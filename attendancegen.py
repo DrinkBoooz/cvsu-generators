@@ -511,6 +511,17 @@ def load_students(path: str) -> list:
         return load_students_excel(path)
     return load_students_csv(path)
 
+
+def get_default_template_path() -> str:
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    repo_root_template = os.path.join(script_dir, "template.docx")
+    bundled_template = os.path.join(script_dir, "attendance", "template.docx")
+    if os.path.exists(repo_root_template):
+        return repo_root_template
+    if os.path.exists(bundled_template):
+        return bundled_template
+    return repo_root_template
+
 # ── CLI helpers ───────────────────────────────────────────────────────────────
 
 def prompt(label: str, default: str = "") -> str:
@@ -525,8 +536,7 @@ def prompt(label: str, default: str = "") -> str:
 def main():
     parser = argparse.ArgumentParser(description="CvSU Attendance Sheet Generator")
     parser.add_argument("--csv", help="Path to student list (.xlsx or .csv)")
-    parser.add_argument("--template", default=os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), "template.docx"),
+    parser.add_argument("--template", default=get_default_template_path(),
         help="Path to template .docx")
     args = parser.parse_args()
 
