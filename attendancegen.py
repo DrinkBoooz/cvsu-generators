@@ -101,6 +101,112 @@ def extract_weekday_from_schedule(schedule: str):
         if token in days: return days[token]
     return None
 
+def parse_schedule_days(schedule: str) -> list:
+    """Return weekdays found after the slash in a schedule string."""
+    days = {
+        "mon":0,"monday":0,"tue":1,"tues":1,"tuesday":1,
+        "wed":2,"wednesday":2,"thu":3,"thur":3,"thurs":3,"thursday":3,
+        "fri":4,"friday":4,"sat":5,"saturday":5,"sun":6,"sunday":6,
+    }
+
+    day_part = schedule.split("/", 1)[1] if "/" in schedule else schedule
+    parsed = []
+    for token in re.split(r"[\s,]+", day_part.lower()):
+        token = token.strip()
+        if token in days and days[token] not in parsed:
+            parsed.append(days[token])
+
+    if parsed:
+        return parsed
+
+    fallback = extract_weekday_from_schedule(schedule)
+    return [fallback] if fallback is not None else []
+
+def parse_schedule_slots(schedule: str) -> list:
+    """Return the session time labels found before the slash in a schedule string."""
+    if "/" not in schedule:
+        return []
+
+    time_part = schedule.split("/", 1)[0]
+    return [slot.strip() for slot in time_part.split(",") if slot.strip()]
+
+def parse_explicit_schedule_meetings(schedule: str) -> list:
+    """Parse explicit day-to-slot mappings like 'Thu: 07:00AM-09:00AM; Fri: 01:00PM-03:00PM'."""
+    if ":" not in schedule:
+        return []
+
+    days = {
+        "mon":0,"monday":0,"tue":1,"tues":1,"tuesday":1,
+        "wed":2,"wednesday":2,"thu":3,"thur":3,"thurs":3,"thursday":3,
+        "fri":4,"friday":4,"sat":5,"saturday":5,"sun":6,"sunday":6,
+    }
+    meetings = []
+    for segment in re.split(r"[;\n|]+", schedule):
+        segment = segment.strip()
+        if not segment or ":" not in segment:
+            continue
+        day_part, slot_part = segment.split(":", 1)
+        slot_label = slot_part.strip()
+        day_tokens = [tok.strip().lower() for tok in re.split(r"[\s,]+", day_part) if tok.strip()]
+        matched_days = [days[tok] for tok in day_tokens if tok in days]
+        if not matched_days or not slot_label:
+            continue
+        for day_idx in matched_days:
+            meetings.append((day_idx, slot_label))
+
+    return meetings
+
+def build_schedule_meetings(schedule: str) -> list:
+    """Return ordered (day_index, slot_label) meeting pairs for the schedule."""
+    explicit = parse_explicit_schedule_meetings(schedule)
+    if explicit:
+        return explicit
+
+    days = parse_schedule_days(schedule)
+    slots = parse_schedule_slots(schedule) or [""]
+    return [(day_idx, slot_label) for day_idx in days for slot_label in slots]
+
+def build_schedule_label(schedule: str) -> str:
+    """Normalize the class schedule text for the info table."""
+    meetings = build_schedule_meetings(schedule)
+
+    if not meetings:
+        return schedule
+
+    day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    if ":" in schedule:
+        return "; ".join(f"{day_names[d]}: {slot}" for d, slot in meetings)
+
+    days = []
+    slots = []
+    for day_idx, slot_label in meetings:
+        if day_idx not in days:
+            days.append(day_idx)
+        if slot_label and slot_label not in slots:
+            slots.append(slot_label)
+
+    day_text = ", ".join(day_names[d] for d in days) if days else ""
+    slot_text = ", ".join(slots) if slots else ""
+    if day_text and slot_text:
+        return f"{slot_text} / {day_text}"
+    return day_text or slot_text or schedule
+
+def build_semester_label(semester_term: str, year: int) -> str:
+    """Build the semester and academic year label from a compact semester input."""
+    return f"{semester_term} Semester / A.Y. {year - 1}-{year}"
+
+def get_class_dates_for_weekdays(months: list, year: int, weekdays: list) -> list:
+    """Get all class dates matching any weekday in weekdays."""
+    weekday_set = set(weekdays)
+    dates = []
+    for m in months:
+        _, ndays = calendar.monthrange(year, m)
+        for d in range(1, ndays + 1):
+            dt = date(year, m, d)
+            if dt.weekday() in weekday_set:
+                dates.append(dt)
+    return sorted(dates)
+
 # ── XML text helpers ──────────────────────────────────────────────────────────
 
 def get_full_text(el) -> str:
@@ -199,18 +305,22 @@ def build_attendance_sheet(
     instructor: str,
     months: list,
     year: int,
-    weekday: int,
+    weekdays: list,
     students: list,          # [(name, student_number), ...]
-    sessions_per_class: int = 2,
 ):
-    class_dates = get_class_dates(months, year, weekday)
+    class_dates = get_class_dates_for_weekdays(months, year, weekdays)
     if not class_dates:
-        raise ValueError("No class dates found for the given months/year/weekday.")
+        raise ValueError("No class dates found for the given months/year/weekdays.")
 
     week_groups = dates_to_weeks(class_dates)
     n_weeks = len(week_groups)
-    n_date_cols = n_weeks * sessions_per_class
+    schedule_meetings = build_schedule_meetings(class_schedule)
+    if not schedule_meetings:
+        schedule_meetings = [(day_idx, "") for day_idx in (weekdays or [0])]
+    session_count = len(schedule_meetings)
+    n_date_cols = n_weeks * session_count
     month_year_label = month_label(months, year)
+    schedule_label = build_schedule_label(class_schedule)
 
     # ── Load & parse template ─────────────────────────────────────────────────
     with open(template_path, "rb") as fh:
@@ -234,7 +344,7 @@ def build_attendance_sheet(
 
     set_para_text(info_cell_para(0, 1), course_code_title)
     set_para_text(info_cell_para(0, 4), month_year_label)
-    set_para_text(info_cell_para(1, 1), class_schedule)
+    set_para_text(info_cell_para(1, 1), schedule_label)
     set_para_text(info_cell_para(2, 1), semester_ay)
     set_para_text(info_cell_para(3, 1), room_assignment)
     set_para_text(info_cell_para(4, 1), instructor)
@@ -249,7 +359,7 @@ def build_attendance_sheet(
     # PCT layout (total = 5000):
     #   Fixed:  NO=248, NAME=1277, STNUM=499, LB=212, LC=208, R=133  → 2577
     #   Date pool: 5000 - 2577 = 2423 pct → divide among n_date_cols
-    #   WEEK span cell = DATE_W * sessions_per_class pct
+    #   WEEK span cell = DATE_W * n_date_cols pct
     #   Summary span cell (row 0) = LB+LC+R = 553 pct, gridSpan=3
 
     FIXED_PCT   = 248 + 1277 + 499 + 212 + 208 + 133   # 2577
@@ -263,7 +373,7 @@ def build_attendance_sheet(
     LB_W    = 212
     LC_W    = 208
     R_W     = 133
-    WEEK_W  = DATE_W * sessions_per_class   # width of each WEEK header cell
+    WEEK_W  = DATE_W * session_count  # width of each WEEK header cell
     SUM_W   = LB_W + LC_W + R_W            # width of lb+lc+r header cell
 
     # ── Grab template rows to clone from ─────────────────────────────────────
@@ -307,7 +417,7 @@ def build_attendance_sheet(
     for wi, wg in enumerate(week_groups, 1):
         tc = copy.deepcopy(week_cell_template)
         set_cell_width(tc, WEEK_W)
-        set_gridspan(tc, sessions_per_class)
+        set_gridspan(tc, session_count)
         # Set text to "WEEK N"
         p = tc.find(w("p"))
         if p is not None:
@@ -345,16 +455,19 @@ def build_attendance_sheet(
     # Date cell template = tc[3] from original
     date_cell_template = row1_cells[3]
 
+    day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     for wg in week_groups:
-        day_num = str(wg[0].day) if wg else ""
-        for _ in range(sessions_per_class):
+        week_dates = {dt.weekday(): dt for dt in wg}
+        for session_idx, (day_idx, slot_label) in enumerate(schedule_meetings, 1):
+            dt = week_dates.get(day_idx)
+            day_num = str(dt.day) if dt is not None else ""
             tc = copy.deepcopy(date_cell_template)
             set_cell_width(tc, DATE_W)
-            # The date cell has 2 paragraphs: "Date" + the number
+            # The date cell shows only the day number.
             paras = tc.findall(w("p"))
             if len(paras) >= 2:
-                set_para_text(paras[0], "Date")
-                set_para_text(paras[1], day_num)
+                set_para_text(paras[0], day_num)
+                set_para_text(paras[1], "")
             elif len(paras) == 1:
                 set_para_text(paras[0], day_num)
             row1.append(tc)
@@ -548,9 +661,8 @@ def main():
     course    = prompt("Course Code and Title",
                        "DCIT25 - DATA STRUCTURES AND ALGORITHMS")
     schedule  = prompt("Class Schedule",
-                       "07:00AM-09:00AM, 01:00PM-03:00PM / Thurs")
-    sem_ay    = prompt("Semester & Academic Year",
-                       "2nd Semester / A.Y. 2025-2026")
+                       "07:00AM-09:00AM, 01:00PM-03:00PM / Thurs, Fri")
+    semester_term = prompt("Semester (1st/2nd)", "2nd")
     room      = prompt("Room Assignment",
                        "LAB: CCL 204, LEC: ITC 404")
     instructor= prompt("Name of Instructor", "DAN JOSEPH ORTEGA")
@@ -563,17 +675,23 @@ def main():
             print(f"    ⚠  {e}")
 
     year = int(prompt("Year", "2026"))
+    sem_ay = build_semester_label(semester_term, year)
 
-    auto_wd = extract_weekday_from_schedule(schedule)
-    wd_names = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
-    if auto_wd is not None:
-        print(f"  (Auto-detected class day: {wd_names[auto_wd]})")
-        wd_raw = input(f"  Class day [{wd_names[auto_wd]}]: ").strip()
-        weekday = auto_wd if not wd_raw else parse_weekday(wd_raw)
+    schedule_days = parse_schedule_days(schedule)
+    if not schedule_days:
+        schedule_days = [day_idx for day_idx, _ in build_schedule_meetings(schedule) if day_idx is not None]
+    if schedule_days:
+        wd_names = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
+        print(f"  (Detected class day(s): {', '.join(wd_names[d] for d in schedule_days)})")
     else:
-        weekday = parse_weekday(prompt("Class day (Mon/Tue/Wed/Thu/Fri/Sat/Sun)"))
-
-    sessions = max(1, int(prompt("Sessions per class day (2 = Lab+Lec, 1 = single)", "2")))
+        auto_wd = extract_weekday_from_schedule(schedule)
+        wd_names = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
+        if auto_wd is not None:
+            print(f"  (Auto-detected class day: {wd_names[auto_wd]})")
+            wd_raw = input(f"  Class day [{wd_names[auto_wd]}]: ").strip()
+            schedule_days = [auto_wd if not wd_raw else parse_weekday(wd_raw)]
+        else:
+            schedule_days = [parse_weekday(prompt("Class day (Mon/Tue/Wed/Thu/Fri/Sat/Sun)"))]
 
     # Student file
     student_file = args.csv
@@ -605,7 +723,7 @@ def main():
     # Summary
     print()
     for m in months:
-        dates = get_class_dates([m], year, weekday)
+        dates = get_class_dates_for_weekdays([m], year, schedule_days)
         print(f"  📅  {MONTHS[m]} {year}: {len(dates)} class date(s)")
         for d in dates:
             print(f"       {d.strftime('%B %d, %Y (%A)')}")
@@ -645,9 +763,8 @@ def main():
             instructor        = instructor,
             months            = [m],
             year              = year,
-            weekday           = weekday,
+            weekdays          = schedule_days,
             students          = students,
-            sessions_per_class= sessions,
         )
 
     print(f"\n✅  Done! {len(files_to_gen)} file(s) generated in: {out_folder}\n")
