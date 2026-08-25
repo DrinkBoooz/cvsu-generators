@@ -19,7 +19,7 @@ Usage:
     python ceit_generator.py --csv students.xlsx
 """
 
-import argparse, copy, csv, io, os, sys, zipfile
+import argparse, copy, csv, io, json, os, sys, zipfile
 from abc import ABC, abstractmethod
 from lxml import etree
 
@@ -106,9 +106,23 @@ def replace_after_colon(para, value: str):
     if rpr_src is not None:
         r_val.insert(0, copy.deepcopy(rpr_src))
     t_val = etree.SubElement(r_val, w("t"))
-    t_val.text = value
-    if value and value[0] == " ":
+    # Ensure there's a separating space after the ':' unless the caller
+    # intentionally provided it (some callsites already do so).
+    if value and not value.startswith(" "):
+        t_val.text = " " + value
+    else:
+        t_val.text = value
+    if t_val.text and t_val.text[0] == " ":
         t_val.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
+    # Remove paragraph-level hanging indent if present — templates sometimes
+    # use a hanging indent for label/value pairs which causes inconsistent
+    # visual spacing when we replace runs. Clearing it produces a consistent
+    # inline label:value appearance.
+    ppr = para.find(w("pPr"))
+    if ppr is not None:
+        ind = ppr.find(w("ind"))
+        if ind is not None:
+            ppr.remove(ind)
 
 def replace_value_run(para, run_index: int, value: str):
     """
@@ -123,8 +137,21 @@ def replace_value_run(para, run_index: int, value: str):
     # Remove all runs after run_index
     for r in runs[run_index + 1:]:
         para.remove(r)
+    # If the runs before the target end with a colon, ensure a separating
+    # space before the value so text doesn't concatenate with the label.
+    prefix = "".join(get_full_text(r) for r in runs[:run_index])
+    if prefix.rstrip().endswith(":") and value and not value.startswith(" "):
+        value = " " + value
+
     # Set the target run
     set_run_text(runs[run_index], value)
+    # Also clear paragraph indent for consistency
+    p = para
+    ppr = p.find(w("pPr"))
+    if ppr is not None:
+        ind = ppr.find(w("ind"))
+        if ind is not None:
+            ppr.remove(ind)
 
 def collapse_runs_after_colon(para, value: str):
     """
@@ -171,15 +198,36 @@ def collapse_runs_after_colon(para, value: str):
     if rpr_src is not None:
         r_val.insert(0, copy.deepcopy(rpr_src))
     t_val = etree.SubElement(r_val, w("t"))
-    t_val.text = value
-    if value and value[0] == " ":
+    # Ensure a separating space after the ':' unless the caller provided one.
+    if value and not value.startswith(" "):
+        t_val.text = " " + value
+    else:
+        t_val.text = value
+    if t_val.text and t_val.text[0] == " ":
         t_val.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
+    ppr = para.find(w("pPr"))
+    if ppr is not None:
+        ind = ppr.find(w("ind"))
+        if ind is not None:
+            ppr.remove(ind)
 
-def set_cell_text(tc, text: str):
-    """Replace text in first paragraph of a cell, preserving run formatting."""
+def set_cell_text(tc, text: str, remove_num: bool = False):
+    """Replace text in first paragraph of a cell, preserving run formatting.
+
+    If `remove_num` is True, remove any paragraph-level `w:numPr` so an
+    automatic list number won't render next to our explicit cell text.
+    """
     p = tc.find(w("p"))
     if p is None:
         return
+    # Optionally remove automatic numbering from the paragraph so Word
+    # doesn't render an extra list number next to our explicit cell text.
+    if remove_num:
+        ppr = p.find(w("pPr"))
+        if ppr is not None:
+            numpr = ppr.find(w("numPr"))
+            if numpr is not None:
+                ppr.remove(numpr)
     runs = p.findall(w("r"))
     if not runs:
         r = etree.SubElement(p, w("r"))
@@ -241,27 +289,61 @@ class DocumentGenerator(ABC):
     def fill_header(self, body, info: ClassInfo) -> None:
         """Fill header fields specific to this document type."""
 
+    def _is_student_table(self, tbl) -> bool:
+        """Return True only for the actual student roster table."""
+        rows = tbl.findall(w("tr"))
+        if not rows:
+            return False
+        cells = rows[0].findall(w("tc"))
+        if not cells:
+            return False
+        hdr = " ".join("".join((t.text or '') for t in c.iter(w('t'))) for c in cells).lower()
+        # The metadata header tables contain labels like Instructor / Course /
+        # Schedule / Subject / Semester and may include the word "name" in the
+        # title, but they do not include the roster columns used by the student list.
+        if any(k in hdr for k in ("instructor", "course /", "schedule code", "subject code", "semester /", "time / days / room")):
+            return False
+        return ("student" in hdr or "name of student" in hdr or "name of students" in hdr or "no." in hdr) and (
+            "signature" in hdr or "student number" in hdr or "studentnumber" in hdr or "name of student" in hdr
+        )
+
     def fill_table(self, body, info: ClassInfo) -> None:
         """
         Default table fill: clone first student row as template,
         remove existing student rows, then write info.students.
         Works for all three document types.
         """
+        # Find the table that contains the student list.
         tables = body.findall(w("tbl"))
-        tbl = tables[0]
-        rows = tbl.findall(w("tr"))
-        header_row   = rows[0]
+        target = None
+        for tbl in tables:
+            if self._is_student_table(tbl):
+                target = tbl
+                break
+        if target is None:
+            return
+        rows = target.findall(w("tr"))
+        if len(rows) < 2:
+            return
+        header_row = rows[0]
         template_row = rows[1]   # first student row = formatting reference
 
         # Remove all existing student rows (keep only header)
         for tr in rows[1:]:
-            tbl.remove(tr)
+            target.remove(tr)
 
         for idx, (name, stnum) in enumerate(info.students):
             tr = copy.deepcopy(template_row)
+            # Clear any existing text in cloned row cells to avoid duplicated
+            # numbering or leftover template text, then fill.
+            for tc in tr.findall(w("tc")):
+                for p in tc.findall(w("p")):
+                    for r in p.findall(w("r")):
+                        for t in r.findall(w("t")):
+                            t.text = ""
             cells = tr.findall(w("tc"))
             self._fill_student_row(cells, idx, name, stnum)
-            tbl.append(tr)
+            target.append(tr)
 
     @abstractmethod
     def _fill_student_row(self, cells: list, idx: int,
@@ -285,20 +367,78 @@ class SyllabusGenerator(DocumentGenerator):
     """
 
     def fill_header(self, body, info: ClassInfo) -> None:
-        paras = body.findall(w("p"))
-        replace_after_colon(paras[12], info.instructor)
-        replace_after_colon(paras[13], info.course_section)
-        replace_value_run(paras[14], 4, info.schedule_code)
-        replace_after_colon(paras[15], info.subject)
-        replace_after_colon(paras[16], info.time_days_room)
-        collapse_runs_after_colon(paras[17], info.semester_ay)
+        # The syllabus template stores header fields in the first table (two-column)
+        # where column 0 = label and column 1 = value. Write values directly
+        # into the second cell of each header row to preserve formatting.
+        tables = body.findall(w("tbl"))
+        if not tables:
+            return
+        info_tbl = tables[0]
+        rows = info_tbl.findall(w("tr"))
+        # Expected order: Instructor, Course/Section, Schedule Code,
+        # Subject, Time/Days/Room, Semester/AY
+        mapping = [
+            (0, info.instructor),
+            (1, info.course_section),
+            (2, info.schedule_code),
+            (3, info.subject),
+            (4, info.time_days_room),
+            (5, info.semester_ay),
+        ]
+        for row_idx, val in mapping:
+            if row_idx < len(rows):
+                cells = rows[row_idx].findall(w("tc"))
+                if len(cells) > 1:
+                    set_cell_text(cells[1], val)
 
     def _fill_student_row(self, cells, idx, name, stnum):
         # cells: [No., Name, StudentNumber, Signature]
-        set_cell_text(cells[0], str(idx + 1))  # row number (1-based)
+        # Use template's automatic numbering: do not write an explicit
+        # digit into the first cell (the template's paragraph `w:numPr`
+        # will produce the visible number). Leave the cell text empty.
         set_cell_text(cells[1], name)
         set_cell_text(cells[2], stnum)
         # cells[3] = Signature — leave blank
+
+    def fill_table(self, body, info: ClassInfo) -> None:
+        """Syllabus-specific table fill: find the student list table by
+        locating a table whose first row contains the roster columns and
+        populate it. This template stores the header in a separate table,
+        so the student table may not be the first table in the document."""
+        tbls = body.findall(w("tbl"))
+        target = None
+        for tbl in tbls:
+            if self._is_student_table(tbl):
+                target = tbl
+                break
+        if target is None:
+            return
+
+        rows = target.findall(w("tr"))
+        if len(rows) < 2:
+            return
+        header_row = rows[0]
+        template_row = rows[1]
+
+        # Remove existing student rows
+        for tr in rows[1:]:
+            target.remove(tr)
+
+        for idx, (name, stnum) in enumerate(info.students):
+            tr = copy.deepcopy(template_row)
+            for tc in tr.findall(w("tc")):
+                for p in tc.findall(w("p")):
+                    for r in p.findall(w("r")):
+                        for t in r.findall(w("t")):
+                            t.text = ""
+            cells = tr.findall(w("tc"))
+            # Ensure we have at least 3 cells; if not, pad with empty cells
+            while len(cells) < 3:
+                new_tc = etree.Element(w("tc"))
+                tr.append(new_tc)
+                cells = tr.findall(w("tc"))
+            self._fill_student_row(cells, idx, name, stnum)
+            target.append(tr)
 
 # ══ Exam Returns Generator ════════════════════════════════════════════════════
 class ExamReturnsGenerator(DocumentGenerator):
@@ -322,25 +462,36 @@ class ExamReturnsGenerator(DocumentGenerator):
         return self._period
 
     def fill_header(self, body, info: ClassInfo) -> None:
-        paras = body.findall(w("p"))
-        # para[1]: ['INSTRUCTOR NAME/SIGNATURE', ':  ', 'value', '', '', '']
-        replace_value_run(paras[1], 2, info.instructor)
-        # para[2]: ['COURSE / YEAR / SECTION', '', ': ', 'value', '', ...]
-        replace_value_run(paras[2], 3, f" {info.course_section}")
-        # para[3]: ['SCHEDULE CODE', '', '', '', '', ':  ', 'value', '', ...]
-        replace_value_run(paras[3], 6, f"  {info.schedule_code}")
-        # para[4]: ['SUBJECT CODE / TITLE', ':', ' ', 'value', ' ', '–', ' ', 'rest', ...]
-        # Replace from run[3] onward with the full subject
-        replace_value_run(paras[4], 3, info.subject)
-        # para[5]: ['SEMESTER / ACADEMIC YEAR', '', '', ':  ', ' 2', 'nd', ' 2025...', ...]
-        # Colon is in run[3]; collapse everything after it
-        collapse_runs_after_colon(paras[5], f"   {info.semester_ay}")
-        # para[9]: exam type label
-        runs = paras[9].findall(w("r"))
-        if runs:
-            set_run_text(runs[0], f"{self._period} EXAMINATION")
-            for r in runs[1:]:
-                paras[9].remove(r)
+        # Prefer filling header from the first table if present (table rows:
+        # Instructor, Course/Section, Schedule Code, Subject, Semester/AY).
+        tables = body.findall(w("tbl"))
+        if tables:
+            info_tbl = tables[0]
+            rows = info_tbl.findall(w("tr"))
+            mapping = [
+                (0, info.instructor),
+                (1, info.course_section),
+                (2, info.schedule_code),
+                (3, info.subject),
+                (4, info.semester_ay),
+            ]
+            for row_idx, val in mapping:
+                if row_idx < len(rows):
+                    cells = rows[row_idx].findall(w("tc"))
+                    if len(cells) > 1:
+                        set_cell_text(cells[1], val)
+        else:
+            paras = body.findall(w("p"))
+            replace_value_run(paras[1], 2, info.instructor)
+            replace_value_run(paras[2], 3, info.course_section)
+            replace_value_run(paras[3], 6, info.schedule_code)
+            replace_value_run(paras[4], 3, info.subject)
+            collapse_runs_after_colon(paras[5], info.semester_ay)
+            runs = paras[9].findall(w("r"))
+            if runs:
+                set_run_text(runs[0], f"{self._period} EXAMINATION")
+                for r in runs[1:]:
+                    paras[9].remove(r)
 
     def _fill_student_row(self, cells, idx, name, stnum):
         # cells: [Name, StudentNumber, Signature]
@@ -368,15 +519,34 @@ class TOSGenerator(DocumentGenerator):
         return self._period
 
     def fill_header(self, body, info: ClassInfo) -> None:
-        paras = body.findall(w("p"))
-        replace_after_colon(paras[1], info.instructor)
-        replace_value_run(paras[2], 2, info.course_section)
-        replace_value_run(paras[3], 4, info.schedule_code)
-        replace_after_colon(paras[4], info.subject)
-        replace_after_colon(paras[5], info.time_days_room)
-        collapse_runs_after_colon(
-            paras[6], f"{info.semester_ay} ({self._period})"
-        )
+        # Prefer filling header from the first table when available
+        tables = body.findall(w("tbl"))
+        if tables:
+            info_tbl = tables[0]
+            rows = info_tbl.findall(w("tr"))
+            mapping = [
+                (0, info.instructor),
+                (1, info.course_section),
+                (2, info.schedule_code),
+                (3, info.subject),
+                (4, info.time_days_room),
+                (5, f"{info.semester_ay} ({self._period})"),
+            ]
+            for row_idx, val in mapping:
+                if row_idx < len(rows):
+                    cells = rows[row_idx].findall(w("tc"))
+                    if len(cells) > 1:
+                        set_cell_text(cells[1], val)
+        else:
+            paras = body.findall(w("p"))
+            replace_after_colon(paras[1], info.instructor)
+            replace_value_run(paras[2], 2, info.course_section)
+            replace_value_run(paras[3], 4, info.schedule_code)
+            replace_after_colon(paras[4], info.subject)
+            replace_after_colon(paras[5], info.time_days_room)
+            collapse_runs_after_colon(
+                paras[6], f"{info.semester_ay} ({self._period})"
+            )
 
     def _fill_student_row(self, cells, idx, name, stnum):
         # cells: [Name, StudentNumber, Signature]
@@ -449,7 +619,9 @@ def load_students_excel(path: str) -> list:
             t = c.get("t", "")
             if t == "inlineStr":
                 is_el = c.find("x:is", ns)
-                return "".join(x.text or "" for x in is_el.iter(f"{{{NS}}}t")) if is_el else ""
+                if is_el is not None:
+                    return "".join(x.text or "" for x in is_el.iter(f"{{{NS}}}t"))
+                return ""
             v = c.find("x:v", ns)
             if v is None or v.text is None: return ""
             return shared[int(v.text)] if t == "s" else v.text
@@ -493,9 +665,169 @@ def prompt(label: str, default: str = "") -> str:
         if val: return val
         print("    (required)")
 
+
+def prompt_choice(label: str, options: list[str], default: str = "") -> str:
+    """Prompt the user to pick a numbered option from a list."""
+    if not options:
+        return default
+    default_idx = options.index(default) if default in options else 0
+    print(f"  {label}")
+    for idx, value in enumerate(options, start=1):
+        marker = "*" if idx - 1 == default_idx else " "
+        print(f"    {marker}[{idx}] {value}")
+    while True:
+        try:
+            raw = input(f"  Select option [{default_idx + 1}]: ").strip()
+        except EOFError:
+            return options[default_idx]
+        if not raw:
+            return options[default_idx]
+        if raw.isdigit() and 1 <= int(raw) <= len(options):
+            return options[int(raw) - 1]
+        lowered = {o.lower(): o for o in options}
+        if raw.lower() in lowered:
+            return lowered[raw.lower()]
+        print("    Please choose a valid option number.")
+
+
+def _build_preset_map() -> dict:
+    return {
+        "default": {
+            "course": "BSCS 1-4",
+            "subject": "ITEC50 – WEB SYSTEMS AND TECHNOLOGY",
+            "time": "10:00AM-12:00AM, 01:00PM-03:00PM / M / LAB: CCL 305, LEC: ITC 401",
+            "semester": "2nd Semester / 2025-2026",
+            "schedule": "202522383",
+            "instructor": "DAN JOSEPH A. ORTEGA",
+        },
+        "dcit21": {
+            "course": "BSCS 1-4",
+            "subject": "DCIT 21 - INTRODUCTION TO COMPUTING",
+            "time": "05:00PM-07:00PM / M / LEC: ITC 402",
+            "semester": "1st Semester / 2026-2027",
+            "schedule": "202612040",
+            "instructor": "DAN JOSEPH A. ORTEGA",
+        },
+        "custom": {
+            "course": "",
+            "subject": "",
+            "time": "",
+            "semester": "",
+            "schedule": "",
+            "instructor": "",
+        },
+    }
+
+
+def parse_class_payload(raw: str) -> dict:
+    """Parse a JSON payload or simple key=value payload into a class data dict."""
+    raw = raw.strip()
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+        if isinstance(data, dict):
+            return data
+    except json.JSONDecodeError:
+        pass
+
+    data = {}
+    for part in raw.split(";"):
+        if not part:
+            continue
+        if "=" in part:
+            key, value = part.split("=", 1)
+            data[key.strip().lower()] = value.strip()
+    return data
+
+
+def read_class_payload(path_or_text: str) -> dict:
+    """Read either a JSON file path or the JSON payload text itself."""
+    text = path_or_text.strip()
+    if os.path.exists(text):
+        with open(text, "r", encoding="utf-8") as fh:
+            return parse_class_payload(fh.read())
+    return parse_class_payload(text)
+
+
+def collect_class_info(args) -> ClassInfo:
+    presets = _build_preset_map()
+
+    payload = {}
+    if getattr(args, "class_data", None):
+        payload = read_class_payload(args.class_data)
+    elif getattr(args, "class_file", None):
+        payload = read_class_payload(args.class_file)
+
+    if payload:
+        instructor = args.instructor or payload.get("instructor") or payload.get("instructor_name") or ""
+        course_sec = args.course or payload.get("course_section") or payload.get("course") or ""
+        sched_code = args.sched or payload.get("schedule_code") or payload.get("schedule") or ""
+        subject = args.subject or payload.get("subject") or payload.get("subject_code") or ""
+        time_room = args.time or payload.get("time_days_room") or payload.get("time") or ""
+        semester_ay = args.semester or payload.get("semester_ay") or payload.get("semester") or ""
+        if not all([instructor, course_sec, sched_code, subject, time_room, semester_ay]):
+            missing = [k for k, v in {
+                "Instructor": instructor,
+                "Course / Year / Section": course_sec,
+                "Schedule Code": sched_code,
+                "Subject": subject,
+                "Time / Days / Room": time_room,
+                "Semester / Academic Year": semester_ay,
+            }.items() if not v]
+            raise ValueError(f"Missing required class fields: {', '.join(missing)}")
+        return ClassInfo(
+            instructor=instructor,
+            course_section=course_sec,
+            schedule_code=sched_code,
+            subject=subject,
+            time_days_room=time_room,
+            semester_ay=semester_ay,
+            students=[],
+        )
+
+    if args.preset and args.preset in presets:
+        preset_choice = args.preset
+    else:
+        print("  Choose a quick preset or enter values manually.\n")
+        preset_choice = prompt_choice(
+            "Quick class preset",
+            ["default", "dcit21", "custom"],
+            args.preset or "default",
+        )
+    chosen = presets[preset_choice]
+
+    instructor = args.instructor or chosen["instructor"] or prompt("Instructor Name", "DAN JOSEPH A. ORTEGA")
+    course_sec = args.course or chosen["course"] or prompt("Course / Year / Section", "BSCS 1-4")
+    sched_code = args.sched or chosen["schedule"] or prompt("Schedule Code", "202522383")
+    subject = args.subject or chosen["subject"] or prompt("Subject Code / Title", "ITEC50 – WEB SYSTEMS AND TECHNOLOGY")
+    time_room = args.time or chosen["time"] or prompt("Time / Days / Room No.", "10:00AM-12:00AM, 01:00PM-03:00PM / M / LAB: CCL 305, LEC: ITC 401")
+    semester_ay = args.semester or chosen["semester"] or prompt("Semester / Academic Year", "2nd Semester / 2025-2026")
+
+    return ClassInfo(
+        instructor=instructor,
+        course_section=course_sec,
+        schedule_code=sched_code,
+        subject=subject,
+        time_days_room=time_room,
+        semester_ay=semester_ay,
+        students=[],
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(description="CvSU CEIT Document Generator")
     parser.add_argument("--csv",       help="Student list (.xlsx or .csv)")
+    parser.add_argument("--instructor", help="Instructor name")
+    parser.add_argument("--course",     help="Course / Year / Section")
+    parser.add_argument("--sched",      help="Schedule Code")
+    parser.add_argument("--subject",    help="Subject Code / Title")
+    parser.add_argument("--time",       help="Time / Days / Room No.")
+    parser.add_argument("--semester",   help="Semester / Academic Year")
+    parser.add_argument("--preset", choices=["default", "dcit21", "custom"],
+                        help="Choose a common class preset for quick input")
+    parser.add_argument("--class-data", help="Single JSON payload or key=value string with all class fields")
+    parser.add_argument("--class-file", help="Path to a JSON file containing class fields")
     parser.add_argument("--templates", help="Folder containing template .docx files",
                         default=os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                              "templates"))
@@ -510,18 +842,7 @@ def main():
     print("╚══════════════════════════════════════════════════════╝\n")
     print("  Fill in the class details below.\n")
 
-    instructor   = prompt("Instructor Name",
-                          "DAN JOSEPH A. ORTEGA")
-    course_sec   = prompt("Course / Year / Section",
-                          "BSCS 1-4")
-    sched_code   = prompt("Schedule Code",
-                          "202522383")
-    subject      = prompt("Subject Code / Title",
-                          "ITEC50 – WEB SYSTEMS AND TECHNOLOGY")
-    time_room    = prompt("Time / Days / Room No.",
-                          "10:00AM-12:00AM, 01:00PM-03:00PM / M / LAB: CCL 305, LEC: ITC 401")
-    semester_ay  = prompt("Semester / Academic Year",
-                          "2nd Semester / 2025-2026")
+    info = collect_class_info(args)
 
     # Student file
     student_file = args.csv
@@ -538,6 +859,7 @@ def main():
 
     students = load_students(student_file)
     print(f"  ✔  Loaded {len(students)} students\n")
+    info.students = students
 
     # Templates folder check
     templates_dir = args.templates.strip().strip('"').strip("'")
@@ -549,18 +871,8 @@ def main():
             print("  Templates folder not found. Exiting.")
             sys.exit(1)
 
-    info = ClassInfo(
-        instructor    = instructor,
-        course_section= course_sec,
-        schedule_code = sched_code,
-        subject       = subject,
-        time_days_room= time_room,
-        semester_ay   = semester_ay,
-        students      = students,
-    )
-
     # Build output folder name from course section (sanitised)
-    safe_section = course_sec.replace("/", "-").replace(" ", "_")
+    safe_section = info.course_section.replace("/", "-").replace(" ", "_")
     out_dir = os.path.join(args.output, safe_section)
     os.makedirs(out_dir, exist_ok=True)
 

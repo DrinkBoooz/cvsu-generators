@@ -1,2 +1,11 @@
 .venv/
 __pycache__/
+attendance_output/
+output/
+# Ignore all Excel files
+*.xlsx
+*.xls
+*.xlsm
+
+# Ignore all CSV files
+*.csv
