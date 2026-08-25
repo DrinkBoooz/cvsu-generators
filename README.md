@@ -119,3 +119,93 @@ The final verification checked that the generated files contain the expected hea
 - The script reads Excel files by parsing the XML inside the workbook, which avoids some openpyxl compatibility issues.
 - The script also accepts CSV student lists if the file is not Excel.
 - If the template folder is missing, the script prompts for a valid path before generation continues.
+
+## Run the Attendance Generator
+
+```powershell
+python .\attendancegen.py --csv "path\to\students.xlsx"
+```
+
+The script will prompt you for:
+
+- course title and code
+- class schedule
+- semester and academic year
+- room assignment
+- instructor name
+- month/year and class day
+- student list file if you did not pass `--csv`
+
+Generated output files are saved in the `attendance_output/` folder or the selected output folder.
+
+## Run the CEIT Document Generator
+
+```powershell
+python .\ceit_generator.py --csv "path\to\students.xlsx"
+```
+
+The script will prompt you for the class details and then generate the documents into the `output/` folder.
+
+## Optional Arguments
+
+- Attendance generator
+
+  ```powershell
+  python .\attendancegen.py --csv "path\to\students.xlsx" --template "path\to\template.docx"
+  ```powershell
+- CEIT generator
+
+  ```powershell
+  python .\ceit_generator.py --csv "path\to\students.xlsx" --templates "templates" --output "output"
+  ```powershell
+
+## Example input sets
+
+- Lecture only
+
+```powershell
+   Course Code and Title: DCIT25 - DATA STRUCTURES AND ALGORITHMS
+   Class Schedule: 07:00AM-10:00AM / Mon
+   Semester: 1st
+   Room Assignment: LEC: ITC 404
+   Name of Instructor: DAN JOSEPH ORTEGA
+   Month: February
+   Year: 2026
+```
+
+- Lecture and Lab on the same day
+
+```powershell
+   Course Code and Title: DCIT25 - DATA STRUCTURES AND ALGORITHMS
+   Class Schedule: 07:00AM-09:00AM, 01:00PM-03:00PM / Thurs
+   Semester: 2nd
+   Room Assignment: LAB: CCL 204, LEC: ITC 404
+   Name of Instructor: DAN JOSEPH ORTEGA
+   Month: February
+   Year: 2026
+
+```
+
+- Lecture and Lab on separate days
+
+```powershell
+   Course Code and Title: DCIT25 - DATA STRUCTURES AND ALGORITHMS
+   Class Schedule: Thu: 07:00AM-09:00AM; Fri: 01:00PM-03:00PM
+   Semester: 2nd
+   Room Assignment: LAB: CCL 204, LEC: ITC 404
+   Name of Instructor: DAN JOSEPH ORTEGA
+   Month: February
+   Year: 2026
+```
+
+- Lecture + 2 labs
+
+```powershell
+   Course Code and Title: DCIT25 - DATA STRUCTURES AND ALGORITHMS
+   Class Schedule: Mon: 07:00AM-09:00AM; Wed: 01:00PM-03:00PM; Fri: 03:00PM-05:00PM
+   Semester: 1st
+   Room Assignment: LAB 1: CCL 204, LAB 2: CCL 205, LEC: ITC 404
+   Name of Instructor: DAN JOSEPH ORTEGA
+   Month: February
+   Year: 2026
+```
