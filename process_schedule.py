@@ -42,11 +42,32 @@ def parse_schedule(project_dir):
                 row_vals.append(str(val))
         grid.append(row_vals)
         
-    instructor = grid[13][2].strip() if len(grid) > 13 and len(grid[13]) > 2 else "DAN JOSEPH A. ORTEGA"
-    semester = grid[11][1].strip() if len(grid) > 11 and len(grid[11]) > 1 else "FIRST SEMESTER, AY 2026 - 2027"
-    
+    instructor = "DAN JOSEPH A. ORTEGA"
+    semester = "FIRST SEMESTER, AY 2026 - 2027"
     start_row = 18
     end_row = 46
+    
+    for r in range(len(grid)):
+        for c in range(len(grid[r])):
+            val = grid[r][c].upper()
+            
+            if "SEMESTER" in val and ("SY " in val or "AY " in val):
+                semester = grid[r][c]
+                
+            if val.replace(":", "").strip() == "NAME":
+                if c + 1 < len(grid[r]) and grid[r][c+1].strip():
+                    instructor = grid[r][c+1]
+                elif c + 2 < len(grid[r]) and grid[r][c+2].strip():
+                    instructor = grid[r][c+2]
+                    
+            if val.strip() == "TIME" or val.strip() == "MONDAY":
+                if r + 1 < len(grid):
+                    start_row = r + 1
+                    
+            if "SUBJECT" in val or "COURSE/YR/SEC" in val.replace(" ", "") or "CONTACT HOURS" in val:
+                if r > start_row:
+                    end_row = r - 1
+                    
     return grid, instructor, semester, start_row, end_row
 
 def find_blocks_for_section(grid, section, start_row, end_row):
@@ -107,6 +128,23 @@ def find_blocks_for_section(grid, section, start_row, end_row):
 def process_all():
     project_dir = os.path.dirname(os.path.abspath(__file__))
     grid, instructor, semester_ay, s_row, e_row = parse_schedule(project_dir)
+    
+    sem_lower = semester_ay.lower()
+    if 'second' in sem_lower or '2nd' in sem_lower:
+        months = [2, 3, 4, 5, 6]
+        is_second = True
+    else:
+        months = [8, 9, 10, 11, 12]
+        is_second = False
+        
+    years = re.findall(r'20\d{2}', semester_ay)
+    if not years:
+        att_year = 2026
+    elif len(years) > 1 and is_second:
+        att_year = int(years[1])
+    else:
+        att_year = int(years[0])
+        
     xlsx_files = glob.glob(os.path.join(project_dir, "*.xlsx"))
     
     templates_dir = os.path.join(project_dir, "templates")
@@ -152,7 +190,7 @@ def process_all():
             students=students
         )
         
-        section_dir = os.path.join(project_dir, "dev", course_sec)
+        section_dir = os.path.join(project_dir, "output", course_sec)
         ceit_dir = os.path.join(section_dir, "CEIT_Forms")
         attendance_dir = os.path.join(section_dir, "Attendance")
         
@@ -164,7 +202,6 @@ def process_all():
             out_path = os.path.join(ceit_dir, out_name)
             generator.generate(info, out_path)
             
-        months = [8, 9, 10, 11, 12]
         days = []
         for b in blocks:
             day_idx = attendancegen.parse_weekday(b['day'])
@@ -174,7 +211,7 @@ def process_all():
             days = [0]
             
         for m_num in months:
-            out_name = f"{course_sec}_{schedule_code}_ATTENDANCE_{attendancegen.MONTHS[m_num]}_2026.docx"
+            out_name = f"{course_sec}_{schedule_code}_ATTENDANCE_{attendancegen.MONTHS[m_num]}_{att_year}.docx"
             out_path = os.path.join(attendance_dir, out_name)
             try:
                 attendancegen.build_attendance_sheet(
@@ -186,7 +223,7 @@ def process_all():
                     room_assignment=", ".join([b['room'] for b in blocks]) if blocks else "N/A",
                     instructor=instructor,
                     months=[m_num],
-                    year=2026,
+                    year=att_year,
                     weekdays=days,
                     students=students
                 )

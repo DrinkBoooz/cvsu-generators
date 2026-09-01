@@ -292,7 +292,7 @@ When executed, it natively parses your schedule, evaluates which student lists m
    - Using the extracted parameters, the script simultaneously triggers the generator factories.
    - Generated `.docx` outputs are perfectly scoped and organized within nested categorical directories to eliminate clutter:
      ```
-     dev/
+     output/
       ├── BSCS 1-4/
       │     ├── Attendance/    (August-December attendance lists)
       │     └── CEIT_Forms/    (Syllabus, Exams, and TOS Acknowledgment forms)
