@@ -1,3 +1,6 @@
+import sys, os
+if os.path.dirname(os.path.dirname(os.path.abspath(__file__))) not in sys.path:
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 #!/usr/bin/env python3
 """Verify generated DOCX files contain expected headers and student rows."""
 import sys, os, zipfile

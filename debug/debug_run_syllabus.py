@@ -10,9 +10,9 @@ info = ClassInfo(
     semester_ay='1st Semester / 2026-2027',
     students=students,
 )
-factory = GeneratorFactory(os.path.join(os.path.dirname(__file__), 'templates'))
+factory = GeneratorFactory(os.path.join(os.path.dirname(__file__), '../templates'))
 gen = factory.get_all()[0][0]  # SyllabusGenerator
-out_dir = os.path.join(os.path.dirname(__file__), 'output','BSCS_1-4_debug2')
+out_dir = os.path.join(os.path.dirname(__file__), '../output','BSCS_1-4_debug2')
 os.makedirs(out_dir, exist_ok=True)
 out_path = os.path.join(out_dir, 'BSCS_1-4_SYLLABUS_ACCEPTANCE.docx')
 # Let exception propagate to see full traceback
