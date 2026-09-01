@@ -150,18 +150,23 @@ The script will prompt you for the class details and then generate the documents
 
 - Attendance generator
 
-  ```powershell
+  ````powershell
   python .\attendancegen.py --csv "path\to\students.xlsx" --template "path\to\template.docx"
   ```powershell
+  ````
+
 - CEIT generator
 
-  ```powershell
+  ````powershell
   python .\ceit_generator.py --csv "path\to\students.xlsx" --templates "templates" --output "output"
   ```powershell
+  ````
 
 ## Example input sets
 
-- Lecture only
+### Attendance Generator
+
+- Lecture OR Lab only
 
 ```powershell
    Course Code and Title: DCIT25 - DATA STRUCTURES AND ALGORITHMS
@@ -183,7 +188,6 @@ The script will prompt you for the class details and then generate the documents
    Name of Instructor: DAN JOSEPH ORTEGA
    Month: February
    Year: 2026
-
 ```
 
 - Lecture and Lab on separate days
@@ -208,4 +212,50 @@ The script will prompt you for the class details and then generate the documents
    Name of Instructor: DAN JOSEPH ORTEGA
    Month: February
    Year: 2026
+```
+
+### CEIT Generator
+
+- Lecture OR Lab only
+
+```powershell
+   Instructor Name: DAN JOSEPH A. ORTEGA
+   Course / Year / Section: BSCS 1-4
+   Schedule Code: 202612040
+   Subject: DCIT 25 - DATA STRUCTURES AND ALGORITHMS
+   Time / Days / Room: 07:00AM-10:00AM / M / LEC: ITC 404
+   Semester / Academic Year: 1st Semester / 2026-2027
+```
+
+- Lecture and Lab on the same day
+
+```powershell
+   Instructor Name: DAN JOSEPH A. ORTEGA
+   Course / Year / Section: BSCS 2-1
+   Schedule Code: 202612041
+   Subject: DCIT 25 - DATA STRUCTURES AND ALGORITHMS
+   Time / Days / Room: 07:00AM-09:00AM, 01:00PM-03:00PM / Th / LAB: CCL 204, LEC: ITC 404
+   Semester / Academic Year: 2nd Semester / 2026-2027
+```
+
+- Lecture and Lab on separate days
+
+```powershell
+   Instructor Name: DAN JOSEPH A. ORTEGA
+   Course / Year / Section: BSCS 2-1
+   Schedule Code: 202612042
+   Subject: DCIT 25 - DATA STRUCTURES AND ALGORITHMS
+   Time / Days / Room: Th: 07:00AM-09:00AM; F: 01:00PM-03:00PM / LAB: CCL 204, LEC: ITC 404
+   Semester / Academic Year: 2nd Semester / 2026-2027
+```
+
+- Lecture + 2 labs
+
+```powershell
+   Instructor Name: DAN JOSEPH A. ORTEGA
+   Course / Year / Section: BSCS 2-1
+   Schedule Code: 202612043
+   Subject: DCIT 25 - DATA STRUCTURES AND ALGORITHMS
+   Time / Days / Room: M: 07:00AM-09:00AM; W: 01:00PM-03:00PM; F: 03:00PM-05:00PM / LAB 1: CCL 204, LAB 2: CCL 205, LEC: ITC 404
+   Semester / Academic Year: 1st Semester / 2026-2027
 ```
