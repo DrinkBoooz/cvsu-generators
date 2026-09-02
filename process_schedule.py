@@ -24,8 +24,41 @@ def get_day_name(col_idx):
     days = {3: "Mon", 4: "Tue", 5: "Wed", 6: "Thu", 7: "Fri", 8: "Sat"}
     return days.get(col_idx, "Unknown")
 
+def find_schedule_file(project_dir):
+    """Return the schedule spreadsheet path, ignoring student roster files."""
+    candidates = []
+    for pattern in ("*.xls", "*.xlsx", "*.xlsm"):
+        for path in glob.glob(os.path.join(project_dir, pattern)):
+            name = os.path.basename(path)
+            lower_name = name.lower()
+            if "list of students for" in lower_name:
+                continue
+            if lower_name.endswith(".csv"):
+                continue
+            candidates.append(path)
+
+    if not candidates:
+        legacy_path = os.path.join(project_dir, "ORTEGA_SCHEDULE.xls")
+        if os.path.exists(legacy_path):
+            return legacy_path
+        raise FileNotFoundError(
+            f"No schedule spreadsheet found in {project_dir}. "
+            "Expected a schedule file like ORTEGA_SCHEDULE.xls, ROSALES UPDATED.xls, or a .xlsx schedule file."
+        )
+
+    preferred = []
+    for path in candidates:
+        lower_name = os.path.basename(path).lower()
+        if "ortega_schedule" in lower_name or "rosales" in lower_name or "schedule" in lower_name:
+            preferred.append(path)
+
+    if preferred:
+        return sorted(preferred, key=lambda p: os.path.basename(p).lower())[0]
+    return sorted(candidates, key=lambda p: os.path.basename(p).lower())[0]
+
+
 def parse_schedule(project_dir):
-    xls_path = os.path.join(project_dir, "ORTEGA_SCHEDULE.xls")
+    xls_path = find_schedule_file(project_dir)
     wb = xlrd.open_workbook(xls_path, formatting_info=True)
     sheet = wb.sheet_by_index(0)
     

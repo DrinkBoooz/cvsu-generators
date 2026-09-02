@@ -2,6 +2,27 @@
 
 This repository contains Python scripts for generating standardized CvSU academic documents from a single class dataset and a set of Word templates.
 
+## Setup
+
+1. Create and activate a virtual environment:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+```
+
+2. Install the required Python dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+3. Verify the project is working:
+
+```bash
+python -m unittest discover -s tests -v
+```
+
 ## Included files
 
 - `ceit_generator.py` — generates the five CEIT document types from one student list and class metadata.
@@ -23,12 +44,20 @@ The main generator is `ceit_generator.py`. It creates the following documents fr
 ## Prerequisites
 
 - Python 3.10+
-- `lxml` installed in the active environment
+- `lxml` for Word XML editing
+- `xlrd` for reading Excel schedule/student files
+- `pytest` for running the project tests
 
-Example install:
+Install all required dependencies:
 
 ```bash
-pip install lxml
+pip install -r requirements.txt
+```
+
+Or install them individually:
+
+```bash
+pip install lxml xlrd pytest
 ```
 
 ## Quick start

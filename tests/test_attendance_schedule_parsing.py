@@ -1,9 +1,23 @@
+import os
+import tempfile
 import unittest
 
 import attendancegen
+import process_schedule
 
 
 class AttendanceScheduleParsingTests(unittest.TestCase):
+    def test_find_schedule_file_ignores_student_rosters_and_prefers_schedule_file(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            roster = os.path.join(tmpdir, "BSCS 1-2 List of Students for 202612022-DCIT 21A - INTRODUCTION TO COMPUTING.xlsx")
+            schedule = os.path.join(tmpdir, "ROSALES UPDATED.xls")
+            with open(roster, "wb") as f:
+                f.write(b"student roster")
+            with open(schedule, "wb") as f:
+                f.write(b"schedule")
+
+            self.assertEqual(process_schedule.find_schedule_file(tmpdir), schedule)
+
     def test_parse_schedule_days_handles_multiple_days(self):
         self.assertEqual(
             attendancegen.parse_schedule_days("07:00AM-09:00AM, 01:00PM-03:00PM / Thurs, Fri"),
