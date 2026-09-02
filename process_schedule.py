@@ -12,12 +12,45 @@ import attendancegen
 import xlrd
 
 def format_time(t_str):
-    t_str = t_str.strip()
+    t_str = str(t_str).strip()
     if not t_str:
         return ""
-    h, m = map(int, t_str.split(':'))
-    ampm = "PM" if (1 <= h <= 6 or h == 12) else "AM"
-    h12 = 12 if h == 12 else (h if h < 12 else h - 12)
+    
+    try:
+        # Check if it's an Excel float string like '0.2916666666666667'
+        if ':' not in t_str:
+            val = float(t_str)
+            if 0 <= val < 1:
+                total_minutes = round(val * 24 * 60)
+                h = total_minutes // 60
+                m = total_minutes % 60
+            else:
+                return t_str
+        else:
+            t_str_clean = t_str.upper().replace('AM', '').replace('PM', '').strip()
+            h, m = map(int, t_str_clean.split(':'))
+    except ValueError:
+        return t_str
+        
+    has_pm_suffix = 'PM' in t_str.upper()
+    has_am_suffix = 'AM' in t_str.upper()
+    
+    if has_pm_suffix:
+        is_pm = True
+    elif has_am_suffix:
+        is_pm = False
+    elif h >= 12:
+        is_pm = True
+    elif 1 <= h <= 6:
+        is_pm = True
+    else:
+        is_pm = False
+        
+    h12 = h % 12
+    if h12 == 0:
+        h12 = 12
+        
+    ampm = "PM" if is_pm else "AM"
     return f"{h12:02d}:{m:02d}{ampm}"
 
 def get_day_name(col_idx):
@@ -27,31 +60,31 @@ def get_day_name(col_idx):
 def find_schedule_file(project_dir):
     """Return the schedule spreadsheet path, ignoring student roster files."""
     candidates = []
-    for pattern in ("*.xls", "*.xlsx", "*.xlsm"):
-        for path in glob.glob(os.path.join(project_dir, pattern)):
-            name = os.path.basename(path)
-            lower_name = name.lower()
-            if "list of students for" in lower_name:
-                continue
-            if lower_name.endswith(".csv"):
-                continue
-            candidates.append(path)
+    search_dirs = [project_dir, os.path.join(project_dir, "schedules")]
+    
+    for search_dir in search_dirs:
+        if not os.path.isdir(search_dir):
+            continue
+        for pattern in ("*.xls", "*.xlsx", "*.xlsm"):
+            for path in glob.glob(os.path.join(search_dir, pattern)):
+                name = os.path.basename(path)
+                lower_name = name.lower()
+                # Ignore roster files
+                if "list of students for" in lower_name:
+                    continue
+                if lower_name.endswith(".csv"):
+                    continue
+                candidates.append(path)
 
     if not candidates:
-        legacy_path = os.path.join(project_dir, "ORTEGA_SCHEDULE.xls")
-        if os.path.exists(legacy_path):
-            return legacy_path
         raise FileNotFoundError(
-            f"No schedule spreadsheet found in {project_dir}. "
-            "Expected a schedule file like ORTEGA_SCHEDULE.xls, ROSALES UPDATED.xls, or a .xlsx schedule file."
+            f"No schedule spreadsheet found in {project_dir} or its schedules/ directory. "
+            "Please ensure your schedule file is present (e.g., Mina.xlsx, Rosales.xls) and that it doesn't contain 'list of students for' in the name."
         )
 
-    preferred = []
-    for path in candidates:
-        lower_name = os.path.basename(path).lower()
-        if "ortega_schedule" in lower_name or "rosales" in lower_name or "schedule" in lower_name:
-            preferred.append(path)
-
+    # Prefer files that actually have 'schedule' in the name if there are multiple spreadsheets
+    preferred = [p for p in candidates if "schedule" in os.path.basename(p).lower()]
+    
     if preferred:
         return sorted(preferred, key=lambda p: os.path.basename(p).lower())[0]
     return sorted(candidates, key=lambda p: os.path.basename(p).lower())[0]
@@ -59,21 +92,44 @@ def find_schedule_file(project_dir):
 
 def parse_schedule(project_dir):
     xls_path = find_schedule_file(project_dir)
-    wb = xlrd.open_workbook(xls_path, formatting_info=True)
-    sheet = wb.sheet_by_index(0)
     
     grid = []
-    for rx in range(sheet.nrows):
-        row_vals = []
-        for cx in range(sheet.ncols):
-            val = sheet.cell_value(rx, cx)
-            if sheet.cell_type(rx, cx) == xlrd.XL_CELL_TEXT:
-                row_vals.append(str(val))
-            elif sheet.cell_type(rx, cx) == xlrd.XL_CELL_NUMBER:
-                row_vals.append(str(int(val)) if val.is_integer() else str(val))
-            else:
-                row_vals.append(str(val))
-        grid.append(row_vals)
+    if xls_path.lower().endswith(".xls"):
+        wb = xlrd.open_workbook(xls_path, formatting_info=True)
+        sheet = wb.sheet_by_index(0)
+        
+        for rx in range(sheet.nrows):
+            row_vals = []
+            for cx in range(sheet.ncols):
+                val = sheet.cell_value(rx, cx)
+                if sheet.cell_type(rx, cx) == xlrd.XL_CELL_TEXT:
+                    row_vals.append(str(val))
+                elif sheet.cell_type(rx, cx) == xlrd.XL_CELL_NUMBER:
+                    row_vals.append(str(int(val)) if val.is_integer() else str(val))
+                elif sheet.cell_type(rx, cx) == xlrd.XL_CELL_DATE:
+                    t = xlrd.xldate_as_tuple(val, wb.datemode)
+                    row_vals.append(f"{t[3]:02d}:{t[4]:02d}")
+                else:
+                    row_vals.append(str(val))
+            grid.append(row_vals)
+    else:
+        import openpyxl
+        import datetime
+        wb = openpyxl.load_workbook(xls_path, data_only=True)
+        sheet = wb.active
+        
+        for row in sheet.iter_rows(values_only=True):
+            row_vals = []
+            for val in row:
+                if val is None:
+                    row_vals.append("")
+                elif isinstance(val, (datetime.time, datetime.datetime)):
+                    row_vals.append(val.strftime("%H:%M"))
+                elif isinstance(val, float):
+                    row_vals.append(str(int(val)) if val.is_integer() else str(val))
+                else:
+                    row_vals.append(str(val))
+            grid.append(row_vals)
         
     instructor = "DAN JOSEPH A. ORTEGA"
     semester = "FIRST SEMESTER, AY 2026 - 2027"
@@ -84,7 +140,7 @@ def parse_schedule(project_dir):
         for c in range(len(grid[r])):
             val = grid[r][c].upper()
             
-            if "SEMESTER" in val and ("SY " in val or "AY " in val):
+            if "SEMESTER" in val and re.search(r'\b(SY|AY|A\.Y\.|S\.Y\.)\b', val):
                 semester = grid[r][c]
                 
             if val.replace(":", "").strip() == "NAME":
@@ -119,14 +175,16 @@ def find_blocks_for_section(grid, section, start_row, end_row):
                     subject_row = r
                     for i in range(r, start_row-1, -1):
                         val = grid[i][c].strip()
-                        if val.startswith("CVSU") or val.startswith("DCIT") or val.startswith("COSC"):
+                        SUBJECT_PREFIXES = ("CVSU", "DCIT", "COSC", "ITEC", "INSY", "GNED", "MATH", "STAT", "FITT", "NSTP", "PHYS", "PHED", "ECON", "BAMG")
+                        if val.startswith(SUBJECT_PREFIXES):
                             subject_row = i
                             break
                     
                     room_row = r
                     for i in range(r, end_row+1):
                         val = grid[i][c].strip()
-                        if i > r and (val.startswith("CVSU") or val.startswith("DCIT") or val.startswith("COSC")):
+                        SUBJECT_PREFIXES = ("CVSU", "DCIT", "COSC", "ITEC", "INSY", "GNED", "MATH", "STAT", "FITT", "NSTP", "PHYS", "PHED", "ECON", "BAMG")
+                        if i > r and val.startswith(SUBJECT_PREFIXES):
                             break
                         if val:
                             room_row = i
@@ -210,8 +268,8 @@ def process_all():
             parts = []
             for b in blocks:
                 typ = f"{b['type']}: " if b['type'] else ""
-                parts.append(f"{b['start_time']}-{b['end_time']} / {b['day']} / {typ}{b['room']}")
-            time_days_room = ", ".join(parts)
+                parts.append(f"{b['day']}: {b['start_time']}-{b['end_time']} / {typ}{b['room']}")
+            time_days_room = "; ".join(parts)
         else:
             time_days_room = "SEE SCHEDULE"
             
@@ -256,7 +314,7 @@ def process_all():
                 attendancegen.build_attendance_sheet(
                     template_path=attendance_template,
                     output_path=out_path,
-                    course_code_title=f"{subject_name.split(' - ')[0]} - {subject_name}",
+                    course_code_title=subject_name,
                     class_schedule=time_days_room,
                     semester_ay=semester_ay,
                     room_assignment=", ".join([b['room'] for b in blocks]) if blocks else "N/A",

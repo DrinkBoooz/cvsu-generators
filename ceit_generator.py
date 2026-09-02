@@ -57,16 +57,35 @@ class ClassInfo:
 def get_full_text(el) -> str:
     return "".join(t.text or "" for t in el.iter(w("t")))
 
-def set_run_text(run, text: str):
-    """Replace text in a single run, preserving its rPr."""
+def _auto_scale_font(r_el, text: str, shrink_threshold: int, sz_val: str):
+    """Automatically scale the font of a run if the text exceeds a given length."""
+    if shrink_threshold > 0 and len(text) > shrink_threshold:
+        rpr = r_el.find(w("rPr"))
+        if rpr is None:
+            rpr = etree.Element(w("rPr"))
+            r_el.insert(0, rpr)
+        sz = rpr.find(w("sz"))
+        if sz is None:
+            sz = etree.SubElement(rpr, w("sz"))
+        sz.set(w("val"), sz_val)
+        sz_cs = rpr.find(w("szCs"))
+        if sz_cs is None:
+            sz_cs = etree.SubElement(rpr, w("szCs"))
+        sz_cs.set(w("val"), sz_val)
+
+def set_run_text(run, text: str, shrink_threshold: int = 0, shrink_sz: str = "18"):
+    """Replace text in a single run, preserving its rPr, and optionally scaling font."""
     for t in run.findall(w("t")):
         run.remove(t)
+        
+    _auto_scale_font(run, text, shrink_threshold, shrink_sz)
+        
     t_el = etree.SubElement(run, w("t"))
     t_el.text = text
     if text and (text[0] == " " or text[-1] == " "):
         t_el.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
 
-def replace_after_colon(para, value: str):
+def replace_after_colon(para, value: str, shrink_threshold: int = 0, shrink_sz: str = "18"):
     """
     Keep the label run (up to and including ':'), set the last run to value,
     and remove all runs in between. Works for 1-run and multi-run paragraphs.
@@ -114,6 +133,8 @@ def replace_after_colon(para, value: str):
         t_val.text = value
     if t_val.text and t_val.text[0] == " ":
         t_val.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
+        
+    _auto_scale_font(r_val, value, shrink_threshold, shrink_sz)
     # Remove paragraph-level hanging indent if present — templates sometimes
     # use a hanging indent for label/value pairs which causes inconsistent
     # visual spacing when we replace runs. Clearing it produces a consistent
@@ -124,7 +145,7 @@ def replace_after_colon(para, value: str):
         if ind is not None:
             ppr.remove(ind)
 
-def replace_value_run(para, run_index: int, value: str):
+def replace_value_run(para, run_index: int, value: str, shrink_threshold: int = 0, shrink_sz: str = "18"):
     """
     Keep runs [0..run_index-1] as-is (label), set run[run_index] to value,
     and remove all runs after run_index.
@@ -144,7 +165,7 @@ def replace_value_run(para, run_index: int, value: str):
         value = " " + value
 
     # Set the target run
-    set_run_text(runs[run_index], value)
+    set_run_text(runs[run_index], value, shrink_threshold, shrink_sz)
     # Also clear paragraph indent for consistency
     p = para
     ppr = p.find(w("pPr"))
@@ -153,7 +174,7 @@ def replace_value_run(para, run_index: int, value: str):
         if ind is not None:
             ppr.remove(ind)
 
-def collapse_runs_after_colon(para, value: str):
+def collapse_runs_after_colon(para, value: str, shrink_threshold: int = 0, shrink_sz: str = "18"):
     """
     For semester paragraphs that have multiple runs (e.g. superscript 'nd').
     Collapses everything after the colon into one run.
@@ -205,13 +226,16 @@ def collapse_runs_after_colon(para, value: str):
         t_val.text = value
     if t_val.text and t_val.text[0] == " ":
         t_val.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
+        
+    _auto_scale_font(r_val, value, shrink_threshold, shrink_sz)
+        
     ppr = para.find(w("pPr"))
     if ppr is not None:
         ind = ppr.find(w("ind"))
         if ind is not None:
             ppr.remove(ind)
 
-def set_cell_text(tc, text: str, remove_num: bool = False):
+def set_cell_text(tc, text: str, remove_num: bool = False, shrink_threshold: int = 0, shrink_sz: str = "18"):
     """Replace text in first paragraph of a cell, preserving run formatting.
 
     If `remove_num` is True, remove any paragraph-level `w:numPr` so an
@@ -241,6 +265,9 @@ def set_cell_text(tc, text: str, remove_num: bool = False):
     r_new = etree.SubElement(p, w("r"))
     if first_rpr is not None:
         r_new.insert(0, copy.deepcopy(first_rpr))
+        
+    _auto_scale_font(r_new, text, shrink_threshold, shrink_sz)
+        
     t = etree.SubElement(r_new, w("t"))
     t.text = text
     if text and text[0] == " ":
@@ -378,25 +405,26 @@ class SyllabusGenerator(DocumentGenerator):
         # Expected order: Instructor, Course/Section, Schedule Code,
         # Subject, Time/Days/Room, Semester/AY
         mapping = [
-            (0, info.instructor),
-            (1, info.course_section),
-            (2, info.schedule_code),
-            (3, info.subject),
-            (4, info.time_days_room),
-            (5, info.semester_ay),
+            (0, info.instructor, 30),
+            (1, info.course_section, 0),
+            (2, info.schedule_code, 0),
+            (3, info.subject, 35),
+            (4, info.time_days_room, 45),
+            (5, info.semester_ay, 0),
         ]
-        for row_idx, val in mapping:
+        for row_idx, val, thresh in mapping:
             if row_idx < len(rows):
                 cells = rows[row_idx].findall(w("tc"))
                 if len(cells) > 1:
-                    set_cell_text(cells[1], val)
+                    set_cell_text(cells[1], val, shrink_threshold=thresh, shrink_sz="18")
 
     def _fill_student_row(self, cells, idx, name, stnum):
         # cells: [No., Name, StudentNumber, Signature]
         # Use template's automatic numbering: do not write an explicit
         # digit into the first cell (the template's paragraph `w:numPr`
         # will produce the visible number). Leave the cell text empty.
-        set_cell_text(cells[1], name)
+        # Extreme names shrink to 9pt to prevent line-wrapping
+        set_cell_text(cells[1], name, shrink_threshold=32, shrink_sz="18")
         set_cell_text(cells[2], stnum)
         # cells[3] = Signature — leave blank
 
@@ -469,23 +497,23 @@ class ExamReturnsGenerator(DocumentGenerator):
             info_tbl = tables[0]
             rows = info_tbl.findall(w("tr"))
             mapping = [
-                (0, info.instructor),
-                (1, info.course_section),
-                (2, info.schedule_code),
-                (3, info.subject),
-                (4, info.semester_ay),
+                (0, info.instructor, 30),
+                (1, info.course_section, 0),
+                (2, info.schedule_code, 0),
+                (3, info.subject, 35),
+                (4, info.semester_ay, 0),
             ]
-            for row_idx, val in mapping:
+            for row_idx, val, thresh in mapping:
                 if row_idx < len(rows):
                     cells = rows[row_idx].findall(w("tc"))
                     if len(cells) > 1:
-                        set_cell_text(cells[1], val)
+                        set_cell_text(cells[1], val, shrink_threshold=thresh, shrink_sz="18")
         else:
             paras = body.findall(w("p"))
-            replace_value_run(paras[1], 2, info.instructor)
+            replace_value_run(paras[1], 2, info.instructor, shrink_threshold=30, shrink_sz="18")
             replace_value_run(paras[2], 3, info.course_section)
             replace_value_run(paras[3], 6, info.schedule_code)
-            replace_value_run(paras[4], 3, info.subject)
+            replace_value_run(paras[4], 3, info.subject, shrink_threshold=35, shrink_sz="18")
             collapse_runs_after_colon(paras[5], info.semester_ay)
             runs = paras[9].findall(w("r"))
             if runs:
@@ -495,7 +523,7 @@ class ExamReturnsGenerator(DocumentGenerator):
 
     def _fill_student_row(self, cells, idx, name, stnum):
         # cells: [Name, StudentNumber, Signature]
-        set_cell_text(cells[0], name)
+        set_cell_text(cells[0], name, shrink_threshold=32, shrink_sz="18")
         set_cell_text(cells[1], stnum)
         # cells[2] = Signature — leave blank
 
@@ -525,32 +553,32 @@ class TOSGenerator(DocumentGenerator):
             info_tbl = tables[0]
             rows = info_tbl.findall(w("tr"))
             mapping = [
-                (0, info.instructor),
-                (1, info.course_section),
-                (2, info.schedule_code),
-                (3, info.subject),
-                (4, info.time_days_room),
-                (5, f"{info.semester_ay} ({self._period})"),
+                (0, info.instructor, 30),
+                (1, info.course_section, 0),
+                (2, info.schedule_code, 0),
+                (3, info.subject, 35),
+                (4, info.time_days_room, 45),
+                (5, f"{info.semester_ay} ({self._period})", 0),
             ]
-            for row_idx, val in mapping:
+            for row_idx, val, thresh in mapping:
                 if row_idx < len(rows):
                     cells = rows[row_idx].findall(w("tc"))
                     if len(cells) > 1:
-                        set_cell_text(cells[1], val)
+                        set_cell_text(cells[1], val, shrink_threshold=thresh, shrink_sz="18")
         else:
             paras = body.findall(w("p"))
-            replace_after_colon(paras[1], info.instructor)
+            replace_after_colon(paras[1], info.instructor, shrink_threshold=30, shrink_sz="18")
             replace_value_run(paras[2], 2, info.course_section)
             replace_value_run(paras[3], 4, info.schedule_code)
-            replace_after_colon(paras[4], info.subject)
-            replace_after_colon(paras[5], info.time_days_room)
+            replace_after_colon(paras[4], info.subject, shrink_threshold=35, shrink_sz="18")
+            replace_after_colon(paras[5], info.time_days_room, shrink_threshold=45, shrink_sz="18")
             collapse_runs_after_colon(
                 paras[6], f"{info.semester_ay} ({self._period})"
             )
 
     def _fill_student_row(self, cells, idx, name, stnum):
         # cells: [Name, StudentNumber, Signature]
-        set_cell_text(cells[0], name)
+        set_cell_text(cells[0], name, shrink_threshold=32, shrink_sz="18")
         set_cell_text(cells[1], stnum)
         # cells[2] = Signature — leave blank
 
@@ -640,15 +668,22 @@ def load_students_excel(path: str) -> list:
 
 def load_students_csv(path: str) -> list:
     students = []
-    with open(path, newline="", encoding="utf-8") as f:
-        for i, row in enumerate(csv.reader(f)):
-            if i == 0 and row and row[0].lower() in ("name","student name","full name"):
-                continue
-            if len(row) >= 2:
-                students.append((row[0].strip(), row[1].strip()))
-            elif len(row) == 1 and row[0].strip():
-                students.append((row[0].strip(), ""))
-    return students
+    encodings = ["utf-8", "utf-16", "utf-8-sig", "cp1252"]
+    for enc in encodings:
+        try:
+            with open(path, newline="", encoding=enc) as f:
+                for i, row in enumerate(csv.reader(f)):
+                    if i == 0 and row and row[0].lower() in ("name","student name","full name"):
+                        continue
+                    if len(row) >= 2:
+                        students.append((row[0].strip(), row[1].strip()))
+                    elif len(row) == 1 and row[0].strip():
+                        students.append((row[0].strip(), ""))
+            return students
+        except (UnicodeDecodeError, csv.Error):
+            continue
+    raise RuntimeError(f"Could not parse CSV {path} with any known encoding.")
+
 
 def load_students(path: str) -> list:
     ext = os.path.splitext(path)[1].lower()

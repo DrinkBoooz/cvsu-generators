@@ -213,7 +213,23 @@ def get_full_text(el) -> str:
     """Get all text content from an element."""
     return "".join(t.text or "" for t in el.iter(w("t")))
 
-def set_para_text(para, text: str):
+def _auto_scale_font(r_el, text: str, shrink_threshold: int, sz_val: str):
+    """Automatically scale the font of a run if the text exceeds a given length."""
+    if shrink_threshold > 0 and len(text) > shrink_threshold:
+        rpr = r_el.find(w("rPr"))
+        if rpr is None:
+            rpr = etree.Element(w("rPr"))
+            r_el.insert(0, rpr)
+        sz = rpr.find(w("sz"))
+        if sz is None:
+            sz = etree.SubElement(rpr, w("sz"))
+        sz.set(w("val"), sz_val)
+        sz_cs = rpr.find(w("szCs"))
+        if sz_cs is None:
+            sz_cs = etree.SubElement(rpr, w("szCs"))
+        sz_cs.set(w("val"), sz_val)
+
+def set_para_text(para, text: str, shrink_threshold: int = 0, shrink_sz: str = "18"):
     """
     Replace text content of a paragraph while preserving the formatting
     of the first run found. Removes all runs then writes one clean run.
@@ -236,6 +252,9 @@ def set_para_text(para, text: str):
     r = etree.SubElement(para, w("r"))
     if rpr_clone is not None:
         r.insert(0, rpr_clone)
+        
+    _auto_scale_font(r, text, shrink_threshold, shrink_sz)
+        
     t = etree.SubElement(r, w("t"))
     t.text = text
     if text and (text[0] == " " or text[-1] == " "):
@@ -342,12 +361,12 @@ def build_attendance_sheet(
         cells = info_rows[row_idx].findall(w("tc"))
         return cells[cell_idx].find(w("p"))
 
-    set_para_text(info_cell_para(0, 1), course_code_title)
+    set_para_text(info_cell_para(0, 1), course_code_title, shrink_threshold=40, shrink_sz="18")
     set_para_text(info_cell_para(0, 4), month_year_label)
-    set_para_text(info_cell_para(1, 1), schedule_label)
+    set_para_text(info_cell_para(1, 1), schedule_label, shrink_threshold=45, shrink_sz="18")
     set_para_text(info_cell_para(2, 1), semester_ay)
     set_para_text(info_cell_para(3, 1), room_assignment)
-    set_para_text(info_cell_para(4, 1), instructor)
+    set_para_text(info_cell_para(4, 1), instructor, shrink_threshold=35, shrink_sz="18")
 
     # ══ 2. Rebuild attendance table rows ═════════════════════════════════════
     #
@@ -495,7 +514,8 @@ def build_attendance_sheet(
     r_s  = orig_student_cells[-1]
 
     MAX_ROWS = 40
-    for row_idx in range(MAX_ROWS):
+    target_rows = max(MAX_ROWS, len(students))
+    for row_idx in range(target_rows):
         name, stnum = students[row_idx] if row_idx < len(students) else ("", "")
 
         tr = copy.deepcopy(orig_student)
@@ -508,7 +528,7 @@ def build_attendance_sheet(
 
         # Set NO., name, stnum
         set_para_text(cells[0].find(w("p")), str(row_idx + 1))
-        set_para_text(cells[1].find(w("p")), name)
+        set_para_text(cells[1].find(w("p")), name, shrink_threshold=32, shrink_sz="18")
         set_para_text(cells[2].find(w("p")), stnum)
 
         # Remove existing attendance + summary cells
@@ -607,16 +627,23 @@ def load_students_excel(path: str) -> list:
 
 def load_students_csv(path: str) -> list:
     students = []
-    with open(path, newline="", encoding="utf-8") as f:
-        reader = csv.reader(f)
-        for i, row in enumerate(reader):
-            if i == 0 and row and row[0].lower() in ("name", "student name", "full name"):
-                continue
-            if len(row) >= 2:
-                students.append((row[0].strip(), row[1].strip()))
-            elif len(row) == 1 and row[0].strip():
-                students.append((row[0].strip(), ""))
-    return students
+    encodings = ["utf-8", "utf-16", "utf-8-sig", "cp1252"]
+    for enc in encodings:
+        try:
+            with open(path, newline="", encoding=enc) as f:
+                reader = csv.reader(f)
+                for i, row in enumerate(reader):
+                    if i == 0 and row and row[0].lower() in ("name", "student name", "full name"):
+                        continue
+                    if len(row) >= 2:
+                        students.append((row[0].strip(), row[1].strip()))
+                    elif len(row) == 1 and row[0].strip():
+                        students.append((row[0].strip(), ""))
+            return students
+        except UnicodeDecodeError:
+            continue
+    raise RuntimeError(f"Could not parse CSV {path} with any known encoding.")
+
 
 def load_students(path: str) -> list:
     ext = os.path.splitext(path)[1].lower()
