@@ -71,8 +71,11 @@ def parse_schedule(project_dir):
     return grid, instructor, semester, start_row, end_row
 
 def find_blocks_for_section(grid, section, start_row, end_row):
-    search_str = section.replace("BSCS", "CS ").replace("BSIT", "IT ")
-    search_str = re.sub(r'([A-Z]+)(\d)', r'\1 \2', search_str)
+    search_str = section.replace("CSCS", "CS")
+    if search_str.upper().startswith("BS"):
+        search_str = search_str[2:]
+        
+    search_str = re.sub(r'([a-zA-Z]+)(\d)', r'\1 \2', search_str)
     
     blocks = []
     for c in range(3, 9):
@@ -107,11 +110,11 @@ def find_blocks_for_section(grid, section, start_row, end_row):
                     type_str = ""
                     is_async = False
                     for i in range(subject_row, room_row + 1):
-                        v = grid[i][c].strip()
-                        if "async" in v.lower():
+                        v = grid[i][c].strip().lower()
+                        if "async" in v or "online" in v or "virtual" in v:
                             is_async = True
-                        if v in ["LAB", "LEC"]:
-                            type_str = v
+                        if v.upper() in ["LAB", "LEC"]:
+                            type_str = v.upper()
                             
                     if is_async:
                         continue
@@ -145,7 +148,9 @@ def process_all():
     else:
         att_year = int(years[0])
         
-    xlsx_files = glob.glob(os.path.join(project_dir, "*.xlsx"))
+    xlsx_files = []
+    for ext in ['*.xlsx', '*.xls', '*.csv', '*.XLSX', '*.CSV', '*.XLS']:
+        xlsx_files.extend(glob.glob(os.path.join(project_dir, ext)))
     
     templates_dir = os.path.join(project_dir, "templates")
     if not os.path.exists(templates_dir):
@@ -157,11 +162,12 @@ def process_all():
     
     for student_file in xlsx_files:
         filename = os.path.basename(student_file)
-        m = re.match(r'^([A-Z0-9\-]+).*for\s+(\d+)\s*-\s*(.+?)\.xlsx', filename)
+        m = re.match(r'^([a-z\s]+[a-z0-9\-\s]+?)\s*list of students for\s+(\d+)\s*-\s*(.+?)\.(xlsx|xls|csv)', filename, re.IGNORECASE)
         if not m:
             continue
             
-        course_sec = m.group(1).replace("CSCS", "CS")
+        raw_course = m.group(1).strip()
+        course_sec = re.sub(r'\s+', '', raw_course).replace("CSCS", "CS")
         schedule_code = m.group(2)
         subject_name = m.group(3)
         
