@@ -135,7 +135,8 @@ class GradeGenerator:
 
         # 4. Copy template to a temporary path for atomic writes
         os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
-        tmp_path = output_path + ".tmp.xlsx"
+        import uuid
+        tmp_path = output_path + f".{uuid.uuid4().hex[:8]}.tmp.xlsx"
         shutil.copy2(template_path, tmp_path)
 
         # 5. Populate workbook natively
@@ -185,8 +186,14 @@ class GradeGenerator:
                 row_num = start_row + r_idx
                 if r_idx < len(cleaned_students):
                     name, num = cleaned_students[r_idx]
+                    
+                    def sanitize_excel(val):
+                        if isinstance(val, str) and val.startswith(('=', '+', '-', '@')):
+                            return "'" + val
+                        return val
+                        
                     ws.cell(row=row_num, column=1).value = r_idx + 1
-                    ws.cell(row=row_num, column=2).value = name
+                    ws.cell(row=row_num, column=2).value = sanitize_excel(name)
                     ws.cell(row=row_num, column=3).value = int(num) if (num.isdigit() and not num.startswith('0')) else num
                 else:
                     # Clear remaining student name and number cells

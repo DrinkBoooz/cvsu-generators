@@ -602,6 +602,16 @@
     </div>
 
     <script>
+      function escapeHTML(str) {
+        if (!str) return "";
+        return String(str)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#039;");
+      }
+
       document.addEventListener("DOMContentLoaded", () => {
         loadDates();
       });
@@ -692,14 +702,14 @@
             row.innerHTML = `
               <div class="flex-grow-1">
                 <div class="d-flex align-items-center gap-2 mb-1">
-                  <span class="badge" style="background: var(--ios-blue); color: white; font-size: 11px; font-weight: 600; padding: 4px 8px; border-radius: 8px;">${cls.course_sec}</span>
-                  <span class="text-secondary" style="font-size: 12px; font-family: monospace;">Sched: ${cls.schedule_code}</span>
+                  <span class="badge" style="background: var(--ios-blue); color: white; font-size: 11px; font-weight: 600; padding: 4px 8px; border-radius: 8px;">${escapeHTML(cls.course_sec)}</span>
+                  <span class="text-secondary" style="font-size: 12px; font-family: monospace;">Sched: ${escapeHTML(cls.schedule_code)}</span>
                 </div>
-                <div style="font-size: 13.5px; font-weight: 600; line-height: 1.3;">${cls.subject_name}</div>
-                <div class="text-secondary mt-1" style="font-size: 11.5px;">${cls.schedule_desc}</div>
+                <div style="font-size: 13.5px; font-weight: 600; line-height: 1.3;">${escapeHTML(cls.subject_name)}</div>
+                <div class="text-secondary mt-1" style="font-size: 11.5px;">${escapeHTML(cls.schedule_desc)}</div>
               </div>
               <div class="flex-shrink-0" style="min-width: 185px;">
-                <select class="form-select ios-input py-2 px-3 class-type-select" data-class-id="${cls.id}" style="font-size: 13px; height: auto; border-radius: 10px; cursor: pointer;">
+                <select class="form-select ios-input py-2 px-3 class-type-select" data-class-id="${escapeHTML(cls.id)}" style="font-size: 13px; height: auto; border-radius: 10px; cursor: pointer;">
                   <option value="lecture_lab" ${isLab ? "selected" : ""}>Lecture and Lab</option>
                   <option value="lecture_only" ${!isLab ? "selected" : ""}>Lecture only</option>
                 </select>

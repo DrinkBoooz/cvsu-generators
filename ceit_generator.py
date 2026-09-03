@@ -281,7 +281,8 @@ def load_docx(path: str):
     with open(path, "rb") as fh:
         data = fh.read()
     zin = zipfile.ZipFile(io.BytesIO(data))
-    root = etree.fromstring(zin.read("word/document.xml"))
+    safe_parser = etree.XMLParser(resolve_entities=False)
+    root = etree.fromstring(zin.read("word/document.xml"), parser=safe_parser)
     body = root.find(w("body"))
     return zin, root, body
 
@@ -297,7 +298,8 @@ def save_docx(zin, root, output_path: str):
     zout.close()
     zin.close()
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
-    tmp_path = output_path + ".tmp"
+    import uuid
+    tmp_path = output_path + f".{uuid.uuid4().hex[:8]}.tmp"
     with open(tmp_path, "wb") as fh:
         fh.write(buf.getvalue())
     os.replace(tmp_path, output_path)

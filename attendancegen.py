@@ -376,7 +376,8 @@ def build_attendance_sheet(
 
     zin = zipfile.ZipFile(io.BytesIO(template_bytes))
     doc_xml = zin.read("word/document.xml")
-    root = etree.fromstring(doc_xml)
+    safe_parser = etree.XMLParser(resolve_entities=False)
+    root = etree.fromstring(doc_xml, parser=safe_parser)
     body = root.find(w("body"))
     tables = body.findall(w("tbl"))
     if len(tables) < 2:
@@ -608,9 +609,11 @@ def build_attendance_sheet(
     zout.close()
     zin.close()
 
-    with open(output_path + ".tmp", "wb") as fh:
+    import uuid
+    tmp_path = output_path + f".{uuid.uuid4().hex[:8]}.tmp"
+    with open(tmp_path, "wb") as fh:
         fh.write(zout_buf.getvalue())
-    os.replace(output_path + ".tmp", output_path)
+    os.replace(tmp_path, output_path)
     print(f"  [SUCCESS]  Saved: {output_path}")
 
 # ── Student file loaders ──────────────────────────────────────────────────────
