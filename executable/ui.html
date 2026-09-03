@@ -1,0 +1,754 @@
+<!doctype html>
+<html lang="en" data-bs-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CvSU Generators Webview</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --ios-bg: #f2f2f7;
+        --ios-card: rgba(255, 255, 255, 0.65);
+        --ios-border: rgba(0, 0, 0, 0.08);
+        --ios-text: #1c1c1e;
+        --ios-blue: #007aff;
+        --ios-green: #34c759;
+        --ios-gray: rgba(142, 142, 147, 0.12);
+      }
+      [data-bs-theme="dark"] {
+        --ios-bg: #000000;
+        --ios-card: rgba(28, 28, 30, 0.55);
+        --ios-border: rgba(255, 255, 255, 0.1);
+        --ios-text: #f2f2f7;
+        --ios-blue: #0a84ff;
+        --ios-green: #30d158;
+        --ios-gray: rgba(142, 142, 147, 0.2);
+      }
+
+      body {
+        background-color: var(--ios-bg);
+        color: var(--ios-text);
+        font-family:
+          -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+          "Segoe UI", Roboto, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        transition:
+          background-color 0.4s ease,
+          color 0.4s ease;
+        margin: 0;
+        min-height: 100vh;
+        padding-top: 30px;
+        padding-bottom: 50px;
+      }
+
+      /* Liquid Glass Surfaces */
+      .glass-panel {
+        background: var(--ios-card);
+        backdrop-filter: blur(40px) saturate(200%);
+        -webkit-backdrop-filter: blur(40px) saturate(200%);
+        border: 1px solid var(--ios-border);
+        border-radius: 28px;
+        box-shadow:
+          0 10px 40px rgba(0, 0, 0, 0.05),
+          inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        transition: all 0.4s ease;
+      }
+
+      /* Native Inputs */
+      .ios-input {
+        background: var(--ios-gray) !important;
+        border: 1px solid transparent !important;
+        border-radius: 14px;
+        padding: 16px 20px;
+        font-size: 16px;
+        font-weight: 500;
+        color: var(--ios-text) !important;
+        transition:
+          transform 0.2s,
+          background 0.3s;
+        box-shadow: none !important;
+      }
+      .ios-input:focus {
+        background: var(--ios-card) !important;
+        border: 1px solid var(--ios-blue) !important;
+        box-shadow: 0 0 0 4px rgba(10, 132, 255, 0.15) !important;
+      }
+
+      /* Physics-based Core Buttons */
+      .btn-ios {
+        border-radius: 14px;
+        padding: 16px 24px;
+        font-weight: 600;
+        font-size: 16px;
+        letter-spacing: -0.01em;
+        border: none;
+        transition:
+          transform 0.15s cubic-bezier(0.25, 1, 0.5, 1),
+          opacity 0.15s;
+        margin-left: 8px; /* gap from input */
+      }
+      .btn-ios:active {
+        transform: scale(0.94);
+        opacity: 0.8;
+      }
+      .btn-ios-secondary {
+        background: var(--ios-gray);
+        color: var(--ios-blue);
+      }
+      .btn-ios-secondary:hover {
+        background: rgba(10, 132, 255, 0.15);
+      }
+      .btn-ios-success {
+        background: var(
+          --ios-blue
+        ); /* iOS prioritizes blue for primary actions */
+        color: white;
+        padding: 18px 24px;
+        font-size: 18px;
+        border-radius: 20px;
+        box-shadow: 0 6px 24px rgba(0, 122, 255, 0.35);
+        width: 100%;
+        margin-left: 0;
+      }
+
+      /* Typographic Hierarchy */
+      h3.ios-title {
+        font-weight: 700;
+        letter-spacing: -0.04em;
+        font-size: 32px;
+        margin-bottom: 2rem;
+      }
+      .form-label {
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: #8e8e93;
+        margin-left: 8px;
+        margin-bottom: 10px;
+      }
+
+      /* UI Controls */
+      .theme-btn {
+        background: var(--ios-card);
+        backdrop-filter: blur(20px) saturate(180%);
+        -webkit-backdrop-filter: blur(20px) saturate(180%);
+        border: 1px solid var(--ios-border);
+        color: var(--ios-text);
+        box-shadow:
+          0 4px 12px rgba(0, 0, 0, 0.05),
+          inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        border-radius: 20px;
+        font-weight: 500;
+        font-size: 13px;
+        letter-spacing: 0.02em;
+        transition: all 0.25s cubic-bezier(0.25, 1, 0.5, 1);
+        padding: 8px 16px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        pointer-events: auto;
+      }
+      .theme-btn:active {
+        transform: scale(0.93);
+        opacity: 0.8;
+      }
+      .theme-btn:hover {
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+      }
+      .top-nav {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: -10px;
+        padding-right: 15px;
+        z-index: 100;
+        position: relative;
+        pointer-events: none;
+      }
+
+      /* Native Accordion */
+      .accordion-item {
+        background: transparent !important;
+        border: none;
+        border-bottom: 1px solid var(--ios-border);
+      }
+      .accordion-item:last-child {
+        border-bottom: none;
+      }
+      .accordion-button {
+        background: transparent !important;
+        color: var(--ios-text) !important;
+        font-weight: 600;
+        font-size: 17px;
+        letter-spacing: -0.01em;
+        padding: 20px 8px;
+        box-shadow: none !important;
+      }
+      .accordion-button::after {
+        opacity: 0.5;
+        transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+      }
+      [data-bs-theme="dark"] .accordion-button::after {
+        filter: invert(1);
+      }
+      .accordion-body {
+        background: var(--ios-gray);
+        border-radius: 16px;
+        margin: 0 8px 20px 8px;
+        padding: 20px;
+        font-size: 15px;
+        line-height: 1.6;
+        border: 1px solid var(--ios-border);
+      }
+      .accordion-body code {
+        background: var(--ios-bg);
+        border-radius: 6px;
+        padding: 2px 6px;
+        color: var(--ios-text);
+        font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+        font-size: 13px;
+      }
+
+      .alert-ios {
+        border-radius: 16px;
+        background: rgba(10, 132, 255, 0.1);
+        border: 1px solid rgba(10, 132, 255, 0.2);
+        color: var(--ios-blue);
+        font-weight: 500;
+        font-size: 14px;
+        padding: 16px;
+        margin-top: 10px;
+      }
+
+      .dynamic-alert-box {
+        border-radius: 18px;
+        font-weight: 600;
+        border: none;
+        backdrop-filter: blur(20px);
+      }
+
+      .class-type-select {
+        background: var(--ios-card) !important;
+        color: var(--ios-text) !important;
+        border: 1px solid var(--ios-border) !important;
+        border-radius: 12px;
+        font-weight: 500;
+      }
+      .class-type-select:focus {
+        border-color: var(--ios-blue) !important;
+        box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.2) !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container" style="max-width: 800px">
+      <div class="top-nav">
+        <button class="theme-btn" onclick="toggleTheme()">
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+          Theme
+        </button>
+      </div>
+
+      <div class="glass-panel p-4 p-md-5">
+        <h3 class="ios-title text-center">Document Engines</h3>
+
+        <!-- Schedule Section -->
+        <div class="mb-4">
+          <label class="form-label">1. Instructor Schedule (Excel)</label>
+          <div class="d-flex gx-2">
+            <input
+              type="text"
+              id="scheduleDisplay"
+              class="form-control ios-input flex-grow-1"
+              placeholder="Select your XLS schedule..."
+              readonly
+            />
+            <button
+              class="btn-ios btn-ios-secondary flex-shrink-0"
+              type="button"
+              onclick="loadSchedule()"
+            >
+              Browse File
+            </button>
+          </div>
+        </div>
+
+        <!-- Roster Section -->
+        <div class="mb-4">
+          <label class="form-label">2. Student Rosters (XLSX)</label>
+          <div class="d-flex gx-2">
+            <input
+              type="text"
+              id="rosterDisplay"
+              class="form-control ios-input flex-grow-1"
+              placeholder="No files selected..."
+              readonly
+            />
+            <button
+              class="btn-ios btn-ios-secondary flex-shrink-0"
+              type="button"
+              onclick="loadRosters()"
+            >
+              Browse Data
+            </button>
+          </div>
+        </div>
+
+        <!-- Detected Classes & Subject Types Section -->
+        <div id="classesSection" class="mb-4 d-none">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <label class="form-label mb-0">Detected Classes & Subject Types</label>
+            <span id="classesCountBadge" class="badge rounded-pill" style="background: var(--ios-gray); color: var(--ios-blue); font-size: 11px; padding: 6px 12px;">0 Classes</span>
+          </div>
+          <p class="text-secondary mb-3" style="font-size: 13px; margin-left: 8px;">
+            Confirm or adjust whether each subject uses <strong>Lecture and Lab</strong> or <strong>Lecture only</strong> grading templates.
+          </p>
+          <div id="classesListContainer" class="d-flex flex-column gap-2" style="max-height: 280px; overflow-y: auto; padding-right: 4px;">
+            <!-- Rendered dynamically -->
+          </div>
+        </div>
+
+        <!-- Semester Date Boundaries -->
+        <div class="mb-4">
+          <label class="form-label">3. Semester Date Boundaries (Optional)</label>
+          <div class="d-flex gx-2 align-items-center flex-wrap gap-2">
+            <div class="d-flex align-items-center gap-1">
+              <span class="text-secondary" style="font-size: 13px;">Start:</span>
+              <select id="startMonth" class="form-select ios-input py-2" style="font-size: 14px; width: auto; border-radius: 10px;">
+                <option value="">Month</option>
+                <option value="1">Jan</option><option value="2">Feb</option><option value="3">Mar</option>
+                <option value="4">Apr</option><option value="5">May</option><option value="6">Jun</option>
+                <option value="7">Jul</option><option value="8">Aug</option><option value="9">Sep</option>
+                <option value="10">Oct</option><option value="11">Nov</option><option value="12">Dec</option>
+              </select>
+              <select id="startDay" class="form-select ios-input py-2" style="font-size: 14px; width: auto; border-radius: 10px;">
+                <option value="">Day</option>
+                <script>
+                  for(let i=1; i<=31; i++) document.write(`<option value="${i}">${i}</option>`);
+                </script>
+              </select>
+            </div>
+            
+            <div class="d-flex align-items-center gap-1 ms-md-3">
+              <span class="text-secondary" style="font-size: 13px;">End:</span>
+              <select id="endMonth" class="form-select ios-input py-2" style="font-size: 14px; width: auto; border-radius: 10px;">
+                <option value="">Month</option>
+                <option value="1">Jan</option><option value="2">Feb</option><option value="3">Mar</option>
+                <option value="4">Apr</option><option value="5">May</option><option value="6">Jun</option>
+                <option value="7">Jul</option><option value="8">Aug</option><option value="9">Sep</option>
+                <option value="10">Oct</option><option value="11">Nov</option><option value="12">Dec</option>
+              </select>
+              <select id="endDay" class="form-select ios-input py-2" style="font-size: 14px; width: auto; border-radius: 10px;">
+                <option value="">Day</option>
+                <script>
+                  for(let i=1; i<=31; i++) document.write(`<option value="${i}">${i}</option>`);
+                </script>
+              </select>
+            </div>
+          </div>
+          <p class="text-secondary mt-2 mb-0" style="font-size: 12px; margin-left: 4px;">
+            Overrides default semester dates. Both Start and End dates are required to take effect.
+          </p>
+        </div>
+
+        <!-- Output Directory -->
+        <div class="mb-5">
+          <label class="form-label">4. Target Output Environment</label>
+          <div class="d-flex gx-2">
+            <input
+              type="text"
+              id="outputDisplay"
+              class="form-control ios-input flex-grow-1"
+              placeholder="Choose a folder to deposit outputs..."
+              readonly
+            />
+            <button
+              class="btn-ios btn-ios-secondary flex-shrink-0"
+              type="button"
+              onclick="loadOutput()"
+            >
+              Browse Path
+            </button>
+          </div>
+        </div>
+
+        <!-- Execute Action -->
+        <div class="mb-2">
+          <button
+            class="btn-ios btn-ios-success"
+            type="button"
+            onclick="triggerPythonAction()"
+          >
+            Initialize Workflow
+          </button>
+        </div>
+
+        <div
+          id="alertBox"
+          class="mt-4 alert dynamic-alert-box d-none shadow-sm"
+          role="alert"
+        ></div>
+
+        <hr class="my-5" style="border-color: var(--ios-border)" />
+
+        <h5
+          class="mb-4 fw-bold"
+          style="font-size: 20px; letter-spacing: -0.02em"
+        >
+          Documentation & Guides
+        </h5>
+
+        <div class="accordion accordion-flush" id="instructionAccordion">
+          <!-- Overview Item -->
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="headingOne">
+              <button
+                class="accordion-button collapsed"
+                type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#collapseOne"
+                aria-expanded="false"
+                aria-controls="collapseOne"
+              >
+                Overview & Native Automation
+              </button>
+            </h2>
+            <div
+              id="collapseOne"
+              class="accordion-collapse collapse"
+              aria-labelledby="headingOne"
+              data-bs-parent="#instructionAccordion"
+            >
+              <div class="accordion-body">
+                Instead of manually typing class details via the CLI, the
+                unified script automatically constructs the required metadata by
+                pairing the official raw <code>.xls</code> schedule format
+                alongside standardized student lists.<br /><br />
+                When executed, it natively parses your schedule, extracts your
+                name and academic semester, and simultaneously traces the exact
+                Class, Room, Times, and Day placements by analyzing block
+                offsets. Generated <code>.docx</code> outputs are perfectly
+                scoped and organized within nested categorical directories to
+                eliminate clutter.
+              </div>
+            </div>
+          </div>
+
+          <!-- File Format Item -->
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="headingTwo">
+              <button
+                class="accordion-button collapsed"
+                type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#collapseTwo"
+                aria-expanded="false"
+                aria-controls="collapseTwo"
+              >
+                Required Naming Specifications
+              </button>
+            </h2>
+            <div
+              id="collapseTwo"
+              class="accordion-collapse collapse"
+              aria-labelledby="headingTwo"
+              data-bs-parent="#instructionAccordion"
+            >
+              <div class="accordion-body">
+                <strong>Schedule Parsing:</strong> The system crawls the
+                natively formatted Excel 97-2003 schedule blocks. Completely
+                filters out blocks mapped as "Async" or "Asynch".<br /><br />
+                <strong>Student Roster Extraction:</strong> The generic schema
+                relies heavily on filename formatting to dynamically bind to
+                your schedule blocks. Student lists MUST exist using the precise
+                format:<br /><br />
+                <code
+                  >{Course/Sec} List of Students for
+                  {ScheduleCode}-{Subject}.xlsx</code
+                ><br />
+                <em class="d-block mt-2"
+                  >Example:
+                  <code
+                    >BSCS1-4 List of Students for 202612040-DCIT
+                    21A...xlsx</code
+                  ></em
+                >
+
+                <div class="alert-ios mt-3">
+                  <strong>Origin Requirement:</strong> Rosters MUST be manually
+                  exported from
+                  <a
+                    href="https://registrar.cvsu.edu.ph/"
+                    target="_blank"
+                    style="color: inherit; text-decoration: underline"
+                    >registrar.cvsu.edu.ph</a
+                  >. The file must strictly contain exactly
+                  <strong>Student Name</strong> and
+                  <strong>Student Number</strong> columns.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Attendance Example Item -->
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="headingThree">
+              <button
+                class="accordion-button collapsed"
+                type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#collapseThree"
+                aria-expanded="false"
+                aria-controls="collapseThree"
+              >
+                Attendance Generator: Scenarios
+              </button>
+            </h2>
+            <div
+              id="collapseThree"
+              class="accordion-collapse collapse"
+              aria-labelledby="headingThree"
+              data-bs-parent="#instructionAccordion"
+            >
+              <div class="accordion-body">
+                <div class="mb-3">
+                  <strong>Lecture OR Lab only</strong><br />
+                  <code
+                    >Course Code: DCIT25 - DATA STRUCTURES AND ALGORITHMS<br />Schedule:
+                    07:00AM-10:00AM / Mon</code
+                  >
+                </div>
+                <div class="mb-3">
+                  <strong>Lecture and Lab on the same day</strong><br />
+                  <code
+                    >Course Code: DCIT25 - DATA STRUCTURES AND ALGORITHMS<br />Schedule:
+                    07:00AM-09:00AM, 01:00PM-03:00PM / Thurs<br />Room: LAB: CCL
+                    204, LEC: ITC 404</code
+                  >
+                </div>
+                <div class="mb-3">
+                  <strong>Lecture and Lab on separate days</strong><br />
+                  <code
+                    >Schedule: Thu: 07:00AM-09:00AM; Fri: 01:00PM-03:00PM<br />Room:
+                    LAB: CCL 204, LEC: ITC 404</code
+                  >
+                </div>
+                <div>
+                  <strong>Lecture + 2 labs</strong><br />
+                  <code
+                    >Schedule: Mon: 07:00AM-09:00AM; Wed: 01:00PM-03:00PM; Fri:
+                    03:00PM-05:00PM<br />Room: LAB 1: CCL 204, LAB 2: CCL 205,
+                    LEC: ITC 404</code
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- CEIT Example Item -->
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="headingFour">
+              <button
+                class="accordion-button collapsed"
+                type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#collapseFour"
+                aria-expanded="false"
+                aria-controls="collapseFour"
+              >
+                CEIT Generator: Scenarios
+              </button>
+            </h2>
+            <div
+              id="collapseFour"
+              class="accordion-collapse collapse"
+              aria-labelledby="headingFour"
+              data-bs-parent="#instructionAccordion"
+            >
+              <div class="accordion-body">
+                <div class="mb-3">
+                  <strong>Lecture OR Lab only</strong><br />
+                  <code
+                    >Time / Days / Room: 07:00AM-10:00AM / M / LEC: ITC
+                    404</code
+                  >
+                </div>
+                <div class="mb-3">
+                  <strong>Lecture and Lab on the same day</strong><br />
+                  <code
+                    >Time / Days / Room: 07:00AM-09:00AM, 01:00PM-03:00PM / Th /
+                    LAB: CCL 204, LEC: ITC 404</code
+                  >
+                </div>
+                <div class="mb-3">
+                  <strong>Lecture and Lab on separate days</strong><br />
+                  <code
+                    >Time / Days / Room: Th: 07:00AM-09:00AM; F: 01:00PM-03:00PM
+                    / LAB: CCL 204, LEC: ITC 404</code
+                  >
+                </div>
+                <div>
+                  <strong>Lecture + 2 labs</strong><br />
+                  <code
+                    >Time / Days / Room: M: 07:00AM-09:00AM; W: 01:00PM-03:00PM;
+                    F: 03:00PM-05:00PM / LAB 1: CCL 204, LAB 2: CCL 205, LEC:
+                    ITC 404</code
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Navigation API Callbacks
+      async function loadSchedule() {
+        const response = await window.pywebview.api.browse_schedule();
+        if (response !== "") {
+          document.getElementById("scheduleDisplay").value = response;
+          await updateClassDetection();
+        }
+      }
+
+      async function loadRosters() {
+        const count = await window.pywebview.api.browse_rosters();
+        if (count > 0) {
+          document.getElementById("rosterDisplay").value =
+            `Loaded ${count} active class rosters`;
+          await updateClassDetection();
+        }
+      }
+
+      async function updateClassDetection() {
+        try {
+          const classes = await window.pywebview.api.detect_classes();
+          const section = document.getElementById("classesSection");
+          const container = document.getElementById("classesListContainer");
+          const badge = document.getElementById("classesCountBadge");
+
+          if (!classes || classes.length === 0) {
+            section.classList.add("d-none");
+            container.innerHTML = "";
+            return;
+          }
+
+          badge.innerText = `${classes.length} Classes Detected`;
+          container.innerHTML = "";
+
+          classes.forEach((cls) => {
+            const isLab = cls.detected_type === "lecture_lab";
+            const row = document.createElement("div");
+            row.className = "p-3 d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2";
+            row.style.borderRadius = "16px";
+            row.style.background = "var(--ios-gray)";
+            row.style.border = "1px solid var(--ios-border)";
+
+            row.innerHTML = `
+              <div class="flex-grow-1">
+                <div class="d-flex align-items-center gap-2 mb-1">
+                  <span class="badge" style="background: var(--ios-blue); color: white; font-size: 11px; font-weight: 600; padding: 4px 8px; border-radius: 8px;">${cls.course_sec}</span>
+                  <span class="text-secondary" style="font-size: 12px; font-family: monospace;">Sched: ${cls.schedule_code}</span>
+                </div>
+                <div style="font-size: 13.5px; font-weight: 600; line-height: 1.3;">${cls.subject_name}</div>
+                <div class="text-secondary mt-1" style="font-size: 11.5px;">${cls.schedule_desc}</div>
+              </div>
+              <div class="flex-shrink-0" style="min-width: 185px;">
+                <select class="form-select ios-input py-2 px-3 class-type-select" data-class-id="${cls.id}" style="font-size: 13px; height: auto; border-radius: 10px; cursor: pointer;">
+                  <option value="lecture_lab" ${isLab ? "selected" : ""}>Lecture and Lab</option>
+                  <option value="lecture_only" ${!isLab ? "selected" : ""}>Lecture only</option>
+                </select>
+              </div>
+            `;
+            container.appendChild(row);
+          });
+
+          section.classList.remove("d-none");
+        } catch (err) {
+          console.error("Failed to update class detection:", err);
+        }
+      }
+
+      async function loadOutput() {
+        const response = await window.pywebview.api.browse_output();
+        if (response !== "") {
+          document.getElementById("outputDisplay").value = response;
+        }
+      }
+
+      async function triggerPythonAction() {
+        const typeOverrides = {};
+        const selects = document.querySelectorAll(".class-type-select");
+        selects.forEach((sel) => {
+          const classId = sel.getAttribute("data-class-id");
+          if (classId) {
+            typeOverrides[classId] = sel.value;
+          }
+        });
+
+        const alertBox = document.getElementById("alertBox");
+        alertBox.classList.remove(
+          "d-none",
+          "alert-danger",
+          "alert-success",
+          "text-danger",
+        );
+        alertBox.classList.add("alert-info");
+        alertBox.innerText = "Generating documentation and grading sheets...";
+
+        const dateOverrides = {
+          startMonth: document.getElementById("startMonth").value,
+          startDay: document.getElementById("startDay").value,
+          endMonth: document.getElementById("endMonth").value,
+          endDay: document.getElementById("endDay").value
+        };
+
+        const payload = await window.pywebview.api.run_generation(typeOverrides, dateOverrides);
+
+        alertBox.classList.remove("alert-info");
+        if (payload.status === "error") {
+          alertBox.classList.add("alert-danger", "text-danger");
+          alertBox.innerText = payload.message;
+        } else {
+          // Fallback iOS green for success since we removed standard bootstrap variables
+          alertBox.classList.add("alert-success");
+          alertBox.style.color = "var(--ios-green)";
+          alertBox.style.background = "rgba(48, 209, 88, 0.1)";
+          alertBox.style.borderColor = "rgba(48, 209, 88, 0.2)";
+          alertBox.innerText = payload.message;
+        }
+      }
+
+      function toggleTheme() {
+        const doc = document.documentElement;
+        const newTheme =
+          doc.getAttribute("data-bs-theme") === "dark" ? "light" : "dark";
+        doc.setAttribute("data-bs-theme", newTheme);
+      }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  </body>
+</html>

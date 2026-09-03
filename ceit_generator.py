@@ -296,7 +296,7 @@ def save_docx(zin, root, output_path: str):
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
     with open(output_path, "wb") as fh:
         fh.write(buf.getvalue())
-    print(f"  ✅  {output_path}")
+    print(f"  [SUCCESS]  {output_path}")
 
 # ══ Abstract base class ═══════════════════════════════════════════════════════
 class DocumentGenerator(ABC):
@@ -625,6 +625,14 @@ class GeneratorFactory:
         ]
 
 # ══ Student file loaders ══════════════════════════════════════════════════════
+def _fix_encoding(text: str) -> str:
+    if not text:
+        return text
+    text = text.replace("Ã±", "ñ")
+    text = text.replace("Ã\x91", "Ñ")
+    text = text.replace("Ã", "Ñ")
+    return text
+
 def load_students_excel(path: str) -> list:
     """Read Excel via ZIP/XML — avoids openpyxl style compatibility bugs."""
     from xml.etree import ElementTree as ET
@@ -663,7 +671,7 @@ def load_students_excel(path: str) -> list:
             if i == 0 and a.lower() in ("name", "student name", "full name"):
                 continue
             if a:
-                students.append((a, b))
+                students.append((_fix_encoding(a), _fix_encoding(b)))
     return students
 
 def load_students_csv(path: str) -> list:
@@ -676,9 +684,9 @@ def load_students_csv(path: str) -> list:
                     if i == 0 and row and row[0].lower() in ("name","student name","full name"):
                         continue
                     if len(row) >= 2:
-                        students.append((row[0].strip(), row[1].strip()))
+                        students.append((_fix_encoding(row[0].strip()), _fix_encoding(row[1].strip())))
                     elif len(row) == 1 and row[0].strip():
-                        students.append((row[0].strip(), ""))
+                        students.append((_fix_encoding(row[0].strip()), ""))
             return students
         except (UnicodeDecodeError, csv.Error):
             continue
@@ -923,7 +931,7 @@ def main():
     try:
         generators = factory.get_all()
     except FileNotFoundError as e:
-        print(f"\n  ❌  {e}")
+        print(f"\n  [ERROR]  {e}")
         sys.exit(1)
 
     for gen, suffix in generators:
@@ -931,9 +939,9 @@ def main():
         try:
             gen.generate(info, out_path)
         except Exception as e:
-            print(f"  ❌  Failed {suffix}: {e}")
+            print(f"  [ERROR]  Failed {suffix}: {e}")
 
-    print(f"\n✅  Done! All documents saved to: {out_dir}\n")
+    print(f"\n[DONE] All documents saved to: {out_dir}\n")
 
 if __name__ == "__main__":
     main()

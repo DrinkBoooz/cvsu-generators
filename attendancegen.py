@@ -195,14 +195,35 @@ def build_semester_label(semester_term: str, year: int) -> str:
     """Build the semester and academic year label from a compact semester input."""
     return f"{semester_term} Semester / A.Y. {year - 1}-{year}"
 
-def get_class_dates_for_weekdays(months: list, year: int, weekdays: list) -> list:
-    """Get all class dates matching any weekday in weekdays."""
+def get_class_dates_for_weekdays(months: list, year: int, weekdays: list, start_bound=None, end_bound=None) -> list:
+    """Get all class dates matching any weekday in weekdays, strictly within start_bound and end_bound."""
     weekday_set = set(weekdays)
     dates = []
+    
+    start_date = None
+    end_date = None
+    if start_bound and end_bound:
+        # year is either att_year (e.g. 2026). If the month wrapped around (e.g., Aug-May), we should be careful.
+        # But for now, we assume standard semester progression.
+        # start_bound: (month, day)
+        start_date = date(year if start_bound[0] >= 6 else year + 1, start_bound[0], start_bound[1])
+        end_date = date(year if end_bound[0] >= 6 else year + 1, end_bound[0], end_bound[1])
+        if start_date > end_date:
+             # handle wrapped year correctly
+             end_date = date(start_date.year + 1, end_bound[0], end_bound[1])
+
     for m in months:
-        _, ndays = calendar.monthrange(year, m)
+        y = year if m >= 6 else year + 1 # simplistic year heuristic for ph calendar
+        _, ndays = calendar.monthrange(y, m)
         for d in range(1, ndays + 1):
-            dt = date(year, m, d)
+            dt = date(y, m, d)
+            
+            # Filter by bounds
+            if start_date and dt < start_date:
+                continue
+            if end_date and dt > end_date:
+                continue
+                
             if dt.weekday() in weekday_set:
                 dates.append(dt)
     return sorted(dates)
@@ -326,8 +347,10 @@ def build_attendance_sheet(
     year: int,
     weekdays: list,
     students: list,          # [(name, student_number), ...]
+    start_bound=None,
+    end_bound=None
 ):
-    class_dates = get_class_dates_for_weekdays(months, year, weekdays)
+    class_dates = get_class_dates_for_weekdays(months, year, weekdays, start_bound=start_bound, end_bound=end_bound)
     if not class_dates:
         raise ValueError("No class dates found for the given months/year/weekdays.")
 
@@ -570,9 +593,17 @@ def build_attendance_sheet(
 
     with open(output_path, "wb") as fh:
         fh.write(zout_buf.getvalue())
-    print(f"  ✅  Saved: {output_path}")
+    print(f"  [SUCCESS]  Saved: {output_path}")
 
 # ── Student file loaders ──────────────────────────────────────────────────────
+
+def _fix_encoding(text: str) -> str:
+    if not text:
+        return text
+    text = text.replace("Ã±", "ñ")
+    text = text.replace("Ã\x91", "Ñ")
+    text = text.replace("Ã", "Ñ")
+    return text
 
 def load_students_excel(path: str) -> list:
     """Read Excel by parsing XML directly — no openpyxl dependency."""
@@ -622,7 +653,7 @@ def load_students_excel(path: str) -> list:
             if i == 0 and col_a.lower() in ("name", "student name", "full name"):
                 continue
             if col_a:
-                students.append((col_a, col_b))
+                students.append((_fix_encoding(col_a), _fix_encoding(col_b)))
     return students
 
 def load_students_csv(path: str) -> list:
@@ -636,9 +667,9 @@ def load_students_csv(path: str) -> list:
                     if i == 0 and row and row[0].lower() in ("name", "student name", "full name"):
                         continue
                     if len(row) >= 2:
-                        students.append((row[0].strip(), row[1].strip()))
+                        students.append((_fix_encoding(row[0].strip()), _fix_encoding(row[1].strip())))
                     elif len(row) == 1 and row[0].strip():
-                        students.append((row[0].strip(), ""))
+                        students.append((_fix_encoding(row[0].strip()), ""))
             return students
         except UnicodeDecodeError:
             continue
@@ -794,7 +825,48 @@ def main():
             students          = students,
         )
 
-    print(f"\n✅  Done! {len(files_to_gen)} file(s) generated in: {out_folder}\n")
+    print(f"\n[DONE] All {len(files_to_gen)} file(s) generated in: {out_folder}\n")
+
+def generate_attendance_for_month(template_path, output_path, info, students, month, year, class_day, start_bound=None, end_bound=None):
+    """
+    Wrapper for process_schedule.py to generate a single month attendance sheet.
+    info: dict containing course, schedule, semester, room, instructor, subject
+    """
+    # Parse month string to integer list
+    try:
+        months = parse_months(month)
+    except ValueError:
+        # Fallback if unparseable
+        months = [1]
+        for k, v in MONTHS.items():
+            if v.lower() == month.lower():
+                months = [k]
+                break
+                
+    # Parse day string to integer list
+    try:
+        schedule_days = [parse_weekday(class_day)]
+    except ValueError:
+        schedule_days = [0] # default monday
+        
+    year_int = int(year)
+    
+    build_attendance_sheet(
+        template_path=template_path,
+        output_path=output_path,
+        course_code_title=f"{info.get('course', '')} - {info.get('subject', '')}",
+        class_schedule=info.get('schedule', ''),
+        semester_ay=info.get('semester', ''),
+        room_assignment=info.get('room', ''),
+        instructor=info.get('instructor', ''),
+        months=months,
+        year=year_int,
+        weekdays=schedule_days,
+        students=students,
+        start_bound=start_bound,
+        end_bound=end_bound
+    )
+
 
 if __name__ == "__main__":
     main()
