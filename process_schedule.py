@@ -56,7 +56,7 @@ def sanitize_filename(name: str) -> str:
         
     return name
 
-def format_time(t_str):
+def format_time(t_str, is_pm_hint=None):
     t_str = str(t_str).strip()
     if not t_str:
         return "SEE SCHEDULE"
@@ -84,6 +84,11 @@ def format_time(t_str):
         is_pm = True
     elif has_am_suffix:
         is_pm = False
+    elif is_pm_hint is not None:
+        if h == 12:
+            is_pm = True
+        else:
+            is_pm = bool(is_pm_hint)
     elif h >= 12:
         is_pm = True
     elif 1 <= h <= 6:
@@ -245,6 +250,17 @@ def find_blocks_for_section(grid, section, start_row, end_row):
         
     search_str = re.sub(r'([a-zA-Z]+)(\d)', r'\1 \2', search_str)
     
+    # Map each schedule row to whether it falls in the afternoon/evening (PM).
+    # Schedules start in the morning (e.g. 7:00 AM). Once 12:00 or 12:30 is reached,
+    # all subsequent rows are afternoon/evening.
+    seen_noon = False
+    row_is_pm = {}
+    for r_idx in range(start_row, min(end_row + 1, len(grid))):
+        t_val = grid[r_idx][1] if len(grid[r_idx]) > 1 else ""
+        if "12:" in t_val or t_val.startswith("12") or t_val in ("0.5", "0.5208333333333334"):
+            seen_noon = True
+        row_is_pm[r_idx] = seen_noon
+
     blocks = []
     for c in range(3, 9):
         for r in range(start_row, end_row + 1):
@@ -271,8 +287,12 @@ def find_blocks_for_section(grid, section, start_row, end_row):
                     start_time = grid[subject_row][1]
                     end_time = grid[room_row][2]
                     
-                    start_time_fmt = format_time(start_time) if start_time else ""
-                    end_time_fmt = format_time(end_time) if end_time else ""
+                    start_pm_hint = row_is_pm.get(subject_row, None)
+                    start_time_fmt = format_time(start_time, is_pm_hint=start_pm_hint) if start_time else ""
+                    
+                    # If start time is in the afternoon/evening (PM), end time is guaranteed to be PM
+                    end_pm_hint = True if (start_time_fmt and "PM" in start_time_fmt) else row_is_pm.get(room_row, None)
+                    end_time_fmt = format_time(end_time, is_pm_hint=end_pm_hint) if end_time else ""
                     
                     day = get_day_name(c)
                     room = grid[room_row][c].split('/')[0].strip()

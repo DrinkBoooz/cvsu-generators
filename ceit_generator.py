@@ -247,14 +247,22 @@ def set_cell_text(tc, text: str, remove_num: bool = False, shrink_threshold: int
     p = tc.find(w("p"))
     if p is None:
         return
-    # Optionally remove automatic numbering from the paragraph so Word
-    # doesn't render an extra list number next to our explicit cell text.
-    if remove_num:
-        ppr = p.find(w("pPr"))
-        if ppr is not None:
+    ppr = p.find(w("pPr"))
+    if ppr is not None:
+        # Optionally remove automatic numbering from the paragraph so Word
+        # doesn't render an extra list number next to our explicit cell text.
+        if remove_num:
             numpr = ppr.find(w("numPr"))
             if numpr is not None:
                 ppr.remove(numpr)
+        # Remove any hanging or left indent that distorts multi-line wrapped text
+        ind = ppr.find(w("ind"))
+        if ind is not None:
+            ppr.remove(ind)
+        # Change full justification to left alignment so wrapped lines don't stretch awkwardly
+        jc = ppr.find(w("jc"))
+        if jc is not None and jc.get(w("val")) == "both":
+            jc.set(w("val"), "left")
     runs = p.findall(w("r"))
     if not runs:
         r = etree.SubElement(p, w("r"))

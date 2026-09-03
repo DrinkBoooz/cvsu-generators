@@ -130,7 +130,7 @@ if __name__ == '__main__':
     html_template = get_resource_path('ui.html')
     
     window = webview.create_window(
-        title='CvSU Document Generators',
+        title='CvSU Gen (Beta)',
         url=html_template,
         js_api=api,
         width=750,
