@@ -32,17 +32,34 @@ def get_logger():
 
 logger = get_logger()
 
+def get_long_path(p: str) -> str:
+    if not p:
+        return p
+    p = os.path.abspath(p)
+    if os.name == 'nt' and not p.startswith('\\\\?\\'):
+        return '\\\\?\\' + p
+    return p
+
 def sanitize_filename(name: str) -> str:
     """Remove illegal characters for Windows/Linux file paths."""
     if not name:
-        return ""
+        return "Unknown"
     name = str(name)
-    return re.sub(r'[<>:"/\\|?*]', '_', name).strip()
+    name = re.sub(r'[<>:"/\\|?*]', '_', name).strip()
+    if not name:
+        return "Unknown"
+        
+    base = name.split('.')[0].upper()
+    reserved = {"CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"}
+    if base in reserved:
+        name = name + "_"
+        
+    return name
 
 def format_time(t_str):
     t_str = str(t_str).strip()
     if not t_str:
-        return ""
+        return "SEE SCHEDULE"
     
     try:
         # Check if it's an Excel float string like '0.2916666666666667'
@@ -53,12 +70,12 @@ def format_time(t_str):
                 h = total_minutes // 60
                 m = total_minutes % 60
             else:
-                return t_str
+                return "SEE SCHEDULE"
         else:
             t_str_clean = t_str.upper().replace('AM', '').replace('PM', '').strip()
             h, m = map(int, t_str_clean.split(':'))
     except ValueError:
-        return t_str
+        return "SEE SCHEDULE"
         
     has_pm_suffix = 'PM' in t_str.upper()
     has_am_suffix = 'AM' in t_str.upper()
@@ -346,24 +363,28 @@ def detect_classes(schedule_path, roster_paths):
     return detected
 
 def process_all(schedule_path, xlsx_files, output_dir_base, type_overrides=None, date_overrides=None):
+    schedule_path = get_long_path(schedule_path)
+    output_dir_base = get_long_path(output_dir_base)
+    xlsx_files = [get_long_path(f) for f in xlsx_files]
+    
     results = {
         "generated": {"attendance": [], "grades": [], "ceit": []},
         "skipped": {"attendance": [], "grades": [], "ceit": [], "rosters": []},
         "errors": {"attendance": [], "grades": [], "ceit": [], "rosters": []}
     }
-    project_dir = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+    project_dir = get_long_path(getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__))))
     parsed_schedules = parse_schedule(schedule_path)
     if not parsed_schedules:
         print("Error: No valid schedules found.")
         return results
         
-    templates_dir = os.path.join(project_dir, "templates")
+    templates_dir = get_long_path(os.path.join(project_dir, "templates"))
     if not os.path.exists(templates_dir):
         print(f"Error: Templates directory not found at {templates_dir}")
         return results
         
     factory = GeneratorFactory(templates_dir)
-    attendance_template = os.path.join(project_dir, "attendance", "template.docx")
+    attendance_template = get_long_path(os.path.join(project_dir, "attendance", "template.docx"))
     
     for student_file in xlsx_files:
         filename = os.path.basename(student_file)
