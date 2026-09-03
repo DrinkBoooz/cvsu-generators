@@ -118,4 +118,12 @@ If you encounter an unexpected error, a detailed log file is automatically saved
 %APPDATA%/CVSU_Generators/logs/generator.log
 ```
 
-You can press `Win + R`, paste the path above, and press Enter to view the log file or send it for technical assistance.
+You can press `Win + R`, paste the path above, and press Enter to view the log file.
+
+Please send the error logs, screenshots, and description of issue to **danjoseph.ortega@cvsu.edu.ph** with the subject formatting:
+
+```text
+[CvSU Gen (Beta) - <Issue>]
+```
+
+_(e.g., `[CvSU Gen (Beta) - Schedule Parsing Error]`)_
