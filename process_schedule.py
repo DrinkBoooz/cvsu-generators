@@ -128,7 +128,8 @@ def parse_schedule(schedule_path):
     
     import uuid
     import shutil
-    tmp_path = xls_path + f".{uuid.uuid4().hex[:8]}.tmp"
+    ext = os.path.splitext(xls_path)[1]
+    tmp_path = xls_path + f".{uuid.uuid4().hex[:8]}.tmp{ext}"
     shutil.copy2(xls_path, tmp_path)
 
     try:
@@ -155,7 +156,7 @@ def parse_schedule(schedule_path):
         else:
             import openpyxl
             import datetime
-            wb = openpyxl.load_workbook(xls_path, data_only=True)
+            wb = openpyxl.load_workbook(tmp_path, data_only=True)
             for sheet in wb.worksheets:
                 grid = []
                 for row in sheet.iter_rows(values_only=True):
@@ -478,11 +479,12 @@ def process_all(schedule_path, xlsx_files, output_dir_base, type_overrides=None,
         os.makedirs(ceit_dir, exist_ok=True)
         os.makedirs(attendance_dir, exist_ok=True)
         
-        for generator, suffix in factory.get_all():
+        for gen_factory, suffix in factory.get_all():
             safe_suffix = sanitize_filename(suffix)
             out_name = f"{course_sec_safe}_{schedule_code_safe}_{safe_suffix}.docx"
             out_path = os.path.join(ceit_dir, out_name)
             try:
+                generator = gen_factory()
                 generator.generate(info, out_path)
                 results["generated"]["ceit"].append(out_name)
             except Exception as e:

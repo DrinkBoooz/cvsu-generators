@@ -81,7 +81,7 @@ def test_process_all_catches_ceit_errors(temp_env):
         def generate(self, info, out_path):
             raise Exception("simulated failure")
             
-    with patch('process_schedule.GeneratorFactory.get_all', return_value=[(FailingGenerator(), "suffix")]):
+    with patch('process_schedule.GeneratorFactory.get_all', return_value=[(lambda: FailingGenerator(), "suffix")]):
         sched_path = os.path.join(temp_env, "sched.xlsx")
         import openpyxl
         wb = openpyxl.Workbook()

@@ -21,6 +21,7 @@ class ScriptAPI:
         self.schedule_path = ""
         self.output_dir = ""
         self.rosters = []
+        self._is_processing = False
 
     def browse_schedule(self):
         file_types = ('Excel files (*.xls;*.xlsx;*.xlsm)', 'All files (*.*)')
@@ -62,6 +63,9 @@ class ScriptAPI:
             return []
 
     def run_generation(self, type_overrides=None, date_overrides=None):
+        if self._is_processing:
+            return {"status": "error", "message": "A generation task is already in progress."}
+            
         if not self.schedule_path:
             return {"status": "error", "message": "Missing Instructor Schedule. Please attach your Master Schedule .xls context."}
         if not self.rosters:
@@ -70,6 +74,7 @@ class ScriptAPI:
             return {"status": "error", "message": "Missing Output Directory. Operations cannot resolve without an endpoint."}
         
         try:
+            self._is_processing = True
             print("Commencing Build Initialization...")
             import threading
             import json
@@ -93,6 +98,8 @@ class ScriptAPI:
                 except Exception as e:
                     print(f"Error Pipeline Breakdown: {str(e)}")
                     payload = {"status": "error", "message": f"Fatal Generation Fault: {str(e)}"}
+                finally:
+                    self._is_processing = False
                 
                 # Use evaluate_js to update the UI from the background thread
                 try:
@@ -100,7 +107,11 @@ class ScriptAPI:
                     js_code = f"onGenerationComplete({json.dumps(payload)});"
                     self._window.evaluate_js(js_code)
                 except Exception as e:
-                    print(f"Failed to execute UI callback: {e}")
+                    process_schedule.logger.error(f"Failed to execute UI callback: {e}")
+                    try:
+                        self._window.evaluate_js("document.getElementById('processBtn').disabled = false; document.getElementById('processBtn').innerText = 'Initialize Workflow';")
+                    except Exception:
+                        pass
 
             # Spawn and start the background thread
             threading.Thread(target=_thread_target, daemon=True).start()

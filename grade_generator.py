@@ -2,6 +2,9 @@ import os
 import re
 import shutil
 import openpyxl
+import logging
+
+logger = logging.getLogger(__name__)
 
 class GradeGenerator:
     def __init__(self, templates_dir: str):
@@ -138,11 +141,14 @@ class GradeGenerator:
         # 5. Populate workbook natively
         try:
             wb = openpyxl.load_workbook(tmp_path, data_only=False)
+            
+            sheet_names = [s.lower() for s in wb.sheetnames]
+            name_map = {s.lower(): s for s in wb.sheetnames}
 
             # Populate 'Lecture' sheet
-            if "Lecture" not in wb.sheetnames:
+            if "lecture" not in sheet_names:
                 raise ValueError(f"Grade template is missing required 'Lecture' sheet.")
-            ws = wb["Lecture"]
+            ws = wb[name_map["lecture"]]
             ws['C1'] = sched_val
             ws['M1'] = course_str
             ws['C2'] = subj_code
@@ -170,6 +176,8 @@ class GradeGenerator:
                         break
                 if found_label:
                     ws['BI57'] = instructor
+                else:
+                    logger.warning(f"Could not find 'Instructor' anchor cell near BI57 for {course_str} ({sched_val}). Signature omitted.")
 
             # Inject active student roster without touching formulas in other columns
             total_slots = max(max_rows, len(cleaned_students))
@@ -186,20 +194,21 @@ class GradeGenerator:
                     ws.cell(row=row_num, column=3).value = None
 
             # Populate 'Laboratory' sheet if present
-            if "Laboratory" in wb.sheetnames:
-                ws_lab = wb["Laboratory"]
+            if "laboratory" in sheet_names:
+                ws_lab = wb[name_map["laboratory"]]
                 ws_lab['AO59'] = instructor
     
             # Populate 'Consolidated' sheet if present
-            if "Consolidated" in wb.sheetnames:
-                ws_con = wb["Consolidated"]
+            if "consolidated" in sheet_names:
+                ws_con = wb[name_map["consolidated"]]
                 ws_con['J56'] = instructor
     
             # Populate 'Grading Sheet'
-            if "Grading Sheet" in wb.sheetnames:
-                ws_grd = wb["Grading Sheet"]
-                if ws_grd['A9'].value in (None, 'NAME OF COLLEGE'):
-                    ws_grd['A9'] = 'COLLEGE OF ENGINEERING AND INFORMATION TECHNOLOGY'
+            if "grading sheet" not in sheet_names:
+                raise ValueError(f"Grade template is missing required 'Grading Sheet' sheet.")
+            ws_grd = wb[name_map["grading sheet"]]
+            if ws_grd['A9'].value in (None, 'NAME OF COLLEGE'):
+                ws_grd['A9'] = 'COLLEGE OF ENGINEERING AND INFORMATION TECHNOLOGY'
     
             wb.save(tmp_path)
             wb.close()

@@ -619,17 +619,18 @@ class GeneratorFactory:
         return p
 
     def get_all(self) -> list:
-        """Return list of (generator, output_suffix) tuples."""
+        """Return list of (generator_factory, output_suffix) tuples.
+        The factory is a callable that returns the instantiated generator."""
         return [
-            (SyllabusGenerator(self._path("syllabus")),
+            (lambda: SyllabusGenerator(self._path("syllabus")),
              "SYLLABUS_ACCEPTANCE"),
-            (ExamReturnsGenerator(self._path("exam_midterm"), "MIDTERM"),
+            (lambda: ExamReturnsGenerator(self._path("exam_midterm"), "MIDTERM"),
              "EXAM_RETURNS_MIDTERM"),
-            (ExamReturnsGenerator(self._path("exam_finals"),  "FINAL"),
+            (lambda: ExamReturnsGenerator(self._path("exam_finals"),  "FINAL"),
              "EXAM_RETURNS_FINALS"),
-            (TOSGenerator(self._path("tos_midterm"), "Midterm"),
+            (lambda: TOSGenerator(self._path("tos_midterm"), "Midterm"),
              "TOS_MIDTERM"),
-            (TOSGenerator(self._path("tos_finals"),  "Finals"),
+            (lambda: TOSGenerator(self._path("tos_finals"),  "Finals"),
              "TOS_FINALS"),
         ]
 
@@ -937,15 +938,12 @@ def main():
 
     print()
     factory = GeneratorFactory(templates_dir)
-    try:
-        generators = factory.get_all()
-    except FileNotFoundError as e:
-        print(f"\n  [ERROR]  {e}")
-        sys.exit(1)
+    generators = factory.get_all()
 
-    for gen, suffix in generators:
+    for gen_factory, suffix in generators:
         out_path = os.path.join(out_dir, f"{safe_section}_{suffix}.docx")
         try:
+            gen = gen_factory()
             gen.generate(info, out_path)
         except Exception as e:
             print(f"  [ERROR]  Failed {suffix}: {e}")

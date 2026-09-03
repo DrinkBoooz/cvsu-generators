@@ -636,6 +636,35 @@
         }
       }
 
+      function saveClassTypeOverrides() {
+        const selects = document.querySelectorAll(".class-type-select");
+        const overrides = {};
+        selects.forEach(sel => {
+          const classId = sel.getAttribute("data-class-id");
+          if (classId) {
+            overrides[classId] = sel.value;
+          }
+        });
+        localStorage.setItem("classTypeOverrides", JSON.stringify(overrides));
+      }
+
+      function applyClassTypeOverrides() {
+        const overridesStr = localStorage.getItem("classTypeOverrides");
+        if (!overridesStr) return;
+        try {
+          const overrides = JSON.parse(overridesStr);
+          const selects = document.querySelectorAll(".class-type-select");
+          selects.forEach(sel => {
+            const classId = sel.getAttribute("data-class-id");
+            if (classId && overrides[classId]) {
+              sel.value = overrides[classId];
+            }
+          });
+        } catch(e) {
+          console.error("Failed to parse class type overrides:", e);
+        }
+      }
+
       async function updateClassDetection() {
         try {
           const classes = await window.pywebview.api.detect_classes();
@@ -677,6 +706,13 @@
               </div>
             `;
             container.appendChild(row);
+          });
+
+          applyClassTypeOverrides();
+
+          const selects = document.querySelectorAll(".class-type-select");
+          selects.forEach(sel => {
+            sel.addEventListener("change", saveClassTypeOverrides);
           });
 
           section.classList.remove("d-none");
@@ -725,6 +761,14 @@
           const eDate = new Date(endVal);
           // Only add overrides if date objects are valid
           if (!isNaN(sDate.getTime()) && !isNaN(eDate.getTime())) {
+            if (sDate > eDate) {
+              alertBox.classList.remove("alert-info");
+              alertBox.classList.add("alert-danger", "text-danger");
+              alertBox.innerText = "Error: Start Date cannot be chronologically after End Date.";
+              btn.disabled = false;
+              btn.innerText = "Initialize Workflow";
+              return;
+            }
             dateOverrides = {
               startMonth: sDate.getMonth() + 1,
               startDay: sDate.getDate(),
