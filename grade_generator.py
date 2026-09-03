@@ -167,7 +167,7 @@ class GradeGenerator:
             if is_lab:
                 # Scan adjacent cells near BI57 (col 61, row 57) for 'Instructor'
                 found_label = False
-                for r_offset in range(-2, 3):
+                for r_offset in range(-5, 6):
                     for c_offset in range(-20, 5):
                         val = ws.cell(row=57 + r_offset, column=61 + c_offset).value
                         if val and "instructor" in str(val).lower():
