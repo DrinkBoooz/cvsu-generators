@@ -336,36 +336,12 @@
           <div class="d-flex gx-2 align-items-center flex-wrap gap-2">
             <div class="d-flex align-items-center gap-1">
               <span class="text-secondary" style="font-size: 13px;">Start:</span>
-              <select id="startMonth" class="form-select ios-input py-2" style="font-size: 14px; width: auto; border-radius: 10px;">
-                <option value="">Month</option>
-                <option value="1">Jan</option><option value="2">Feb</option><option value="3">Mar</option>
-                <option value="4">Apr</option><option value="5">May</option><option value="6">Jun</option>
-                <option value="7">Jul</option><option value="8">Aug</option><option value="9">Sep</option>
-                <option value="10">Oct</option><option value="11">Nov</option><option value="12">Dec</option>
-              </select>
-              <select id="startDay" class="form-select ios-input py-2" style="font-size: 14px; width: auto; border-radius: 10px;">
-                <option value="">Day</option>
-                <script>
-                  for(let i=1; i<=31; i++) document.write(`<option value="${i}">${i}</option>`);
-                </script>
-              </select>
+              <input type="date" id="startDate" class="form-control ios-input py-2" style="font-size: 14px; width: auto; border-radius: 10px;" onchange="saveDates()">
             </div>
             
             <div class="d-flex align-items-center gap-1 ms-md-3">
               <span class="text-secondary" style="font-size: 13px;">End:</span>
-              <select id="endMonth" class="form-select ios-input py-2" style="font-size: 14px; width: auto; border-radius: 10px;">
-                <option value="">Month</option>
-                <option value="1">Jan</option><option value="2">Feb</option><option value="3">Mar</option>
-                <option value="4">Apr</option><option value="5">May</option><option value="6">Jun</option>
-                <option value="7">Jul</option><option value="8">Aug</option><option value="9">Sep</option>
-                <option value="10">Oct</option><option value="11">Nov</option><option value="12">Dec</option>
-              </select>
-              <select id="endDay" class="form-select ios-input py-2" style="font-size: 14px; width: auto; border-radius: 10px;">
-                <option value="">Day</option>
-                <script>
-                  for(let i=1; i<=31; i++) document.write(`<option value="${i}">${i}</option>`);
-                </script>
-              </select>
+              <input type="date" id="endDate" class="form-control ios-input py-2" style="font-size: 14px; width: auto; border-radius: 10px;" onchange="saveDates()">
             </div>
           </div>
           <p class="text-secondary mt-2 mb-0" style="font-size: 12px; margin-left: 4px;">
@@ -397,6 +373,7 @@
         <!-- Execute Action -->
         <div class="mb-2">
           <button
+            id="processBtn"
             class="btn-ios btn-ios-success"
             type="button"
             onclick="triggerPythonAction()"
@@ -625,6 +602,22 @@
     </div>
 
     <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        loadDates();
+      });
+
+      function saveDates() {
+        localStorage.setItem("startDate", document.getElementById("startDate").value);
+        localStorage.setItem("endDate", document.getElementById("endDate").value);
+      }
+
+      function loadDates() {
+        const start = localStorage.getItem("startDate");
+        const end = localStorage.getItem("endDate");
+        if (start) document.getElementById("startDate").value = start;
+        if (end) document.getElementById("endDate").value = end;
+      }
+
       // Navigation API Callbacks
       async function loadSchedule() {
         const response = await window.pywebview.api.browse_schedule();
@@ -700,6 +693,10 @@
       }
 
       async function triggerPythonAction() {
+        const btn = document.getElementById("processBtn");
+        btn.disabled = true;
+        btn.innerText = "Generating...";
+
         const typeOverrides = {};
         const selects = document.querySelectorAll(".class-type-select");
         selects.forEach((sel) => {
@@ -719,21 +716,41 @@
         alertBox.classList.add("alert-info");
         alertBox.innerText = "Generating documentation and grading sheets...";
 
-        const dateOverrides = {
-          startMonth: document.getElementById("startMonth").value,
-          startDay: document.getElementById("startDay").value,
-          endMonth: document.getElementById("endMonth").value,
-          endDay: document.getElementById("endDay").value
-        };
+        let dateOverrides = null;
+        const startVal = document.getElementById("startDate").value;
+        const endVal = document.getElementById("endDate").value;
+        
+        if (startVal && endVal) {
+          const sDate = new Date(startVal);
+          const eDate = new Date(endVal);
+          // Only add overrides if date objects are valid
+          if (!isNaN(sDate.getTime()) && !isNaN(eDate.getTime())) {
+            dateOverrides = {
+              startMonth: sDate.getMonth() + 1,
+              startDay: sDate.getDate(),
+              endMonth: eDate.getMonth() + 1,
+              endDay: eDate.getDate()
+            };
+          }
+        }
 
         const payload = await window.pywebview.api.run_generation(typeOverrides, dateOverrides);
+        if (payload && payload.status === "error") {
+            onGenerationComplete(payload);
+        }
+      }
 
+      function onGenerationComplete(payload) {
+        const btn = document.getElementById("processBtn");
+        btn.disabled = false;
+        btn.innerText = "Initialize Workflow";
+
+        const alertBox = document.getElementById("alertBox");
         alertBox.classList.remove("alert-info");
         if (payload.status === "error") {
           alertBox.classList.add("alert-danger", "text-danger");
           alertBox.innerText = payload.message;
         } else {
-          // Fallback iOS green for success since we removed standard bootstrap variables
           alertBox.classList.add("alert-success");
           alertBox.style.color = "var(--ios-green)";
           alertBox.style.background = "rgba(48, 209, 88, 0.1)";

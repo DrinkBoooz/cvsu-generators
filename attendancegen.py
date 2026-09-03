@@ -12,9 +12,15 @@ Usage:
     python attendance_generator.py --csv students.xlsx
 """
 
-import argparse, calendar, copy, csv, io, os, re, sys, zipfile
+import argparse, calendar, copy, csv, io, os, re, sys, zipfile, shutil
 from datetime import date
 from lxml import etree
+
+class TemplateError(Exception):
+    pass
+
+class EmptyDateError(Exception):
+    pass
 
 # ── Namespaces ────────────────────────────────────────────────────────────────
 W   = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
@@ -352,7 +358,7 @@ def build_attendance_sheet(
 ):
     class_dates = get_class_dates_for_weekdays(months, year, weekdays, start_bound=start_bound, end_bound=end_bound)
     if not class_dates:
-        raise ValueError("No class dates found for the given months/year/weekdays.")
+        raise EmptyDateError("No class dates found for the given months/year/weekdays.")
 
     week_groups = dates_to_weeks(class_dates)
     n_weeks = len(week_groups)
@@ -373,16 +379,24 @@ def build_attendance_sheet(
     root = etree.fromstring(doc_xml)
     body = root.find(w("body"))
     tables = body.findall(w("tbl"))
+    if len(tables) < 2:
+        raise TemplateError("Attendance template must contain at least two tables.")
+    
     info_tbl  = tables[0]
     attn_tbl  = tables[1]
 
     # ══ 1. Fill info table ════════════════════════════════════════════════════
     # Row 0: cell 1 = course code+title,  cell 4 = Month & Year value
     info_rows = info_tbl.findall(w("tr"))
+    if len(info_rows) < 5:
+        raise TemplateError("Attendance template info table must have at least 5 rows.")
 
     def info_cell_para(row_idx, cell_idx):
-        cells = info_rows[row_idx].findall(w("tc"))
-        return cells[cell_idx].find(w("p"))
+        try:
+            cells = info_rows[row_idx].findall(w("tc"))
+            return cells[cell_idx].find(w("p"))
+        except IndexError:
+            raise TemplateError(f"Info table structure invalid: missing cell at row {row_idx}, col {cell_idx}.")
 
     set_para_text(info_cell_para(0, 1), course_code_title, shrink_threshold=40, shrink_sz="18")
     set_para_text(info_cell_para(0, 4), month_year_label)
@@ -420,6 +434,9 @@ def build_attendance_sheet(
 
     # ── Grab template rows to clone from ─────────────────────────────────────
     orig_rows = attn_tbl.findall(w("tr"))
+    if len(orig_rows) < 3:
+        raise TemplateError("Attendance template attendance table must have at least 3 rows (2 headers, 1 student row).")
+        
     orig_header0   = orig_rows[0]   # WEEK header row
     orig_header1   = orig_rows[1]   # Date/lb/lc/r row
     orig_student   = orig_rows[2]   # First student row (use as clone source)
@@ -591,8 +608,9 @@ def build_attendance_sheet(
     zout.close()
     zin.close()
 
-    with open(output_path, "wb") as fh:
+    with open(output_path + ".tmp", "wb") as fh:
         fh.write(zout_buf.getvalue())
+    os.replace(output_path + ".tmp", output_path)
     print(f"  [SUCCESS]  Saved: {output_path}")
 
 # ── Student file loaders ──────────────────────────────────────────────────────
@@ -612,9 +630,14 @@ def load_students_excel(path: str) -> list:
 
     NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
     ns = {"x": NS}
+    
+    import uuid
+    tmp_path = path + f".{uuid.uuid4().hex[:8]}.tmp"
+    shutil.copy2(path, tmp_path)
 
-    with zf.ZipFile(path) as z:
-        names = z.namelist()
+    try:
+        with zf.ZipFile(tmp_path) as z:
+            names = z.namelist()
         shared_strings = []
         if "xl/sharedStrings.xml" in names:
             ss_root = ET.fromstring(z.read("xl/sharedStrings.xml"))
@@ -654,6 +677,13 @@ def load_students_excel(path: str) -> list:
                 continue
             if col_a:
                 students.append((_fix_encoding(col_a), _fix_encoding(col_b)))
+    finally:
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
+
     return students
 
 def load_students_csv(path: str) -> list:
@@ -851,21 +881,25 @@ def generate_attendance_for_month(template_path, output_path, info, students, mo
         
     year_int = int(year)
     
-    build_attendance_sheet(
-        template_path=template_path,
-        output_path=output_path,
-        course_code_title=f"{info.get('course', '')} - {info.get('subject', '')}",
-        class_schedule=info.get('schedule', ''),
-        semester_ay=info.get('semester', ''),
-        room_assignment=info.get('room', ''),
-        instructor=info.get('instructor', ''),
-        months=months,
-        year=year_int,
-        weekdays=schedule_days,
-        students=students,
-        start_bound=start_bound,
-        end_bound=end_bound
-    )
+    try:
+        build_attendance_sheet(
+            template_path=template_path,
+            output_path=output_path,
+            course_code_title=f"{info.get('course', '')} - {info.get('subject', '')}",
+            class_schedule=info.get('schedule', ''),
+            semester_ay=info.get('semester', ''),
+            room_assignment=info.get('room', ''),
+            instructor=info.get('instructor', ''),
+            months=months,
+            year=year_int,
+            weekdays=schedule_days,
+            students=students,
+            start_bound=start_bound,
+            end_bound=end_bound
+        )
+        return "generated"
+    except EmptyDateError:
+        return "skipped_empty"
 
 
 if __name__ == "__main__":

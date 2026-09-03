@@ -12,6 +12,32 @@ import xlrd
 import openpyxl 
 import traceback
 from grade_generator import GradeGenerator
+import logging
+from logging.handlers import RotatingFileHandler
+
+def get_logger():
+    app_data = os.getenv('APPDATA') or os.path.expanduser("~")
+    log_dir = os.path.join(app_data, "CVSU_Generators", "logs")
+    os.makedirs(log_dir, exist_ok=True)
+    log_file = os.path.join(log_dir, "generator.log")
+    
+    logger = logging.getLogger("cvsu_generators")
+    if not logger.handlers:
+        logger.setLevel(logging.DEBUG)
+        handler = RotatingFileHandler(log_file, maxBytes=5*1024*1024, backupCount=3)
+        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+    return logger
+
+logger = get_logger()
+
+def sanitize_filename(name: str) -> str:
+    """Remove illegal characters for Windows/Linux file paths."""
+    if not name:
+        return ""
+    name = str(name)
+    return re.sub(r'[<>:"/\\|?*]', '_', name).strip()
 
 def format_time(t_str):
     t_str = str(t_str).strip()
@@ -99,46 +125,58 @@ def parse_schedule(schedule_path):
         
     xls_path = schedule_path
     parsed_sheets = []
+    
+    import uuid
+    import shutil
+    tmp_path = xls_path + f".{uuid.uuid4().hex[:8]}.tmp"
+    shutil.copy2(xls_path, tmp_path)
 
-    if xls_path.lower().endswith(".xls"):
-        wb = xlrd.open_workbook(xls_path, formatting_info=True)
-        for sheet_idx in range(wb.nsheets):
-            sheet = wb.sheet_by_index(sheet_idx)
-            grid = []
-            for rx in range(sheet.nrows):
-                row_vals = []
-                for cx in range(sheet.ncols):
-                    val = sheet.cell_value(rx, cx)
-                    if sheet.cell_type(rx, cx) == xlrd.XL_CELL_TEXT:
-                        row_vals.append(str(val))
-                    elif sheet.cell_type(rx, cx) == xlrd.XL_CELL_NUMBER:
-                        row_vals.append(str(int(val)) if val.is_integer() else str(val))
-                    elif sheet.cell_type(rx, cx) == xlrd.XL_CELL_DATE:
-                        t = xlrd.xldate_as_tuple(val, wb.datemode)
-                        row_vals.append(f"{t[3]:02d}:{t[4]:02d}")
-                    else:
-                        row_vals.append(str(val))
-                grid.append(row_vals)
-            parsed_sheets.append(grid)
-    else:
-        import openpyxl
-        import datetime
-        wb = openpyxl.load_workbook(xls_path, data_only=True)
-        for sheet in wb.worksheets:
-            grid = []
-            for row in sheet.iter_rows(values_only=True):
-                row_vals = []
-                for val in row:
-                    if val is None:
-                        row_vals.append("")
-                    elif isinstance(val, (datetime.time, datetime.datetime)):
-                        row_vals.append(val.strftime("%H:%M"))
-                    elif isinstance(val, float):
-                        row_vals.append(str(int(val)) if val.is_integer() else str(val))
-                    else:
-                        row_vals.append(str(val))
-                grid.append(row_vals)
-            parsed_sheets.append(grid)
+    try:
+        if xls_path.lower().endswith(".xls"):
+            wb = xlrd.open_workbook(tmp_path, formatting_info=True)
+            for sheet_idx in range(wb.nsheets):
+                sheet = wb.sheet_by_index(sheet_idx)
+                grid = []
+                for rx in range(sheet.nrows):
+                    row_vals = []
+                    for cx in range(sheet.ncols):
+                        val = sheet.cell_value(rx, cx)
+                        if sheet.cell_type(rx, cx) == xlrd.XL_CELL_TEXT:
+                            row_vals.append(str(val))
+                        elif sheet.cell_type(rx, cx) == xlrd.XL_CELL_NUMBER:
+                            row_vals.append(str(int(val)) if val.is_integer() else str(val))
+                        elif sheet.cell_type(rx, cx) == xlrd.XL_CELL_DATE:
+                            t = xlrd.xldate_as_tuple(val, wb.datemode)
+                            row_vals.append(f"{t[3]:02d}:{t[4]:02d}")
+                        else:
+                            row_vals.append(str(val))
+                    grid.append(row_vals)
+                parsed_sheets.append(grid)
+        else:
+            import openpyxl
+            import datetime
+            wb = openpyxl.load_workbook(xls_path, data_only=True)
+            for sheet in wb.worksheets:
+                grid = []
+                for row in sheet.iter_rows(values_only=True):
+                    row_vals = []
+                    for val in row:
+                        if val is None:
+                            row_vals.append("")
+                        elif isinstance(val, (datetime.time, datetime.datetime)):
+                            row_vals.append(val.strftime("%H:%M"))
+                        elif isinstance(val, float):
+                            row_vals.append(str(int(val)) if val.is_integer() else str(val))
+                        else:
+                            row_vals.append(str(val))
+                    grid.append(row_vals)
+                parsed_sheets.append(grid)
+    finally:
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
             
     results = []
     
@@ -307,16 +345,21 @@ def detect_classes(schedule_path, roster_paths):
     return detected
 
 def process_all(schedule_path, xlsx_files, output_dir_base, type_overrides=None, date_overrides=None):
+    results = {
+        "generated": {"attendance": [], "grades": [], "ceit": []},
+        "skipped": {"attendance": [], "grades": [], "ceit": [], "rosters": []},
+        "errors": {"attendance": [], "grades": [], "ceit": [], "rosters": []}
+    }
     project_dir = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
     parsed_schedules = parse_schedule(schedule_path)
     if not parsed_schedules:
         print("Error: No valid schedules found.")
-        return
+        return results
         
     templates_dir = os.path.join(project_dir, "templates")
     if not os.path.exists(templates_dir):
         print(f"Error: Templates directory not found at {templates_dir}")
-        return
+        return results
         
     factory = GeneratorFactory(templates_dir)
     attendance_template = os.path.join(project_dir, "attendance", "template.docx")
@@ -327,6 +370,7 @@ def process_all(schedule_path, xlsx_files, output_dir_base, type_overrides=None,
             continue
         m = re.match(r'^(.*?)\s*list of students for\s+(\d+)\s*-\s*(.+?)\.(xlsx|xls|csv)', filename, re.IGNORECASE)
         if not m:
+            results["skipped"]["rosters"].append(filename)
             continue
             
         raw_course = m.group(1).strip()
@@ -367,8 +411,9 @@ def process_all(schedule_path, xlsx_files, output_dir_base, type_overrides=None,
             is_second = False
             
         years = re.findall(r'20\d{2}', semester_ay)
+        att_year = None
         if not years:
-            att_year = 2026
+            results["errors"]["attendance"].append(f"{course_sec} ({schedule_code}): Could not parse year from '{semester_ay}'")
         elif len(years) > 1 and is_second:
             att_year = int(years[1])
         else:
@@ -421,8 +466,12 @@ def process_all(schedule_path, xlsx_files, output_dir_base, type_overrides=None,
             students=students
         )
         
-        course_dir = os.path.join(output_dir_base, course_sec)
+        course_sec_safe = sanitize_filename(course_sec)
+        schedule_code_safe = sanitize_filename(schedule_code)
+        
+        course_dir = os.path.join(output_dir_base, course_sec_safe)
         os.makedirs(course_dir, exist_ok=True)
+        
         ceit_dir = os.path.join(course_dir, "CEIT_Forms")
         attendance_dir = os.path.join(course_dir, "Attendance")
         
@@ -430,41 +479,60 @@ def process_all(schedule_path, xlsx_files, output_dir_base, type_overrides=None,
         os.makedirs(attendance_dir, exist_ok=True)
         
         for generator, suffix in factory.get_all():
-            out_name = f"{course_sec}_{schedule_code}_{suffix}.docx"
+            safe_suffix = sanitize_filename(suffix)
+            out_name = f"{course_sec_safe}_{schedule_code_safe}_{safe_suffix}.docx"
             out_path = os.path.join(ceit_dir, out_name)
-            generator.generate(info, out_path)
+            try:
+                generator.generate(info, out_path)
+                results["generated"]["ceit"].append(out_name)
+            except Exception as e:
+                err_msg = f"Failed CEIT ({suffix}): {str(e)}"
+                logger.error(err_msg, exc_info=True)
+                results["errors"]["ceit"].append(err_msg)
+                print(f"    -> [ERROR] {err_msg}")
             
         print("    -> Passing to Attendance Generator...")
-        for b in blocks:
-            att_out_name = f"{course_sec}_{schedule_code}_ATTENDANCE_{b['day']}.docx"
-            att_out_path = os.path.join(attendance_dir, att_out_name)
-            
-            att_info = {
-                "course": course_sec,
-                "schedule": f"{b['start_time']}-{b['end_time']} / {b['day']}",
-                "semester": semester_ay,
-                "room": f"{b['type']}: {b['room']}" if b['type'] else b['room'],
-                "instructor": instructor,
-                "subject": subject_name
-            }
-            
-            for m in months:
-                month_name = datetime.date(2026, m, 1).strftime('%B')
-                month_out_path = os.path.join(attendance_dir, f"{course_sec}_{schedule_code}_ATTENDANCE_{b['day']}_{month_name}.docx")
-                try:
-                    attendancegen.generate_attendance_for_month(
-                        template_path=attendance_template,
-                        output_path=month_out_path,
-                        info=att_info,
-                        students=students,
-                        month=month_name,
-                        year=str(att_year),
-                        class_day=b['day'],
-                        start_bound=start_bound,
-                        end_bound=end_bound
-                    )
-                except Exception as e:
-                    pass
+        if att_year is not None:
+            for b in blocks:
+                safe_day = sanitize_filename(b['day'])
+                att_out_name = f"{course_sec_safe}_{schedule_code_safe}_ATTENDANCE_{safe_day}.docx"
+                att_out_path = os.path.join(attendance_dir, att_out_name)
+                
+                att_info = {
+                    "course": course_sec,
+                    "schedule": f"{b['start_time']}-{b['end_time']} / {b['day']}",
+                    "semester": semester_ay,
+                    "room": f"{b['type']}: {b['room']}" if b['type'] else b['room'],
+                    "instructor": instructor,
+                    "subject": subject_name
+                }
+                
+                for m in months:
+                    month_name = datetime.date(2026, m, 1).strftime('%B')
+                    safe_month = sanitize_filename(month_name)
+                    month_out_name = f"{course_sec_safe}_{schedule_code_safe}_ATTENDANCE_{safe_day}_{safe_month}.docx"
+                    month_out_path = os.path.join(attendance_dir, month_out_name)
+                    try:
+                        res = attendancegen.generate_attendance_for_month(
+                            template_path=attendance_template,
+                            output_path=month_out_path,
+                            info=att_info,
+                            students=students,
+                            month=month_name,
+                            year=str(att_year),
+                            class_day=b['day'],
+                            start_bound=start_bound,
+                            end_bound=end_bound
+                        )
+                        if res == "skipped_empty":
+                            results["skipped"]["attendance"].append(f"{month_out_name} (0 days)")
+                        else:
+                            results["generated"]["attendance"].append(month_out_name)
+                    except Exception as e:
+                        err_msg = f"Failed Attendance ({month_name}): {str(e)}"
+                        logger.error(err_msg, exc_info=True)
+                        results["errors"]["attendance"].append(err_msg)
+                        print(f"    -> [ERROR] {err_msg}")
 
         print("    -> Passing to Grade Generator...")
         grade_dir = os.path.join(course_dir, "Grades")
@@ -500,12 +568,23 @@ def process_all(schedule_path, xlsx_files, output_dir_base, type_overrides=None,
         
         try:
             grade_gen = GradeGenerator(templates_dir)
-            grade_out_name = f"{course_sec}_{schedule_code}_GRADING_SHEET.xlsx"
+            grade_out_name = f"{course_sec_safe}_{schedule_code_safe}_GRADING_SHEET.xlsx"
             grade_out_path = os.path.join(grade_dir, grade_out_name)
             grade_gen.generate(grade_info, students, grade_out_path)
+            results["generated"]["grades"].append(grade_out_name)
             print("    -> Grades generated successfully.")
+        except ValueError as e:
+            err_msg = f"Failed Grades ({course_sec}_{schedule_code}): {str(e)}"
+            logger.error(err_msg, exc_info=True)
+            results["errors"]["grades"].append(err_msg)
+            print(f"    -> [ERROR] {err_msg}")
         except Exception as e:
-            traceback.print_exc()
+            err_msg = f"Failed Grades ({course_sec}_{schedule_code}): {str(e)}"
+            logger.error(err_msg, exc_info=True)
+            results["errors"]["grades"].append(err_msg)
+            print(f"    -> [ERROR] {err_msg}")
+
+    return results
 
 if __name__ == "__main__":
     pass

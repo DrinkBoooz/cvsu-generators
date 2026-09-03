@@ -71,13 +71,46 @@ class ScriptAPI:
         
         try:
             print("Commencing Build Initialization...")
-            process_schedule.process_all(self.schedule_path, self.rosters, self.output_dir, type_overrides=type_overrides, date_overrides=date_overrides)
+            import threading
+            import json
+
+            def _thread_target():
+                try:
+                    results = process_schedule.process_all(self.schedule_path, self.rosters, self.output_dir, type_overrides=type_overrides, date_overrides=date_overrides)
+                    
+                    gen = results["generated"]
+                    skp = results["skipped"]
+                    err = results["errors"]
+                    
+                    total_generated = len(gen["attendance"]) + len(gen["grades"]) + len(gen["ceit"])
+                    total_skipped = len(skp["attendance"]) + len(skp["grades"]) + len(skp["ceit"]) + len(skp["rosters"])
+                    total_errors = len(err["attendance"]) + len(err["grades"]) + len(err["ceit"]) + len(err["rosters"])
+                    
+                    if total_generated == 0:
+                        payload = {"status": "error", "message": f"Generation blocked: 0 files generated. Skipped: {total_skipped}. Errors: {total_errors}."}
+                    else:
+                        payload = {"status": "success", "message": f"Generation complete: {total_generated} files generated. {total_errors} errors. {total_skipped} skipped."}
+                except Exception as e:
+                    print(f"Error Pipeline Breakdown: {str(e)}")
+                    payload = {"status": "error", "message": f"Fatal Generation Fault: {str(e)}"}
+                
+                # Use evaluate_js to update the UI from the background thread
+                try:
+                    # json.dumps ensures the payload is a valid JavaScript object string
+                    js_code = f"onGenerationComplete({json.dumps(payload)});"
+                    self._window.evaluate_js(js_code)
+                except Exception as e:
+                    print(f"Failed to execute UI callback: {e}")
+
+            # Spawn and start the background thread
+            threading.Thread(target=_thread_target, daemon=True).start()
             
-            return {"status": "success", "message": f"Successfully generated documentation array for {len(self.rosters)} active class rosters on target path."}
+            # Return None to UI, letting the thread invoke onGenerationComplete later
+            return None
             
         except Exception as e:
-            print(f"Error Pipeline Breakdown: {str(e)}")
-            return {"status": "error", "message": f"Fatal Generation Fault: {str(e)}"}
+            print(f"Error starting thread: {str(e)}")
+            return {"status": "error", "message": f"Failed to start generation thread: {str(e)}"}
 
 
 if __name__ == '__main__':

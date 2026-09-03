@@ -38,7 +38,7 @@ class GradeGenerator:
                 y = int(years[0])
                 year_str = f"{y}-{y+1}"
             else:
-                year_str = "2026-2027"
+                raise ValueError(f"Could not parse year from '{raw_sem}'")
 
         return sem_str, year_str
 
@@ -130,15 +130,18 @@ class GradeGenerator:
             if s_name:
                 cleaned_students.append((s_name, s_num))
 
-        # 4. Copy template directly to target path to prevent locking
+        # 4. Copy template to a temporary path for atomic writes
         os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
-        shutil.copy2(template_path, output_path)
+        tmp_path = output_path + ".tmp.xlsx"
+        shutil.copy2(template_path, tmp_path)
 
         # 5. Populate workbook natively
-        wb = openpyxl.load_workbook(output_path, data_only=False)
+        try:
+            wb = openpyxl.load_workbook(tmp_path, data_only=False)
 
-        # Populate 'Lecture' sheet
-        if "Lecture" in wb.sheetnames:
+            # Populate 'Lecture' sheet
+            if "Lecture" not in wb.sheetnames:
+                raise ValueError(f"Grade template is missing required 'Lecture' sheet.")
             ws = wb["Lecture"]
             ws['C1'] = sched_val
             ws['M1'] = course_str
@@ -155,7 +158,18 @@ class GradeGenerator:
 
             # Update instructor signature cell in Lecture & Lab
             if is_lab:
-                ws['BI57'] = instructor
+                # Scan adjacent cells near BI57 (col 61, row 57) for 'Instructor'
+                found_label = False
+                for r_offset in range(-2, 3):
+                    for c_offset in range(-20, 5):
+                        val = ws.cell(row=57 + r_offset, column=61 + c_offset).value
+                        if val and "instructor" in str(val).lower():
+                            found_label = True
+                            break
+                    if found_label:
+                        break
+                if found_label:
+                    ws['BI57'] = instructor
 
             # Inject active student roster without touching formulas in other columns
             total_slots = max(max_rows, len(cleaned_students))
@@ -171,23 +185,31 @@ class GradeGenerator:
                     ws.cell(row=row_num, column=2).value = None
                     ws.cell(row=row_num, column=3).value = None
 
-        # Populate 'Laboratory' sheet if present
-        if "Laboratory" in wb.sheetnames:
-            ws_lab = wb["Laboratory"]
-            ws_lab['AO59'] = instructor
-
-        # Populate 'Consolidated' sheet if present
-        if "Consolidated" in wb.sheetnames:
-            ws_con = wb["Consolidated"]
-            ws_con['J56'] = instructor
-
-        # Populate 'Grading Sheet'
-        if "Grading Sheet" in wb.sheetnames:
-            ws_grd = wb["Grading Sheet"]
-            if ws_grd['A9'].value in (None, 'NAME OF COLLEGE'):
-                ws_grd['A9'] = 'COLLEGE OF ENGINEERING AND INFORMATION TECHNOLOGY'
-
-        wb.save(output_path)
-        wb.close()
-        print(f"  [SUCCESS]  Grades generated at: {output_path}")
-        return True
+            # Populate 'Laboratory' sheet if present
+            if "Laboratory" in wb.sheetnames:
+                ws_lab = wb["Laboratory"]
+                ws_lab['AO59'] = instructor
+    
+            # Populate 'Consolidated' sheet if present
+            if "Consolidated" in wb.sheetnames:
+                ws_con = wb["Consolidated"]
+                ws_con['J56'] = instructor
+    
+            # Populate 'Grading Sheet'
+            if "Grading Sheet" in wb.sheetnames:
+                ws_grd = wb["Grading Sheet"]
+                if ws_grd['A9'].value in (None, 'NAME OF COLLEGE'):
+                    ws_grd['A9'] = 'COLLEGE OF ENGINEERING AND INFORMATION TECHNOLOGY'
+    
+            wb.save(tmp_path)
+            wb.close()
+            os.replace(tmp_path, output_path)
+            print(f"  [SUCCESS]  Grades generated at: {output_path}")
+            return True
+        except Exception as e:
+            if os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except Exception:
+                    pass
+            raise e

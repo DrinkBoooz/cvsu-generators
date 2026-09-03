@@ -23,6 +23,9 @@ import argparse, copy, csv, io, json, os, sys, zipfile
 from abc import ABC, abstractmethod
 from lxml import etree
 
+class TemplateError(Exception):
+    pass
+
 # ══ Namespace helpers ══════════════════════════════════════════════════════════
 W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 
@@ -294,8 +297,10 @@ def save_docx(zin, root, output_path: str):
     zout.close()
     zin.close()
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
-    with open(output_path, "wb") as fh:
+    tmp_path = output_path + ".tmp"
+    with open(tmp_path, "wb") as fh:
         fh.write(buf.getvalue())
+    os.replace(tmp_path, output_path)
     print(f"  [SUCCESS]  {output_path}")
 
 # ══ Abstract base class ═══════════════════════════════════════════════════════
@@ -348,10 +353,10 @@ class DocumentGenerator(ABC):
                 target = tbl
                 break
         if target is None:
-            return
+            raise TemplateError("Could not find the student list table in the template.")
         rows = target.findall(w("tr"))
         if len(rows) < 2:
-            return
+            raise TemplateError("Student list table must have at least 2 rows (1 header, 1 student).")
         header_row = rows[0]
         template_row = rows[1]   # first student row = formatting reference
 
@@ -440,11 +445,11 @@ class SyllabusGenerator(DocumentGenerator):
                 target = tbl
                 break
         if target is None:
-            return
+            raise TemplateError("Could not find the student list table in the syllabus template.")
 
         rows = target.findall(w("tr"))
         if len(rows) < 2:
-            return
+            raise TemplateError("Syllabus student list table must have at least 2 rows (1 header, 1 student).")
         header_row = rows[0]
         template_row = rows[1]
 
@@ -510,6 +515,8 @@ class ExamReturnsGenerator(DocumentGenerator):
                         set_cell_text(cells[1], val, shrink_threshold=thresh, shrink_sz="18")
         else:
             paras = body.findall(w("p"))
+            if len(paras) < 10:
+                raise TemplateError("Exam Returns template missing required paragraphs for the header.")
             replace_value_run(paras[1], 2, info.instructor, shrink_threshold=30, shrink_sz="18")
             replace_value_run(paras[2], 3, info.course_section)
             replace_value_run(paras[3], 6, info.schedule_code)
@@ -567,6 +574,8 @@ class TOSGenerator(DocumentGenerator):
                         set_cell_text(cells[1], val, shrink_threshold=thresh, shrink_sz="18")
         else:
             paras = body.findall(w("p"))
+            if len(paras) < 7:
+                raise TemplateError("TOS template missing required paragraphs for the header.")
             replace_after_colon(paras[1], info.instructor, shrink_threshold=30, shrink_sz="18")
             replace_value_run(paras[2], 2, info.course_section)
             replace_value_run(paras[3], 4, info.schedule_code)
