@@ -63,6 +63,12 @@ class AttendanceScheduleParsingTests(unittest.TestCase):
         self.assertEqual(process_schedule.format_time("0.2916666666666667", is_pm_hint=True), "07:00PM")
         # Noon is always PM
         self.assertEqual(process_schedule.format_time("12:00", is_pm_hint=False), "12:00PM")
+        # Hours 1:00 to 6:00 default to PM in university schedule even if is_pm_hint is False
+        self.assertEqual(process_schedule.format_time("1:00", is_pm_hint=False), "01:00PM")
+        self.assertEqual(process_schedule.format_time("4:30"), "04:30PM")
+        self.assertEqual(process_schedule.format_time("6:00"), "06:00PM")
+        # Explicit AM is still respected
+        self.assertEqual(process_schedule.format_time("1:00 AM"), "01:00AM")
 
     def test_set_cell_text_removes_hanging_indent_and_justification(self):
         from lxml import etree
@@ -85,6 +91,70 @@ class AttendanceScheduleParsingTests(unittest.TestCase):
         self.assertIsNone(ppr.find("w:ind", ns))
         self.assertEqual(ppr.find("w:jc", ns).attrib[f"{{{ns['w']}}}val"], "left")
 
+    def test_sanitize_filename_prevents_directory_traversal(self):
+        # Plain traversal tokens must not permit navigating upwards
+        self.assertNotIn("..", process_schedule.sanitize_filename(".."))
+        self.assertNotIn("..", process_schedule.sanitize_filename("../etc/passwd"))
+        self.assertNotIn("..", process_schedule.sanitize_filename("..\\..\\windows\\system32"))
+        self.assertEqual(process_schedule.sanitize_filename("../safe_roster.xlsx"), "__safe_roster.xlsx")
+
+    def test_find_blocks_for_section_preserves_virtual_reality_in_person(self):
+        # Schedule grid where subject row has 'VIRTUAL REALITY' but room is physical 'CCL 303'
+        grid = [
+            ["", "", "", "", "", ""],
+            # Time column (col 1), Wed col (col 5)
+            ["", "07:00", "09:00", "", "", "COSC 102 - VIRTUAL REALITY"],
+            ["", "07:00", "09:00", "", "", "BSCS 4-2"],
+            ["", "07:00", "09:00", "", "", "LEC"],
+            ["", "07:00", "09:00", "", "", "CCL 303"],
+        ]
+        blocks = process_schedule.find_blocks_for_section(grid, "BSCS 4-2", start_row=1, end_row=4)
+        self.assertEqual(len(blocks), 1)
+        self.assertEqual(blocks[0]["room"], "CCL 303")
+        self.assertEqual(blocks[0]["type"], "LEC")
+
+        # But if the room/modality itself is 'ONLINE' or 'ASYNC', it should be skipped
+        grid_online = [
+            ["", "", "", "", "", ""],
+            ["", "07:00", "09:00", "", "", "COSC 102 - VIRTUAL REALITY"],
+            ["", "07:00", "09:00", "", "", "BSCS 4-2"],
+            ["", "07:00", "09:00", "", "", "ONLINE"],
+        ]
+        blocks_online = process_schedule.find_blocks_for_section(grid_online, "BSCS 4-2", start_row=1, end_row=3)
+        self.assertEqual(len(blocks_online), 0)
+
+    def test_fix_encoding_handles_accents_and_enye(self):
+        # Mojibake Jose should become Jose with accent, not JosÑ©
+        self.assertEqual(attendancegen._fix_encoding("JosÃ©"), "José")
+        self.assertEqual(attendancegen._fix_encoding("PEÃ‘A"), "PEÑA")
+        self.assertEqual(attendancegen._fix_encoding("NiÃ±o"), "Niño")
+
+
+    def test_find_blocks_for_section_handles_section_room_cell(self):
+        # Test cell where section and room are combined in one cell, e.g., "BSCS 4-2 / ITC 201"
+        grid = [
+            ["", "", "", "", "", ""],
+            ["", "07:00", "09:00", "", "", "COSC 102 - VIRTUAL REALITY"],
+            ["", "07:00", "09:00", "", "", "BSCS 4-2 / ITC 201 / ORTEGA"],
+            ["", "07:00", "09:00", "", "", "LEC"],
+        ]
+        blocks = process_schedule.find_blocks_for_section(grid, "BSCS 4-2", start_row=1, end_row=3)
+        self.assertEqual(len(blocks), 1)
+        self.assertEqual(blocks[0]["room"], "ITC 201")
+        self.assertEqual(blocks[0]["type"], "LEC")
+        
+        # Test standard case as well
+        grid2 = [
+            ["", "", "", "", "", ""],
+            ["", "07:00", "09:00", "", "", "COSC 102 - VIRTUAL REALITY"],
+            ["", "07:00", "09:00", "", "", "BSCS 4-2"],
+            ["", "07:00", "09:00", "", "", "LEC"],
+            ["", "07:00", "09:00", "", "", "ITC 201"],
+        ]
+        blocks2 = process_schedule.find_blocks_for_section(grid2, "BSCS 4-2", start_row=1, end_row=4)
+        self.assertEqual(len(blocks2), 1)
+        self.assertEqual(blocks2[0]["room"], "ITC 201")
+        self.assertEqual(blocks2[0]["type"], "LEC")
 
 if __name__ == "__main__":
     unittest.main()

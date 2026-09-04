@@ -305,11 +305,12 @@ def save_docx(zin, root, output_path: str):
                       else zin.read(item.filename))
     zout.close()
     zin.close()
-    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
-    import uuid
-    tmp_path = output_path + f".{uuid.uuid4().hex[:8]}.tmp"
-    with open(tmp_path, "wb") as fh:
+    dir_name = os.path.dirname(os.path.abspath(output_path))
+    os.makedirs(dir_name, exist_ok=True)
+    import tempfile
+    with tempfile.NamedTemporaryFile(dir=dir_name, delete=False, suffix=".tmp") as fh:
         fh.write(buf.getvalue())
+        tmp_path = fh.name
     os.replace(tmp_path, output_path)
     print(f"  [SUCCESS]  {output_path}")
 
@@ -384,6 +385,10 @@ class DocumentGenerator(ABC):
                         for t in r.findall(w("t")):
                             t.text = ""
             cells = tr.findall(w("tc"))
+            while len(cells) < 3:
+                new_tc = etree.Element(w("tc"))
+                tr.append(new_tc)
+                cells = tr.findall(w("tc"))
             self._fill_student_row(cells, idx, name, stnum)
             target.append(tr)
 

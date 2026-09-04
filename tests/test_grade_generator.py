@@ -26,6 +26,16 @@ class GradeGeneratorTests(unittest.TestCase):
         self.assertEqual(code, "DCIT 21A")
         self.assertEqual(title, "INTRODUCTION TO COMPUTING")
 
+        # Unicode en-dash
+        code_en, title_en = self.generator._parse_subject("ITEC 50 – WEB SYSTEMS AND TECHNOLOGY")
+        self.assertEqual(code_en, "ITEC 50")
+        self.assertEqual(title_en, "WEB SYSTEMS AND TECHNOLOGY")
+
+        # Unicode em-dash
+        code_em, title_em = self.generator._parse_subject("COSC 101 — ADVANCED DATABASE")
+        self.assertEqual(code_em, "COSC 101")
+        self.assertEqual(title_em, "ADVANCED DATABASE")
+
         code2, title2 = self.generator._parse_subject("COSC 111A-C S ELECTIVE 3 (IOT)")
         self.assertEqual(code2, "COSC 111A")
         self.assertEqual(title2, "C S ELECTIVE 3 (IOT)")
@@ -205,6 +215,92 @@ class GradeGeneratorTests(unittest.TestCase):
             # When forced to lecture_lab, it must contain Laboratory sheet
             self.assertIn("Laboratory", wb.sheetnames)
             self.assertIn("Consolidated", wb.sheetnames)
+
+    def test_clamp_max_students_overflow(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_path = os.path.join(tmpdir, "test_overflow.xlsx")
+            info = {
+                "instructor": "DAN JOSEPH A. ORTEGA",
+                "course": "BSCS 4-2",
+                "sched": "202612736",
+                "subject": "COSC 111A - C S ELECTIVE 3 (IOT)",
+                "semester": "FIRST SEMESTER, AY 2026 - 2027",
+                "time": "Tue: 09:00AM-11:00AM / LAB: CCL 303; Wed: 07:00AM-10:30AM / LEC: HOURS",
+                "has_lab": True
+            }
+            # 45 students (exceeds max capacity of 40)
+            students = [
+                {"student_name": f"STUDENT {i:02d}", "student_number": f"2026000{i:02d}"}
+                for i in range(1, 46)
+            ]
+            success = self.generator.generate(info, students, out_path)
+            self.assertTrue(success)
+
+            wb = openpyxl.load_workbook(out_path, data_only=False)
+            ws_lec = wb["Lecture"]
+            # Student 1 is at row 12
+            self.assertEqual(ws_lec.cell(12, 2).value, "STUDENT 01")
+            # Student 40 is at row 51
+            self.assertEqual(ws_lec.cell(51, 2).value, "STUDENT 40")
+            # Student 41 (row 52) must NOT be written - row 52 remains None
+            self.assertIsNone(ws_lec.cell(52, 2).value)
+            self.assertIsNone(ws_lec.cell(52, 3).value)
+
+    def test_clamp_max_students_overflow_lecture_only(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_path = os.path.join(tmpdir, "test_overflow_lec.xlsx")
+            info = {
+                "instructor": "DAN JOSEPH A. ORTEGA",
+                "course": "BSCS 1-4",
+                "sched": "202612040",
+                "subject": "DCIT 21A - INTRODUCTION TO COMPUTING",
+                "semester": "FIRST SEMESTER, AY 2026 - 2027",
+                "time": "Mon: 07:00AM-09:00AM / LEC: CL2",
+                "has_lab": False
+            }
+            # 65 students (exceeds lecture only max capacity of 60)
+            students = [
+                {"student_name": f"STUDENT {i:02d}", "student_number": f"2026000{i:02d}"}
+                for i in range(1, 66)
+            ]
+            success = self.generator.generate(info, students, out_path)
+            self.assertTrue(success)
+
+            wb = openpyxl.load_workbook(out_path, data_only=False)
+            ws_lec = wb["Lecture"]
+            # Student 1 is at row 11 in Lecture Only
+            self.assertEqual(ws_lec.cell(11, 2).value, "STUDENT 01")
+            # Student 60 is at row 70
+            self.assertEqual(ws_lec.cell(70, 2).value, "STUDENT 60")
+            # Student 61 (row 71) must NOT be written - row 71 remains None
+            self.assertIsNone(ws_lec.cell(71, 2).value)
+            self.assertIsNone(ws_lec.cell(71, 3).value)
+
+    def test_metadata_formula_injection_sanitization(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_path = os.path.join(tmpdir, "test_injection.xlsx")
+            info = {
+                "instructor": "=CMD|' /C calc'!A0",
+                "course": "+BSCS 1-4",
+                "sched": "-202612040",
+                "subject": "@DCIT 21A - INTRODUCTION TO COMPUTING",
+                "semester": "=FIRST SEMESTER, AY 2026 - 2027",
+                "time": "Mon: 07:00AM-09:00AM / LEC: CL2",
+                "has_lab": False
+            }
+            students = [("=DDE('cmd';'calc')", "+261014253")]
+            success = self.generator.generate(info, students, out_path)
+            self.assertTrue(success)
+
+            wb = openpyxl.load_workbook(out_path, data_only=False)
+            ws_lec = wb["Lecture"]
+            # Metadata fields must be prefixed with single quote
+            self.assertTrue(str(ws_lec["M4"].value).startswith("'="))
+            self.assertTrue(str(ws_lec["M1"].value).startswith("'+"))
+            self.assertTrue(str(ws_lec["C1"].value).startswith("'-"))
+            self.assertTrue(str(ws_lec["C2"].value).startswith("'@"))
+            # Student fields must be prefixed with single quote
+            self.assertTrue(str(ws_lec.cell(11, 2).value).startswith("'="))
 
     def test_root_files_remain_untouched(self):
         with open(self.ll_root, "rb") as f:

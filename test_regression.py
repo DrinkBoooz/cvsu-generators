@@ -19,7 +19,7 @@ def temp_env():
 
 def test_sanitize_filename():
     assert process_schedule.sanitize_filename("ITEC 50 - WEB SYSTEMS: AND TECH") == "ITEC 50 - WEB SYSTEMS_ AND TECH"
-    assert process_schedule.sanitize_filename("CON") == "CON" # Windows handles CON differently at lower levels, but we replace special chars.
+    assert process_schedule.sanitize_filename("CON") == "CON_" # Windows handles CON differently at lower levels, so reserved names get trailing underscore.
     assert process_schedule.sanitize_filename("foo/bar\\baz?*\"<>|") == "foo_bar_baz______"
 
 def test_ceit_generator_missing_table(temp_env):

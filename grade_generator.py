@@ -49,13 +49,16 @@ class GradeGenerator:
         """
         Parse subject string into (subject_code, subject_title).
         e.g. 'DCIT 21A - INTRODUCTION TO COMPUTING' -> ('DCIT 21A', 'INTRODUCTION TO COMPUTING')
+        Supports standard hyphens, unicode en-dashes, and em-dashes.
         """
         raw_subject = str(raw_subject).strip()
-        if " - " in raw_subject:
-            parts = raw_subject.split(" - ", 1)
+        # First try dash surrounded by whitespace (standard format)
+        parts = re.split(r'\s+[-–—―−]\s+', raw_subject, maxsplit=1)
+        if len(parts) == 2:
             return parts[0].strip(), parts[1].strip()
-        elif "-" in raw_subject:
-            parts = raw_subject.split("-", 1)
+        # Fallback to any dash
+        parts = re.split(r'[-–—―−]', raw_subject, maxsplit=1)
+        if len(parts) == 2:
             return parts[0].strip(), parts[1].strip()
         return raw_subject, ""
 
@@ -134,10 +137,17 @@ class GradeGenerator:
                 cleaned_students.append((s_name, s_num))
 
         # 4. Copy template to a temporary path for atomic writes
-        os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
-        import uuid
-        tmp_path = output_path + f".{uuid.uuid4().hex[:8]}.tmp.xlsx"
+        dir_name = os.path.dirname(os.path.abspath(output_path))
+        os.makedirs(dir_name, exist_ok=True)
+        import tempfile
+        with tempfile.NamedTemporaryFile(dir=dir_name, delete=False, suffix=".tmp.xlsx") as fh:
+            tmp_path = fh.name
         shutil.copy2(template_path, tmp_path)
+
+        def sanitize_excel(val):
+            if isinstance(val, str) and val.startswith(('=', '+', '-', '@')):
+                return "'" + val
+            return val
 
         # 5. Populate workbook natively
         try:
@@ -150,13 +160,13 @@ class GradeGenerator:
             if "lecture" not in sheet_names:
                 raise ValueError(f"Grade template is missing required 'Lecture' sheet.")
             ws = wb[name_map["lecture"]]
-            ws['C1'] = sched_val
-            ws['M1'] = course_str
-            ws['C2'] = subj_code
-            ws['M2'] = sem_str
-            ws['C3'] = subj_title
-            ws['M3'] = year_str
-            ws['M4'] = instructor
+            ws['C1'] = sched_val if isinstance(sched_val, int) else sanitize_excel(sched_val)
+            ws['M1'] = sanitize_excel(course_str)
+            ws['C2'] = sanitize_excel(subj_code)
+            ws['M2'] = sanitize_excel(sem_str)
+            ws['C3'] = sanitize_excel(subj_title)
+            ws['M3'] = sanitize_excel(year_str)
+            ws['M4'] = sanitize_excel(instructor)
             if info.get("units"):
                 try:
                     ws['C4'] = int(info["units"])
@@ -167,31 +177,38 @@ class GradeGenerator:
             if is_lab:
                 # Scan adjacent cells near BI57 (col 61, row 57) for 'Instructor'
                 found_label = False
+                sig_cell = ws['BI57']
                 for r_offset in range(-5, 6):
                     for c_offset in range(-20, 5):
-                        val = ws.cell(row=57 + r_offset, column=61 + c_offset).value
+                        r = 57 + r_offset
+                        c = 61 + c_offset
+                        val = ws.cell(row=r, column=c).value
                         if val and "instructor" in str(val).lower():
                             found_label = True
+                            # The signature line is situated 3 rows above the 'INSTRUCTOR' anchor label
+                            sig_cell = ws.cell(row=r - 3, column=c)
                             break
                     if found_label:
                         break
                 if found_label:
-                    ws['BI57'] = instructor
+                    sig_cell.value = sanitize_excel(instructor)
                 else:
                     logger.warning(f"Could not find 'Instructor' anchor cell near BI57 for {course_str} ({sched_val}). Signature omitted.")
 
             # Inject active student roster without touching formulas in other columns
-            total_slots = max(max_rows, len(cleaned_students))
+            max_capacity = max_rows
+            if len(cleaned_students) > max_capacity:
+                logger.warning(
+                    f"Roster for {course_str} ({sched_val}) has {len(cleaned_students)} students, "
+                    f"exceeding maximum section capacity of {max_capacity}. Clamping to first {max_capacity} students."
+                )
+                cleaned_students = cleaned_students[:max_capacity]
+
+            total_slots = max_rows
             for r_idx in range(total_slots):
                 row_num = start_row + r_idx
                 if r_idx < len(cleaned_students):
                     name, num = cleaned_students[r_idx]
-                    
-                    def sanitize_excel(val):
-                        if isinstance(val, str) and val.startswith(('=', '+', '-', '@')):
-                            return "'" + val
-                        return val
-                        
                     ws.cell(row=row_num, column=1).value = r_idx + 1
                     ws.cell(row=row_num, column=2).value = sanitize_excel(name)
                     ws.cell(row=row_num, column=3).value = int(num) if (num.isdigit() and not num.startswith('0')) else num
@@ -203,12 +220,12 @@ class GradeGenerator:
             # Populate 'Laboratory' sheet if present
             if "laboratory" in sheet_names:
                 ws_lab = wb[name_map["laboratory"]]
-                ws_lab['AO59'] = instructor
+                ws_lab['AO59'] = sanitize_excel(instructor)
     
             # Populate 'Consolidated' sheet if present
             if "consolidated" in sheet_names:
                 ws_con = wb[name_map["consolidated"]]
-                ws_con['J56'] = instructor
+                ws_con['J56'] = sanitize_excel(instructor)
     
             # Populate 'Grading Sheet'
             if "grading sheet" not in sheet_names:

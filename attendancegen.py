@@ -206,30 +206,19 @@ def get_class_dates_for_weekdays(months: list, year: int, weekdays: list, start_
     weekday_set = set(weekdays)
     dates = []
     
-    start_date = None
-    end_date = None
-    if start_bound and end_bound:
-        # year is either att_year (e.g. 2026). If the month wrapped around (e.g., Aug-May), we should be careful.
-        # But for now, we assume standard semester progression.
-        # start_bound: (month, day)
-        start_date = date(year if start_bound[0] >= 6 else year + 1, start_bound[0], start_bound[1])
-        end_date = date(year if end_bound[0] >= 6 else year + 1, end_bound[0], end_bound[1])
-        if start_date > end_date:
-             # handle wrapped year correctly
-             end_date = date(start_date.year + 1, end_bound[0], end_bound[1])
-
+    first_m = months[0] if months else 1
     for m in months:
-        y = year if m >= 6 else year + 1 # simplistic year heuristic for ph calendar
+        # If months list wraps across calendar year (e.g. [11, 12, 1, 2]), increment year when month wraps
+        y = year + 1 if m < first_m else year
         _, ndays = calendar.monthrange(y, m)
         for d in range(1, ndays + 1):
-            dt = date(y, m, d)
-            
             # Filter by bounds
-            if start_date and dt < start_date:
+            if start_bound and m == start_bound[0] and d < start_bound[1]:
                 continue
-            if end_date and dt > end_date:
+            if end_bound and m == end_bound[0] and d > end_bound[1]:
                 continue
                 
+            dt = date(y, m, d)
             if dt.weekday() in weekday_set:
                 dates.append(dt)
     return sorted(dates)
@@ -621,8 +610,15 @@ def build_attendance_sheet(
 def _fix_encoding(text: str) -> str:
     if not text:
         return text
+    # Try standard double-encoding recovery (e.g. 'JosÃ©' -> 'José', 'PEÃ‘A' -> 'PEÑA')
+    for enc in ("cp1252", "latin1"):
+        try:
+            return text.encode(enc).decode("utf-8")
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            pass
     text = text.replace("Ã±", "ñ")
     text = text.replace("Ã\x91", "Ñ")
+    text = text.replace("Ã‘", "Ñ")
     text = text.replace("Ã", "Ñ")
     return text
 
@@ -641,45 +637,58 @@ def load_students_excel(path: str) -> list:
     try:
         with zf.ZipFile(tmp_path) as z:
             names = z.namelist()
-        shared_strings = []
-        if "xl/sharedStrings.xml" in names:
-            ss_root = ET.fromstring(z.read("xl/sharedStrings.xml"))
-            for si in ss_root.findall("x:si", ns):
-                text = "".join(t.text or "" for t in si.iter(f"{{{NS}}}t"))
-                shared_strings.append(text)
+            shared_strings = []
+            if "xl/sharedStrings.xml" in names:
+                ss_root = ET.fromstring(z.read("xl/sharedStrings.xml"))
+                for si in ss_root.findall("x:si", ns):
+                    text = "".join(t.text or "" for t in si.iter(f"{{{NS}}}t"))
+                    shared_strings.append(text)
 
-        sheet_file = next(
-            (n for n in names if n.startswith("xl/worksheets/sheet") and n.endswith(".xml")),
-            None
-        )
-        if not sheet_file:
-            raise RuntimeError("No worksheet found in Excel file.")
+            sheet_file = next(
+                (n for n in names if n.startswith("xl/worksheets/sheet") and n.endswith(".xml")),
+                None
+            )
+            if not sheet_file:
+                raise RuntimeError("No worksheet found in Excel file.")
 
-        sheet_root = ET.fromstring(z.read(sheet_file))
+            sheet_root = ET.fromstring(z.read(sheet_file))
 
-        def cell_value(c) -> str:
-            t = c.get("t", "")
-            if t == "inlineStr":
-                is_el = c.find("x:is", ns)
-                if is_el is not None:
-                    return "".join(t_el.text or "" for t_el in is_el.iter(f"{{{NS}}}t"))
-                return ""
-            v_el = c.find("x:v", ns)
-            if v_el is None or v_el.text is None: return ""
-            if t == "s":
-                idx = int(v_el.text)
-                return shared_strings[idx] if idx < len(shared_strings) else ""
-            return v_el.text
+            def cell_value(c) -> str:
+                t = c.get("t", "")
+                if t == "inlineStr":
+                    is_el = c.find("x:is", ns)
+                    if is_el is not None:
+                        return "".join(t_el.text or "" for t_el in is_el.iter(f"{{{NS}}}t"))
+                    return ""
+                v_el = c.find("x:v", ns)
+                if v_el is None or v_el.text is None: return ""
+                if t == "s":
+                    idx = int(v_el.text)
+                    return shared_strings[idx] if idx < len(shared_strings) else ""
+                return v_el.text
 
-        students = []
-        for i, row_el in enumerate(sheet_root.findall(".//x:sheetData/x:row", ns)):
-            cells = row_el.findall("x:c", ns)
-            col_a = cell_value(cells[0]).strip() if cells else ""
-            col_b = cell_value(cells[1]).strip() if len(cells) > 1 else ""
-            if i == 0 and col_a.lower() in ("name", "student name", "full name"):
-                continue
-            if col_a:
-                students.append((_fix_encoding(col_a), _fix_encoding(col_b)))
+            students = []
+            for i, row_el in enumerate(sheet_root.findall(".//x:sheetData/x:row", ns)):
+                # Map cells by their coordinate letter (e.g. r="A12" -> "A") to avoid empty cell positional misalignment
+                cell_dict = {}
+                for c_el in row_el.findall("x:c", ns):
+                    ref = c_el.get("r", "")
+                    col_let = re.sub(r'\d+', '', ref).upper()
+                    if col_let:
+                        cell_dict[col_let] = cell_value(c_el).strip()
+                
+                if "A" in cell_dict or "B" in cell_dict:
+                    col_a = cell_dict.get("A", "")
+                    col_b = cell_dict.get("B", "")
+                else:
+                    cells = row_el.findall("x:c", ns)
+                    col_a = cell_value(cells[0]).strip() if cells else ""
+                    col_b = cell_value(cells[1]).strip() if len(cells) > 1 else ""
+
+                if i == 0 and col_a.lower() in ("name", "student name", "full name"):
+                    continue
+                if col_a:
+                    students.append((_fix_encoding(col_a), _fix_encoding(col_b)))
     finally:
         if os.path.exists(tmp_path):
             try:
@@ -716,15 +725,16 @@ def load_students(path: str) -> list:
     return load_students_csv(path)
 
 
-def get_default_template_path() -> str:
+def get_default_template_path(has_lab: bool = False) -> str:
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    repo_root_template = os.path.join(script_dir, "template.docx")
-    bundled_template = os.path.join(script_dir, "attendance", "template.docx")
+    template_name = "template lab and lec.docx" if has_lab else "template lec.docx"
+    repo_root_template = os.path.join(script_dir, template_name)
+    bundled_template = os.path.join(script_dir, "attendance", template_name)
     if os.path.exists(repo_root_template):
         return repo_root_template
     if os.path.exists(bundled_template):
         return bundled_template
-    return repo_root_template
+    return bundled_template
 
 # ── CLI helpers ───────────────────────────────────────────────────────────────
 
@@ -877,11 +887,14 @@ def generate_attendance_for_month(template_path, output_path, info, students, mo
                 break
                 
     # Parse day string to integer list
-    try:
-        schedule_days = [parse_weekday(class_day)]
-    except ValueError:
+    schedule_days = []
+    for d in class_day.split(","):
+        try:
+            schedule_days.append(parse_weekday(d.strip()))
+        except ValueError:
+            pass
+    if not schedule_days:
         schedule_days = [0] # default monday
-        
     year_int = int(year)
     
     try:

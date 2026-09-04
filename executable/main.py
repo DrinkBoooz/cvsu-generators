@@ -5,13 +5,16 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import process_schedule
 
+import threading
+import json
+
 def get_resource_path(relative_path):
     """Get absolute path to resource, works for dev and for PyInstaller"""
     try:
         # PyInstaller creates a temp folder and stores path in _MEIPASS
         base_path = sys._MEIPASS
     except Exception:
-        base_path = os.path.abspath(".")
+        base_path = os.path.dirname(os.path.abspath(__file__))
 
     return os.path.join(base_path, relative_path)
 
@@ -22,6 +25,7 @@ class ScriptAPI:
         self.output_dir = ""
         self.rosters = []
         self._is_processing = False
+        self._lock = threading.Lock()
 
     def browse_schedule(self):
         file_types = ('Excel files (*.xls;*.xlsx;*.xlsm)', 'All files (*.*)')
@@ -59,25 +63,30 @@ class ScriptAPI:
         try:
             return process_schedule.detect_classes(self.schedule_path, self.rosters)
         except Exception as e:
-            print(f"Error in detect_classes: {str(e)}")
+            process_schedule.logger.error(f"Error in detect_classes: {e}")
             return []
 
     def run_generation(self, type_overrides=None, date_overrides=None):
-        if self._is_processing:
-            return {"status": "error", "message": "A generation task is already in progress."}
-            
+        with self._lock:
+            if self._is_processing:
+                return {"status": "error", "message": "A generation task is already in progress."}
+            self._is_processing = True
+
         if not self.schedule_path:
+            with self._lock:
+                self._is_processing = False
             return {"status": "error", "message": "Missing Instructor Schedule. Please attach your Master Schedule .xls context."}
         if not self.rosters:
+            with self._lock:
+                self._is_processing = False
             return {"status": "error", "message": "Missing Student Rosters. Please attach the student list files."}
         if not self.output_dir:
+            with self._lock:
+                self._is_processing = False
             return {"status": "error", "message": "Missing Output Directory. Operations cannot resolve without an endpoint."}
         
         try:
-            self._is_processing = True
-            print("Commencing Build Initialization...")
-            import threading
-            import json
+            process_schedule.logger.info("Commencing Build Initialization...")
 
             def _thread_target():
                 try:
@@ -96,10 +105,11 @@ class ScriptAPI:
                     else:
                         payload = {"status": "success", "message": f"Generation complete: {total_generated} files generated. {total_errors} errors. {total_skipped} skipped."}
                 except Exception as e:
-                    print(f"Error Pipeline Breakdown: {str(e)}")
+                    process_schedule.logger.error(f"Error Pipeline Breakdown: {e}")
                     payload = {"status": "error", "message": f"Fatal Generation Fault: {str(e)}"}
                 finally:
-                    self._is_processing = False
+                    with self._lock:
+                        self._is_processing = False
                 
                 # Use evaluate_js to update the UI from the background thread
                 try:
@@ -120,7 +130,9 @@ class ScriptAPI:
             return None
             
         except Exception as e:
-            print(f"Error starting thread: {str(e)}")
+            with self._lock:
+                self._is_processing = False
+            process_schedule.logger.error(f"Error starting thread: {e}")
             return {"status": "error", "message": f"Failed to start generation thread: {str(e)}"}
 
 

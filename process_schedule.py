@@ -41,11 +41,14 @@ def get_long_path(p: str) -> str:
     return p
 
 def sanitize_filename(name: str) -> str:
-    """Remove illegal characters for Windows/Linux file paths."""
+    """Remove illegal characters for Windows/Linux file paths and prevent directory traversal."""
     if not name:
         return "Unknown"
     name = str(name)
-    name = re.sub(r'[<>:"/\\|?*]', '_', name).strip()
+    name = re.sub(r'[<>:"/\\|?*]', '_', name)
+    # Prevent path traversal by neutralizing consecutive dots
+    name = re.sub(r'\.{2,}', '_', name).strip()
+    name = name.strip('. ')
     if not name:
         return "Unknown"
         
@@ -55,6 +58,14 @@ def sanitize_filename(name: str) -> str:
         name = name + "_"
         
     return name
+
+def get_subject_code(s: str) -> str:
+    """Extracts base subject code, removing lab/lec modifiers, hyphens, and spaces."""
+    if not s:
+        return ""
+    prefix = s.split('-')[0].upper()
+    prefix = re.sub(r'\(.*?\)', '', prefix)
+    return re.sub(r'[^a-zA-Z0-9]', '', prefix)
 
 def format_time(t_str, is_pm_hint=None):
     t_str = str(t_str).strip()
@@ -84,15 +95,10 @@ def format_time(t_str, is_pm_hint=None):
         is_pm = True
     elif has_am_suffix:
         is_pm = False
+    elif (1 <= h <= 6) or h >= 12:
+        is_pm = True
     elif is_pm_hint is not None:
-        if h == 12:
-            is_pm = True
-        else:
-            is_pm = bool(is_pm_hint)
-    elif h >= 12:
-        is_pm = True
-    elif 1 <= h <= 6:
-        is_pm = True
+        is_pm = bool(is_pm_hint)
     else:
         is_pm = False
         
@@ -179,21 +185,24 @@ def parse_schedule(schedule_path):
             import openpyxl
             import datetime
             wb = openpyxl.load_workbook(tmp_path, data_only=True)
-            for sheet in wb.worksheets:
-                grid = []
-                for row in sheet.iter_rows(values_only=True):
-                    row_vals = []
-                    for val in row:
-                        if val is None:
-                            row_vals.append("")
-                        elif isinstance(val, (datetime.time, datetime.datetime)):
-                            row_vals.append(val.strftime("%H:%M"))
-                        elif isinstance(val, float):
-                            row_vals.append(str(int(val)) if val.is_integer() else str(val))
-                        else:
-                            row_vals.append(str(val))
-                    grid.append(row_vals)
-                parsed_sheets.append(grid)
+            try:
+                for sheet in wb.worksheets:
+                    grid = []
+                    for row in sheet.iter_rows(values_only=True):
+                        row_vals = []
+                        for val in row:
+                            if val is None:
+                                row_vals.append("")
+                            elif isinstance(val, (datetime.time, datetime.datetime)):
+                                row_vals.append(val.strftime("%H:%M"))
+                            elif isinstance(val, float):
+                                row_vals.append(str(int(val)) if val.is_integer() else str(val))
+                            else:
+                                row_vals.append(str(val))
+                        grid.append(row_vals)
+                    parsed_sheets.append(grid)
+            finally:
+                wb.close()
     finally:
         if os.path.exists(tmp_path):
             try:
@@ -257,7 +266,8 @@ def find_blocks_for_section(grid, section, start_row, end_row):
     row_is_pm = {}
     for r_idx in range(start_row, min(end_row + 1, len(grid))):
         t_val = grid[r_idx][1] if len(grid[r_idx]) > 1 else ""
-        if "12:" in t_val or t_val.startswith("12") or t_val in ("0.5", "0.5208333333333334"):
+        t_fmt = format_time(t_val)
+        if ("12:" in t_val or t_val.startswith("12") or t_val in ("0.5", "0.5208333333333334")) or (t_fmt != "SEE SCHEDULE" and "PM" in t_fmt):
             seen_noon = True
         row_is_pm[r_idx] = seen_noon
 
@@ -267,10 +277,15 @@ def find_blocks_for_section(grid, section, start_row, end_row):
             if c < len(grid[r]):
                 cell = grid[r][c].strip()
                 if search_str in cell:
+                    SUBJECT_PREFIXES = (
+                        "CVSU", "DCIT", "COSC", "ITEC", "INSY", "GNED", "MATH", "STAT",
+                        "FITT", "NSTP", "PHYS", "PHED", "ECON", "BAMG", "ENGR", "BSCE",
+                        "COEN", "ELET", "MECH", "AENG", "CHEM", "BIOL", "FILI", "HIST",
+                        "COMM", "SOCS", "HUMA", "AGRI", "CRIM", "BMGT"
+                    )
                     subject_row = r
                     for i in range(r, start_row-1, -1):
                         val = grid[i][c].strip()
-                        SUBJECT_PREFIXES = ("CVSU", "DCIT", "COSC", "ITEC", "INSY", "GNED", "MATH", "STAT", "FITT", "NSTP", "PHYS", "PHED", "ECON", "BAMG")
                         if val.startswith(SUBJECT_PREFIXES):
                             subject_row = i
                             break
@@ -278,7 +293,6 @@ def find_blocks_for_section(grid, section, start_row, end_row):
                     room_row = r
                     for i in range(r, end_row+1):
                         val = grid[i][c].strip()
-                        SUBJECT_PREFIXES = ("CVSU", "DCIT", "COSC", "ITEC", "INSY", "GNED", "MATH", "STAT", "FITT", "NSTP", "PHYS", "PHED", "ECON", "BAMG")
                         if i > r and val.startswith(SUBJECT_PREFIXES):
                             break
                         if val:
@@ -295,17 +309,26 @@ def find_blocks_for_section(grid, section, start_row, end_row):
                     end_time_fmt = format_time(end_time, is_pm_hint=end_pm_hint) if end_time else ""
                     
                     day = get_day_name(c)
-                    room = grid[room_row][c].split('/')[0].strip()
+                    
+                    # The cell where we found the section might contain the room too (e.g. "BSCS 4-2 / ITC 201")
+                    section_cell_parts = [p.strip() for p in grid[r][c].split('/')]
+                    if len(section_cell_parts) > 1 and search_str.upper().replace(" ", "") in section_cell_parts[0].upper().replace(" ", ""):
+                        room = section_cell_parts[1]
+                    else:
+                        room = grid[room_row][c].strip()
                     
                     type_str = ""
                     is_async = False
                     for i in range(subject_row, room_row + 1):
                         v = grid[i][c].strip().lower()
-                        if "async" in v or "online" in v or "virtual" in v:
-                            is_async = True
+                        # Only check for async/online keywords in room or modality rows (exclude subject title row)
+                        if i > subject_row:
+                            if "async" in v or "online" in v or "virtual" in v:
+                                is_async = True
                         if v.upper() in ["LAB", "LEC"]:
                             type_str = v.upper()
                             
+                    subject_title = grid[subject_row][c].strip()
                     if is_async:
                         continue
                             
@@ -314,7 +337,8 @@ def find_blocks_for_section(grid, section, start_row, end_row):
                         'end_time': end_time_fmt,
                         'day': day,
                         'room': room,
-                        'type': type_str
+                        'type': type_str,
+                        'subject_title': subject_title
                     })
     return blocks
 
@@ -404,7 +428,6 @@ def process_all(schedule_path, xlsx_files, output_dir_base, type_overrides=None,
         return results
         
     factory = GeneratorFactory(templates_dir)
-    attendance_template = get_long_path(os.path.join(project_dir, "attendance", "template.docx"))
     
     for student_file in xlsx_files:
         filename = os.path.basename(student_file)
@@ -454,7 +477,9 @@ def process_all(schedule_path, xlsx_files, output_dir_base, type_overrides=None,
             
         years = re.findall(r'20\d{2}', semester_ay)
         att_year = None
-        if not years:
+        if date_overrides and date_overrides.get('startYear'):
+            att_year = int(date_overrides['startYear'])
+        elif not years:
             results["errors"]["attendance"].append(f"{course_sec} ({schedule_code}): Could not parse year from '{semester_ay}'")
         elif len(years) > 1 and is_second:
             att_year = int(years[1])
@@ -483,6 +508,19 @@ def process_all(schedule_path, xlsx_files, output_dir_base, type_overrides=None,
                 cur += 1
                 if cur > 12:
                     cur = 1
+            
+        # Filter blocks by the intended subject early to prevent CEIT/Grades for mismatched subjects
+        intended_code = get_subject_code(subject_name)
+        # Use substring match to allow 'DCIT21' to match 'DCIT21A'
+        filtered_blocks = [b for b in blocks if intended_code in get_subject_code(b['subject_title']) or get_subject_code(b['subject_title']) in intended_code]
+        
+        if not filtered_blocks:
+            msg = f"Skipping {course_sec} - {subject_name} because no blocks matched its subject code."
+            print(f"\n{msg}")
+            logger.info(msg)
+            continue
+            
+        blocks = filtered_blocks
             
         if blocks:
             parts = []
@@ -520,67 +558,6 @@ def process_all(schedule_path, xlsx_files, output_dir_base, type_overrides=None,
         os.makedirs(ceit_dir, exist_ok=True)
         os.makedirs(attendance_dir, exist_ok=True)
         
-        for gen_factory, suffix in factory.get_all():
-            safe_suffix = sanitize_filename(suffix)
-            out_name = f"{course_sec_safe}_{schedule_code_safe}_{safe_suffix}.docx"
-            out_path = os.path.join(ceit_dir, out_name)
-            try:
-                generator = gen_factory()
-                generator.generate(info, out_path)
-                results["generated"]["ceit"].append(out_name)
-            except Exception as e:
-                err_msg = f"Failed CEIT ({suffix}): {str(e)}"
-                logger.error(err_msg, exc_info=True)
-                results["errors"]["ceit"].append(err_msg)
-                print(f"    -> [ERROR] {err_msg}")
-            
-        print("    -> Passing to Attendance Generator...")
-        if att_year is not None:
-            for b in blocks:
-                safe_day = sanitize_filename(b['day'])
-                att_out_name = f"{course_sec_safe}_{schedule_code_safe}_ATTENDANCE_{safe_day}.docx"
-                att_out_path = os.path.join(attendance_dir, att_out_name)
-                
-                att_info = {
-                    "course": course_sec,
-                    "schedule": f"{b['start_time']}-{b['end_time']} / {b['day']}",
-                    "semester": semester_ay,
-                    "room": f"{b['type']}: {b['room']}" if b['type'] else b['room'],
-                    "instructor": instructor,
-                    "subject": subject_name
-                }
-                
-                for m in months:
-                    month_name = datetime.date(2026, m, 1).strftime('%B')
-                    safe_month = sanitize_filename(month_name)
-                    month_out_name = f"{course_sec_safe}_{schedule_code_safe}_ATTENDANCE_{safe_day}_{safe_month}.docx"
-                    month_out_path = os.path.join(attendance_dir, month_out_name)
-                    try:
-                        res = attendancegen.generate_attendance_for_month(
-                            template_path=attendance_template,
-                            output_path=month_out_path,
-                            info=att_info,
-                            students=students,
-                            month=month_name,
-                            year=str(att_year),
-                            class_day=b['day'],
-                            start_bound=start_bound,
-                            end_bound=end_bound
-                        )
-                        if res == "skipped_empty":
-                            results["skipped"]["attendance"].append(f"{month_out_name} (0 days)")
-                        else:
-                            results["generated"]["attendance"].append(month_out_name)
-                    except Exception as e:
-                        err_msg = f"Failed Attendance ({month_name}): {str(e)}"
-                        logger.error(err_msg, exc_info=True)
-                        results["errors"]["attendance"].append(err_msg)
-                        print(f"    -> [ERROR] {err_msg}")
-
-        print("    -> Passing to Grade Generator...")
-        grade_dir = os.path.join(course_dir, "Grades")
-        os.makedirs(grade_dir, exist_ok=True)
-        
         # Determine subject type: use override if specified, else auto-detect from schedule/subject
         auto_has_lab = any(b.get("type", "").upper() == "LAB" for b in blocks)
         if not blocks and ("LAB" in subject_name.upper() or "LABORATORY" in subject_name.upper()):
@@ -598,8 +575,109 @@ def process_all(schedule_path, xlsx_files, output_dir_base, type_overrides=None,
             has_lab = (chosen_type == "lecture_lab")
         else:
             has_lab = auto_has_lab
+            
+        if has_lab:
+            attendance_template = get_long_path(os.path.join(project_dir, "attendance", "template lab and lec.docx"))
+        else:
+            attendance_template = get_long_path(os.path.join(project_dir, "attendance", "template lec.docx"))
+        
+
+        for gen_factory, suffix in factory.get_all():
+            safe_suffix = sanitize_filename(suffix)
+            out_name = f"{course_sec_safe}_{schedule_code_safe}_{safe_suffix}.docx"
+            out_path = os.path.join(ceit_dir, out_name)
+            try:
+                generator = gen_factory()
+                generator.generate(info, out_path)
+                results["generated"]["ceit"].append(out_name)
+            except Exception as e:
+                err_msg = f"Failed CEIT ({suffix}): {str(e)}"
+                logger.error(err_msg, exc_info=True)
+                results["errors"]["ceit"].append(err_msg)
+                print(f"    -> [ERROR] {err_msg}")
+            
+        print("    -> Passing to Attendance Generator...")
+        if att_year is not None:
+            # Group blocks by subject title (now normalized)
+            from collections import defaultdict
+            grouped_blocks = defaultdict(list)
+            for b in blocks:
+                grouped_blocks[get_subject_code(b['subject_title'])].append(b)
+                
+            for subj_title, subj_blocks in grouped_blocks.items():
+                print(f"DEBUG: Matched {subj_title} == {intended_code}, months to process: {months}")
+
+                # Consolidate schedule, room, and days
+                sched_parts = []
+                room_parts = []
+                days_set = []
+                safe_days = []
+                for b in subj_blocks:
+                    typ = f"{b['type']}: " if b['type'] else ""
+                    # Format strictly as Day: Time for accurate Lab/Lec column matching in attendancegen
+                    sched_parts.append(f"{b['day']}: {b['start_time']}-{b['end_time']}")
+                    room_parts.append(f"{typ}{b['room']}")
+                    if b['day'] not in days_set:
+                        days_set.append(b['day'])
+                        safe_days.append(sanitize_filename(b['day']))
+
+                combined_schedule = "; ".join(sched_parts)
+                combined_room = ", ".join(room_parts)
+                combined_days = ", ".join(days_set)
+                combined_safe_days = "_".join(safe_days)
+
+                att_out_name = f"{course_sec_safe}_{schedule_code_safe}_ATTENDANCE_{combined_safe_days}.docx"
+                att_out_path = os.path.join(attendance_dir, att_out_name)
+                
+                att_info = {
+                    "course": course_sec,
+                    "schedule": combined_schedule,
+                    "semester": semester_ay,
+                    "room": combined_room,
+                    "instructor": instructor,
+                    "subject": subject_name
+                }
+                
+                for m in months:
+                    month_name = datetime.date(2026, m, 1).strftime('%B')
+                    safe_month = sanitize_filename(month_name)
+                    month_out_name = f"{course_sec_safe}_{schedule_code_safe}_ATTENDANCE_{combined_safe_days}_{safe_month}.docx"
+                    month_out_path = os.path.join(attendance_dir, month_out_name)
+                    
+                    year_for_month = (
+                        att_year + 1
+                        if (start_bound and end_bound and start_bound[0] > end_bound[0] and m < start_bound[0])
+                        else att_year
+                    )
+                    try:
+                        res = attendancegen.generate_attendance_for_month(
+                            template_path=attendance_template,
+                            output_path=month_out_path,
+                            info=att_info,
+                            students=students,
+                            month=month_name,
+                            year=str(year_for_month),
+                            class_day=combined_days,
+                            start_bound=start_bound,
+                            end_bound=end_bound
+                        )
+                        print(f"DEBUG: generate_attendance_for_month for {month_name} returned {res}")
+                        if res == "skipped_empty":
+                            results["skipped"]["attendance"].append(f"{month_out_name} (0 days)")
+                        else:
+                            results["generated"]["attendance"].append(month_out_name)
+                    except Exception as e:
+                        err_msg = f"Failed Attendance ({month_out_name}): {str(e)}"
+                        logger.error(err_msg, exc_info=True)
+                        results["errors"]["attendance"].append(err_msg)
+                        print(f"    -> [ERROR] {err_msg}")
+
+        print("    -> Passing to Grade Generator...")
+        grade_dir = os.path.join(course_dir, "Grades")
+        os.makedirs(grade_dir, exist_ok=True)
 
         grade_info = {
+
             "instructor": instructor,
             "course": course_sec,
             "sched": schedule_code,
