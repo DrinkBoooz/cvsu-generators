@@ -231,8 +231,8 @@ class GradeGenerator:
             if "grading sheet" not in sheet_names:
                 raise ValueError(f"Grade template is missing required 'Grading Sheet' sheet.")
             ws_grd = wb[name_map["grading sheet"]]
-            if ws_grd['A9'].value in (None, 'NAME OF COLLEGE'):
-                ws_grd['A9'] = 'COLLEGE OF ENGINEERING AND INFORMATION TECHNOLOGY'
+            college_val = str(info.get("college") or "").strip() or "COLLEGE OF ENGINEERING AND INFORMATION TECHNOLOGY"
+            ws_grd['A9'] = sanitize_excel(college_val)
     
             wb.save(tmp_path)
             wb.close()

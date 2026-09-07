@@ -218,6 +218,7 @@ def parse_schedule(schedule_path):
             
         instructor = "DAN JOSEPH A. ORTEGA"
         semester = "FIRST SEMESTER, AY 2026 - 2027"
+        college = "COLLEGE OF ENGINEERING AND INFORMATION TECHNOLOGY"
         start_row = 18
         end_row = 46
         
@@ -225,6 +226,9 @@ def parse_schedule(schedule_path):
             for c in range(len(grid[r])):
                 val = grid[r][c].upper()
                 
+                if "COLLEGE OF" in val:
+                    college = grid[r][c].strip()
+                    
                 if "SEMESTER" in val and re.search(r'\b(SY|AY|A\.Y\.|S\.Y\.)\b', val):
                     semester = grid[r][c]
                     
@@ -246,6 +250,7 @@ def parse_schedule(schedule_path):
             "grid": grid,
             "instructor": instructor,
             "semester": semester,
+            "college": college,
             "start_row": start_row,
             "end_row": end_row
         })
@@ -466,6 +471,7 @@ def process_all(schedule_path, xlsx_files, output_dir_base, type_overrides=None,
                 
         instructor = best_sched["instructor"]
         semester_ay = best_sched["semester"]
+        college = best_sched.get("college", "COLLEGE OF ENGINEERING AND INFORMATION TECHNOLOGY")
         
         sem_lower = semester_ay.lower()
         if 'second' in sem_lower or '2nd' in sem_lower:
@@ -543,7 +549,8 @@ def process_all(schedule_path, xlsx_files, output_dir_base, type_overrides=None,
             subject=subject_name,
             time_days_room=time_days_room,
             semester_ay=semester_ay,
-            students=students
+            students=students,
+            college=college
         )
         
         course_sec_safe = sanitize_filename(course_sec)
@@ -677,14 +684,14 @@ def process_all(schedule_path, xlsx_files, output_dir_base, type_overrides=None,
         os.makedirs(grade_dir, exist_ok=True)
 
         grade_info = {
-
             "instructor": instructor,
             "course": course_sec,
             "sched": schedule_code,
             "subject": subject_name,
             "semester": semester_ay,
             "time": time_days_room,
-            "has_lab": has_lab
+            "has_lab": has_lab,
+            "college": college
         }
         
         try:

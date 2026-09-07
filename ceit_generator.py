@@ -19,7 +19,7 @@ Usage:
     python ceit_generator.py --csv students.xlsx
 """
 
-import argparse, copy, csv, io, json, os, sys, zipfile
+import argparse, copy, csv, io, json, os, re, sys, zipfile
 from abc import ABC, abstractmethod
 from lxml import etree
 
@@ -47,6 +47,7 @@ class ClassInfo:
         time_days_room: str,   # e.g. "10:00AM-12:00AM / M / LAB: CCL 305"
         semester_ay:   str,    # e.g. "2nd Semester / 2025-2026"
         students:      list,   # [(name, student_number), ...]
+        college:       str = "COLLEGE OF ENGINEERING AND INFORMATION TECHNOLOGY",
     ):
         self.instructor     = instructor
         self.course_section = course_section
@@ -55,6 +56,7 @@ class ClassInfo:
         self.time_days_room = time_days_room
         self.semester_ay    = semester_ay
         self.students       = students
+        self.college        = college
 
 # ══ XML utilities (module-level, shared by all generators) ════════════════════
 def get_full_text(el) -> str:
@@ -661,6 +663,7 @@ def _fix_encoding(text: str) -> str:
 def load_students_excel(path: str) -> list:
     """Read Excel via ZIP/XML — avoids openpyxl style compatibility bugs."""
     from xml.etree import ElementTree as ET
+    import re
     NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
     ns = {"x": NS}
 
@@ -690,9 +693,19 @@ def load_students_excel(path: str) -> list:
         students = []
         for i, row in enumerate(
                 ET.fromstring(z.read(sheet)).findall(".//x:sheetData/x:row", ns)):
-            cells = row.findall("x:c", ns)
-            a = cell_val(cells[0]).strip() if cells else ""
-            b = cell_val(cells[1]).strip() if len(cells) > 1 else ""
+            cell_dict = {}
+            for c_el in row.findall("x:c", ns):
+                ref = c_el.get("r", "")
+                col_let = re.sub(r'\d+', '', ref).upper()
+                if col_let:
+                    cell_dict[col_let] = cell_val(c_el).strip()
+            if "A" in cell_dict or "B" in cell_dict:
+                a = cell_dict.get("A", "")
+                b = cell_dict.get("B", "")
+            else:
+                cells = row.findall("x:c", ns)
+                a = cell_val(cells[0]).strip() if cells else ""
+                b = cell_val(cells[1]).strip() if len(cells) > 1 else ""
             if i == 0 and a.lower() in ("name", "student name", "full name"):
                 continue
             if a:
