@@ -1,160 +1,308 @@
-# CvSU Gen (Beta)
+# CVSU Generators
 
-Standardized academic document generation suite for Cavite State University (CvSU) faculty members. The system automatically reads an instructor's official master schedule and student rosters to produce attendance sheets, department forms, and official grade sheets with zero manual data entry.
+This repository contains Python scripts for generating standardized CvSU academic documents from a single class dataset and a set of Word templates.
 
-Available as both a **standalone modern desktop application** (GUI) and a **Python CLI / batch pipeline**.
+## Included files
 
----
+- `ceit_generator.py` — generates the five CEIT document types from one student list and class metadata.
+- `attendancegen.py` — attendance sheet generator.
+- `templates/` — source Word templates used by the document generator.
+- `output/` — generated document output folders.
+- `tests/` — automated checks for the attendance-related utilities.
 
-## 📑 Generated Document Types
+## CEIT document generator
 
-The suite concurrently drives three specialized generation engines:
+The main generator is `ceit_generator.py`. It creates the following documents from one class input:
 
-1. **Monthly Attendance Sheets (`.docx`)**
-   - Generates individual attendance documents for each active month in the semester (e.g., August to December, or January to May).
-   - Matches official university layout and automatically populates class dates corresponding to your specific weekly lecture/lab days (e.g., Mondays, Thursdays/Fridays).
-   - Filters dates strictly within user-specified semester start and end dates.
+- Course Syllabus Acceptance Form
+- Exam Returns Form — Midterm
+- Exam Returns Form — Finals
+- TOS Acknowledgment — Midterm
+- TOS Acknowledgment — Finals
 
-2. **CEIT Department Forms (`.docx`)**
-   - **Course Syllabus Acceptance Form** — with full student roster table, schedule information, and course details.
-   - **Midterm Examination Returns Form** — complete student acknowledgement checklist.
-   - **Final Examination Returns Form** — complete student acknowledgement checklist.
-   - **Table of Specifications (TOS) Acknowledgment — Midterm**
-   - **Table of Specifications (TOS) Acknowledgment — Finals**
+## Prerequisites
 
-3. **Official CvSU Grading Sheets (`.xlsx`)**
-   - Generates native Excel workbooks based on official university grading templates:
-     - **Lecture and Lab Template (`GRADING_LECTURE_LAB_TEMPLATE.xlsx`)**: Populates `Lecture`, `Laboratory`, `Consolidated`, and `Grading Sheet` sheets.
-     - **Lecture Only Template (`GRADING_LECTURE_TEMPLATE.xlsx`)**: Populates `Lecture` and `Grading Sheet` sheets.
-   - Automatically writes Course & Section, Subject Code & Title, Schedule Code, Units, Semester, Academic Year, and Instructor Signature (`BI60`/`BI57`).
-   - Fills Student Names and Student Numbers while strictly preserving internal Excel grading formulas.
-   - Includes automatic formula injection sanitization.
+- Python 3.10+
+- `lxml` installed in the active environment
 
----
+Example install:
 
-## 🖥️ Desktop Application (Recommended)
+```bash
+pip install lxml
+```
 
-The easiest way to generate documents is using the standalone desktop GUI application.
+## Quick start
 
-### Running the Standalone Application
-1. Navigate to `executable/dist/CvSU Gen (Beta).exe`.
-2. Double-click **`CvSU Gen (Beta).exe`** (no Python installation required).
+Run the script interactively:
 
-### Step-by-Step User Instructions
-1. **Step 1: Instructor Schedule (Excel)**
-   - Click **Browse File** and select your master schedule file (`.xls` or `.xlsx`).
-   - *Requirement:* Exported from the university faculty portal.
-   - *Note:* Any schedule blocks marked as `"Async"` or `"Asynch"` are automatically filtered out to ensure offline documents only target face-to-face sessions.
-2. **Step 2: Student Rosters (XLSX)**
-   - Click **Browse Data** and select one or more student roster files. You can select multiple files at once.
-   - *Requirement:* Exported directly from [registrar.cvsu.edu.ph](https://registrar.cvsu.edu.ph/).
-   - *Naming Format:* Must strictly follow:
-     ```text
-     {Course/Sec} List of Students for {ScheduleCode}-{Subject}.xlsx
-     ```
-     *Example:* `BSCS1-4 List of Students for 202612040-DCIT 21A - INTRODUCTION TO COMPUTING.xlsx`
-3. **Step 3: Review Detected Classes & Subject Types**
-   - Once both Schedule and Rosters are loaded, the **Detected Classes & Subject Types** section automatically appears.
-   - For each class found, the system intelligently auto-detects whether the course is **Lecture and Lab** (if schedule has lab rooms/hours) or **Lecture only**.
-   - Use the dropdown on each class to manually override the type if necessary.
-4. **Step 4: Semester Date Boundaries (Optional)**
-   - **Start Date:** The official starting date of classes for the semester.
-   - **End Date:** The official ending date of classes.
-   - *Behavior:* When both dates are provided, attendance sheets will only generate attendance check columns for calendar days falling strictly between Start and End. If left blank, standard monthly calendars derived from the semester are used.
-5. **Step 5: Target Output Environment**
-   - Click **Browse Path** and select the destination folder where generated documents should be saved.
-6. **Step 6: Initialize Workflow**
-   - Click **Initialize Workflow**. The process runs asynchronously in the background. A confirmation alert will report total generated files, skipped classes, or errors upon completion.
+```bash
+python ceit_generator.py
+```
 
----
+Then enter the required values when prompted, or choose a quick preset.
 
-## 📁 Output Directory Organization
+## Command-line usage
 
-All outputs are automatically sorted and grouped into clean subdirectories by course and section:
+### Basic run
+
+```bash
+python ceit_generator.py --csv "C:\Users\YourName\Documents\students.xlsx"
+```
+
+### Pre-filled values
+
+```bash
+python ceit_generator.py \
+  --csv "C:\Users\YourName\Documents\students.xlsx" \
+  --instructor "DAN JOSEPH A. ORTEGA" \
+  --course "BSCS 1-4" \
+  --sched "202612040" \
+  --subject "DCIT 21 - INTRODUCTION TO COMPUTING" \
+  --time "05:00PM-07:00PM / M / LEC: ITC 402" \
+  --semester "1st Semester / 2026-2027"
+```
+
+### Preset option
+
+```bash
+python ceit_generator.py --csv "students.xlsx" --preset dcit21
+```
+
+Available presets:
+
+- `default`
+- `dcit21`
+- `custom`
+
+## Interactive flow
+
+When you run the script without all arguments, it will:
+
+1. show a preset selector
+2. prompt for class details
+3. prompt for the student list file
+4. confirm the template folder and output folder
+5. ask for final confirmation before generating all 5 documents
+
+## Output folder
+
+Generated files are saved under:
 
 ```text
-<Output Directory>/
-└── BSCS 1-4/
-    ├── Attendance/
-    │   ├── BSCS 1-4_202612040_ATTENDANCE_AUGUST.docx
-    │   ├── BSCS 1-4_202612040_ATTENDANCE_SEPTEMBER.docx
-    │   ├── BSCS 1-4_202612040_ATTENDANCE_OCTOBER.docx
-    │   ├── BSCS 1-4_202612040_ATTENDANCE_NOVEMBER.docx
-    │   └── BSCS 1-4_202612040_ATTENDANCE_DECEMBER.docx
-    ├── CEIT_Forms/
-    │   ├── BSCS 1-4_202612040_SYLLABUS.docx
-    │   ├── BSCS 1-4_202612040_EXAM_MIDTERM.docx
-    │   ├── BSCS 1-4_202612040_EXAM_FINALS.docx
-    │   ├── BSCS 1-4_202612040_TOS_MIDTERM.docx
-    │   └── BSCS 1-4_202612040_TOS_FINALS.docx
-    └── Grades/
-        └── BSCS 1-4_202612040_GRADE_SHEET.xlsx
+output/<CourseSection>/<CourseSection>_DOCUMENT_NAME.docx
 ```
 
----
+Example:
 
-## ⚙️ Developer Setup & CLI Usage
-
-If you prefer to run or modify the Python source code directly:
-
-### 1. Prerequisites
-- **Python 3.10+** (64-bit recommended)
-- Git
-
-### 2. Environment Installation
-```bash
-# Clone the repository
-git clone https://github.com/DrinkBoooz/cvsu-generators.git
-cd cvsu-generators
-
-# Create and activate virtual environment
-python -m venv .venv
-# On Windows PowerShell:
-.venv\Scripts\Activate.ps1
-# On Linux / macOS:
-source .venv/bin/activate
-
-# Install required packages
-pip install -r requirements.txt
-pip install pywebview
+```text
+output/BSCS_1-4/BSCS_1-4_TOS_MIDTERM.docx
 ```
 
-### 3. Run Automated Tests
-```bash
-python -m unittest discover -s tests -v
-```
-*(All 16 unit test suites should pass cleanly)*
+## Template behavior
 
-### 4. Running the Unified Batch Pipeline via Python
-Place your `.xls` master schedule and student roster files in the project folder, then run:
+The generator uses the Word templates in the `templates/` folder. It fills:
+
+- the header metadata table
+- the subject and schedule rows
+- the student roster table
+
+It is designed to keep the metadata table separate from the student list table so that the class information is not overwritten by roster data.
+
+## Verification status
+
+The generator has been verified to produce all five document types successfully in a fresh output folder using real student lists.
+
+The final verification checked that the generated files contain the expected header values and that the metadata and student roster tables remain correctly separate.
+
+## Notes
+
+- The script reads Excel files by parsing the XML inside the workbook, which avoids some openpyxl compatibility issues.
+- The script also accepts CSV student lists if the file is not Excel.
+- If the template folder is missing, the script prompts for a valid path before generation continues.
+
+## Run the Attendance Generator
+
+```powershell
+python .\attendancegen.py --csv "path\to\students.xlsx"
+```
+
+The script will prompt you for:
+
+- course title and code
+- class schedule
+- semester and academic year
+- room assignment
+- instructor name
+- month/year and class day
+- student list file if you did not pass `--csv`
+
+Generated output files are saved in the `attendance_output/` folder or the selected output folder.
+
+## Run the CEIT Document Generator
+
+```powershell
+python .\ceit_generator.py --csv "path\to\students.xlsx"
+```
+
+The script will prompt you for the class details and then generate the documents into the `output/` folder.
+
+## Optional Arguments
+
+- Attendance generator
+
+  ````powershell
+  python .\attendancegen.py --csv "path\to\students.xlsx" --template "path\to\template.docx"
+  ```powershell
+  ````
+
+- CEIT generator
+
+  ````powershell
+  python .\ceit_generator.py --csv "path\to\students.xlsx" --templates "templates" --output "output"
+  ```powershell
+  ````
+
+## Example input sets
+
+### Attendance Generator
+
+- Lecture OR Lab only
+
+```powershell
+   Course Code and Title: DCIT25 - DATA STRUCTURES AND ALGORITHMS
+   Class Schedule: 07:00AM-10:00AM / Mon
+   Semester: 1st
+   Room Assignment: LEC: ITC 404
+   Name of Instructor: DAN JOSEPH ORTEGA
+   Month: February
+   Year: 2026
+```
+
+- Lecture and Lab on the same day
+
+```powershell
+   Course Code and Title: DCIT25 - DATA STRUCTURES AND ALGORITHMS
+   Class Schedule: 07:00AM-09:00AM, 01:00PM-03:00PM / Thurs
+   Semester: 2nd
+   Room Assignment: LAB: CCL 204, LEC: ITC 404
+   Name of Instructor: DAN JOSEPH ORTEGA
+   Month: February
+   Year: 2026
+```
+
+- Lecture and Lab on separate days
+
+```powershell
+   Course Code and Title: DCIT25 - DATA STRUCTURES AND ALGORITHMS
+   Class Schedule: Thu: 07:00AM-09:00AM; Fri: 01:00PM-03:00PM
+   Semester: 2nd
+   Room Assignment: LAB: CCL 204, LEC: ITC 404
+   Name of Instructor: DAN JOSEPH ORTEGA
+   Month: February
+   Year: 2026
+```
+
+- Lecture + 2 labs
+
+```powershell
+   Course Code and Title: DCIT25 - DATA STRUCTURES AND ALGORITHMS
+   Class Schedule: Mon: 07:00AM-09:00AM; Wed: 01:00PM-03:00PM; Fri: 03:00PM-05:00PM
+   Semester: 1st
+   Room Assignment: LAB 1: CCL 204, LAB 2: CCL 205, LEC: ITC 404
+   Name of Instructor: DAN JOSEPH ORTEGA
+   Month: February
+   Year: 2026
+```
+
+### CEIT Generator
+
+- Lecture OR Lab only
+
+```powershell
+   Instructor Name: DAN JOSEPH A. ORTEGA
+   Course / Year / Section: BSCS 1-4
+   Schedule Code: 202612040
+   Subject: DCIT 25 - DATA STRUCTURES AND ALGORITHMS
+   Time / Days / Room: 07:00AM-10:00AM / M / LEC: ITC 404
+   Semester / Academic Year: 1st Semester / 2026-2027
+```
+
+- Lecture and Lab on the same day
+
+```powershell
+   Instructor Name: DAN JOSEPH A. ORTEGA
+   Course / Year / Section: BSCS 2-1
+   Schedule Code: 202612041
+   Subject: DCIT 25 - DATA STRUCTURES AND ALGORITHMS
+   Time / Days / Room: 07:00AM-09:00AM, 01:00PM-03:00PM / Th / LAB: CCL 204, LEC: ITC 404
+   Semester / Academic Year: 2nd Semester / 2026-2027
+```
+
+- Lecture and Lab on separate days
+
+```powershell
+   Instructor Name: DAN JOSEPH A. ORTEGA
+   Course / Year / Section: BSCS 2-1
+   Schedule Code: 202612042
+   Subject: DCIT 25 - DATA STRUCTURES AND ALGORITHMS
+   Time / Days / Room: Th: 07:00AM-09:00AM; F: 01:00PM-03:00PM / LAB: CCL 204, LEC: ITC 404
+   Semester / Academic Year: 2nd Semester / 2026-2027
+```
+
+- Lecture + 2 labs
+
+```powershell
+   Instructor Name: DAN JOSEPH A. ORTEGA
+   Course / Year / Section: BSCS 2-1
+   Schedule Code: 202612043
+   Subject: DCIT 25 - DATA STRUCTURES AND ALGORITHMS
+   Time / Days / Room: M: 07:00AM-09:00AM; W: 01:00PM-03:00PM; F: 03:00PM-05:00PM / LAB 1: CCL 204, LAB 2: CCL 205, LEC: ITC 404
+   Semester / Academic Year: 1st Semester / 2026-2027
+```
+
+# CvSU Unified Document Generator
+
+This directory contains `process_schedule.py`, an automated orchestration script that perfectly bridges the gap between `attendancegen.py` and `ceit_generator.py` by seamlessly ingesting standard teacher schedules.
+
+## Overview
+
+Instead of manually typing class details via the CLI, the unified script automatically constructs the required metadata by pairing the official raw `.xls` schedule format alongside standardized student lists.
+
+When executed, it natively parses your schedule, evaluates which student lists match your assigned sections, filters out any asynchronous constraints, and cleanly outputs 90+ targeted documents grouped by section directly inside this `dev` directory!
+
+## Requirements
+
+- Python 3
+- `xlrd` (Install via `python -m pip install xlrd`)
+
+## How It Works
+
+1. **Native Schedule Parsing (`ORTEGA_SCHEDULE.xls`)**
+   - Uses `xlrd` to traverse the natively formatted Excel 97-2003 schedule blocks.
+   - Extracts your name and the current academic semester automatically.
+   - Traces the exact Class, Room, Times, and Day placements by analyzing block offsets against recognized prefixes (`CVSU`, `DCIT`, `COSC`).
+   - **Async Intelligent Filtering**: Completely filters out blocks mapped as "Async" or "Asynch" to ensure offline output documents accurately reflect only face-to-face slotted sessions.
+
+2. **Student List Extraction**
+   - Automatically crawls the root directory for `.xlsx` lists using the standard naming schema:
+     `{Course/Sec} List of Students for {ScheduleCode}-{Subject}.xlsx`
+     _(Example: `BSCS1-4 List of Students for 202612040-DCIT 21A...xlsx`)_
+
+3. **Categorized Document Output**
+   - Using the extracted parameters, the script simultaneously triggers the generator factories.
+   - Generated `.docx` outputs are perfectly scoped and organized within nested categorical directories to eliminate clutter:
+     ```
+     dev/
+      ├── BSCS 1-4/
+      │     ├── Attendance/    (August-December attendance lists)
+      │     └── CEIT_Forms/    (Syllabus, Exams, and TOS Acknowledgment forms)
+      └── BSCS 1-6/
+     ```
+
+## Usage
+
+Simply ensure your `.xls` schedule document lies inside your root folder alongside this file, and your student lists exist in the same folder, then run:
 
 ```bash
 python process_schedule.py
 ```
-
-### 5. Running the Desktop UI via Python
-```bash
-python executable/main.py
-```
-
-### 6. Compiling the Standalone Executable
-To package the app into a single, self-contained Windows executable with icons and embedded templates:
-
-```cmd
-cd executable
-.\build.bat
-```
-The output binary will be generated at `executable/dist/CvSU Gen (Beta).exe`.
-
----
-
-## 🔒 Security & Reliability Features
-
-- **XSS Sanitization:** The desktop user interface strictly sanitizes all student, subject, and section strings before rendering to prevent HTML injection.
-- **XXE Hardened:** XML template parsers (`lxml.etree`) strictly disable entity resolution (`resolve_entities=False`) to prevent external entity vulnerabilities.
-- **Excel Formula Injection Guard:** Any student name starting with formula triggers (`=`, `+`, `-`, `@`) is automatically escaped with an apostrophe prefix (`'`).
-- **File Lock Resilience:** All writes utilize randomized temporary files (`uuid.uuid4()`) and atomic replacements (`os.replace`). If an existing output or roster file is open in Microsoft Excel, the system gracefully handles the lock without corrupting files.
-- **Diagnostics Logging:** System logs are persistently written with automatic rotation to:
-  ```text
-  %APPDATA%/CVSU_Generators/logs/generator.log
-  ```
