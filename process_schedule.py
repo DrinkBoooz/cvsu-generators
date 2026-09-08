@@ -621,7 +621,7 @@ def detect_classes(schedule_path, roster_paths):
         
     return detected
 
-def process_all(schedule_path, xlsx_files, output_dir_base, type_overrides=None, date_overrides=None, class_filter=None, engine_filter=None, progress_callback=None):
+def process_all(schedule_path, xlsx_files, output_dir_base, type_overrides=None, date_overrides=None, class_filter=None, engine_filter=None, progress_callback=None, cancel_event=None):
     schedule_path = get_long_path(schedule_path)
     output_dir_base = get_long_path(output_dir_base)
     xlsx_files = [get_long_path(f) for f in xlsx_files]
@@ -629,7 +629,9 @@ def process_all(schedule_path, xlsx_files, output_dir_base, type_overrides=None,
     results = {
         "generated": {"attendance": [], "grades": [], "ceit": []},
         "skipped": {"attendance": [], "grades": [], "ceit": [], "rosters": []},
-        "errors": {"attendance": [], "grades": [], "ceit": [], "rosters": []}
+        "errors": {"attendance": [], "grades": [], "ceit": [], "rosters": []},
+        "by_class": {},
+        "cancelled": False
     }
     project_dir = get_long_path(getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__))))
     parsed_schedules = parse_schedule(schedule_path)
@@ -754,6 +756,11 @@ def process_all(schedule_path, xlsx_files, output_dir_base, type_overrides=None,
                 logger.debug(f"Progress callback error: {pe}")
     
     for student_file in xlsx_files:
+        if cancel_event and cancel_event.is_set():
+            logger.info("Generation cancelled by user signal.")
+            results["cancelled"] = True
+            break
+
         filename = os.path.basename(student_file)
         if filename.startswith("~$") or filename == os.path.basename(schedule_path):
             continue
@@ -912,8 +919,14 @@ def process_all(schedule_path, xlsx_files, output_dir_base, type_overrides=None,
         else:
             attendance_template = get_long_path(os.path.join(project_dir, "attendance", "template lec.docx"))
         
+        if course_sec not in results["by_class"]:
+            results["by_class"][course_sec] = {"ceit": [], "attendance": [], "grades": []}
+
         if "ceit" in enabled_engines:
             for gen_factory, suffix in factory.get_all():
+                if cancel_event and cancel_event.is_set():
+                    results["cancelled"] = True
+                    break
                 safe_suffix = sanitize_filename(suffix)
                 out_name = f"{course_sec_safe}_{schedule_code_safe}_{safe_suffix}.docx"
                 out_path = os.path.join(ceit_dir, out_name)
@@ -921,6 +934,7 @@ def process_all(schedule_path, xlsx_files, output_dir_base, type_overrides=None,
                     generator = gen_factory()
                     generator.generate(info, out_path)
                     results["generated"]["ceit"].append(out_name)
+                    results["by_class"][course_sec]["ceit"].append({"name": out_name, "path": out_path})
                     _notify(course_sec, f"Created {suffix}")
                 except Exception as e:
                     err_msg = f"Failed CEIT ({suffix}): {str(e)}"
@@ -929,6 +943,10 @@ def process_all(schedule_path, xlsx_files, output_dir_base, type_overrides=None,
                     print(f"    -> [ERROR] {err_msg}")
                     _notify(course_sec, f"Error {suffix}")
             
+        if cancel_event and cancel_event.is_set():
+            results["cancelled"] = True
+            break
+
         if "attendance" in enabled_engines:
             print("    -> Passing to Attendance Generator...")
             if att_year is not None:
@@ -939,6 +957,9 @@ def process_all(schedule_path, xlsx_files, output_dir_base, type_overrides=None,
                     grouped_blocks[get_subject_code(b['subject_title'])].append(b)
                     
                 for subj_title, subj_blocks in grouped_blocks.items():
+                    if cancel_event and cancel_event.is_set():
+                        results["cancelled"] = True
+                        break
                     print(f"DEBUG: Matched {subj_title} == {intended_code}, months to process: {months}")
 
                     # Consolidate schedule, room, and days
@@ -970,6 +991,9 @@ def process_all(schedule_path, xlsx_files, output_dir_base, type_overrides=None,
                     }
                     
                     for m in months:
+                        if cancel_event and cancel_event.is_set():
+                            results["cancelled"] = True
+                            break
                         month_name = datetime.date(2026, m, 1).strftime('%B')
                         safe_month = sanitize_filename(month_name)
                         month_out_name = f"{course_sec_safe}_{schedule_code_safe}_ATTENDANCE_{combined_safe_days}_{safe_month}.docx"
@@ -997,6 +1021,7 @@ def process_all(schedule_path, xlsx_files, output_dir_base, type_overrides=None,
                                 results["skipped"]["attendance"].append(f"{month_out_name} (0 days)")
                             else:
                                 results["generated"]["attendance"].append(month_out_name)
+                                results["by_class"][course_sec]["attendance"].append({"name": month_out_name, "path": month_out_path})
                             _notify(course_sec, f"Attendance {month_name}")
                         except Exception as e:
                             err_msg = f"Failed Attendance ({month_out_name}): {str(e)}"
@@ -1004,6 +1029,10 @@ def process_all(schedule_path, xlsx_files, output_dir_base, type_overrides=None,
                             results["errors"]["attendance"].append(err_msg)
                             print(f"    -> [ERROR] {err_msg}")
                             _notify(course_sec, f"Error Attendance {month_name}")
+
+        if cancel_event and cancel_event.is_set():
+            results["cancelled"] = True
+            break
 
         if "grades" in enabled_engines:
             print("    -> Passing to Grade Generator...")
@@ -1027,6 +1056,7 @@ def process_all(schedule_path, xlsx_files, output_dir_base, type_overrides=None,
                 grade_out_path = os.path.join(grade_dir, grade_out_name)
                 grade_gen.generate(grade_info, students, grade_out_path)
                 results["generated"]["grades"].append(grade_out_name)
+                results["by_class"][course_sec]["grades"].append({"name": grade_out_name, "path": grade_out_path})
                 print("    -> Grades generated successfully.")
                 _notify(course_sec, "Grading Sheet")
             except ValueError as e:

@@ -27,7 +27,16 @@ class ScriptAPI:
         self.output_dir = ""
         self.rosters = []
         self._is_processing = False
+        self._cancel_event = threading.Event()
         self._lock = threading.Lock()
+
+    def cancel_generation(self):
+        with self._lock:
+            if self._is_processing and self._cancel_event:
+                self._cancel_event.set()
+                process_schedule.logger.info("User requested generation cancellation.")
+                return {"status": "success", "message": "Cancellation requested."}
+        return {"status": "error", "message": "No active generation to cancel."}
 
     def browse_schedule(self):
         file_types = ('Excel files (*.xls;*.xlsx;*.xlsm)', 'All files (*.*)')
@@ -242,6 +251,7 @@ class ScriptAPI:
             process_schedule.logger.info(f"Loaded Rosters: {len(self.rosters)} file(s)")
             process_schedule.logger.info(f"Target Output Directory: {self.output_dir}")
             process_schedule.logger.info(f"Selected Engines: {engine_filter}")
+            self._cancel_event.clear()
 
             def _progress_hook(info):
                 try:
@@ -260,7 +270,8 @@ class ScriptAPI:
                         date_overrides=date_overrides,
                         class_filter=class_filter,
                         engine_filter=engine_filter,
-                        progress_callback=_progress_hook
+                        progress_callback=_progress_hook,
+                        cancel_event=self._cancel_event
                     )
                     
                     gen = results["generated"]
@@ -271,7 +282,22 @@ class ScriptAPI:
                     total_skipped = len(skp["attendance"]) + len(skp["grades"]) + len(skp["ceit"]) + len(skp["rosters"])
                     total_errors = len(err["attendance"]) + len(err["grades"]) + len(err["ceit"]) + len(err["rosters"])
                     
-                    if total_generated == 0:
+                    if results.get("cancelled"):
+                        process_schedule.logger.info(
+                            f"Build cancelled by user. {total_generated} file(s) generated."
+                        )
+                        payload = {
+                            "status": "cancelled",
+                            "message": f"Generation stopped by user. {total_generated} file(s) were generated.",
+                            "stats": {
+                                "generated": total_generated,
+                                "errors": total_errors,
+                                "skipped": total_skipped
+                            },
+                            "details": results,
+                            "output_dir": self.output_dir
+                        }
+                    elif total_generated == 0:
                         process_schedule.logger.warning(
                             f"Build completed: 0 files generated (Skipped: {total_skipped}, Errors: {total_errors})."
                         )

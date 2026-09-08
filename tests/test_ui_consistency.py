@@ -65,3 +65,43 @@ def test_ui_html_element_ids_complete():
     # All getElementById targets must exist in HTML
     missing = js_ids - html_ids
     assert not missing, f"Missing element IDs in ui.html: {missing}"
+
+def test_ui_html_new_ux_components():
+    with open(UI_HTML_PATH, "r", encoding="utf-8") as f:
+        ui_content = f.read()
+
+    # Verify Stepper Bar and Step Chips
+    assert 'id="workflowStepper"' in ui_content
+    for i in range(1, 7):
+        assert f'id="chipStep{i}"' in ui_content
+        assert f'id="statusStep{i}"' in ui_content
+
+    # Verify Toast Engine Container
+    assert 'id="toastContainer"' in ui_content
+    assert "showToast" in ui_content
+
+    # Verify Graceful Cancellation & Elapsed Stopwatch
+    assert 'id="btnCancelGeneration"' in ui_content
+    assert 'id="progressElapsedTimer"' in ui_content
+    assert "cancelGeneration" in ui_content
+
+    # Verify Interactive Artifact Tree & Metrics
+    assert 'id="fileTreeContainer"' in ui_content
+    assert 'id="resultsMetricsPills"' in ui_content
+    assert "openArtifactFile" in ui_content
+
+    # Verify Auto-Strip Extra Columns Toggle & Estimate Badge
+    assert 'id="autoStripCheck"' in ui_content
+    assert 'id="fileEstimateBadge"' in ui_content
+    assert 'id="btnResetSchedule"' in ui_content
+    assert 'id="rosterSearchInput"' in ui_content
+    assert 'id="btnClearAllRosters"' in ui_content
+
+    # Verify Help Drawer Tabs & Live Search
+    for tab in ["Overview", "Naming", "Formats", "Faq"]:
+        assert f'id="helpTab{tab}"' in ui_content
+        assert f'id="helpContent{tab}"' in ui_content
+    assert 'id="helpSearchInput"' in ui_content
+    assert "switchHelpTab" in ui_content
+    assert "filterHelpContent" in ui_content
+

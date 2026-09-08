@@ -194,3 +194,28 @@ def test_dynamic_total_steps_telemetry(tmp_path):
     assert progress_events[-1]["step"] == 14
     assert progress_events[-1]["total_steps"] == 14
 
+def test_cancel_generation_and_by_class_artifacts(tmp_path):
+    import threading
+    schedule_path = os.path.join(WORKSPACE_DIR, "ORTEGA_SCHEDULE.xls")
+    roster_file = tmp_path / "BSCS1-4 List of Students for 202612040-DCIT 21A - INTRODUCTION TO COMPUTING.csv"
+    roster_file.write_text("Name,Student number\nOrtega, Dan,20261001\n", encoding="utf-8")
+
+    out_dir = tmp_path / "output"
+    out_dir.mkdir()
+
+    cancel_evt = threading.Event()
+    cancel_evt.set()  # Pre-cancel before execution
+
+    results = process_schedule.process_all(
+        schedule_path=schedule_path,
+        xlsx_files=[str(roster_file)],
+        output_dir_base=str(out_dir),
+        class_filter=["202612040_CS1-4"],
+        engine_filter=["ceit", "attendance", "grades"],
+        cancel_event=cancel_evt
+    )
+
+    assert results["cancelled"] is True
+    # Verify by_class exists in results
+    assert "by_class" in results
+
