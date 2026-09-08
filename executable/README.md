@@ -41,8 +41,8 @@ Before generating, make sure you have the following files ready:
 
 - Download class student rosters directly from [registrar.cvsu.edu.ph](https://registrar.cvsu.edu.ph/).
 
-> [!CAUTION]
-> **Strict Column Requirement:** Roster files must contain **only** the `Name` and `Student number` columns. If the file contains more than these two headers (such as Email, Course, Year, Section, Status, or Remarks), the parser will produce an error. Remove all extra columns before importing.
+> [!TIP]
+> **Roster Column Guidelines:** Roster files require `Name` and `Student number` in Columns A & B. Extra portal columns (such as Email, Course, Year, Section, Status, or Remarks) are automatically cleaned and ignored by the generator.
 
 - **Crucial:** Keep the official file naming format:
 

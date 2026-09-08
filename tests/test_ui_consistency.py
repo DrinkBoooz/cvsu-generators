@@ -37,10 +37,13 @@ def test_ui_html_matches_readme_instructions():
     assert "Browse Path" in ui_content, "Browse Path button must be present in Step 5"
     assert "Initialize Workflow" in ui_content, "Initialize Workflow button must be present in Step 6"
 
-    # Verify strict column requirement caution from README.md
-    assert "Strict Column Requirement" in ui_content
+    # Verify roster column requirements and guidelines from README.md
+    assert "Roster Column Guidelines" in ui_content or "Roster Columns" in ui_content
     assert "Name" in ui_content and "Student number" in ui_content
-    assert "Remove all extra columns before importing" in ui_content
+    assert "Columns A &amp; B" in ui_content or "Columns A & B" in ui_content
+
+    # Verify current application version badge
+    assert "v1.2 Beta" in ui_content
 
     # Verify official roster naming format from README.md
     assert "{Course/Sec} List of Students for {ScheduleCode}-{Subject}.xlsx" in ui_content

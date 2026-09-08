@@ -64,6 +64,59 @@ def test_validate_rosters_valid_and_invalid(tmp_path):
     assert reports[2]["column_count"] == 4
     assert reports[2]["student_count"] == 1
 
+def test_validate_and_process_xlsx_extra_columns(tmp_path):
+    import openpyxl
+    import ceit_generator
+    import attendancegen
+
+    schedule_path = os.path.join(WORKSPACE_DIR, "ORTEGA_SCHEDULE.xls")
+    assert os.path.exists(schedule_path)
+
+    # Create an actual .xlsx file with 8 columns (Name, Student number + 6 extra columns)
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Sheet1"
+    headers = ["Name", "Student number", "Email", "Course", "Year", "Section", "Status", "Remarks"]
+    ws.append(headers)
+    ws.append(["DELA CRUZ, JUAN A.", "202110001", "juan.delacruz@cvsu.edu.ph", "BSCS", "4", "1", "Enrolled", "Regular"])
+    ws.append(["SANTOS, MARIA B.", "202110002", "maria.santos@cvsu.edu.ph", "BSCS", "4", "1", "Enrolled", "Irregular"])
+
+    xlsx_path = os.path.join(tmp_path, "BSCS4-1 List of Students for 202612731-COSC 111A - C S ELECTIVE 3 (INTERNET OF THINGS).xlsx")
+    wb.save(xlsx_path)
+
+    # 1. Test load_students isolation
+    students_ceit = ceit_generator.load_students(xlsx_path)
+    assert len(students_ceit) == 2
+    assert students_ceit[0] == ("DELA CRUZ, JUAN A.", "202110001")
+    assert students_ceit[1] == ("SANTOS, MARIA B.", "202110002")
+
+    students_att = attendancegen.load_students(xlsx_path)
+    assert len(students_att) == 2
+    assert students_att[0] == ("DELA CRUZ, JUAN A.", "202110001")
+
+    # 2. Test pre-flight roster validation
+    val = process_schedule.validate_rosters(schedule_path, [xlsx_path])
+    assert len(val) == 1
+    assert val[0]["status"] == "warning"
+    assert val[0]["issue"] == "extra_columns"
+    assert val[0]["column_count"] == 8
+    assert val[0]["student_count"] == 2
+    assert "auto-cleaned" in val[0]["message"]
+
+    # 3. Test end-to-end execution with extra columns
+    out_dir = os.path.join(tmp_path, "output")
+    res = process_schedule.process_all(
+        schedule_path=schedule_path,
+        xlsx_files=[xlsx_path],
+        output_dir_base=out_dir
+    )
+    assert len(res["generated"]["ceit"]) > 0
+    assert len(res["generated"]["attendance"]) > 0
+    assert len(res["generated"]["grades"]) > 0
+    assert len(res["errors"]["ceit"]) == 0
+    assert len(res["errors"]["attendance"]) == 0
+    assert len(res["errors"]["grades"]) == 0
+
 def test_script_api_methods(tmp_path):
     api = ScriptAPI()
     assert api.schedule_path == ""

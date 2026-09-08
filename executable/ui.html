@@ -1279,7 +1279,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 8px;">
               <span class="brand-title">CvSU Gen</span>
-              <span class="badge-version">v1.1 Beta</span>
+              <span class="badge-version">v1.2 Beta</span>
             </div>
             <div class="brand-subtitle">Cavite State University Document Automation</div>
           </div>
@@ -1436,17 +1436,17 @@
           </div>
         </div>
 
-        <!-- Caution Callout Box -->
-        <div class="alert-caution">
-          <div class="alert-caution-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-              <line x1="12" y1="9" x2="12" y2="13"></line>
-              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+        <!-- Roster Column Info Box -->
+        <div class="alert-info">
+          <div style="color: var(--accent-blue); flex-shrink: 0; margin-top: 2px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="16" x2="12" y2="12"></line>
+              <line x1="12" y1="8" x2="12.01" y2="8"></line>
             </svg>
           </div>
           <div>
-            <strong>Strict Column Requirement:</strong> Roster files must contain <strong>only</strong> the <code>Name</code> and <code>Student number</code> columns. If the file contains more than these two headers (such as Email, Course, Year, Section, Status, or Remarks), the parser will produce an error. Remove all extra columns before importing.
+            <strong>Roster Columns:</strong> Columns A &amp; B must contain the student <code>Name</code> and <code>Student number</code>. Extra portal columns (Email, Course, Section, Status, Remarks) are automatically cleaned and ignored.
           </div>
         </div>
 
@@ -1761,16 +1761,16 @@
               <li>Download class student rosters directly from <a href="https://registrar.cvsu.edu.ph/" target="_blank" class="text-link">registrar.cvsu.edu.ph</a>.</li>
             </ul>
 
-            <div class="alert-caution">
-              <div class="alert-caution-icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-                  <line x1="12" y1="9" x2="12" y2="13"></line>
-                  <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            <div class="alert-info">
+              <div style="color: var(--accent-blue); flex-shrink: 0; margin-top: 2px;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="16" x2="12" y2="12"></line>
+                  <line x1="12" y1="8" x2="12.01" y2="8"></line>
                 </svg>
               </div>
               <div>
-                <strong>Strict Column Requirement:</strong> Roster files must contain <strong>only</strong> the <code>Name</code> and <code>Student number</code> columns. If the file contains more than these two headers (such as Email, Course, Year, Section, Status, or Remarks), the parser will produce an error. Remove all extra columns before importing.
+                <strong>Roster Column Guidelines:</strong> Roster files require <code>Name</code> and <code>Student number</code> in Columns A &amp; B. Extra portal columns (such as Email, Course, Year, Section, Status, or Remarks) are automatically cleaned and ignored by the generator.
               </div>
             </div>
 

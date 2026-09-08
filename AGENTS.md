@@ -30,3 +30,14 @@ All git commit messages must strictly follow the format:
     3. `git merge --no-ff dev -m "<commit_number>: merge dev into main - <description of merged changes>"`
     4. `git push origin main`
     5. `git checkout dev`
+
+## Version Numbering & Synchronization
+- **Single Source of Truth**: The active application version is displayed in `executable/ui.html` via the `<span class="badge-version">vX.Y Beta</span>` badge in the navigation header.
+- **When to Bump the Version**:
+  - Whenever new features, UX workflows, generators, or significant fixes are implemented across a chat or milestone, the version number must be bumped (e.g. from `v1.1 Beta` -> `v1.2 Beta`).
+  - Never leave the version number stale across releases or major feature updates.
+- **Synchronization Checklist**:
+  1. `executable/ui.html`: Update the header badge `<span class="badge-version">vX.Y Beta</span>`.
+  2. `tests/test_ui_consistency.py`: Ensure test assertions verify the current version badge.
+  3. `executable/README.md`: If version numbers or changelog items are listed, keep them synchronized.
+
