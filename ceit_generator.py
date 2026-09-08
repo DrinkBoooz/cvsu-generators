@@ -268,8 +268,14 @@ def set_cell_text(tc, text: str, remove_num: bool = False, shrink_threshold: int
     runs = p.findall(w("r"))
     if not runs:
         r = etree.SubElement(p, w("r"))
+        ppr_rpr = ppr.find(w("rPr")) if ppr is not None else None
+        if ppr_rpr is not None:
+            r.append(copy.deepcopy(ppr_rpr))
+        _auto_scale_font(r, text, shrink_threshold, shrink_sz)
         t = etree.SubElement(r, w("t"))
         t.text = text
+        if text and text[0] == " ":
+            t.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
         return
     # Preserve first run's rPr, collapse all runs into one
     first_rpr = runs[0].find(w("rPr"))
@@ -608,10 +614,89 @@ class TOSGenerator(DocumentGenerator):
         set_cell_text(cells[1], stnum)
         # cells[2] = Signature — leave blank
 
+# ══ Grade Discussion Generator ════════════════════════════════════════════════
+class GradeDiscussionGenerator(DocumentGenerator):
+    """
+    Grade Discussion Form (Midterm / Finals)
+    Columns: Name of Students | Student Number | Signature
+    Header fields: Instructor, Course/Section, Schedule Code,
+                   Subject, Time/Days/Room, Semester/AY, Date
+    """
+
+    def __init__(self, template_path: str, period: str = "Midterm"):
+        super().__init__(template_path)
+        self._period = period   # "Midterm" or "Finals"
+
+    @property
+    def period(self) -> str:
+        return self._period
+
+    def fill_header(self, body, info: ClassInfo) -> None:
+        tables = body.findall(w("tbl"))
+        if not tables:
+            return
+        info_tbl = tables[0]
+        rows = info_tbl.findall(w("tr"))
+        
+        for r_idx, row in enumerate(rows):
+            cells = row.findall(w("tc"))
+            if len(cells) < 3:
+                continue
+            label = get_full_text(cells[0]).upper().strip()
+            val = None
+            thresh = 0
+            if "INSTRUCTOR" in label:
+                val = info.instructor
+                thresh = 30
+            elif "COURSE" in label or "SECTION" in label:
+                val = info.course_section
+            elif "SCHEDULE" in label:
+                val = info.schedule_code
+            elif "SUBJECT" in label:
+                val = info.subject
+                thresh = 35
+            elif "SEMESTER" in label or "ACADEMIC" in label:
+                val = info.semester_ay
+            elif "TIME" in label or "ROOM" in label or "DAY" in label:
+                val = info.time_days_room
+                thresh = 45
+            elif "DATE" in label:
+                val = None  # Left blank for manual date/signing
+            else:
+                # Fallback by row index
+                if r_idx == 0:
+                    val = info.instructor
+                    thresh = 30
+                elif r_idx == 1:
+                    val = info.course_section
+                elif r_idx == 2:
+                    val = info.schedule_code
+                elif r_idx == 3:
+                    val = info.subject
+                    thresh = 35
+                elif r_idx == 4:
+                    if len(rows) == 6:
+                        val = info.semester_ay
+                    else:
+                        val = info.time_days_room
+                        thresh = 45
+                elif r_idx == 5:
+                    if len(rows) > 6:
+                        val = info.semester_ay
+
+            if val is not None:
+                set_cell_text(cells[2], val, shrink_threshold=thresh, shrink_sz="18")
+
+    def _fill_student_row(self, cells, idx, name, stnum):
+        # cells: [Name, StudentNumber, Signature]
+        set_cell_text(cells[0], name, shrink_threshold=32, shrink_sz="18")
+        set_cell_text(cells[1], stnum)
+        # cells[2] = Signature — leave blank
+
 # ══ GeneratorFactory ══════════════════════════════════════════════════════════
 class GeneratorFactory:
     """
-    Creates all 5 generators from a templates directory.
+    Creates generators from a templates directory.
     Encapsulates the mapping of document type → template file → generator.
     """
 
@@ -621,6 +706,8 @@ class GeneratorFactory:
         "exam_finals":    "template_exam_finals.docx",
         "tos_midterm":    "template_tos_midterm.docx",
         "tos_finals":     "template_tos_finals.docx",
+        "grade_midterm":  "Midterm-Grade-Discussion_LATEST.docx",
+        "grade_finals":   "Final-Grade-Discussion_LATEST.docx",
     }
 
     def __init__(self, templates_dir: str):
@@ -629,6 +716,10 @@ class GeneratorFactory:
     def _path(self, key: str) -> str:
         p = os.path.join(self._dir, self.TEMPLATE_FILES[key])
         if not os.path.exists(p):
+            if key == "grade_finals":
+                alt = os.path.join(self._dir, "Finals-Grade-Discussion_LATEST.docx")
+                if os.path.exists(alt):
+                    return alt
             raise FileNotFoundError(
                 f"Template not found: {p}\n"
                 f"Expected file: {self.TEMPLATE_FILES[key]}"
@@ -649,6 +740,10 @@ class GeneratorFactory:
              "TOS_MIDTERM"),
             (lambda: TOSGenerator(self._path("tos_finals"),  "Finals"),
              "TOS_FINALS"),
+            (lambda: GradeDiscussionGenerator(self._path("grade_midterm"), "Midterm"),
+             "GRADE_DISCUSSION_MIDTERM"),
+            (lambda: GradeDiscussionGenerator(self._path("grade_finals"),  "Finals"),
+             "GRADE_DISCUSSION_FINALS"),
         ]
 
 # ══ Student file loaders ══════════════════════════════════════════════════════
