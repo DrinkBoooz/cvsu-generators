@@ -646,26 +646,100 @@ def process_all(schedule_path, xlsx_files, output_dir_base, type_overrides=None,
 
     enabled_engines = set(engine_filter) if engine_filter else {"attendance", "ceit", "grades"}
     
-    # Calculate estimated tasks for progress bar
-    total_valid_files = 0
-    for f in xlsx_files:
-        fn = os.path.basename(f)
-        if not fn.startswith("~$") and fn != os.path.basename(schedule_path):
-            total_valid_files += 1
-    
-    tasks_per_class = 0
-    if "ceit" in enabled_engines:
-        tasks_per_class += 7
-    if "attendance" in enabled_engines:
-        tasks_per_class += 5
-    if "grades" in enabled_engines:
-        tasks_per_class += 1
-    total_estimated_steps = max(1, total_valid_files * max(1, tasks_per_class))
+    # Dynamically pre-calculate exact total steps based on valid classes, date overrides, and enabled engines
+    num_ceit_generators = len(factory.get_all()) if "ceit" in enabled_engines else 0
+    total_estimated_steps = 0
+    from collections import defaultdict
+
+    for student_file in xlsx_files:
+        fn = os.path.basename(student_file)
+        if fn.startswith("~$") or fn == os.path.basename(schedule_path):
+            continue
+        m = re.match(r'^(.*?)\s*list of students for\s+(\d+)\s*-\s*(.+?)\.(xlsx|xls|csv)', fn, re.IGNORECASE)
+        if not m:
+            continue
+
+        raw_c = m.group(1).strip()
+        let = re.sub(r'[^A-Za-z]', '', raw_c).upper()
+        if let.startswith('BS'):
+            let = let[2:]
+        if let == 'CSCS':
+            let = 'CS'
+
+        dig = re.sub(r'[^0-9]', '', raw_c)
+        if len(dig) >= 2:
+            c_sec = f"{let}{dig[0]}-{dig[1:]}"
+        else:
+            c_sec = re.sub(r'\s+', '', raw_c).replace("CSCS", "CS")
+        s_code = m.group(2)
+        s_name = m.group(3)
+
+        c_id = f"{s_code}_{c_sec}"
+        if class_filter and (c_id not in class_filter and s_code not in class_filter and c_sec not in class_filter):
+            continue
+
+        pre_blocks = []
+        pre_best_sched = parsed_schedules[0]
+        for sched in parsed_schedules:
+            b = find_blocks_for_section(sched["grid"], c_sec, sched["start_row"], sched["end_row"])
+            if b:
+                pre_blocks = b
+                pre_best_sched = sched
+                break
+
+        int_code = get_subject_code(s_name)
+        flt_blocks = [b for b in pre_blocks if int_code in get_subject_code(b['subject_title']) or get_subject_code(b['subject_title']) in int_code]
+        if not flt_blocks:
+            continue
+
+        # CEIT tasks count
+        total_estimated_steps += num_ceit_generators
+
+        # Attendance tasks count
+        if "attendance" in enabled_engines:
+            pre_sem = pre_best_sched["semester"]
+            sem_low = pre_sem.lower()
+            if 'second' in sem_low or '2nd' in sem_low:
+                class_months = [2, 3, 4, 5, 6]
+                is_second = True
+            else:
+                class_months = [8, 9, 10, 11, 12]
+                is_second = False
+
+            pre_years = re.findall(r'20\d{2}', pre_sem)
+            has_year = bool((date_overrides and date_overrides.get('startYear')) or pre_years)
+
+            if date_overrides and date_overrides.get('startMonth') and date_overrides.get('startDay') and date_overrides.get('endMonth') and date_overrides.get('endDay'):
+                s_m = int(date_overrides['startMonth'])
+                e_m = int(date_overrides['endMonth'])
+                class_months = []
+                cur = s_m
+                while True:
+                    class_months.append(cur)
+                    if cur == e_m:
+                        break
+                    cur += 1
+                    if cur > 12:
+                        cur = 1
+
+            if has_year:
+                pre_grouped = defaultdict(list)
+                for b in flt_blocks:
+                    pre_grouped[get_subject_code(b['subject_title'])].append(b)
+                total_estimated_steps += len(pre_grouped) * len(class_months)
+
+        # Grades task count
+        if "grades" in enabled_engines:
+            total_estimated_steps += 1
+
+    total_estimated_steps = max(1, total_estimated_steps)
     current_step = 0
 
     def _notify(current_class, current_task):
-        nonlocal current_step
+        nonlocal current_step, total_estimated_steps
         current_step += 1
+        if current_step > total_estimated_steps:
+            total_estimated_steps = current_step
         if progress_callback:
             try:
                 pct = int(min(99, (current_step / total_estimated_steps) * 100))

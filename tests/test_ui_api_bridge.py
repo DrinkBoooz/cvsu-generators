@@ -154,3 +154,43 @@ def test_handle_dropped_schedule_and_rosters(tmp_path):
     assert len(res3["validation"]) == 1
     assert res3["validation"][0]["status"] == "valid"
 
+def test_dynamic_total_steps_telemetry(tmp_path):
+    schedule_path = os.path.join(WORKSPACE_DIR, "ORTEGA_SCHEDULE.xls")
+    roster_file = tmp_path / "BSCS1-4 List of Students for 202612040-DCIT 21A - INTRODUCTION TO COMPUTING.csv"
+    roster_file.write_text("Name,Student number\nOrtega, Dan,20261001\n", encoding="utf-8")
+
+    out_dir = tmp_path / "output"
+    out_dir.mkdir()
+
+    progress_events = []
+    def on_progress(event):
+        progress_events.append(event)
+
+    # 6-month date overrides (Aug to Jan): 7 CEIT + 6 Attendance + 1 Grades = 14 steps
+    date_overrides = {
+        "startYear": 2026, "startMonth": 8, "startDay": 1,
+        "endYear": 2027, "endMonth": 1, "endDay": 31
+    }
+
+    results = process_schedule.process_all(
+        schedule_path=schedule_path,
+        xlsx_files=[str(roster_file)],
+        output_dir_base=str(out_dir),
+        class_filter=["202612040_CS1-4"],
+        engine_filter=["ceit", "attendance", "grades"],
+        date_overrides=date_overrides,
+        progress_callback=on_progress
+    )
+
+    assert len(results["generated"]["ceit"]) == 7
+    assert len(results["generated"]["attendance"]) == 6
+    assert len(results["generated"]["grades"]) == 1
+    assert len(progress_events) == 14
+
+    for ev in progress_events:
+        assert ev["step"] <= ev["total_steps"]
+        assert ev["total_steps"] == 14
+
+    assert progress_events[-1]["step"] == 14
+    assert progress_events[-1]["total_steps"] == 14
+

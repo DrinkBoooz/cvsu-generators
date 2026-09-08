@@ -2004,6 +2004,12 @@
         btn.disabled = false;
         btnLabel.innerText = "Initialize Workflow";
         progressFill.style.width = "100%";
+        const pctDisplay = document.getElementById("progressPercent");
+        const taskDisplay = document.getElementById("progressTaskLabel");
+        if (pctDisplay) pctDisplay.innerText = "100%";
+        if (taskDisplay && payload.status !== "error") {
+          taskDisplay.innerText = "All tasks completed successfully";
+        }
 
         resultsCard.classList.remove("d-none", "results-success", "results-error");
 
