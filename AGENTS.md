@@ -21,12 +21,12 @@ All git commit messages must strictly follow the format:
 - **Merging into `main` (Only When Prompted by User)**:
   When the user explicitly instructs to merge `dev` into `main`:
   - **Always use `--no-ff` (No Fast-Forward)**: Never perform fast-forward merges into `main`. Always force a dedicated merge commit using `git merge --no-ff <branch>` to ensure the Git commit history preserves a distinct visual branch tree with fork-and-merge nodes.
-  - **Merge Commit Message Formatting**: Merge commits must also follow the commit numbering rule:
-    `<commit_number>: merge <source_branch> into <target_branch>`
-    Example: `44: merge dev into main`
+  - **Merge Commit Message Formatting**: Merge commits must also follow the commit numbering rule and clearly summarize the changes being merged into the target branch:
+    `<commit_number>: merge <source_branch> into <target_branch> - <description of merged changes>`
+    Example: `49: merge dev into main - implement toast notifications, cancellation engine, and stepper workflow`
   - **Standard Merge Workflow**:
     1. Ensure all work is committed and pushed on `dev`.
     2. `git checkout main`
-    3. `git merge --no-ff dev -m "<commit_number>: merge dev into main"`
+    3. `git merge --no-ff dev -m "<commit_number>: merge dev into main - <description of merged changes>"`
     4. `git push origin main`
     5. `git checkout dev`
