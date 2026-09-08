@@ -2630,7 +2630,8 @@
         if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.open_file) return;
         try {
           await window.pywebview.api.open_file(filePath);
-          showToast("Opening Document", filePath.split(/[\\/]/).pop(), "info", 2500);
+          const name = filePath ? String(filePath).split(/[\\/]/).pop() : "Document";
+          showToast("Opening Document", name, "info", 2500);
         } catch(e) {
           showToast("Could Not Open File", String(e), "error");
         }
@@ -2867,13 +2868,20 @@
               const addCategoryRows = (catName, files, icon) => {
                 if (!files || files.length === 0) return;
                 fileRowsHtml += `<div style="font-weight: 700; color: var(--text-primary); font-size: 11.5px; margin-top: 6px; margin-bottom: 2px;">${catName} (${files.length}):</div>`;
-                files.forEach(fPath => {
-                  const fname = fPath.split(/[\\/]/).pop();
-                  const escapedPath = escapeHTML(fPath).replace(/\\/g, "\\\\");
+                files.forEach(item => {
+                  let fPath = "";
+                  let fname = "";
+                  if (typeof item === "object" && item !== null) {
+                    fPath = item.path || item.name || "";
+                    fname = item.name || (fPath ? fPath.split(/[\\/]/).pop() : "File");
+                  } else {
+                    fPath = String(item || "");
+                    fname = fPath ? fPath.split(/[\\/]/).pop() : "File";
+                  }
                   fileRowsHtml += `
                     <div class="artifact-file-row">
                       <span title="${escapeHTML(fPath)}">${icon} ${escapeHTML(fname)}</span>
-                      <button class="btn-launch-file" type="button" onclick="openArtifactFile('${escapedPath}')">
+                      <button class="btn-launch-file" type="button" data-path="${escapeHTML(fPath)}" onclick="openArtifactFile(this.getAttribute('data-path'))">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                           <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
                           <polyline points="15 3 21 3 21 9"></polyline>

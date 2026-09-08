@@ -340,3 +340,43 @@ def test_cancel_generation_and_by_class_artifacts(tmp_path):
     # Verify by_class exists in results
     assert "by_class" in results
 
+
+def test_generation_by_class_payload_structure_and_ui_compatibility(tmp_path):
+    schedule_path = os.path.join(WORKSPACE_DIR, "ORTEGA_SCHEDULE.xls")
+    roster_file = tmp_path / "BSCS1-4 List of Students for 202612040-DCIT 21A - INTRODUCTION TO COMPUTING.csv"
+    roster_file.write_text("Name,Student number\nOrtega, Dan,20261001\n", encoding="utf-8")
+
+    out_dir = tmp_path / "output"
+    out_dir.mkdir()
+
+    results = process_schedule.process_all(
+        schedule_path=schedule_path,
+        xlsx_files=[str(roster_file)],
+        output_dir_base=str(out_dir),
+        class_filter=["202612040_CS1-4"],
+        engine_filter=["ceit", "attendance", "grades"]
+    )
+
+    assert "by_class" in results
+    assert len(results["by_class"]) > 0
+
+    # Ensure each entry in by_class categories contains dictionaries with 'name' and 'path'
+    for course_sec, cat_dict in results["by_class"].items():
+        assert "ceit" in cat_dict
+        assert "attendance" in cat_dict
+        assert "grades" in cat_dict
+        for cat_name, file_list in cat_dict.items():
+            for item in file_list:
+                assert isinstance(item, dict), f"Expected dict in by_class[{course_sec}][{cat_name}], got {type(item)}"
+                assert "name" in item and isinstance(item["name"], str) and len(item["name"]) > 0
+                assert "path" in item and isinstance(item["path"], str) and len(item["path"]) > 0
+
+    # Verify ui.html contains defensive object-aware handling for item.path and item.name
+    ui_path = os.path.join(WORKSPACE_DIR, "executable", "ui.html")
+    with open(ui_path, "r", encoding="utf-8") as f:
+        ui_html = f.read()
+
+    assert 'typeof item === "object"' in ui_html
+    assert 'item.path || item.name' in ui_html
+    assert 'data-path=' in ui_html
+
