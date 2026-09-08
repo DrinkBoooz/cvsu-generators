@@ -533,7 +533,11 @@ def validate_rosters(schedule_path, roster_paths):
         status = "valid"
         issue = ""
         msg = f"{student_count} students ready"
-        if col_count > 2:
+        if student_count == 0:
+            status = "warning"
+            issue = "no_students"
+            msg = "No students detected in roster file"
+        elif col_count > 2:
             status = "warning"
             issue = "extra_columns"
             msg = f"{col_count} columns found (auto-cleaned to Name & Student number)"

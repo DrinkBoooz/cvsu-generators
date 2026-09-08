@@ -724,8 +724,97 @@ def _fix_encoding(text: str) -> str:
     text = text.replace("Ã", "Ñ")
     return text
 
+def _is_id_header(header: str) -> bool:
+    h = re.sub(r'[^a-z0-9]', '', str(header).lower())
+    if not h:
+        return False
+    id_tokens = [
+        "studentnumber", "studentno", "studentnum", "studentid",
+        "idnumber", "idno", "studno", "sn", "lrn", "id"
+    ]
+    if h in id_tokens:
+        return True
+    if any(tok in h for tok in ["studentnumber", "studentno", "studentid", "idnumber", "idno", "studno"]):
+        return True
+    return False
+
+def _is_name_header(header: str) -> bool:
+    if _is_id_header(header):
+        return False
+    h = str(header).lower().strip()
+    clean_h = re.sub(r'[^a-z0-9]', '', h)
+    if not clean_h:
+        return False
+    name_tokens = [
+        "name", "studentname", "fullname", "studentsname", "names", "student", "lastname", "studentfullname"
+    ]
+    if clean_h in name_tokens:
+        return True
+    if any(tok in clean_h for tok in ["studentname", "fullname", "studentsname", "lastname"]):
+        return True
+    if re.search(r'\bname\b', h) and not re.search(r'\b(subject|course|file|sheet|school|college|dept|department)\b', h):
+        return True
+    return False
+
+def _detect_roster_columns(rows: list):
+    """
+    Scans the first 6 rows to locate Name and Student Number headers.
+    Returns (name_col, id_col, header_row_index).
+    If no header row is identified:
+      - Checks first row data heuristics (numbers vs text)
+      - Returns (name_col, id_col, -1) where -1 means no header row to skip
+    """
+    for r_idx in range(min(6, len(rows))):
+        row = rows[r_idx]
+        col_items = row.items() if isinstance(row, dict) else list(enumerate(row))
+        found_name = None
+        found_id = None
+        for col_key, val in col_items:
+            val_str = str(val).strip()
+            if not val_str:
+                continue
+            if _is_id_header(val_str) and found_id is None:
+                found_id = col_key
+            elif _is_name_header(val_str) and found_name is None:
+                found_name = col_key
+        if found_name is not None and found_id is not None:
+            return found_name, found_id, r_idx
+
+    for r_idx in range(min(6, len(rows))):
+        row = rows[r_idx]
+        col_items = row.items() if isinstance(row, dict) else list(enumerate(row))
+        found_name = None
+        for col_key, val in col_items:
+            val_str = str(val).strip()
+            if _is_name_header(val_str):
+                found_name = col_key
+                break
+        if found_name is not None:
+            other_cols = [k for k, _ in col_items if k != found_name]
+            id_col = other_cols[0] if other_cols else None
+            return found_name, id_col, r_idx
+
+    if rows:
+        first_row = rows[0]
+        col_items = list(first_row.items()) if isinstance(first_row, dict) else list(enumerate(first_row))
+        if len(col_items) >= 2:
+            k0, v0 = col_items[0]
+            k1, v1 = col_items[1]
+            s0 = str(v0).strip()
+            s1 = str(v1).strip()
+            if re.match(r'^\d{6,12}$', s0) and re.search(r'[A-Za-z]', s1):
+                return k1, k0, -1
+            return k0, k1, -1
+        elif len(col_items) == 1:
+            k0, _ = col_items[0]
+            return k0, None, -1
+
+    default_a = 'A' if (rows and isinstance(rows[0], dict)) else 0
+    default_b = 'B' if (rows and isinstance(rows[0], dict)) else 1
+    return default_a, default_b, -1
+
 def load_students_excel(path: str) -> list:
-    """Read Excel by parsing XML directly — no openpyxl dependency."""
+    """Read Excel by parsing XML directly — avoids openpyxl dependency and detects columns dynamically."""
     import zipfile as zf
     from xml.etree import ElementTree as ET
 
@@ -769,28 +858,27 @@ def load_students_excel(path: str) -> list:
                     return shared_strings[idx] if idx < len(shared_strings) else ""
                 return v_el.text
 
-            students = []
-            for i, row_el in enumerate(sheet_root.findall(".//x:sheetData/x:row", ns)):
-                # Map cells by their coordinate letter (e.g. r="A12" -> "A") to avoid empty cell positional misalignment
+            row_dicts = []
+            for row_el in sheet_root.findall(".//x:sheetData/x:row", ns):
                 cell_dict = {}
                 for c_el in row_el.findall("x:c", ns):
                     ref = c_el.get("r", "")
                     col_let = re.sub(r'\d+', '', ref).upper()
                     if col_let:
                         cell_dict[col_let] = cell_value(c_el).strip()
-                
-                if "A" in cell_dict or "B" in cell_dict:
-                    col_a = cell_dict.get("A", "")
-                    col_b = cell_dict.get("B", "")
-                else:
-                    cells = row_el.findall("x:c", ns)
-                    col_a = cell_value(cells[0]).strip() if cells else ""
-                    col_b = cell_value(cells[1]).strip() if len(cells) > 1 else ""
+                if any(cell_dict.values()):
+                    row_dicts.append(cell_dict)
 
-                if i == 0 and col_a.lower() in ("name", "student name", "full name"):
+            name_col, id_col, header_idx = _detect_roster_columns(row_dicts)
+            start_row = header_idx + 1 if header_idx >= 0 else 0
+
+            students = []
+            for r in row_dicts[start_row:]:
+                a = r.get(name_col, "").strip() if name_col else ""
+                b = r.get(id_col, "").strip() if id_col else ""
+                if not a or _is_name_header(a):
                     continue
-                if col_a:
-                    students.append((_fix_encoding(col_a), _fix_encoding(col_b)))
+                students.append((_fix_encoding(a), _fix_encoding(b)))
     finally:
         if os.path.exists(tmp_path):
             try:
@@ -801,23 +889,27 @@ def load_students_excel(path: str) -> list:
     return students
 
 def load_students_csv(path: str) -> list:
-    students = []
     encodings = ["utf-8", "utf-16", "utf-8-sig", "cp1252"]
     for enc in encodings:
         try:
             with open(path, newline="", encoding=enc) as f:
-                reader = csv.reader(f)
-                for i, row in enumerate(reader):
-                    if i == 0 and row and row[0].lower() in ("name", "student name", "full name"):
+                raw_rows = [row for row in csv.reader(f) if any(cell.strip() for cell in row)]
+                if not raw_rows:
+                    return []
+                name_col, id_col, header_idx = _detect_roster_columns(raw_rows)
+                start_row = header_idx + 1 if header_idx >= 0 else 0
+                students = []
+                for row in raw_rows[start_row:]:
+                    a = row[name_col].strip() if (isinstance(name_col, int) and name_col < len(row)) else ""
+                    b = row[id_col].strip() if (isinstance(id_col, int) and id_col is not None and id_col < len(row)) else ""
+                    if not a or _is_name_header(a):
                         continue
-                    if len(row) >= 2:
-                        students.append((_fix_encoding(row[0].strip()), _fix_encoding(row[1].strip())))
-                    elif len(row) == 1 and row[0].strip():
-                        students.append((_fix_encoding(row[0].strip()), ""))
-            return students
-        except UnicodeDecodeError:
+                    students.append((_fix_encoding(a), _fix_encoding(b)))
+                return students
+        except (UnicodeDecodeError, csv.Error):
             continue
     raise RuntimeError(f"Could not parse CSV {path} with any known encoding.")
+
 
 
 def load_students(path: str) -> list:

@@ -117,6 +117,74 @@ def test_validate_and_process_xlsx_extra_columns(tmp_path):
     assert len(res["errors"]["attendance"]) == 0
     assert len(res["errors"]["grades"]) == 0
 
+def test_intelligent_header_detection_arbitrary_columns(tmp_path):
+    import openpyxl
+    import ceit_generator
+    import attendancegen
+
+    schedule_path = os.path.join(WORKSPACE_DIR, "ORTEGA_SCHEDULE.xls")
+
+    # Case 1: Swapped columns in XLSX (Col A: Student Number, Col B: Student Name)
+    wb1 = openpyxl.Workbook()
+    ws1 = wb1.active
+    ws1.append(["Student Number", "Student Name"])
+    ws1.append(["202110001", "DELA CRUZ, JUAN A."])
+    p1 = os.path.join(tmp_path, "BSCS4-1 List of Students for 202612731-COSC 111A - C S ELECTIVE 3 (INTERNET OF THINGS).xlsx")
+    wb1.save(p1)
+
+    s1 = ceit_generator.load_students(p1)
+    assert len(s1) == 1
+    assert s1[0] == ("DELA CRUZ, JUAN A.", "202110001")
+    s1_att = attendancegen.load_students(p1)
+    assert s1_att[0] == ("DELA CRUZ, JUAN A.", "202110001")
+
+    # Case 2: Leading '#' / 'No.' column in XLSX (Col A: '#', Col B: Student ID, Col C: Full Name, Col D: Email)
+    wb2 = openpyxl.Workbook()
+    ws2 = wb2.active
+    ws2.append(["#", "Student ID", "Full Name", "Email"])
+    ws2.append(["1", "202110002", "SANTOS, MARIA B.", "maria@cvsu.edu.ph"])
+    p2 = os.path.join(tmp_path, "case2_leading_no.xlsx")
+    wb2.save(p2)
+
+    s2 = ceit_generator.load_students(p2)
+    assert len(s2) == 1
+    assert s2[0] == ("SANTOS, MARIA B.", "202110002")
+
+    # Case 3: Top title metadata in CSV before actual headers
+    p3 = os.path.join(tmp_path, "case3_top_metadata.csv")
+    with open(p3, "w", encoding="utf-8") as f:
+        f.write("CAVITE STATE UNIVERSITY\n")
+        f.write("OFFICIAL CLASS LIST 2026\n")
+        f.write("Department,Student No.,Student's Name,Status\n")
+        f.write('DIT,202110003,"REYES, CARLOS C.",Regular\n')
+
+    s3 = ceit_generator.load_students(p3)
+    assert len(s3) == 1
+    assert s3[0] == ("REYES, CARLOS C.", "202110003")
+
+    # Case 4: Headerless swapped CSV (Col 0: ID, Col 1: Name)
+    p4 = os.path.join(tmp_path, "case4_headerless_swapped.csv")
+    with open(p4, "w", encoding="utf-8") as f:
+        f.write('202110004,"GARCIA, ANA D."\n')
+        f.write('202110005,"LOPEZ, MARK E."\n')
+
+
+    s4 = ceit_generator.load_students(p4)
+    assert len(s4) == 2
+    assert s4[0] == ("GARCIA, ANA D.", "202110004")
+    assert s4[1] == ("LOPEZ, MARK E.", "202110005")
+
+    # Case 5: Empty roster validation check (headers only, no students)
+    p5 = os.path.join(tmp_path, "BSCS1-4 List of Students for 202612040-DCIT 21A - INTRODUCTION TO COMPUTING.csv")
+    with open(p5, "w", encoding="utf-8") as f:
+        f.write("Name,Student number\n")
+
+    val = process_schedule.validate_rosters(schedule_path, [p5])
+    assert len(val) == 1
+    assert val[0]["status"] == "warning"
+    assert val[0]["issue"] == "no_students"
+    assert "No students detected" in val[0]["message"]
+
 def test_script_api_methods(tmp_path):
     api = ScriptAPI()
     assert api.schedule_path == ""
