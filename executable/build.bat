@@ -1,4 +1,5 @@
 @echo off
+cd /d "%~dp0"
 echo ========================================================
 echo Compiling CvSU Gen (Beta) into Standalone EXE
 echo ========================================================
@@ -29,4 +30,4 @@ copy /Y "%TEMP%\cvsu_dist\CvSU Gen (Beta).exe" "dist\CvSU Gen (Beta).exe"
 echo ========================================================
 echo Done! Check the /dist folder for CvSU Gen (Beta).exe
 echo ========================================================
-pause
+if "%1" neq "--nopause" pause

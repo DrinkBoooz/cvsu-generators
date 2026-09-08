@@ -245,11 +245,86 @@ def _auto_scale_font(r_el, text: str, shrink_threshold: int, sz_val: str):
             sz_cs = etree.SubElement(rpr, w("szCs"))
         sz_cs.set(w("val"), sz_val)
 
-def set_para_text(para, text: str, shrink_threshold: int = 0, shrink_sz: str = "18"):
+def _auto_scale_attendance_name(r_el, text: str, para=None):
+    """
+    Progressively scale font for student names in the attendance table
+    so names fit on a single line and prevent row height expansion.
+    The attendance table name column is ~1.76 inches (1277 pct) with standard 8pt (sz=16) bold Arial.
+      - <= 24 chars: 8pt (sz="16", default template font)
+      - 25-28 chars: 7pt (sz="14")
+      - 29-33 chars: 6.5pt (sz="13")
+      - 34-37 chars: 5.5pt (sz="11")
+      - >= 38 chars: 5pt (sz="10")
+    """
+    length = len(text.strip())
+    unbold = False
+    if length >= 38:
+        target_sz = "10"  # 5pt
+        unbold = True
+    elif length >= 34:
+        target_sz = "11"  # 5.5pt
+        unbold = True
+    elif length >= 29:
+        target_sz = "13"  # 6.5pt
+    elif length >= 25:
+        target_sz = "14"  # 7pt
+    else:
+        return
+
+    rpr = r_el.find(w("rPr"))
+    if rpr is None:
+        rpr = etree.Element(w("rPr"))
+        r_el.insert(0, rpr)
+    sz = rpr.find(w("sz"))
+    if sz is None:
+        sz = etree.SubElement(rpr, w("sz"))
+    sz.set(w("val"), target_sz)
+    sz_cs = rpr.find(w("szCs"))
+    if sz_cs is None:
+        sz_cs = etree.SubElement(rpr, w("szCs"))
+    sz_cs.set(w("val"), target_sz)
+
+    if unbold:
+        b = rpr.find(w("b"))
+        if b is not None:
+            rpr.remove(b)
+        b_cs = rpr.find(w("bCs"))
+        if b_cs is not None:
+            rpr.remove(b_cs)
+
+    if para is not None:
+        ppr = para.find(w("pPr"))
+        if ppr is not None:
+            ppr_rpr = ppr.find(w("rPr"))
+            if ppr_rpr is not None:
+                psz = ppr_rpr.find(w("sz"))
+                if psz is not None:
+                    psz.set(w("val"), target_sz)
+                psz_cs = ppr_rpr.find(w("szCs"))
+                if psz_cs is not None:
+                    psz_cs.set(w("val"), target_sz)
+                if unbold:
+                    pb = ppr_rpr.find(w("b"))
+                    if pb is not None:
+                        ppr_rpr.remove(pb)
+                    pb_cs = ppr_rpr.find(w("bCs"))
+                    if pb_cs is not None:
+                        ppr_rpr.remove(pb_cs)
+
+def set_para_text(para, text: str, shrink_threshold: int = 0, shrink_sz: str = "18", is_attendance_student: bool = False):
     """
     Replace text content of a paragraph while preserving the formatting
     of the first run found. Removes all runs then writes one clean run.
     """
+    ppr = para.find(w("pPr"))
+    if ppr is not None:
+        ind = ppr.find(w("ind"))
+        if ind is not None:
+            ppr.remove(ind)
+        jc = ppr.find(w("jc"))
+        if jc is not None and jc.get(w("val")) == "both":
+            jc.set(w("val"), "left")
+
     # Find first run to clone its rPr
     first_run = para.find(w("r"))
     rpr_clone = None
@@ -269,7 +344,10 @@ def set_para_text(para, text: str, shrink_threshold: int = 0, shrink_sz: str = "
     if rpr_clone is not None:
         r.insert(0, rpr_clone)
         
-    _auto_scale_font(r, text, shrink_threshold, shrink_sz)
+    if is_attendance_student:
+        _auto_scale_attendance_name(r, text, para=para)
+    else:
+        _auto_scale_font(r, text, shrink_threshold, shrink_sz)
         
     t = etree.SubElement(r, w("t"))
     t.text = text
@@ -556,9 +634,33 @@ def build_attendance_sheet(
         set_cell_width(cells[1], NAME_W)
         set_cell_width(cells[2], STNUM_W)
 
+        # Optimize cell margins on name cell to maximize printable horizontal room
+        tcpr1 = cells[1].find(w("tcPr"))
+        if tcpr1 is not None:
+            tcmar = tcpr1.find(w("tcMar"))
+            if tcmar is None:
+                tcmar = etree.SubElement(tcpr1, w("tcMar"))
+            left = tcmar.find(w("left"))
+            if left is None:
+                left = etree.SubElement(tcmar, w("left"))
+            left.set(w("w"), "50")
+            left.set(w("type"), "dxa")
+            right = tcmar.find(w("right"))
+            if right is None:
+                right = etree.SubElement(tcmar, w("right"))
+            right.set(w("w"), "50")
+            right.set(w("type"), "dxa")
+
+        # Set cantSplit on row to keep layout uniform across page breaks
+        trpr = tr.find(w("trPr"))
+        if trpr is None:
+            trpr = etree.SubElement(tr, w("trPr"))
+        if trpr.find(w("cantSplit")) is None:
+            etree.SubElement(trpr, w("cantSplit"))
+
         # Set NO., name, stnum
         set_para_text(cells[0].find(w("p")), str(row_idx + 1))
-        set_para_text(cells[1].find(w("p")), name, shrink_threshold=32, shrink_sz="18")
+        set_para_text(cells[1].find(w("p")), name, is_attendance_student=True)
         set_para_text(cells[2].find(w("p")), stnum)
 
         # Remove existing attendance + summary cells

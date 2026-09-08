@@ -7,6 +7,8 @@ import process_schedule
 
 import threading
 import json
+import tempfile
+import base64
 
 def get_resource_path(relative_path):
     """Get absolute path to resource, works for dev and for PyInstaller"""
@@ -36,7 +38,46 @@ class ScriptAPI:
         )
         if result and len(result) > 0:
             self.schedule_path = result[0]
-        return self.schedule_path
+            metadata = process_schedule.inspect_schedule_file(self.schedule_path)
+            validation = process_schedule.validate_rosters(self.schedule_path, self.rosters) if self.rosters else []
+            return {
+                "path": self.schedule_path,
+                "metadata": metadata,
+                "validation": validation
+            }
+        return {"path": self.schedule_path, "metadata": None, "validation": []}
+
+    def inspect_schedule(self, path=None):
+        target = path or self.schedule_path
+        if not target:
+            return None
+        return process_schedule.inspect_schedule_file(target)
+
+    def handle_dropped_schedule(self, filename, base64_data=None, original_path=None):
+        target_path = None
+        if original_path and os.path.exists(original_path):
+            target_path = original_path
+        elif base64_data and filename:
+            cache_dir = os.path.join(tempfile.gettempdir(), "cvsu_cache", "schedules")
+            os.makedirs(cache_dir, exist_ok=True)
+            target_path = os.path.join(cache_dir, filename)
+            try:
+                with open(target_path, "wb") as f:
+                    f.write(base64.b64decode(base64_data))
+            except Exception as e:
+                process_schedule.logger.error(f"Failed to write dropped schedule {filename}: {e}")
+                return {"path": "", "metadata": None, "validation": []}
+
+        if target_path and os.path.exists(target_path):
+            self.schedule_path = target_path
+            metadata = process_schedule.inspect_schedule_file(self.schedule_path)
+            validation = process_schedule.validate_rosters(self.schedule_path, self.rosters) if self.rosters else []
+            return {
+                "path": self.schedule_path,
+                "metadata": metadata,
+                "validation": validation
+            }
+        return {"path": "", "metadata": None, "validation": []}
 
     def browse_rosters(self):
         file_types = ('Student Lists (*.csv;*.xlsx;*.xls)', 'All files (*.*)')
@@ -46,8 +87,76 @@ class ScriptAPI:
             file_types=file_types
         )
         if result:
-            self.rosters = list(result)
-        return len(self.rosters)
+            # Merge while avoiding duplicate file paths
+            existing = set(self.rosters)
+            for r in result:
+                if r not in existing:
+                    self.rosters.append(r)
+            validation = process_schedule.validate_rosters(self.schedule_path, self.rosters)
+            return {
+                "count": len(self.rosters),
+                "rosters": self.rosters,
+                "validation": validation
+            }
+        return {
+            "count": len(self.rosters),
+            "rosters": self.rosters,
+            "validation": process_schedule.validate_rosters(self.schedule_path, self.rosters) if self.rosters else []
+        }
+
+    def handle_dropped_rosters(self, files_payload):
+        cache_dir = os.path.join(tempfile.gettempdir(), "cvsu_cache", "rosters")
+        os.makedirs(cache_dir, exist_ok=True)
+
+        new_paths = []
+        for item in files_payload:
+            original_path = item.get("path")
+            base64_data = item.get("data")
+            filename = item.get("filename")
+
+            if original_path and os.path.exists(original_path):
+                new_paths.append(original_path)
+            elif base64_data and filename:
+                target_path = os.path.join(cache_dir, filename)
+                try:
+                    with open(target_path, "wb") as f:
+                        f.write(base64.b64decode(base64_data))
+                    new_paths.append(target_path)
+                except Exception as e:
+                    process_schedule.logger.error(f"Failed to write dropped roster {filename}: {e}")
+
+        existing = set(self.rosters)
+        for p in new_paths:
+            if p not in existing:
+                self.rosters.append(p)
+                existing.add(p)
+
+        validation = process_schedule.validate_rosters(self.schedule_path, self.rosters)
+        return {
+            "count": len(self.rosters),
+            "rosters": self.rosters,
+            "validation": validation
+        }
+
+    def remove_roster(self, path_or_index):
+        if isinstance(path_or_index, int) and 0 <= path_or_index < len(self.rosters):
+            self.rosters.pop(path_or_index)
+        elif path_or_index in self.rosters:
+            self.rosters.remove(path_or_index)
+        return {
+            "count": len(self.rosters),
+            "rosters": self.rosters,
+            "validation": process_schedule.validate_rosters(self.schedule_path, self.rosters) if self.rosters else []
+        }
+
+    def clear_rosters(self):
+        self.rosters = []
+        return {"count": 0, "rosters": [], "validation": []}
+
+    def validate_rosters(self):
+        if not self.rosters:
+            return []
+        return process_schedule.validate_rosters(self.schedule_path, self.rosters)
 
     def browse_output(self):
         result = self._window.create_file_dialog(
@@ -56,6 +165,48 @@ class ScriptAPI:
         if result and len(result) > 0:
             self.output_dir = result[0]
         return self.output_dir
+
+    def open_output_folder(self, folder_path=None):
+        target = folder_path or self.output_dir
+        if target and os.path.exists(target):
+            try:
+                os.startfile(target)
+                return {"status": "success"}
+            except Exception as e:
+                return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": "Directory does not exist"}
+
+    def open_file(self, file_path):
+        if file_path and os.path.exists(file_path):
+            try:
+                os.startfile(file_path)
+                return {"status": "success"}
+            except Exception as e:
+                return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": "File not found"}
+
+    def get_recent_logs(self, lines=120):
+        app_data = os.getenv('APPDATA') or os.path.expanduser("~")
+        log_file = os.path.join(app_data, "CVSU_Generators", "logs", "generator.log")
+        if os.path.exists(log_file):
+            try:
+                with open(log_file, "r", encoding="utf-8", errors="ignore") as f:
+                    all_lines = f.readlines()
+                    return "".join(all_lines[-lines:])
+            except Exception as e:
+                return f"Could not read log file: {e}"
+        return "No log entries found."
+
+    def open_log_folder(self):
+        app_data = os.getenv('APPDATA') or os.path.expanduser("~")
+        log_dir = os.path.join(app_data, "CVSU_Generators", "logs")
+        if os.path.exists(log_dir):
+            try:
+                os.startfile(log_dir)
+                return {"status": "success"}
+            except Exception as e:
+                return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": "Logs directory does not exist"}
 
     def detect_classes(self):
         if not self.schedule_path or not self.rosters:
@@ -66,7 +217,7 @@ class ScriptAPI:
             process_schedule.logger.error(f"Error in detect_classes: {e}")
             return []
 
-    def run_generation(self, type_overrides=None, date_overrides=None):
+    def run_generation(self, type_overrides=None, date_overrides=None, class_filter=None, engine_filter=None):
         with self._lock:
             if self._is_processing:
                 return {"status": "error", "message": "A generation task is already in progress."}
@@ -86,11 +237,31 @@ class ScriptAPI:
             return {"status": "error", "message": "Missing Output Directory. Operations cannot resolve without an endpoint."}
         
         try:
-            process_schedule.logger.info("Commencing Build Initialization...")
+            process_schedule.logger.info("Commencing Build Initialization with real-time telemetry...")
+            process_schedule.logger.info(f"Loaded Schedule: {self.schedule_path}")
+            process_schedule.logger.info(f"Loaded Rosters: {len(self.rosters)} file(s)")
+            process_schedule.logger.info(f"Target Output Directory: {self.output_dir}")
+            process_schedule.logger.info(f"Selected Engines: {engine_filter}")
+
+            def _progress_hook(info):
+                try:
+                    js_code = f"if (window.onGenerationProgress) window.onGenerationProgress({json.dumps(info)});"
+                    self._window.evaluate_js(js_code)
+                except Exception as pe:
+                    process_schedule.logger.debug(f"Telemetry evaluate error: {pe}")
 
             def _thread_target():
                 try:
-                    results = process_schedule.process_all(self.schedule_path, self.rosters, self.output_dir, type_overrides=type_overrides, date_overrides=date_overrides)
+                    results = process_schedule.process_all(
+                        self.schedule_path,
+                        self.rosters,
+                        self.output_dir,
+                        type_overrides=type_overrides,
+                        date_overrides=date_overrides,
+                        class_filter=class_filter,
+                        engine_filter=engine_filter,
+                        progress_callback=_progress_hook
+                    )
                     
                     gen = results["generated"]
                     skp = results["skipped"]
@@ -101,32 +272,48 @@ class ScriptAPI:
                     total_errors = len(err["attendance"]) + len(err["grades"]) + len(err["ceit"]) + len(err["rosters"])
                     
                     if total_generated == 0:
-                        payload = {"status": "error", "message": f"Generation blocked: 0 files generated. Skipped: {total_skipped}. Errors: {total_errors}."}
+                        process_schedule.logger.warning(
+                            f"Build completed: 0 files generated (Skipped: {total_skipped}, Errors: {total_errors})."
+                        )
+                        payload = {
+                            "status": "error",
+                            "message": f"Generation blocked: 0 files generated. Skipped: {total_skipped}. Errors: {total_errors}.",
+                            "details": results,
+                            "output_dir": self.output_dir
+                        }
                     else:
-                        payload = {"status": "success", "message": f"Generation complete: {total_generated} files generated. {total_errors} errors. {total_skipped} skipped."}
+                        process_schedule.logger.info(
+                            f"Build completed successfully! {total_generated} file(s) generated (CEIT: {len(gen['ceit'])}, Attendance: {len(gen['attendance'])}, Grades: {len(gen['grades'])})."
+                        )
+                        payload = {
+                            "status": "success",
+                            "message": f"Generation complete! {total_generated} files generated successfully.",
+                            "stats": {
+                                "generated": total_generated,
+                                "errors": total_errors,
+                                "skipped": total_skipped
+                            },
+                            "details": results,
+                            "output_dir": self.output_dir
+                        }
                 except Exception as e:
-                    process_schedule.logger.error(f"Error Pipeline Breakdown: {e}")
-                    payload = {"status": "error", "message": f"Fatal Generation Fault: {str(e)}"}
+                    process_schedule.logger.error(f"Error Pipeline Breakdown: {e}", exc_info=True)
+                    payload = {"status": "error", "message": f"Fatal Generation Fault: {str(e)}", "details": None}
                 finally:
                     with self._lock:
                         self._is_processing = False
                 
-                # Use evaluate_js to update the UI from the background thread
                 try:
-                    # json.dumps ensures the payload is a valid JavaScript object string
-                    js_code = f"onGenerationComplete({json.dumps(payload)});"
+                    js_code = f"if (window.onGenerationComplete) window.onGenerationComplete({json.dumps(payload)});"
                     self._window.evaluate_js(js_code)
                 except Exception as e:
                     process_schedule.logger.error(f"Failed to execute UI callback: {e}")
                     try:
-                        self._window.evaluate_js("document.getElementById('processBtn').disabled = false; document.getElementById('processBtn').innerText = 'Initialize Workflow';")
+                        self._window.evaluate_js("if (window.onGenerationError) window.onGenerationError();")
                     except Exception:
                         pass
 
-            # Spawn and start the background thread
             threading.Thread(target=_thread_target, daemon=True).start()
-            
-            # Return None to UI, letting the thread invoke onGenerationComplete later
             return None
             
         except Exception as e:
@@ -134,6 +321,141 @@ class ScriptAPI:
                 self._is_processing = False
             process_schedule.logger.error(f"Error starting thread: {e}")
             return {"status": "error", "message": f"Failed to start generation thread: {str(e)}"}
+
+
+def setup_window_drag_and_drop(window, api):
+    """
+    Initializes native Windows Forms AllowDrop and binds pywebview DOMEventHandler
+    listeners to handle file drag-and-drop seamlessly in Microsoft Edge WebView2.
+    """
+    try:
+        window.events.loaded.wait(10)
+    except Exception:
+        pass
+
+    # 1. Enable Windows Forms AllowDrop on the UI thread for native OLE support
+    try:
+        import clr
+        clr.AddReference('System.Windows.Forms')
+        import System.Windows.Forms as WinForms
+
+        def _enable_native_dnd():
+            if window.native:
+                window.native.AllowDrop = True
+                browser = getattr(window.native, 'browser', None)
+                wv = getattr(browser, 'webview', None)
+                if wv:
+                    wv.AllowDrop = True
+
+        if window.native:
+            window.native.Invoke(WinForms.MethodInvoker(_enable_native_dnd))
+    except Exception as e:
+        process_schedule.logger.debug(f"WinForms AllowDrop setup: {e}")
+
+    # 2. Bind DOM Drag and Drop handlers to capture pywebviewFullPath
+    try:
+        from webview.dom import DOMEventHandler
+
+        sched_zone = window.dom.get_element('#scheduleDropzone')
+        rosters_zone = window.dom.get_element('#rostersDropzone')
+        doc = window.dom.document
+
+        def on_drag_ignore(e):
+            pass
+
+        def on_schedule_drop(e):
+            try:
+                files = e.get('dataTransfer', {}).get('files', [])
+                if not files:
+                    return
+                for f in files:
+                    full_path = f.get('pywebviewFullPath')
+                    if full_path and os.path.exists(full_path):
+                        ext = os.path.splitext(full_path)[1].lower()
+                        if ext in ('.xls', '.xlsx', '.xlsm'):
+                            res = api.handle_dropped_schedule(os.path.basename(full_path), original_path=full_path)
+                            window.evaluate_js(f"if (window.onScheduleLoaded) window.onScheduleLoaded({json.dumps(res)});")
+                            break
+            except Exception as err:
+                process_schedule.logger.error(f"Error handling schedule drop: {err}")
+
+        def on_rosters_drop(e):
+            try:
+                files = e.get('dataTransfer', {}).get('files', [])
+                if not files:
+                    return
+                payloads = []
+                for f in files:
+                    full_path = f.get('pywebviewFullPath')
+                    if full_path and os.path.exists(full_path):
+                        base = os.path.basename(full_path)
+                        ext = os.path.splitext(base)[1].lower()
+                        if not base.startswith('~$') and ext in ('.xlsx', '.xls', '.csv'):
+                            payloads.append({
+                                'filename': base,
+                                'path': full_path,
+                                'data': None
+                            })
+                if payloads:
+                    res = api.handle_dropped_rosters(payloads)
+                    window.evaluate_js(f"if (window.onRostersLoaded) window.onRostersLoaded({json.dumps(res)});")
+            except Exception as err:
+                process_schedule.logger.error(f"Error handling rosters drop: {err}")
+
+        def on_doc_drop(e):
+            try:
+                files = e.get('dataTransfer', {}).get('files', [])
+                if not files:
+                    return
+
+                excel_schedules = []
+                roster_items = []
+                for f in files:
+                    full_path = f.get('pywebviewFullPath')
+                    if not full_path or not os.path.exists(full_path):
+                        continue
+                    base = os.path.basename(full_path)
+                    ext = os.path.splitext(base)[1].lower()
+                    if base.startswith('~$'):
+                        continue
+                    if ext in ('.xls', '.xlsx', '.xlsm'):
+                        meta = process_schedule.inspect_schedule_file(full_path)
+                        if meta and meta.get('total_slots', 0) > 0 and (not api.schedule_path or 'List of Students' not in base):
+                            excel_schedules.append((base, full_path))
+                        else:
+                            roster_items.append({'filename': base, 'path': full_path, 'data': None})
+                    elif ext == '.csv':
+                        roster_items.append({'filename': base, 'path': full_path, 'data': None})
+
+                if excel_schedules and not api.schedule_path:
+                    base, path = excel_schedules[0]
+                    res = api.handle_dropped_schedule(base, original_path=path)
+                    window.evaluate_js(f"if (window.onScheduleLoaded) window.onScheduleLoaded({json.dumps(res)});")
+                    for b, p in excel_schedules[1:]:
+                        roster_items.append({'filename': b, 'path': p, 'data': None})
+
+                if roster_items:
+                    res = api.handle_dropped_rosters(roster_items)
+                    window.evaluate_js(f"if (window.onRostersLoaded) window.onRostersLoaded({json.dumps(res)});")
+            except Exception as err:
+                process_schedule.logger.error(f"Error handling document drop: {err}")
+
+        if sched_zone:
+            sched_zone.events.dragenter += DOMEventHandler(on_drag_ignore, True, True)
+            sched_zone.events.dragover += DOMEventHandler(on_drag_ignore, True, True, debounce=200)
+            sched_zone.events.drop += DOMEventHandler(on_schedule_drop, True, True)
+
+        if rosters_zone:
+            rosters_zone.events.dragenter += DOMEventHandler(on_drag_ignore, True, True)
+            rosters_zone.events.dragover += DOMEventHandler(on_drag_ignore, True, True, debounce=200)
+            rosters_zone.events.drop += DOMEventHandler(on_rosters_drop, True, True)
+
+        if doc:
+            doc.events.dragover += DOMEventHandler(on_drag_ignore, True, True, debounce=500)
+            doc.events.drop += DOMEventHandler(on_doc_drop, True, True)
+
+    except Exception as e:
+        process_schedule.logger.error(f"Error binding pywebview DOM handlers: {e}")
 
 
 if __name__ == '__main__':
@@ -145,10 +467,12 @@ if __name__ == '__main__':
         title='CvSU Gen (Beta)',
         url=html_template,
         js_api=api,
-        width=750,
-        height=620,
-        text_select=False
+        width=920,
+        height=720,
+        min_size=(840, 640),
+        text_select=True
     )
     api._window = window
     
-    webview.start()
+    webview.start(setup_window_drag_and_drop, (window, api))
+
