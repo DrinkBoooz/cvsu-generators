@@ -9,7 +9,13 @@
          CvSU Gen Design System — 100% Offline, Zero CDN Dependencies
          Theme: CvSU Emerald & Obsidian Glassmorphism
          ═══════════════════════════════════════════════════════════════════════ */
-      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
 
       :root {
         --bg-base: #f8fafc;
@@ -33,7 +39,9 @@
         --radius-md: 14px;
         --radius-lg: 20px;
         --radius-xl: 28px;
-        --shadow-card: 0 10px 30px -5px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.02);
+        --shadow-card:
+          0 10px 30px -5px rgba(0, 0, 0, 0.05),
+          0 4px 6px -2px rgba(0, 0, 0, 0.02);
       }
 
       [data-bs-theme="dark"] {
@@ -54,22 +62,32 @@
         --accent-amber: #f59e0b;
         --accent-blue: #3b82f6;
         --accent-rose: #ef4444;
-        --shadow-card: 0 16px 40px -10px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+        --shadow-card:
+          0 16px 40px -10px rgba(0, 0, 0, 0.4),
+          inset 0 1px 0 rgba(255, 255, 255, 0.06);
       }
 
       body {
         background-color: var(--bg-base);
         color: var(--text-primary);
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
         -webkit-font-smoothing: antialiased;
         min-height: 100vh;
         padding-bottom: 60px;
-        transition: background-color 0.3s ease, color 0.3s ease;
+        transition:
+          background-color 0.3s ease,
+          color 0.3s ease;
         user-select: none;
       }
 
       /* Allow text selection on specific data display elements */
-      .selectable, code, pre, input, textarea {
+      .selectable,
+      code,
+      pre,
+      input,
+      textarea {
         user-select: text !important;
       }
 
@@ -90,7 +108,10 @@
         -webkit-backdrop-filter: blur(20px) saturate(180%);
         border-bottom: 1px solid var(--border-subtle);
         box-shadow: var(--header-shadow);
-        transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+        transition:
+          background-color 0.3s ease,
+          border-color 0.3s ease,
+          box-shadow 0.3s ease;
       }
       .top-header {
         max-width: 900px;
@@ -186,7 +207,9 @@
         box-shadow: var(--shadow-card);
         padding: 28px;
         margin-bottom: 24px;
-        transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        transition:
+          border-color 0.3s ease,
+          box-shadow 0.3s ease;
       }
       .step-header {
         display: flex;
@@ -225,7 +248,9 @@
         margin-bottom: 18px;
       }
       @media (max-width: 680px) {
-        .dropzone-grid { grid-template-columns: 1fr; }
+        .dropzone-grid {
+          grid-template-columns: 1fr;
+        }
       }
       .dropzone {
         background: var(--surface-subtle);
@@ -242,7 +267,8 @@
         gap: 8px;
         min-height: 140px;
       }
-      .dropzone:hover, .dropzone.dragover {
+      .dropzone:hover,
+      .dropzone.dragover {
         border-color: var(--accent-emerald);
         background: var(--accent-emerald-glow);
         transform: translateY(-2px);
@@ -280,7 +306,11 @@
 
       /* ── Instructor Profile Banner ─────────────────────────────────────── */
       .instructor-banner {
-        background: linear-gradient(135deg, rgba(5, 150, 105, 0.12), rgba(37, 99, 235, 0.08));
+        background: linear-gradient(
+          135deg,
+          rgba(5, 150, 105, 0.12),
+          rgba(37, 99, 235, 0.08)
+        );
         border: 1px solid rgba(16, 185, 129, 0.25);
         border-radius: var(--radius-md);
         padding: 16px 20px;
@@ -355,7 +385,9 @@
         font-size: 13px;
         gap: 10px;
       }
-      .roster-row:last-child { margin-bottom: 0; }
+      .roster-row:last-child {
+        margin-bottom: 0;
+      }
       .roster-title {
         font-weight: 600;
         white-space: nowrap;
@@ -370,9 +402,18 @@
         border-radius: 10px;
         white-space: nowrap;
       }
-      .badge-valid { background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald); }
-      .badge-warning { background: rgba(245, 158, 11, 0.15); color: var(--accent-amber); }
-      .badge-error { background: rgba(239, 68, 68, 0.15); color: var(--accent-rose); }
+      .badge-valid {
+        background: rgba(16, 185, 129, 0.15);
+        color: var(--accent-emerald);
+      }
+      .badge-warning {
+        background: rgba(245, 158, 11, 0.15);
+        color: var(--accent-amber);
+      }
+      .badge-error {
+        background: rgba(239, 68, 68, 0.15);
+        color: var(--accent-rose);
+      }
       .btn-remove-roster {
         background: transparent;
         border: none;
@@ -395,7 +436,9 @@
         margin-bottom: 20px;
       }
       @media (max-width: 640px) {
-        .engine-selector { grid-template-columns: 1fr; }
+        .engine-selector {
+          grid-template-columns: 1fr;
+        }
       }
       .engine-chip {
         background: var(--surface-subtle);
@@ -668,9 +711,18 @@
         animation: pulse 1.4s infinite;
       }
       @keyframes pulse {
-        0% { transform: scale(0.95); box-shadow: 0 0 0 0 var(--accent-emerald-glow); }
-        70% { transform: scale(1.15); box-shadow: 0 0 0 8px transparent; }
-        100% { transform: scale(0.95); box-shadow: 0 0 0 0 transparent; }
+        0% {
+          transform: scale(0.95);
+          box-shadow: 0 0 0 0 var(--accent-emerald-glow);
+        }
+        70% {
+          transform: scale(1.15);
+          box-shadow: 0 0 0 8px transparent;
+        }
+        100% {
+          transform: scale(0.95);
+          box-shadow: 0 0 0 0 transparent;
+        }
       }
 
       /* ── Results Screen & File Tree ────────────────────────────────────── */
@@ -744,7 +796,10 @@
       /* ── Off-Canvas Slide Drawers ──────────────────────────────────────── */
       .drawer-backdrop {
         position: fixed;
-        top: 0; left: 0; right: 0; bottom: 0;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
         background: rgba(0, 0, 0, 0.5);
         backdrop-filter: blur(4px);
         z-index: 998;
@@ -758,7 +813,9 @@
       }
       .drawer-panel {
         position: fixed;
-        top: 0; right: 0; bottom: 0;
+        top: 0;
+        right: 0;
+        bottom: 0;
         width: 100%;
         max-width: 580px;
         background: var(--surface-elevated);
@@ -867,7 +924,8 @@
         padding: 2px 6px;
         border-radius: 6px;
         font-size: 12px;
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       }
       .code-block {
         background: var(--surface-subtle);
@@ -875,7 +933,8 @@
         border-radius: var(--radius-sm);
         padding: 12px 14px;
         font-size: 12px;
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
         overflow-x: auto;
         white-space: pre;
         margin: 8px 0;
@@ -893,7 +952,7 @@
         background: var(--surface-card);
         border: 1px solid var(--border-subtle);
         border-radius: 4px;
-        box-shadow: 0 1px 1px rgba(0,0,0,0.15);
+        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.15);
         font-size: 11px;
         font-weight: 600;
         padding: 2px 6px;
@@ -959,8 +1018,12 @@
         background: var(--accent-emerald);
         color: white;
       }
-      .chip-txt { font-weight: 600; }
-      .chip-status { font-size: 10px; }
+      .chip-txt {
+        font-weight: 600;
+      }
+      .chip-status {
+        font-size: 10px;
+      }
       .stepper-connector {
         flex: 1;
         height: 2px;
@@ -989,26 +1052,65 @@
         border: 1px solid var(--border-subtle);
         border-left: 4px solid var(--accent-emerald);
         border-radius: var(--radius-md);
-        box-shadow: 0 12px 32px rgba(0,0,0,0.25);
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
         padding: 12px 16px;
         display: flex;
         align-items: flex-start;
         gap: 12px;
         animation: toastSlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-        transition: opacity 0.25s ease, transform 0.25s ease;
+        transition:
+          opacity 0.25s ease,
+          transform 0.25s ease;
       }
-      .toast.toast-warning { border-left-color: var(--accent-amber); }
-      .toast.toast-error { border-left-color: var(--accent-rose); }
-      .toast.toast-info { border-left-color: var(--accent-blue); }
-      .toast-icon { flex-shrink: 0; margin-top: 2px; }
-      .toast-content { flex: 1; min-width: 0; }
-      .toast-title { font-size: 13.5px; font-weight: 700; margin-bottom: 2px; }
-      .toast-message { font-size: 12px; color: var(--text-secondary); line-height: 1.4; word-break: break-word; }
-      .toast-close { background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 16px; line-height: 1; padding: 0 4px; }
-      .toast-close:hover { color: var(--text-primary); }
+      .toast.toast-warning {
+        border-left-color: var(--accent-amber);
+      }
+      .toast.toast-error {
+        border-left-color: var(--accent-rose);
+      }
+      .toast.toast-info {
+        border-left-color: var(--accent-blue);
+      }
+      .toast-icon {
+        flex-shrink: 0;
+        margin-top: 2px;
+      }
+      .toast-content {
+        flex: 1;
+        min-width: 0;
+      }
+      .toast-title {
+        font-size: 13.5px;
+        font-weight: 700;
+        margin-bottom: 2px;
+      }
+      .toast-message {
+        font-size: 12px;
+        color: var(--text-secondary);
+        line-height: 1.4;
+        word-break: break-word;
+      }
+      .toast-close {
+        background: transparent;
+        border: none;
+        color: var(--text-muted);
+        cursor: pointer;
+        font-size: 16px;
+        line-height: 1;
+        padding: 0 4px;
+      }
+      .toast-close:hover {
+        color: var(--text-primary);
+      }
       @keyframes toastSlideIn {
-        from { transform: translateX(110%); opacity: 0; }
-        to { transform: translateX(0); opacity: 1; }
+        from {
+          transform: translateX(110%);
+          opacity: 0;
+        }
+        to {
+          transform: translateX(0);
+          opacity: 1;
+        }
       }
 
       /* ── Auto-Strip Toggle & Roster Controls ────────────────────────────── */
@@ -1029,24 +1131,33 @@
         height: 22px;
         flex-shrink: 0;
       }
-      .toggle-switch input { opacity: 0; width: 0; height: 0; }
+      .toggle-switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+      }
       .toggle-slider {
         position: absolute;
         cursor: pointer;
-        top: 0; left: 0; right: 0; bottom: 0;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
         background-color: var(--border-subtle);
-        transition: .3s cubic-bezier(0.16, 1, 0.3, 1);
+        transition: 0.3s cubic-bezier(0.16, 1, 0.3, 1);
         border-radius: 22px;
       }
       .toggle-slider:before {
         position: absolute;
         content: "";
-        height: 16px; width: 16px;
-        left: 3px; bottom: 3px;
+        height: 16px;
+        width: 16px;
+        left: 3px;
+        bottom: 3px;
         background-color: white;
-        transition: .3s cubic-bezier(0.16, 1, 0.3, 1);
+        transition: 0.3s cubic-bezier(0.16, 1, 0.3, 1);
         border-radius: 50%;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
       }
       .toggle-switch input:checked + .toggle-slider {
         background-color: var(--accent-emerald);
@@ -1084,7 +1195,8 @@
         cursor: pointer;
         transition: all 0.2s ease;
       }
-      .filter-pill:hover, .filter-pill.active {
+      .filter-pill:hover,
+      .filter-pill.active {
         background: var(--accent-emerald);
         color: white;
         border-color: var(--accent-emerald);
@@ -1189,7 +1301,9 @@
         font-size: 12.5px;
         border-bottom: 1px dashed var(--border-subtle);
       }
-      .artifact-file-row:last-child { border-bottom: none; }
+      .artifact-file-row:last-child {
+        border-bottom: none;
+      }
       .btn-launch-file {
         background: var(--surface-card);
         border: 1px solid var(--border-subtle);
@@ -1232,7 +1346,8 @@
         white-space: nowrap;
         transition: all 0.2s ease;
       }
-      .drawer-tab.active, .drawer-tab:hover {
+      .drawer-tab.active,
+      .drawer-tab:hover {
         background: var(--surface-card);
         color: var(--text-primary);
       }
@@ -1255,10 +1370,18 @@
       }
 
       /* Helpers */
-      .d-none { display: none !important; }
-      .text-muted { color: var(--text-muted); }
-      .text-secondary { color: var(--text-secondary); }
-      .text-emerald { color: var(--accent-emerald); }
+      .d-none {
+        display: none !important;
+      }
+      .text-muted {
+        color: var(--text-muted);
+      }
+      .text-secondary {
+        color: var(--text-secondary);
+      }
+      .text-emerald {
+        color: var(--accent-emerald);
+      }
     </style>
   </head>
   <body>
@@ -1268,8 +1391,19 @@
         <div class="brand-lockup">
           <div class="brand-icon">
             <!-- Academic Document Icon SVG -->
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path
+                d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+              ></path>
               <polyline points="14 2 14 8 20 8"></polyline>
               <line x1="16" y1="13" x2="8" y2="13"></line>
               <line x1="16" y1="17" x2="8" y2="17"></line>
@@ -1277,17 +1411,32 @@
             </svg>
           </div>
           <div>
-            <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px">
               <span class="brand-title">CvSU Gen</span>
               <span class="badge-version">v1.2 Beta</span>
             </div>
-            <div class="brand-subtitle">Cavite State University Document Automation</div>
+            <div class="brand-subtitle">
+              Cavite State University Document Automation
+            </div>
           </div>
         </div>
 
         <div class="header-actions">
-          <button class="nav-btn" onclick="toggleTheme()" title="Toggle Dark/Light Mode">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <button
+            class="nav-btn"
+            onclick="toggleTheme()"
+            title="Toggle Dark/Light Mode"
+          >
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
               <circle cx="12" cy="12" r="5"></circle>
               <line x1="12" y1="1" x2="12" y2="3"></line>
               <line x1="12" y1="21" x2="12" y2="23"></line>
@@ -1300,17 +1449,45 @@
             </svg>
             Theme
           </button>
-          <button class="nav-btn" onclick="openLogsDrawer()" title="View Execution Diagnostics">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <button
+            class="nav-btn"
+            onclick="openLogsDrawer()"
+            title="View Execution Diagnostics"
+          >
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path
+                d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+              ></path>
               <polyline points="14 2 14 8 20 8"></polyline>
               <line x1="16" y1="13" x2="8" y2="13"></line>
               <line x1="16" y1="17" x2="8" y2="17"></line>
             </svg>
             Logs
           </button>
-          <button class="nav-btn" onclick="openHelpDrawer()" title="View User Guide & Rules">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <button
+            class="nav-btn"
+            onclick="openHelpDrawer()"
+            title="View User Guide & Rules"
+          >
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
               <circle cx="12" cy="12" r="10"></circle>
               <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
               <line x1="12" y1="17" x2="12.01" y2="17"></line>
@@ -1323,37 +1500,67 @@
       <!-- Stepper Readiness Tracker Bar -->
       <div class="stepper-bar" id="workflowStepper">
         <div class="stepper-track">
-          <button class="step-chip" id="chipStep1" type="button" onclick="scrollToStep('cardStep1')">
+          <button
+            class="step-chip"
+            id="chipStep1"
+            type="button"
+            onclick="scrollToStep('cardStep1')"
+          >
             <span class="chip-num">1</span>
             <span class="chip-txt">Schedule</span>
             <span class="chip-status" id="statusStep1">⚪</span>
           </button>
           <div class="stepper-connector"></div>
-          <button class="step-chip" id="chipStep2" type="button" onclick="scrollToStep('cardStep2')">
+          <button
+            class="step-chip"
+            id="chipStep2"
+            type="button"
+            onclick="scrollToStep('cardStep2')"
+          >
             <span class="chip-num">2</span>
             <span class="chip-txt">Rosters</span>
             <span class="chip-status" id="statusStep2">⚪</span>
           </button>
           <div class="stepper-connector"></div>
-          <button class="step-chip" id="chipStep3" type="button" onclick="scrollToStep('cardStep3')">
+          <button
+            class="step-chip"
+            id="chipStep3"
+            type="button"
+            onclick="scrollToStep('cardStep3')"
+          >
             <span class="chip-num">3</span>
             <span class="chip-txt">Packages</span>
             <span class="chip-status" id="statusStep3">⚪</span>
           </button>
           <div class="stepper-connector"></div>
-          <button class="step-chip" id="chipStep4" type="button" onclick="scrollToStep('cardStep4')">
+          <button
+            class="step-chip"
+            id="chipStep4"
+            type="button"
+            onclick="scrollToStep('cardStep4')"
+          >
             <span class="chip-num">4</span>
             <span class="chip-txt">Dates</span>
             <span class="chip-status" id="statusStep4">⚪</span>
           </button>
           <div class="stepper-connector"></div>
-          <button class="step-chip" id="chipStep5" type="button" onclick="scrollToStep('cardStep5')">
+          <button
+            class="step-chip"
+            id="chipStep5"
+            type="button"
+            onclick="scrollToStep('cardStep5')"
+          >
             <span class="chip-num">5</span>
             <span class="chip-txt">Output</span>
             <span class="chip-status" id="statusStep5">⚪</span>
           </button>
           <div class="stepper-connector"></div>
-          <button class="step-chip" id="chipStep6" type="button" onclick="scrollToStep('cardStep6')">
+          <button
+            class="step-chip"
+            id="chipStep6"
+            type="button"
+            onclick="scrollToStep('cardStep6')"
+          >
             <span class="chip-num">6</span>
             <span class="chip-txt">Generate</span>
             <span class="chip-status" id="statusStep6">⚪</span>
@@ -1370,44 +1577,105 @@
       <section class="glass-card" id="cardStep1">
         <div class="step-header">
           <div class="step-number">1</div>
-          <div class="step-title">Select Instructor Schedule (.xls or .xlsx)</div>
+          <div class="step-title">
+            Select Instructor Schedule (.xls or .xlsx)
+          </div>
           <div class="step-desc">Master Schedule</div>
         </div>
 
         <p class="step-instructions">
-          Download your official schedule spreadsheet from the faculty portal. Click <strong>"Browse File"</strong> below to select your master schedule. The generator automatically extracts your instructor name, college header, semester, academic year, class times, days, and rooms.<br>
-          <em>Note: Schedule blocks labeled as Async or Asynch are automatically filtered out so only in-person sessions receive attendance columns.</em>
+          Download your official schedule spreadsheet from the faculty portal.
+          Click <strong>"Browse File"</strong> below to select your master
+          schedule. The generator automatically extracts your instructor name,
+          college header, semester, academic year, class times, days, and
+          rooms.<br />
+          <em
+            >Note: Schedule blocks labeled as Async or Asynch are automatically
+            filtered out so only in-person sessions receive attendance
+            columns.</em
+          >
         </p>
 
         <!-- Schedule Dropzone with Browse File button -->
         <div id="scheduleDropzone" class="dropzone" onclick="loadSchedule()">
-          <svg class="dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg
+            class="dropzone-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
             <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
             <line x1="16" y1="2" x2="16" y2="6"></line>
             <line x1="8" y1="2" x2="8" y2="6"></line>
             <line x1="3" y1="10" x2="21" y2="10"></line>
           </svg>
-          <div class="dropzone-title">Instructor Schedule Spreadsheet <span id="scheduleFormatBadge" class="badge-version d-none" style="margin-left: 6px;">.XLS</span></div>
-          <div id="schedulePrompt" class="dropzone-hint">Click "Browse File" or drop master schedule (.xls / .xlsx)</div>
-          <div style="display: flex; gap: 8px; margin-top: 6px;">
-            <button class="btn-browse" type="button" onclick="event.stopPropagation(); loadSchedule();">Browse File</button>
-            <button class="nav-btn d-none" id="btnResetSchedule" type="button" style="padding: 4px 10px; font-size: 11px;" onclick="event.stopPropagation(); resetSchedule();">Reset File</button>
+          <div class="dropzone-title">
+            Instructor Schedule Spreadsheet
+            <span
+              id="scheduleFormatBadge"
+              class="badge-version d-none"
+              style="margin-left: 6px"
+              >.XLS</span
+            >
           </div>
-          <div id="scheduleFilename" class="dropzone-status d-none selectable"></div>
+          <div id="schedulePrompt" class="dropzone-hint">
+            Click "Browse File" or drop master schedule (.xls / .xlsx)
+          </div>
+          <div style="display: flex; gap: 8px; margin-top: 6px">
+            <button
+              class="btn-browse"
+              type="button"
+              onclick="
+                event.stopPropagation();
+                loadSchedule();
+              "
+            >
+              Browse File
+            </button>
+            <button
+              class="nav-btn d-none"
+              id="btnResetSchedule"
+              type="button"
+              style="padding: 4px 10px; font-size: 11px"
+              onclick="
+                event.stopPropagation();
+                resetSchedule();
+              "
+            >
+              Reset File
+            </button>
+          </div>
+          <div
+            id="scheduleFilename"
+            class="dropzone-status d-none selectable"
+          ></div>
         </div>
 
         <!-- Instructor Profile Instant Banner -->
-        <div id="instructorBanner" class="instructor-banner d-none" style="margin-top: 16px;">
+        <div
+          id="instructorBanner"
+          class="instructor-banner d-none"
+          style="margin-top: 16px"
+        >
           <div class="instructor-info">
             <div id="instructorInitials" class="instructor-avatar">DO</div>
             <div>
-              <div id="instructorName" class="instructor-name selectable">Instructor Name</div>
-              <div id="instructorCollege" class="instructor-meta selectable">College of Engineering and Information Technology</div>
+              <div id="instructorName" class="instructor-name selectable">
+                Instructor Name
+              </div>
+              <div id="instructorCollege" class="instructor-meta selectable">
+                College of Engineering and Information Technology
+              </div>
             </div>
           </div>
           <div class="instructor-pills">
             <span id="instructorSemPill" class="meta-pill">Semester</span>
-            <span id="instructorSlotsPill" class="meta-pill">0 Class Blocks</span>
+            <span id="instructorSlotsPill" class="meta-pill"
+              >0 Class Blocks</span
+            >
           </div>
         </div>
       </section>
@@ -1416,72 +1684,181 @@
       <section class="glass-card" id="cardStep2">
         <div class="step-header">
           <div class="step-number">2</div>
-          <div class="step-title">Select Student Rosters (.xlsx, .xls, or .csv)</div>
+          <div class="step-title">
+            Select Student Rosters (.xlsx, .xls, or .csv)
+          </div>
           <div class="step-desc">Class Lists</div>
         </div>
 
         <p class="step-instructions">
-          Download class student rosters directly from <a href="https://registrar.cvsu.edu.ph/" target="_blank" class="text-link">registrar.cvsu.edu.ph</a>. Click <strong>"Browse Data"</strong> below. You can select <strong>multiple files at once</strong> by holding <kbd>Ctrl</kbd> or <kbd>Shift</kbd> to load all your class rosters together.
+          Download class student rosters directly from
+          <a
+            href="https://registrar.cvsu.edu.ph/"
+            target="_blank"
+            class="text-link"
+            >registrar.cvsu.edu.ph</a
+          >. Click <strong>"Browse Data"</strong> below. You can select
+          <strong>multiple files at once</strong> by holding <kbd>Ctrl</kbd> or
+          <kbd>Shift</kbd> to load all your class rosters together.
         </p>
 
         <!-- Auto-Strip Extra Columns Toggle -->
         <div class="auto-strip-box">
           <label class="toggle-switch">
-            <input type="checkbox" id="autoStripCheck" checked onchange="renderRosterStatus()">
+            <input
+              type="checkbox"
+              id="autoStripCheck"
+              checked
+              onchange="renderRosterStatus()"
+            />
             <span class="toggle-slider"></span>
           </label>
           <div>
-            <div class="toggle-label">Auto-Strip Extra Columns (Recommended)</div>
-            <div class="toggle-sub">Automatically isolates Name &amp; Student number, safely ignoring extra portal columns.</div>
+            <div class="toggle-label">
+              Auto-Strip Extra Columns (Recommended)
+            </div>
+            <div class="toggle-sub">
+              Automatically isolates Name &amp; Student number, safely ignoring
+              extra portal columns.
+            </div>
           </div>
         </div>
 
         <!-- Roster Column Info Box -->
         <div class="alert-info">
-          <div style="color: var(--accent-blue); flex-shrink: 0; margin-top: 2px;">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <div
+            style="color: var(--accent-blue); flex-shrink: 0; margin-top: 2px"
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
               <circle cx="12" cy="12" r="10"></circle>
               <line x1="12" y1="16" x2="12" y2="12"></line>
               <line x1="12" y1="8" x2="12.01" y2="8"></line>
             </svg>
           </div>
           <div>
-            <strong>Roster Columns:</strong> Columns A &amp; B must contain the student <code>Name</code> and <code>Student number</code>. Extra portal columns (Email, Course, Section, Status, Remarks) are automatically cleaned and ignored.
+            <strong>Roster Columns:</strong> Columns A &amp; B must contain the
+            student <code>Name</code> and <code>Student number</code>. Extra
+            portal columns (Email, Course, Section, Status, Remarks) are
+            automatically cleaned and ignored.
           </div>
         </div>
 
-        <div style="font-size: 12.5px; color: var(--text-secondary); margin-bottom: 12px;">
+        <div
+          style="
+            font-size: 12.5px;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+          "
+        >
           <strong>Crucial:</strong> Keep the official file naming format:
-          <div class="code-block" style="margin: 6px 0;">{Course/Sec} List of Students for {ScheduleCode}-{Subject}.xlsx</div>
-          <span style="font-size: 12px;">Example: <code>BSCS1-4 List of Students for 202612040-DCIT 21A - INTRODUCTION TO COMPUTING.xlsx</code></span>
+          <div class="code-block" style="margin: 6px 0">
+            {Course/Sec} List of Students for {ScheduleCode}-{Subject}.xlsx
+          </div>
+          <span style="font-size: 12px"
+            >Example:
+            <code
+              >BSCS1-4 List of Students for 202612040-DCIT 21A - INTRODUCTION TO
+              COMPUTING.xlsx</code
+            ></span
+          >
         </div>
 
         <!-- Rosters Dropzone with Browse Data button -->
         <div id="rostersDropzone" class="dropzone" onclick="loadRosters()">
-          <svg class="dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg
+            class="dropzone-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
             <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
             <circle cx="9" cy="7" r="4"></circle>
             <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
             <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
           </svg>
           <div class="dropzone-title">Class Rosters Files</div>
-          <div id="rostersPrompt" class="dropzone-hint">Click "Browse Data" or drop student lists (.xlsx / .xls / .csv) — hold Ctrl/Shift for multi-select</div>
-          <button class="btn-browse" type="button" style="margin-top: 6px;" onclick="event.stopPropagation(); loadRosters();">Browse Data</button>
+          <div id="rostersPrompt" class="dropzone-hint">
+            Click "Browse Data" or drop student lists (.xlsx / .xls / .csv) —
+            hold Ctrl/Shift for multi-select
+          </div>
+          <button
+            class="btn-browse"
+            type="button"
+            style="margin-top: 6px"
+            onclick="
+              event.stopPropagation();
+              loadRosters();
+            "
+          >
+            Browse Data
+          </button>
           <div id="rostersFilename" class="dropzone-status d-none"></div>
         </div>
 
         <!-- Roster Pre-flight List -->
-        <div id="rosterListBox" class="roster-list-box d-none" style="margin-top: 14px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="font-size: 12px; font-weight: 700; text-transform: uppercase; color: var(--text-secondary);">
+        <div
+          id="rosterListBox"
+          class="roster-list-box d-none"
+          style="margin-top: 14px"
+        >
+          <div
+            style="
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              margin-bottom: 8px;
+            "
+          >
+            <div style="display: flex; align-items: center; gap: 8px">
+              <span
+                style="
+                  font-size: 12px;
+                  font-weight: 700;
+                  text-transform: uppercase;
+                  color: var(--text-secondary);
+                "
+              >
                 Loaded Roster Files (<span id="rosterCountBadge">0</span>)
               </span>
-              <span id="rosterTotalStudentsBadge" class="badge-version d-none">0 Students</span>
+              <span id="rosterTotalStudentsBadge" class="badge-version d-none"
+                >0 Students</span
+              >
             </div>
-            <div style="display: flex; gap: 6px;">
-              <input type="text" id="rosterSearchInput" placeholder="Filter rosters..." style="font-size: 11px; padding: 2px 8px; border-radius: 8px; border: 1px solid var(--border-subtle); background: var(--surface-card); color: var(--text-primary);" oninput="filterRostersList(this.value)">
-              <button class="nav-btn" id="btnClearAllRosters" style="padding: 2px 8px; font-size: 11px;" onclick="clearAllRosters()">Clear All</button>
+            <div style="display: flex; gap: 6px">
+              <input
+                type="text"
+                id="rosterSearchInput"
+                placeholder="Filter rosters..."
+                style="
+                  font-size: 11px;
+                  padding: 2px 8px;
+                  border-radius: 8px;
+                  border: 1px solid var(--border-subtle);
+                  background: var(--surface-card);
+                  color: var(--text-primary);
+                "
+                oninput="filterRostersList(this.value)"
+              />
+              <button
+                class="nav-btn"
+                id="btnClearAllRosters"
+                style="padding: 2px 8px; font-size: 11px"
+                onclick="clearAllRosters()"
+              >
+                Clear All
+              </button>
             </div>
           </div>
           <div id="rosterRowsContainer"></div>
@@ -1492,43 +1869,96 @@
       <section class="glass-card" id="cardStep3">
         <div class="step-header">
           <div class="step-number">3</div>
-          <div class="step-title">Confirm Detected Classes &amp; Subject Types</div>
+          <div class="step-title">
+            Confirm Detected Classes &amp; Subject Types
+          </div>
           <div class="step-desc">Templates &amp; Packages</div>
         </div>
 
         <p class="step-instructions">
-          Once your schedule and rosters are loaded, the panel below displays all detected classes paired with official CvSU grading templates:
+          Once your schedule and rosters are loaded, the panel below displays
+          all detected classes paired with official CvSU grading templates:
         </p>
 
         <div class="template-spec-box">
-          <ul style="padding-left: 18px; font-size: 12.5px; color: var(--text-secondary); line-height: 1.6;">
-            <li><strong>Lecture and Lab:</strong> Uses <code>GRADING_LECTURE_LAB_TEMPLATE.xlsx</code> (includes Lecture, Laboratory, Consolidated, and Grading Sheet tabs).</li>
-            <li><strong>Lecture only:</strong> Uses <code>GRADING_LECTURE_TEMPLATE.xlsx</code> (includes Lecture and Grading Sheet tabs).</li>
+          <ul
+            style="
+              padding-left: 18px;
+              font-size: 12.5px;
+              color: var(--text-secondary);
+              line-height: 1.6;
+            "
+          >
+            <li>
+              <strong>Lecture and Lab:</strong> Uses
+              <code>GRADING_LECTURE_LAB_TEMPLATE.xlsx</code> (includes Lecture,
+              Laboratory, Consolidated, and Grading Sheet tabs).
+            </li>
+            <li>
+              <strong>Lecture only:</strong> Uses
+              <code>GRADING_LECTURE_TEMPLATE.xlsx</code> (includes Lecture and
+              Grading Sheet tabs).
+            </li>
           </ul>
-          <div style="font-size: 12px; color: var(--text-muted); margin-top: 6px; font-style: italic;">
-            The system automatically detects labs from your schedule hours, but you can change this anytime using the dropdown menu.
+          <div
+            style="
+              font-size: 12px;
+              color: var(--text-muted);
+              margin-top: 6px;
+              font-style: italic;
+            "
+          >
+            The system automatically detects labs from your schedule hours, but
+            you can change this anytime using the dropdown menu.
           </div>
         </div>
 
         <!-- Document Engine Toggles -->
         <label class="form-label">Document Packages to Compile</label>
         <div class="engine-selector">
-          <div class="engine-chip active" id="chipAttendance" onclick="toggleEngine('attendance')">
-            <input type="checkbox" id="checkAttendance" class="engine-checkbox" checked>
+          <div
+            class="engine-chip active"
+            id="chipAttendance"
+            onclick="toggleEngine('attendance')"
+          >
+            <input
+              type="checkbox"
+              id="checkAttendance"
+              class="engine-checkbox"
+              checked
+            />
             <div>
               <div class="engine-chip-title">Attendance Sheets</div>
               <div class="engine-chip-desc">Monthly logs (.docx)</div>
             </div>
           </div>
-          <div class="engine-chip active" id="chipCeit" onclick="toggleEngine('ceit')">
-            <input type="checkbox" id="checkCeit" class="engine-checkbox" checked>
+          <div
+            class="engine-chip active"
+            id="chipCeit"
+            onclick="toggleEngine('ceit')"
+          >
+            <input
+              type="checkbox"
+              id="checkCeit"
+              class="engine-checkbox"
+              checked
+            />
             <div>
               <div class="engine-chip-title">CEIT Dept Forms</div>
               <div class="engine-chip-desc">7 Forms (.docx)</div>
             </div>
           </div>
-          <div class="engine-chip active" id="chipGrades" onclick="toggleEngine('grades')">
-            <input type="checkbox" id="checkGrades" class="engine-checkbox" checked>
+          <div
+            class="engine-chip active"
+            id="chipGrades"
+            onclick="toggleEngine('grades')"
+          >
+            <input
+              type="checkbox"
+              id="checkGrades"
+              class="engine-checkbox"
+              checked
+            />
             <div>
               <div class="engine-chip-title">Official Grade Sheets</div>
               <div class="engine-chip-desc">Lecture / Lab (.xlsx)</div>
@@ -1537,28 +1967,80 @@
         </div>
 
         <!-- Live File Estimate Badge -->
-        <div id="fileEstimateBadge" class="estimate-badge d-none">Estimated Output: 0 files</div>
+        <div id="fileEstimateBadge" class="estimate-badge d-none">
+          Estimated Output: 0 files
+        </div>
 
         <!-- Detected Classes Matrix -->
         <div id="classesSection" class="d-none">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <input type="checkbox" id="selectAllClasses" class="class-select-check" checked onchange="toggleSelectAllClasses(this.checked)">
-              <label for="selectAllClasses" class="form-label" style="margin-bottom: 0; cursor: pointer;">
-                Detected Classes &amp; Template Selection (<span id="classesCountDisplay">0</span>)
+          <div
+            style="
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              margin-bottom: 8px;
+              flex-wrap: wrap;
+              gap: 8px;
+            "
+          >
+            <div style="display: flex; align-items: center; gap: 8px">
+              <input
+                type="checkbox"
+                id="selectAllClasses"
+                class="class-select-check"
+                checked
+                onchange="toggleSelectAllClasses(this.checked)"
+              />
+              <label
+                for="selectAllClasses"
+                class="form-label"
+                style="margin-bottom: 0; cursor: pointer"
+              >
+                Detected Classes &amp; Template Selection (<span
+                  id="classesCountDisplay"
+                  >0</span
+                >)
               </label>
             </div>
-            <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px">
               <span class="badge-version" id="classesReadyBadge">0 Ready</span>
             </div>
           </div>
 
           <!-- Quick Filters -->
           <div class="filter-chip-group">
-            <span style="font-size: 12px; font-weight: 700; color: var(--text-secondary);">Filter:</span>
-            <button class="filter-pill active" id="filterAllClasses" type="button" onclick="filterClassCards('all')">All</button>
-            <button class="filter-pill" id="filterLabClasses" type="button" onclick="filterClassCards('lab')">Lecture &amp; Lab Only</button>
-            <button class="filter-pill" id="filterLecClasses" type="button" onclick="filterClassCards('lec')">Lecture Only</button>
+            <span
+              style="
+                font-size: 12px;
+                font-weight: 700;
+                color: var(--text-secondary);
+              "
+              >Filter:</span
+            >
+            <button
+              class="filter-pill active"
+              id="filterAllClasses"
+              type="button"
+              onclick="filterClassCards('all')"
+            >
+              All
+            </button>
+            <button
+              class="filter-pill"
+              id="filterLabClasses"
+              type="button"
+              onclick="filterClassCards('lab')"
+            >
+              Lecture &amp; Lab Only
+            </button>
+            <button
+              class="filter-pill"
+              id="filterLecClasses"
+              type="button"
+              onclick="filterClassCards('lec')"
+            >
+              Lecture Only
+            </button>
           </div>
 
           <div id="classesListContainer" class="classes-container"></div>
@@ -1574,19 +2056,50 @@
         </div>
 
         <p class="step-instructions">
-          If you want attendance sheets to cover only specific dates of the semester, select a <strong>Start Date</strong> and <strong>End Date</strong>.<br>
-          <em>If left blank, the app will generate sheets for the standard semester calendar (August–December for 1st Semester; January–May for 2nd Semester).</em>
+          If you want attendance sheets to cover only specific dates of the
+          semester, select a <strong>Start Date</strong> and
+          <strong>End Date</strong>.<br />
+          <em
+            >If left blank, the app will generate sheets for the standard
+            semester calendar (August–December for 1st Semester; January–May for
+            2nd Semester).</em
+          >
         </p>
 
         <div class="date-boundary-box">
-          <span style="font-size: 13px; color: var(--text-secondary);">Start:</span>
-          <input type="date" id="startDate" class="date-input" onchange="saveDates()">
-          <span style="font-size: 13px; color: var(--text-secondary); margin-left: 10px;">End:</span>
-          <input type="date" id="endDate" class="date-input" onchange="saveDates()">
+          <span style="font-size: 13px; color: var(--text-secondary)"
+            >Start:</span
+          >
+          <input
+            type="date"
+            id="startDate"
+            class="date-input"
+            onchange="saveDates()"
+          />
+          <span
+            style="
+              font-size: 13px;
+              color: var(--text-secondary);
+              margin-left: 10px;
+            "
+            >End:</span
+          >
+          <input
+            type="date"
+            id="endDate"
+            class="date-input"
+            onchange="saveDates()"
+          />
           <div class="preset-chips">
-            <span class="chip-preset" onclick="setSemesterPreset('1st')">1st Sem (Aug-Dec)</span>
-            <span class="chip-preset" onclick="setSemesterPreset('2nd')">2nd Sem (Jan-May)</span>
-            <span class="chip-preset" onclick="clearDatePresets()">Reset Dates</span>
+            <span class="chip-preset" onclick="setSemesterPreset('1st')"
+              >1st Sem (Aug-Dec)</span
+            >
+            <span class="chip-preset" onclick="setSemesterPreset('2nd')"
+              >2nd Sem (Jan-May)</span
+            >
+            <span class="chip-preset" onclick="clearDatePresets()"
+              >Reset Dates</span
+            >
           </div>
         </div>
 
@@ -1603,15 +2116,40 @@
         </div>
 
         <p class="step-instructions">
-          Click <strong>"Browse Path"</strong> and select any destination folder on your computer where the files should be saved.
+          Click <strong>"Browse Path"</strong> and select any destination folder
+          on your computer where the files should be saved.
         </p>
 
         <div class="input-with-action">
-          <input type="text" id="outputDisplay" class="text-input selectable" placeholder="Select destination folder for generated files..." readonly>
-          <button class="btn-browse" type="button" onclick="loadOutput()">Browse Path</button>
-          <button class="nav-btn" id="btnOpenOutput" type="button" onclick="openOutputFolder()" title="Open Target Folder">Open Folder</button>
+          <input
+            type="text"
+            id="outputDisplay"
+            class="text-input selectable"
+            placeholder="Select destination folder for generated files..."
+            readonly
+          />
+          <button class="btn-browse" type="button" onclick="loadOutput()">
+            Browse Path
+          </button>
+          <button
+            class="nav-btn"
+            id="btnOpenOutput"
+            type="button"
+            onclick="openOutputFolder()"
+            title="Open Target Folder"
+          >
+            Open Folder
+          </button>
         </div>
-        <div id="outputPathStatus" style="font-size: 12px; margin-top: 6px; font-weight: 600; color: var(--text-muted);"></div>
+        <div
+          id="outputPathStatus"
+          style="
+            font-size: 12px;
+            margin-top: 6px;
+            font-weight: 600;
+            color: var(--text-muted);
+          "
+        ></div>
       </section>
 
       <!-- ── STEP 6: Initialize Workflow ───────────────────────────────── -->
@@ -1623,11 +2161,26 @@
         </div>
 
         <p class="step-instructions">
-          Click the green <strong>"Initialize Workflow"</strong> button. Processing typically takes only a few seconds!
+          Click the green <strong>"Initialize Workflow"</strong> button.
+          Processing typically takes only a few seconds!
         </p>
 
-        <button id="processBtn" class="btn-primary-action" type="button" onclick="startGeneration()">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+        <button
+          id="processBtn"
+          class="btn-primary-action"
+          type="button"
+          onclick="startGeneration()"
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.4"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
             <polygon points="5 3 19 12 5 21 5 3"></polygon>
           </svg>
           <span id="processBtnLabel">Initialize Workflow</span>
@@ -1642,13 +2195,31 @@
             <div class="progress-task">
               <div class="pulse-dot"></div>
               <span id="progressTaskLabel">Initializing engine...</span>
-              <span id="progressElapsedTimer" class="progress-stopwatch">⏱️ 00:00</span>
+              <span id="progressElapsedTimer" class="progress-stopwatch"
+                >⏱️ 00:00</span
+              >
             </div>
-            <div id="progressPercent" style="color: var(--accent-emerald);">0%</div>
+            <div id="progressPercent" style="color: var(--accent-emerald)">
+              0%
+            </div>
           </div>
-          <div style="text-align: center; margin-top: 8px;">
-            <button class="btn-cancel-gen" id="btnCancelGeneration" type="button" onclick="cancelGeneration()">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <div style="text-align: center; margin-top: 8px">
+            <button
+              class="btn-cancel-gen"
+              id="btnCancelGeneration"
+              type="button"
+              onclick="cancelGeneration()"
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
                 <line x1="18" y1="6" x2="6" y2="18"></line>
                 <line x1="6" y1="6" x2="18" y2="18"></line>
               </svg>
@@ -1661,23 +2232,57 @@
         <div id="resultsCard" class="results-card d-none">
           <div class="results-header">
             <div class="results-title">
-              <svg id="resultsIcon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></svg>
+              <svg
+                id="resultsIcon"
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              ></svg>
               <span id="resultsTitleText">Generation Complete</span>
             </div>
-            <div style="display: flex; gap: 8px;">
+            <div style="display: flex; gap: 8px">
               <button class="btn-open-folder" onclick="openOutputFolder()">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
+                  ></path>
                 </svg>
                 Open Output Folder
               </button>
             </div>
           </div>
 
-          <div id="resultsMetricsPills" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;"></div>
-          <div id="resultsMessage" style="font-size: 13.5px; margin-bottom: 14px; line-height: 1.5;"></div>
+          <div
+            id="resultsMetricsPills"
+            style="
+              display: flex;
+              gap: 8px;
+              flex-wrap: wrap;
+              margin-bottom: 12px;
+            "
+          ></div>
+          <div
+            id="resultsMessage"
+            style="font-size: 13.5px; margin-bottom: 14px; line-height: 1.5"
+          ></div>
 
-          <label class="form-label" style="margin-bottom: 6px;">Generated File Artifacts</label>
+          <label class="form-label" style="margin-bottom: 6px"
+            >Generated File Artifacts</label
+          >
           <div id="fileTreeContainer" class="file-tree-container selectable">
             <!-- Populated on completion -->
           </div>
@@ -1686,21 +2291,61 @@
     </div>
 
     <!-- ── Drawers: Guides & Documentation ──────────────────────────────── -->
-    <div id="drawerBackdrop" class="drawer-backdrop" onclick="closeAllDrawers()"></div>
+    <div
+      id="drawerBackdrop"
+      class="drawer-backdrop"
+      onclick="closeAllDrawers()"
+    ></div>
 
     <aside id="helpDrawer" class="drawer-panel">
       <div class="drawer-header">
         <span class="drawer-title">Documentation &amp; User Guide</span>
-        <button class="drawer-close" onclick="closeAllDrawers()">&times;</button>
+        <button class="drawer-close" onclick="closeAllDrawers()">
+          &times;
+        </button>
       </div>
       <div class="drawer-tabs">
-        <button class="drawer-tab active" id="helpTabOverview" type="button" onclick="switchHelpTab('Overview')">Overview</button>
-        <button class="drawer-tab" id="helpTabNaming" type="button" onclick="switchHelpTab('Naming')">Naming &amp; Rosters</button>
-        <button class="drawer-tab" id="helpTabFormats" type="button" onclick="switchHelpTab('Formats')">Templates &amp; Outputs</button>
-        <button class="drawer-tab" id="helpTabFaq" type="button" onclick="switchHelpTab('Faq')">FAQ &amp; Logs</button>
+        <button
+          class="drawer-tab active"
+          id="helpTabOverview"
+          type="button"
+          onclick="switchHelpTab('Overview')"
+        >
+          Overview
+        </button>
+        <button
+          class="drawer-tab"
+          id="helpTabNaming"
+          type="button"
+          onclick="switchHelpTab('Naming')"
+        >
+          Naming &amp; Rosters
+        </button>
+        <button
+          class="drawer-tab"
+          id="helpTabFormats"
+          type="button"
+          onclick="switchHelpTab('Formats')"
+        >
+          Templates &amp; Outputs
+        </button>
+        <button
+          class="drawer-tab"
+          id="helpTabFaq"
+          type="button"
+          onclick="switchHelpTab('Faq')"
+        >
+          FAQ &amp; Logs
+        </button>
       </div>
       <div class="drawer-search-box">
-        <input type="text" id="helpSearchInput" class="drawer-search-input" placeholder="Search guides, errors, rules..." oninput="filterHelpContent(this.value)">
+        <input
+          type="text"
+          id="helpSearchInput"
+          class="drawer-search-input"
+          placeholder="Search guides, errors, rules..."
+          oninput="filterHelpContent(this.value)"
+        />
       </div>
       <div class="drawer-body selectable">
         <!-- Tab 1: Overview -->
@@ -1708,35 +2353,71 @@
           <!-- Overview -->
           <div class="drawer-section">
             <h4>🎓 CvSU Document Generator (User Guide)</h4>
-            <p>A desktop application for Cavite State University (CvSU) faculty members to automatically generate complete, submission-ready academic documents in a single click:</p>
-            <ul style="padding-left: 20px; margin-top: 8px; line-height: 1.6;">
-              <li>📅 <strong>Attendance Sheets (.docx):</strong> Monthly attendance logs with exact calendar days matching your schedule.</li>
-              <li>📋 <strong>CEIT Department Forms (.docx):</strong> 7 complete forms including Syllabus Acceptance, Exam Returns (Midterm/Finals), Table of Specifications (TOS - Midterm/Finals), and Grade Discussion Forms (Midterm/Finals).</li>
-              <li>📊 <strong>Official CvSU Grade Sheets (.xlsx):</strong> Pre-formatted grade sheets for <strong>Lecture</strong> and <strong>Lecture &amp; Lab</strong> courses, preserving all formulas, student data, dynamic college title, and signature metadata.</li>
+            <p>
+              A desktop application for Cavite State University (CvSU) faculty
+              members to automatically generate complete, submission-ready
+              academic documents in a single click:
+            </p>
+            <ul style="padding-left: 20px; margin-top: 8px; line-height: 1.6">
+              <li>
+                📅 <strong>Attendance Sheets (.docx):</strong> Monthly
+                attendance logs with exact calendar days matching your schedule.
+              </li>
+              <li>
+                📋 <strong>CEIT Department Forms (.docx):</strong> 7 complete
+                forms including Syllabus Acceptance, Exam Returns
+                (Midterm/Finals), Table of Specifications (TOS -
+                Midterm/Finals), and Grade Discussion Forms (Midterm/Finals).
+              </li>
+              <li>
+                📊
+                <strong>Official CvSU Grade Sheets (.xlsx):</strong>
+                Pre-formatted grade sheets for <strong>Lecture</strong> and
+                <strong>Lecture &amp; Lab</strong> courses, preserving all
+                formulas, student data, dynamic college title, and signature
+                metadata.
+              </li>
             </ul>
           </div>
 
           <!-- System Requirements -->
           <div class="drawer-section">
             <h4>💻 System Requirements</h4>
-            <ul style="padding-left: 20px; line-height: 1.6;">
-              <li><strong>Operating System:</strong> Windows 10 or Windows 11 (64-bit)</li>
-              <li><strong>Dependencies:</strong> <strong>None!</strong> The application is completely standalone. You do <strong>not</strong> need Python installed.</li>
-              <li><strong>Office Software:</strong> Microsoft Office (Word &amp; Excel) or any compatible office suite to view/edit the generated documents.</li>
+            <ul style="padding-left: 20px; line-height: 1.6">
+              <li>
+                <strong>Operating System:</strong> Windows 10 or Windows 11
+                (64-bit)
+              </li>
+              <li>
+                <strong>Dependencies:</strong> <strong>None!</strong> The
+                application is completely standalone. You do
+                <strong>not</strong> need Python installed.
+              </li>
+              <li>
+                <strong>Office Software:</strong> Microsoft Office (Word &amp;
+                Excel) or any compatible office suite to view/edit the generated
+                documents.
+              </li>
             </ul>
           </div>
 
           <!-- How to Run -->
           <div class="drawer-section">
             <h4>🚀 How to Run</h4>
-            <ol style="padding-left: 20px; line-height: 1.6;">
+            <ol style="padding-left: 20px; line-height: 1.6">
               <li>Locate <code>CvSU Gen (Beta).exe</code>.</li>
-              <li>Double-click <code>CvSU Gen (Beta).exe</code> to open the program.</li>
+              <li>
+                Double-click <code>CvSU Gen (Beta).exe</code> to open the
+                program.
+              </li>
             </ol>
-            <div class="alert-info" style="margin-top: 10px;">
+            <div class="alert-info" style="margin-top: 10px">
               <div>
-                <strong>Note on Windows Defender / SmartScreen:</strong><br>
-                Because this is a custom institutional tool, Windows may display a blue prompt stating <em>"Windows protected your PC"</em>. Simply click <strong>"More info"</strong> and then select <strong>"Run anyway"</strong>.
+                <strong>Note on Windows Defender / SmartScreen:</strong><br />
+                Because this is a custom institutional tool, Windows may display
+                a blue prompt stating <em>"Windows protected your PC"</em>.
+                Simply click <strong>"More info"</strong> and then select
+                <strong>"Run anyway"</strong>.
               </div>
             </div>
           </div>
@@ -1747,38 +2428,114 @@
           <!-- Required Input Files -->
           <div class="drawer-section">
             <h4>📁 Required Input Files</h4>
-            <p>Before generating, make sure you have the following files ready:</p>
-            
-            <h5 style="font-size: 14px; margin-top: 12px; margin-bottom: 6px; color: var(--text-primary);">1. Instructor Master Schedule (.xls or .xlsx)</h5>
-            <ul style="padding-left: 20px; line-height: 1.5; font-size: 13px;">
-              <li>Download your official schedule spreadsheet from the faculty portal.</li>
-              <li>The generator automatically extracts your instructor name, college header, semester, academic year, class times, days, and rooms.</li>
-              <li><em>Note:</em> Any schedule blocks labeled as <code>Async</code> or <code>Asynch</code> are automatically filtered out so only in-person sessions receive attendance columns.</li>
+            <p>
+              Before generating, make sure you have the following files ready:
+            </p>
+
+            <h5
+              style="
+                font-size: 14px;
+                margin-top: 12px;
+                margin-bottom: 6px;
+                color: var(--text-primary);
+              "
+            >
+              1. Instructor Master Schedule (.xls or .xlsx)
+            </h5>
+            <ul style="padding-left: 20px; line-height: 1.5; font-size: 13px">
+              <li>
+                Download your official schedule spreadsheet from the faculty
+                portal.
+              </li>
+              <li>
+                The generator automatically extracts your instructor name,
+                college header, semester, academic year, class times, days, and
+                rooms.
+              </li>
+              <li>
+                <em>Note:</em> Any schedule blocks labeled as
+                <code>Async</code> or <code>Asynch</code> are automatically
+                filtered out so only in-person sessions receive attendance
+                columns.
+              </li>
             </ul>
 
-            <h5 style="font-size: 14px; margin-top: 14px; margin-bottom: 6px; color: var(--text-primary);">2. Student Roster Files (.xlsx, .xls, or .csv)</h5>
-            <ul style="padding-left: 20px; line-height: 1.5; font-size: 13px;">
-              <li>Download class student rosters directly from <a href="https://registrar.cvsu.edu.ph/" target="_blank" class="text-link">registrar.cvsu.edu.ph</a>.</li>
+            <h5
+              style="
+                font-size: 14px;
+                margin-top: 14px;
+                margin-bottom: 6px;
+                color: var(--text-primary);
+              "
+            >
+              2. Student Roster Files (.xlsx, .xls, or .csv)
+            </h5>
+            <ul style="padding-left: 20px; line-height: 1.5; font-size: 13px">
+              <li>
+                Download class student rosters directly from
+                <a
+                  href="https://registrar.cvsu.edu.ph/"
+                  target="_blank"
+                  class="text-link"
+                  >registrar.cvsu.edu.ph</a
+                >.
+              </li>
             </ul>
 
             <div class="alert-info">
-              <div style="color: var(--accent-blue); flex-shrink: 0; margin-top: 2px;">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <div
+                style="
+                  color: var(--accent-blue);
+                  flex-shrink: 0;
+                  margin-top: 2px;
+                "
+              >
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
                   <circle cx="12" cy="12" r="10"></circle>
                   <line x1="12" y1="16" x2="12" y2="12"></line>
                   <line x1="12" y1="8" x2="12.01" y2="8"></line>
                 </svg>
               </div>
               <div>
-                <strong>Roster Column Guidelines:</strong> Roster files require <code>Name</code> and <code>Student number</code> in Columns A &amp; B. Extra portal columns (such as Email, Course, Year, Section, Status, or Remarks) are automatically cleaned and ignored by the generator.
+                <strong>Roster Column Guidelines:</strong> Roster files require
+                <code>Name</code> and <code>Student number</code> in Columns A
+                &amp; B. Extra portal columns (such as Email, Course, Year,
+                Section, Status, or Remarks) are automatically cleaned and
+                ignored by the generator.
               </div>
             </div>
 
-            <p style="font-size: 13px; margin-top: 8px;"><strong>Crucial:</strong> Keep the official file naming format:</p>
-            <div class="code-block">{Course/Sec} List of Students for {ScheduleCode}-{Subject}.xlsx</div>
-            <p style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
-              <strong>Example:</strong> <code>BSCS1-4 List of Students for 202612040-DCIT 21A - INTRODUCTION TO COMPUTING.xlsx</code><br>
-              <em>(The program uses this exact format to pair each student list with the corresponding block in your schedule).</em>
+            <p style="font-size: 13px; margin-top: 8px">
+              <strong>Crucial:</strong> Keep the official file naming format:
+            </p>
+            <div class="code-block">
+              {Course/Sec} List of Students for {ScheduleCode}-{Subject}.xlsx
+            </div>
+            <p
+              style="
+                font-size: 12px;
+                color: var(--text-secondary);
+                margin-top: 4px;
+              "
+            >
+              <strong>Example:</strong>
+              <code
+                >BSCS1-4 List of Students for 202612040-DCIT 21A - INTRODUCTION
+                TO COMPUTING.xlsx</code
+              ><br />
+              <em
+                >(The program uses this exact format to pair each student list
+                with the corresponding block in your schedule).</em
+              >
             </p>
           </div>
         </div>
@@ -1788,35 +2545,63 @@
           <!-- Step by Step Instructions -->
           <div class="drawer-section">
             <h4>📝 Step-by-Step Instructions</h4>
-            <ol style="padding-left: 20px; line-height: 1.6; font-size: 13.5px;">
-              <li style="margin-bottom: 8px;">
-                <strong>Step 1: Select Instructor Schedule</strong><br>
-                Click <strong>"Browse File"</strong> under Section 1 and select your master schedule <code>.xls</code> or <code>.xlsx</code>.
+            <ol style="padding-left: 20px; line-height: 1.6; font-size: 13.5px">
+              <li style="margin-bottom: 8px">
+                <strong>Step 1: Select Instructor Schedule</strong><br />
+                Click <strong>"Browse File"</strong> under Section 1 and select
+                your master schedule <code>.xls</code> or <code>.xlsx</code>.
               </li>
-              <li style="margin-bottom: 8px;">
-                <strong>Step 2: Select Student Rosters</strong><br>
-                Click <strong>"Browse Data"</strong> under Section 2. You can select <strong>multiple files at once</strong> by holding <kbd>Ctrl</kbd> or <kbd>Shift</kbd> to load all your class rosters together.
+              <li style="margin-bottom: 8px">
+                <strong>Step 2: Select Student Rosters</strong><br />
+                Click <strong>"Browse Data"</strong> under Section 2. You can
+                select <strong>multiple files at once</strong> by holding
+                <kbd>Ctrl</kbd> or <kbd>Shift</kbd> to load all your class
+                rosters together.
               </li>
-              <li style="margin-bottom: 8px;">
-                <strong>Step 3: Confirm Detected Classes &amp; Subject Types</strong><br>
-                Once your schedule and rosters are loaded, a panel will appear showing all detected classes:
-                <ul style="padding-left: 18px; margin-top: 4px; font-size: 12.5px;">
-                  <li><strong>Lecture and Lab:</strong> Uses <code>GRADING_LECTURE_LAB_TEMPLATE.xlsx</code> (includes Lecture, Laboratory, Consolidated, and Grading Sheet tabs).</li>
-                  <li><strong>Lecture only:</strong> Uses <code>GRADING_LECTURE_TEMPLATE.xlsx</code> (includes Lecture and Grading Sheet tabs).</li>
+              <li style="margin-bottom: 8px">
+                <strong
+                  >Step 3: Confirm Detected Classes &amp; Subject Types</strong
+                ><br />
+                Once your schedule and rosters are loaded, a panel will appear
+                showing all detected classes:
+                <ul
+                  style="padding-left: 18px; margin-top: 4px; font-size: 12.5px"
+                >
+                  <li>
+                    <strong>Lecture and Lab:</strong> Uses
+                    <code>GRADING_LECTURE_LAB_TEMPLATE.xlsx</code> (includes
+                    Lecture, Laboratory, Consolidated, and Grading Sheet tabs).
+                  </li>
+                  <li>
+                    <strong>Lecture only:</strong> Uses
+                    <code>GRADING_LECTURE_TEMPLATE.xlsx</code> (includes Lecture
+                    and Grading Sheet tabs).
+                  </li>
                 </ul>
-                <em style="font-size: 12px; color: var(--text-secondary);">The system automatically detects labs from your schedule hours, but you can change this anytime using the dropdown menu.</em>
+                <em style="font-size: 12px; color: var(--text-secondary)"
+                  >The system automatically detects labs from your schedule
+                  hours, but you can change this anytime using the dropdown
+                  menu.</em
+                >
               </li>
-              <li style="margin-bottom: 8px;">
-                <strong>Step 4: (Optional) Set Semester Date Boundaries</strong><br>
-                If you want attendance sheets to cover only specific dates of the semester, select a <strong>Start Date</strong> and <strong>End Date</strong>. If left blank, the app will generate sheets for the standard semester calendar (August–December for 1st Semester; January–May for 2nd Semester).
+              <li style="margin-bottom: 8px">
+                <strong>Step 4: (Optional) Set Semester Date Boundaries</strong
+                ><br />
+                If you want attendance sheets to cover only specific dates of
+                the semester, select a <strong>Start Date</strong> and
+                <strong>End Date</strong>. If left blank, the app will generate
+                sheets for the standard semester calendar (August–December for
+                1st Semester; January–May for 2nd Semester).
               </li>
-              <li style="margin-bottom: 8px;">
-                <strong>Step 5: Choose Target Output Folder</strong><br>
-                Click <strong>"Browse Path"</strong> and select any destination folder on your computer where the files should be saved.
+              <li style="margin-bottom: 8px">
+                <strong>Step 5: Choose Target Output Folder</strong><br />
+                Click <strong>"Browse Path"</strong> and select any destination
+                folder on your computer where the files should be saved.
               </li>
-              <li style="margin-bottom: 8px;">
-                <strong>Step 6: Initialize Workflow</strong><br>
-                Click the green <strong>"Initialize Workflow"</strong> button. Processing typically takes only a few seconds!
+              <li style="margin-bottom: 8px">
+                <strong>Step 6: Initialize Workflow</strong><br />
+                Click the green <strong>"Initialize Workflow"</strong> button.
+                Processing typically takes only a few seconds!
               </li>
             </ol>
           </div>
@@ -1824,8 +2609,12 @@
           <!-- Output Folder Structure -->
           <div class="drawer-section">
             <h4>📂 Output Folder Structure</h4>
-            <p>All files will be cleanly arranged into subfolders by course and section:</p>
-            <pre class="code-block" style="font-size: 11.5px;">&lt;Your Selected Output Folder&gt;/
+            <p>
+              All files will be cleanly arranged into subfolders by course and
+              section:
+            </p>
+            <pre class="code-block" style="font-size: 11.5px">
+&lt;Your Selected Output Folder&gt;/
 └── BSCS 1-4/
     ├── Attendance/
     │   ├── BSCS1-4_202612040_ATTENDANCE_Mon_September.docx
@@ -1840,7 +2629,8 @@
     │   ├── BSCS1-4_202612040_GRADE_DISCUSSION_MIDTERM.docx
     │   └── BSCS1-4_202612040_GRADE_DISCUSSION_FINALS.docx
     └── Grades/
-        └── BSCS1-4_202612040_GRADING_SHEET.xlsx</pre>
+        └── BSCS1-4_202612040_GRADING_SHEET.xlsx</pre
+            >
           </div>
         </div>
 
@@ -1849,35 +2639,106 @@
           <!-- FAQ -->
           <div class="drawer-section">
             <h4>❓ Frequently Asked Questions (FAQ)</h4>
-            <div style="margin-bottom: 12px;">
-              <p style="font-weight: 700; color: var(--text-primary);">Q: The app says a student roster was "skipped" or failed with an error. Why?</p>
-              <ol style="padding-left: 20px; font-size: 13px; margin-top: 4px; line-height: 1.5;">
-                <li><strong>File Naming:</strong> Make sure the roster file name matches the official registrar naming convention: <code>{Course/Sec} List of Students for {ScheduleCode}-{Subject}.xlsx</code></li>
-                <li><strong>Column Headers:</strong> Verify that your file contains <strong>only</strong> two columns: <code>Name</code> and <code>Student number</code>. If any additional columns are present (such as Email, Course, Remarks, etc.), the parser will encounter an error. Delete any extra columns and save the file.</li>
+            <div style="margin-bottom: 12px">
+              <p style="font-weight: 700; color: var(--text-primary)">
+                Q: The app says a student roster was "skipped" or failed with an
+                error. Why?
+              </p>
+              <ol
+                style="
+                  padding-left: 20px;
+                  font-size: 13px;
+                  margin-top: 4px;
+                  line-height: 1.5;
+                "
+              >
+                <li>
+                  <strong>File Naming:</strong> Make sure the roster file name
+                  matches the official registrar naming convention:
+                  <code
+                    >{Course/Sec} List of Students for
+                    {ScheduleCode}-{Subject}.xlsx</code
+                  >
+                </li>
+                <li>
+                  <strong>Column Headers:</strong> Verify that your file
+                  contains <strong>only</strong> two columns:
+                  <code>Name</code> and <code>Student number</code>. If any
+                  additional columns are present (such as Email, Course,
+                  Remarks, etc.), the parser will encounter an error. Delete any
+                  extra columns and save the file.
+                </li>
               </ol>
             </div>
 
-            <div style="margin-bottom: 12px;">
-              <p style="font-weight: 700; color: var(--text-primary);">Q: Can I keep my Excel files open while generating?</p>
-              <p style="font-size: 13px; color: var(--text-secondary); margin-top: 4px; line-height: 1.5;">
-                Yes! The generator uses safe atomic writing techniques, meaning files won't get corrupted even if reference rosters are currently open. However, make sure the destination files in the output directory are not locked for editing.
+            <div style="margin-bottom: 12px">
+              <p style="font-weight: 700; color: var(--text-primary)">
+                Q: Can I keep my Excel files open while generating?
+              </p>
+              <p
+                style="
+                  font-size: 13px;
+                  color: var(--text-secondary);
+                  margin-top: 4px;
+                  line-height: 1.5;
+                "
+              >
+                Yes! The generator uses safe atomic writing techniques, meaning
+                files won't get corrupted even if reference rosters are
+                currently open. However, make sure the destination files in the
+                output directory are not locked for editing.
               </p>
             </div>
 
-            <div style="margin-bottom: 12px;">
-              <p style="font-weight: 700; color: var(--text-primary);">Q: Where are error logs stored if something fails?</p>
-              <p style="font-size: 13px; color: var(--text-secondary); margin-top: 4px; line-height: 1.5;">
-                If you encounter an unexpected error, a detailed log file is automatically saved at:
+            <div style="margin-bottom: 12px">
+              <p style="font-weight: 700; color: var(--text-primary)">
+                Q: Where are error logs stored if something fails?
               </p>
-              <div class="code-block">%APPDATA%/CVSU_Generators/logs/generator.log</div>
-              <p style="font-size: 13px; color: var(--text-secondary); margin-top: 4px; line-height: 1.5;">
-                You can press <kbd>Win + R</kbd>, paste the path above, and press Enter to view the log file.
+              <p
+                style="
+                  font-size: 13px;
+                  color: var(--text-secondary);
+                  margin-top: 4px;
+                  line-height: 1.5;
+                "
+              >
+                If you encounter an unexpected error, a detailed log file is
+                automatically saved at:
               </p>
-              <p style="font-size: 13px; color: var(--text-secondary); margin-top: 6px; line-height: 1.5;">
-                Please send the error logs, screenshots, and description of issue to <strong>danjoseph.ortega@cvsu.edu.ph</strong> with the subject formatting:
+              <div class="code-block">
+                %APPDATA%/CVSU_Generators/logs/generator.log
+              </div>
+              <p
+                style="
+                  font-size: 13px;
+                  color: var(--text-secondary);
+                  margin-top: 4px;
+                  line-height: 1.5;
+                "
+              >
+                You can press <kbd>Win + R</kbd>, paste the path above, and
+                press Enter to view the log file.
+              </p>
+              <p
+                style="
+                  font-size: 13px;
+                  color: var(--text-secondary);
+                  margin-top: 6px;
+                  line-height: 1.5;
+                "
+              >
+                Please send the error logs, screenshots, and description of
+                issue to <strong>danjoseph.ortega@cvsu.edu.ph</strong> with the
+                subject formatting:
               </p>
               <div class="code-block">[CvSU Gen (Beta) - &lt;Issue&gt;]</div>
-              <p style="font-size: 12px; color: var(--text-muted); font-style: italic;">
+              <p
+                style="
+                  font-size: 12px;
+                  color: var(--text-muted);
+                  font-style: italic;
+                "
+              >
                 (e.g., <code>[CvSU Gen (Beta) - Schedule Parsing Error]</code>)
               </p>
             </div>
@@ -1890,15 +2751,40 @@
     <aside id="logsDrawer" class="drawer-panel">
       <div class="drawer-header">
         <span class="drawer-title">Execution Diagnostics & Logs</span>
-        <button class="drawer-close" onclick="closeAllDrawers()">&times;</button>
+        <button class="drawer-close" onclick="closeAllDrawers()">
+          &times;
+        </button>
       </div>
       <div class="drawer-body selectable">
-        <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
+        <div
+          style="
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+          "
+        >
           <button class="nav-btn" onclick="refreshLogs()">Refresh Log</button>
-          <button class="nav-btn" onclick="copyLogs()">Copy to Clipboard</button>
-          <button class="nav-btn" onclick="openLogFolder()">Open Logs Folder</button>
+          <button class="nav-btn" onclick="copyLogs()">
+            Copy to Clipboard
+          </button>
+          <button class="nav-btn" onclick="openLogFolder()">
+            Open Logs Folder
+          </button>
         </div>
-        <pre id="logContent" style="background: var(--surface-subtle); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 12px; font-size: 11.5px; font-family: ui-monospace, monospace; overflow-x: auto; white-space: pre-wrap; max-height: 520px;"></pre>
+        <pre
+          id="logContent"
+          style="
+            background: var(--surface-subtle);
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 11.5px;
+            font-family: ui-monospace, monospace;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            max-height: 520px;
+          "
+        ></pre>
       </div>
     </aside>
 
@@ -1914,8 +2800,8 @@
         engines: {
           attendance: true,
           ceit: true,
-          grades: true
-        }
+          grades: true,
+        },
       };
 
       let elapsedTimerInterval = null;
@@ -1941,13 +2827,17 @@
 
         let iconSvg = "";
         if (type === "success") {
-          iconSvg = '<svg class="toast-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent-emerald)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>';
+          iconSvg =
+            '<svg class="toast-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent-emerald)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>';
         } else if (type === "warning") {
-          iconSvg = '<svg class="toast-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent-amber)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>';
+          iconSvg =
+            '<svg class="toast-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent-amber)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>';
         } else if (type === "error") {
-          iconSvg = '<svg class="toast-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent-rose)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>';
+          iconSvg =
+            '<svg class="toast-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent-rose)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>';
         } else {
-          iconSvg = '<svg class="toast-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent-blue)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>';
+          iconSvg =
+            '<svg class="toast-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent-blue)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>';
         }
 
         toast.innerHTML = `
@@ -1964,7 +2854,9 @@
         setTimeout(() => {
           toast.style.opacity = "0";
           toast.style.transform = "translateX(110%)";
-          setTimeout(() => { if (toast.parentElement) toast.remove(); }, 260);
+          setTimeout(() => {
+            if (toast.parentElement) toast.remove();
+          }, 260);
         }, duration);
       }
 
@@ -1979,9 +2871,16 @@
       function updateStepperStatus() {
         const s1Ready = !!state.schedulePath;
         const s2Ready = state.rosters && state.rosters.length > 0;
-        const selectedClasses = document.querySelectorAll(".item-class-check:checked").length;
-        const hasEngines = state.engines.attendance || state.engines.ceit || state.engines.grades;
-        const s3Ready = hasEngines && (state.detectedClasses.length === 0 || selectedClasses > 0);
+        const selectedClasses = document.querySelectorAll(
+          ".item-class-check:checked",
+        ).length;
+        const hasEngines =
+          state.engines.attendance ||
+          state.engines.ceit ||
+          state.engines.grades;
+        const s3Ready =
+          hasEngines &&
+          (state.detectedClasses.length === 0 || selectedClasses > 0);
         const s4Ready = true;
         const s5Ready = !!state.outputDir;
         const s6Ready = s1Ready && s2Ready && s3Ready && s5Ready;
@@ -1996,13 +2895,21 @@
         setChip("chipStep1", "statusStep1", s1Ready);
         setChip("chipStep2", "statusStep2", s2Ready);
         setChip("chipStep3", "statusStep3", s3Ready);
-        setChip("chipStep4", "statusStep4", !!(document.getElementById("startDate").value || document.getElementById("endDate").value), "📅");
+        setChip(
+          "chipStep4",
+          "statusStep4",
+          !!(
+            document.getElementById("startDate").value ||
+            document.getElementById("endDate").value
+          ),
+          "📅",
+        );
         setChip("chipStep5", "statusStep5", s5Ready);
         setChip("chipStep6", "statusStep6", s6Ready, "🚀");
       }
 
       // ── Callbacks Invoked from Python (Bridge / Native DnD) ────────────────
-      window.onScheduleLoaded = async function(res) {
+      window.onScheduleLoaded = async function (res) {
         if (res && res.path) {
           state.schedulePath = res.path;
           state.scheduleMeta = res.metadata;
@@ -2014,11 +2921,15 @@
           await refreshClassDetection();
           updateStepperStatus();
           updateFileEstimate();
-          showToast("Schedule Loaded", `Loaded schedule for ${state.scheduleMeta?.instructor || "Instructor"}`, "success");
+          showToast(
+            "Schedule Loaded",
+            `Loaded schedule for ${state.scheduleMeta?.instructor || "Instructor"}`,
+            "success",
+          );
         }
       };
 
-      window.onRostersLoaded = async function(res) {
+      window.onRostersLoaded = async function (res) {
         if (res) {
           state.rosters = res.rosters || [];
           state.rosterReports = res.validation || [];
@@ -2026,82 +2937,124 @@
           await refreshClassDetection();
           updateStepperStatus();
           updateFileEstimate();
-          showToast("Rosters Loaded", `${state.rosters.length} student roster files loaded.`, "success");
+          showToast(
+            "Rosters Loaded",
+            `${state.rosters.length} student roster files loaded.`,
+            "success",
+          );
         }
       };
 
       function initDragAndDrop() {
-        window.addEventListener("dragover", (e) => {
-          e.preventDefault();
-        }, false);
+        window.addEventListener(
+          "dragover",
+          (e) => {
+            e.preventDefault();
+          },
+          false,
+        );
 
-        window.addEventListener("drop", (e) => {
-          e.preventDefault();
-        }, false);
+        window.addEventListener(
+          "drop",
+          (e) => {
+            e.preventDefault();
+          },
+          false,
+        );
 
         function setupVisualZone(zone, onFiles) {
           if (!zone) return;
           let enterCount = 0;
 
-          zone.addEventListener("dragenter", (e) => {
-            e.preventDefault();
-            enterCount++;
-            zone.classList.add("dragover");
-          }, false);
+          zone.addEventListener(
+            "dragenter",
+            (e) => {
+              e.preventDefault();
+              enterCount++;
+              zone.classList.add("dragover");
+            },
+            false,
+          );
 
-          zone.addEventListener("dragover", (e) => {
-            e.preventDefault();
-            if (e.dataTransfer) {
-              e.dataTransfer.dropEffect = "copy";
-            }
-            zone.classList.add("dragover");
-          }, false);
+          zone.addEventListener(
+            "dragover",
+            (e) => {
+              e.preventDefault();
+              if (e.dataTransfer) {
+                e.dataTransfer.dropEffect = "copy";
+              }
+              zone.classList.add("dragover");
+            },
+            false,
+          );
 
-          zone.addEventListener("dragleave", (e) => {
-            e.preventDefault();
-            enterCount--;
-            if (enterCount <= 0) {
+          zone.addEventListener(
+            "dragleave",
+            (e) => {
+              e.preventDefault();
+              enterCount--;
+              if (enterCount <= 0) {
+                enterCount = 0;
+                zone.classList.remove("dragover");
+              }
+            },
+            false,
+          );
+
+          zone.addEventListener(
+            "drop",
+            async (e) => {
+              e.preventDefault();
               enterCount = 0;
               zone.classList.remove("dragover");
-            }
-          }, false);
 
-          zone.addEventListener("drop", async (e) => {
-            e.preventDefault();
-            enterCount = 0;
-            zone.classList.remove("dragover");
-
-            const files = e.dataTransfer ? e.dataTransfer.files : null;
-            if (files && files.length > 0 && onFiles) {
-              await onFiles(Array.from(files));
-            }
-          }, false);
+              const files = e.dataTransfer ? e.dataTransfer.files : null;
+              if (files && files.length > 0 && onFiles) {
+                await onFiles(Array.from(files));
+              }
+            },
+            false,
+          );
         }
 
-        setupVisualZone(document.getElementById("scheduleDropzone"), async (files) => {
-          if (!window.pywebview || !window.pywebview.api) return;
-          const file = files[0];
-          const path = file.pywebviewFullPath || file.path;
-          if (path) {
-            const res = await window.pywebview.api.handle_dropped_schedule(file.name, null, path);
-            window.onScheduleLoaded(res);
-          }
-        });
+        setupVisualZone(
+          document.getElementById("scheduleDropzone"),
+          async (files) => {
+            if (!window.pywebview || !window.pywebview.api) return;
+            const file = files[0];
+            const path = file.pywebviewFullPath || file.path;
+            if (path) {
+              const res = await window.pywebview.api.handle_dropped_schedule(
+                file.name,
+                null,
+                path,
+              );
+              window.onScheduleLoaded(res);
+            }
+          },
+        );
 
-        setupVisualZone(document.getElementById("rostersDropzone"), async (files) => {
-          if (!window.pywebview || !window.pywebview.api) return;
-          const payloads = files
-            .filter(f => !f.name.startsWith("~$") && (f.pywebviewFullPath || f.path))
-            .map(f => ({
-              filename: f.name,
-              path: f.pywebviewFullPath || f.path,
-              data: null
-            }));
-          if (payloads.length > 0) {
-            const res = await window.pywebview.api.handle_dropped_rosters(payloads);
-            window.onRostersLoaded(res);
-          }
-        });
+        setupVisualZone(
+          document.getElementById("rostersDropzone"),
+          async (files) => {
+            if (!window.pywebview || !window.pywebview.api) return;
+            const payloads = files
+              .filter(
+                (f) =>
+                  !f.name.startsWith("~$") && (f.pywebviewFullPath || f.path),
+              )
+              .map((f) => ({
+                filename: f.name,
+                path: f.pywebviewFullPath || f.path,
+                data: null,
+              }));
+            if (payloads.length > 0) {
+              const res =
+                await window.pywebview.api.handle_dropped_rosters(payloads);
+              window.onRostersLoaded(res);
+            }
+          },
+        );
       }
 
       document.addEventListener("DOMContentLoaded", () => {
@@ -2123,9 +3076,12 @@
       // ── Theme Management ──────────────────────────────────────────────────
       function toggleTheme() {
         const doc = document.documentElement;
-        const newTheme = doc.getAttribute("data-bs-theme") === "dark" ? "light" : "dark";
+        const newTheme =
+          doc.getAttribute("data-bs-theme") === "dark" ? "light" : "dark";
         doc.setAttribute("data-bs-theme", newTheme);
-        try { localStorage.setItem("cvsu_gen_theme", newTheme); } catch(e) {}
+        try {
+          localStorage.setItem("cvsu_gen_theme", newTheme);
+        } catch (e) {}
       }
 
       function loadSavedTheme() {
@@ -2150,27 +3106,42 @@
       }
 
       function closeAllDrawers() {
-        document.querySelectorAll(".drawer-panel").forEach(d => d.classList.remove("active"));
+        document
+          .querySelectorAll(".drawer-panel")
+          .forEach((d) => d.classList.remove("active"));
         document.getElementById("drawerBackdrop").classList.remove("active");
       }
 
       async function refreshLogs() {
-        if (window.pywebview && window.pywebview.api && window.pywebview.api.get_recent_logs) {
+        if (
+          window.pywebview &&
+          window.pywebview.api &&
+          window.pywebview.api.get_recent_logs
+        ) {
           const logs = await window.pywebview.api.get_recent_logs(120);
           document.getElementById("logContent").innerText = logs;
         } else {
-          document.getElementById("logContent").innerText = "Log reader available inside desktop runtime.";
+          document.getElementById("logContent").innerText =
+            "Log reader available inside desktop runtime.";
         }
       }
 
       function copyLogs() {
         const text = document.getElementById("logContent").innerText;
         navigator.clipboard.writeText(text);
-        showToast("Copied to Clipboard", "Diagnostics log content copied to clipboard.", "info");
+        showToast(
+          "Copied to Clipboard",
+          "Diagnostics log content copied to clipboard.",
+          "info",
+        );
       }
 
       async function openLogFolder() {
-        if (window.pywebview && window.pywebview.api && window.pywebview.api.open_log_folder) {
+        if (
+          window.pywebview &&
+          window.pywebview.api &&
+          window.pywebview.api.open_log_folder
+        ) {
           await window.pywebview.api.open_log_folder();
         }
       }
@@ -2186,7 +3157,11 @@
           await refreshClassDetection();
           updateStepperStatus();
           updateFileEstimate();
-          showToast("Schedule Loaded", `Loaded schedule for ${state.scheduleMeta?.instructor || "Instructor"}`, "success");
+          showToast(
+            "Schedule Loaded",
+            `Loaded schedule for ${state.scheduleMeta?.instructor || "Instructor"}`,
+            "success",
+          );
         }
       }
 
@@ -2205,7 +3180,9 @@
           filenameDisplay.innerText = baseName;
           dropzone.style.borderColor = "var(--accent-emerald)";
 
-          const ext = baseName.toUpperCase().endsWith(".XLS") ? ".XLS" : ".XLSX";
+          const ext = baseName.toUpperCase().endsWith(".XLS")
+            ? ".XLS"
+            : ".XLSX";
           if (fmtBadge) {
             fmtBadge.innerText = ext;
             fmtBadge.classList.remove("d-none");
@@ -2214,15 +3191,20 @@
 
           if (state.scheduleMeta) {
             banner.classList.remove("d-none");
-            document.getElementById("instructorName").innerText = state.scheduleMeta.instructor || "Instructor";
-            document.getElementById("instructorCollege").innerText = state.scheduleMeta.college || "College of Engineering and Information Technology";
-            document.getElementById("instructorSemPill").innerText = state.scheduleMeta.semester || "Semester Schedule";
-            document.getElementById("instructorSlotsPill").innerText = `${state.scheduleMeta.total_slots || 0} Scheduled Slots`;
-            
+            document.getElementById("instructorName").innerText =
+              state.scheduleMeta.instructor || "Instructor";
+            document.getElementById("instructorCollege").innerText =
+              state.scheduleMeta.college ||
+              "College of Engineering and Information Technology";
+            document.getElementById("instructorSemPill").innerText =
+              state.scheduleMeta.semester || "Semester Schedule";
+            document.getElementById("instructorSlotsPill").innerText =
+              `${state.scheduleMeta.total_slots || 0} Scheduled Slots`;
+
             const initials = (state.scheduleMeta.instructor || "DO")
               .split(" ")
-              .filter(p => p.length > 0)
-              .map(p => p[0])
+              .filter((p) => p.length > 0)
+              .map((p) => p[0])
               .slice(0, 2)
               .join("");
             document.getElementById("instructorInitials").innerText = initials;
@@ -2244,7 +3226,11 @@
         await refreshClassDetection();
         updateStepperStatus();
         updateFileEstimate();
-        showToast("Schedule Reset", "Instructor master schedule cleared.", "info");
+        showToast(
+          "Schedule Reset",
+          "Instructor master schedule cleared.",
+          "info",
+        );
       }
 
       // ── Step 1: Rosters Ingestion ─────────────────────────────────────────
@@ -2258,7 +3244,11 @@
           await refreshClassDetection();
           updateStepperStatus();
           updateFileEstimate();
-          showToast("Rosters Loaded", `${state.rosters.length} student roster files loaded.`, "success");
+          showToast(
+            "Rosters Loaded",
+            `${state.rosters.length} student roster files loaded.`,
+            "success",
+          );
         }
       }
 
@@ -2284,15 +3274,23 @@
         await refreshClassDetection();
         updateStepperStatus();
         updateFileEstimate();
-        showToast("Rosters Cleared", "All student rosters have been removed.", "info");
+        showToast(
+          "Rosters Cleared",
+          "All student rosters have been removed.",
+          "info",
+        );
       }
 
       function filterRostersList(query) {
         const q = (query || "").trim().toLowerCase();
-        const rows = document.querySelectorAll("#rosterRowsContainer .roster-row");
-        rows.forEach(row => {
-          const title = (row.querySelector(".roster-title")?.innerText || "").toLowerCase();
-          row.style.display = (!q || title.includes(q)) ? "flex" : "none";
+        const rows = document.querySelectorAll(
+          "#rosterRowsContainer .roster-row",
+        );
+        rows.forEach((row) => {
+          const title = (
+            row.querySelector(".roster-title")?.innerText || ""
+          ).toLowerCase();
+          row.style.display = !q || title.includes(q) ? "flex" : "none";
         });
       }
 
@@ -2304,7 +3302,9 @@
         const container = document.getElementById("rosterRowsContainer");
         const badge = document.getElementById("rosterCountBadge");
         const totBadge = document.getElementById("rosterTotalStudentsBadge");
-        const autoStrip = document.getElementById("autoStripCheck") ? document.getElementById("autoStripCheck").checked : true;
+        const autoStrip = document.getElementById("autoStripCheck")
+          ? document.getElementById("autoStripCheck").checked
+          : true;
 
         if (state.rosters && state.rosters.length > 0) {
           promptDisplay.classList.add("d-none");
@@ -2322,7 +3322,7 @@
 
             const row = document.createElement("div");
             row.className = "roster-row";
-            
+
             let statusBadge = `<span class="badge-status badge-valid">Ready</span>`;
             if (rep.status === "warning") {
               if (autoStrip) {
@@ -2362,8 +3362,12 @@
       // ── Step 2: Engine Selection ──────────────────────────────────────────
       function toggleEngine(name) {
         state.engines[name] = !state.engines[name];
-        document.getElementById(`check${name.charAt(0).toUpperCase() + name.slice(1)}`).checked = state.engines[name];
-        document.getElementById(`chip${name.charAt(0).toUpperCase() + name.slice(1)}`).classList.toggle("active", state.engines[name]);
+        document.getElementById(
+          `check${name.charAt(0).toUpperCase() + name.slice(1)}`,
+        ).checked = state.engines[name];
+        document
+          .getElementById(`chip${name.charAt(0).toUpperCase() + name.slice(1)}`)
+          .classList.toggle("active", state.engines[name]);
         updateStepperStatus();
         updateFileEstimate();
       }
@@ -2375,7 +3379,7 @@
           const classes = await window.pywebview.api.detect_classes();
           state.detectedClasses = classes || [];
           renderClassesSection();
-        } catch(e) {
+        } catch (e) {
           console.error("Failed to detect classes:", e);
         }
       }
@@ -2427,32 +3431,46 @@
 
         applyClassTypeOverrides();
         const selects = document.querySelectorAll(".class-type-select");
-        selects.forEach(s => s.addEventListener("change", saveClassTypeOverrides));
+        selects.forEach((s) =>
+          s.addEventListener("change", saveClassTypeOverrides),
+        );
         updateStepperStatus();
         updateFileEstimate();
       }
 
       function toggleSelectAllClasses(checked) {
-        document.querySelectorAll(".item-class-check").forEach(c => c.checked = checked);
+        document
+          .querySelectorAll(".item-class-check")
+          .forEach((c) => (c.checked = checked));
         updateSelectCount();
       }
 
       function updateSelectCount() {
         const total = document.querySelectorAll(".item-class-check").length;
-        const selected = document.querySelectorAll(".item-class-check:checked").length;
-        document.getElementById("classesReadyBadge").innerText = `${selected} / ${total} Selected`;
+        const selected = document.querySelectorAll(
+          ".item-class-check:checked",
+        ).length;
+        document.getElementById("classesReadyBadge").innerText =
+          `${selected} / ${total} Selected`;
         updateStepperStatus();
         updateFileEstimate();
       }
 
       function filterClassCards(type) {
-        document.querySelectorAll(".filter-pill").forEach(p => p.classList.remove("active"));
-        if (type === "all") document.getElementById("filterAllClasses").classList.add("active");
-        else if (type === "lab") document.getElementById("filterLabClasses").classList.add("active");
-        else if (type === "lec") document.getElementById("filterLecClasses").classList.add("active");
+        document
+          .querySelectorAll(".filter-pill")
+          .forEach((p) => p.classList.remove("active"));
+        if (type === "all")
+          document.getElementById("filterAllClasses").classList.add("active");
+        else if (type === "lab")
+          document.getElementById("filterLabClasses").classList.add("active");
+        else if (type === "lec")
+          document.getElementById("filterLecClasses").classList.add("active");
 
-        const cards = document.querySelectorAll("#classesListContainer .class-card");
-        cards.forEach(card => {
+        const cards = document.querySelectorAll(
+          "#classesListContainer .class-card",
+        );
+        cards.forEach((card) => {
           const select = card.querySelector(".class-type-select");
           const val = select ? select.value : "";
           if (type === "all") {
@@ -2469,7 +3487,9 @@
         const estimateBadge = document.getElementById("fileEstimateBadge");
         if (!estimateBadge) return;
 
-        const selectedClasses = document.querySelectorAll(".item-class-check:checked").length;
+        const selectedClasses = document.querySelectorAll(
+          ".item-class-check:checked",
+        ).length;
         if (selectedClasses === 0) {
           estimateBadge.classList.add("d-none");
           return;
@@ -2477,15 +3497,24 @@
 
         const ceitCount = state.engines.ceit ? 7 : 0;
         const gradesCount = state.engines.grades ? 1 : 0;
-        
+
         let monthsCount = 5;
-        const sVal = document.getElementById("startDate") ? document.getElementById("startDate").value : "";
-        const eVal = document.getElementById("endDate") ? document.getElementById("endDate").value : "";
+        const sVal = document.getElementById("startDate")
+          ? document.getElementById("startDate").value
+          : "";
+        const eVal = document.getElementById("endDate")
+          ? document.getElementById("endDate").value
+          : "";
         if (sVal && eVal) {
           const d1 = new Date(sVal);
           const d2 = new Date(eVal);
           if (!isNaN(d1) && !isNaN(d2) && d2 >= d1) {
-            monthsCount = Math.max(1, (d2.getFullYear() - d1.getFullYear()) * 12 + (d2.getMonth() - d1.getMonth()) + 1);
+            monthsCount = Math.max(
+              1,
+              (d2.getFullYear() - d1.getFullYear()) * 12 +
+                (d2.getMonth() - d1.getMonth()) +
+                1,
+            );
           }
         }
         const attCount = state.engines.attendance ? monthsCount : 0;
@@ -2503,7 +3532,7 @@
 
       function saveClassTypeOverrides() {
         const overrides = {};
-        document.querySelectorAll(".class-type-select").forEach(sel => {
+        document.querySelectorAll(".class-type-select").forEach((sel) => {
           const cid = sel.getAttribute("data-class-id");
           if (cid) overrides[cid] = sel.value;
         });
@@ -2515,11 +3544,11 @@
         if (!str) return;
         try {
           const overrides = JSON.parse(str);
-          document.querySelectorAll(".class-type-select").forEach(sel => {
+          document.querySelectorAll(".class-type-select").forEach((sel) => {
             const cid = sel.getAttribute("data-class-id");
             if (cid && overrides[cid]) sel.value = overrides[cid];
           });
-        } catch(e) {}
+        } catch (e) {}
       }
 
       // ── Step 2: Date Boundaries & Output ──────────────────────────────────
@@ -2529,7 +3558,20 @@
 
         const sVal = document.getElementById("startDate").value;
         const eVal = document.getElementById("endDate").value;
-        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        const monthNames = [
+          "Jan",
+          "Feb",
+          "Mar",
+          "Apr",
+          "May",
+          "Jun",
+          "Jul",
+          "Aug",
+          "Sep",
+          "Oct",
+          "Nov",
+          "Dec",
+        ];
 
         if (sVal && eVal) {
           const d1 = new Date(sVal);
@@ -2544,7 +3586,9 @@
               curr.setMonth(curr.getMonth() + 1);
               count++;
             }
-            container.innerHTML = chipsHtml || `<span class="month-chip text-secondary">📅 Standard Semester (~5 Months)</span>`;
+            container.innerHTML =
+              chipsHtml ||
+              `<span class="month-chip text-secondary">📅 Standard Semester (~5 Months)</span>`;
             updateFileEstimate();
             return;
           }
@@ -2554,8 +3598,14 @@
       }
 
       function saveDates() {
-        localStorage.setItem("cvsu_startDate", document.getElementById("startDate").value);
-        localStorage.setItem("cvsu_endDate", document.getElementById("endDate").value);
+        localStorage.setItem(
+          "cvsu_startDate",
+          document.getElementById("startDate").value,
+        );
+        localStorage.setItem(
+          "cvsu_endDate",
+          document.getElementById("endDate").value,
+        );
         renderActiveMonths();
         updateStepperStatus();
       }
@@ -2620,19 +3670,34 @@
             Cancelling...
           `;
         }
-        showToast("Cancelling Generation", "Stopping after current file completes...", "warning");
-        if (window.pywebview && window.pywebview.api && window.pywebview.api.cancel_generation) {
+        showToast(
+          "Cancelling Generation",
+          "Stopping after current file completes...",
+          "warning",
+        );
+        if (
+          window.pywebview &&
+          window.pywebview.api &&
+          window.pywebview.api.cancel_generation
+        ) {
           await window.pywebview.api.cancel_generation();
         }
       }
 
       async function openArtifactFile(filePath) {
-        if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.open_file) return;
+        if (
+          !window.pywebview ||
+          !window.pywebview.api ||
+          !window.pywebview.api.open_file
+        )
+          return;
         try {
           await window.pywebview.api.open_file(filePath);
-          const name = filePath ? String(filePath).split(/[\\/]/).pop() : "Document";
+          const name = filePath
+            ? String(filePath).split(/[\\/]/).pop()
+            : "Document";
           showToast("Opening Document", name, "info", 2500);
-        } catch(e) {
+        } catch (e) {
           showToast("Could Not Open File", String(e), "error");
         }
       }
@@ -2644,35 +3709,53 @@
         const progressFill = document.getElementById("progressFill");
         const progressPercent = document.getElementById("progressPercent");
         const progressTaskLabel = document.getElementById("progressTaskLabel");
-        const progressElapsedTimer = document.getElementById("progressElapsedTimer");
+        const progressElapsedTimer = document.getElementById(
+          "progressElapsedTimer",
+        );
         const btnCancel = document.getElementById("btnCancelGeneration");
         const resultsCard = document.getElementById("resultsCard");
 
         // Validate basic inputs using non-blocking toasts
         if (!state.schedulePath) {
-          showToast("Schedule Required", "Please select or drop your Instructor Schedule (.xls / .xlsx) before proceeding.", "warning");
+          showToast(
+            "Schedule Required",
+            "Please select or drop your Instructor Schedule (.xls / .xlsx) before proceeding.",
+            "warning",
+          );
           scrollToStep("cardStep1");
           return;
         }
         if (!state.rosters || state.rosters.length === 0) {
-          showToast("Rosters Required", "Please select or drop at least one Student Roster file before proceeding.", "warning");
+          showToast(
+            "Rosters Required",
+            "Please select or drop at least one Student Roster file before proceeding.",
+            "warning",
+          );
           scrollToStep("cardStep2");
           return;
         }
         if (!state.outputDir) {
-          showToast("Output Folder Required", "Please select a Target Output Folder for saving documents.", "warning");
+          showToast(
+            "Output Folder Required",
+            "Please select a Target Output Folder for saving documents.",
+            "warning",
+          );
           scrollToStep("cardStep5");
           return;
         }
 
         // Collect class filter
         const selectedClasses = [];
-        document.querySelectorAll(".item-class-check:checked").forEach(cb => {
+        document.querySelectorAll(".item-class-check:checked").forEach((cb) => {
           selectedClasses.push(cb.getAttribute("data-class-id"));
         });
 
         if (selectedClasses.length === 0) {
-          showToast("No Classes Selected", "Please select at least one class to generate.", "warning");
+          showToast(
+            "No Classes Selected",
+            "Please select at least one class to generate.",
+            "warning",
+          );
           scrollToStep("cardStep3");
           return;
         }
@@ -2684,14 +3767,18 @@
         if (state.engines.grades) enabledEngines.push("grades");
 
         if (enabledEngines.length === 0) {
-          showToast("No Packages Selected", "Please enable at least one document package (Attendance, CEIT Forms, or Grades).", "warning");
+          showToast(
+            "No Packages Selected",
+            "Please enable at least one document package (Attendance, CEIT Forms, or Grades).",
+            "warning",
+          );
           scrollToStep("cardStep3");
           return;
         }
 
         // Collect type overrides
         const typeOverrides = {};
-        document.querySelectorAll(".class-type-select").forEach(sel => {
+        document.querySelectorAll(".class-type-select").forEach((sel) => {
           const cid = sel.getAttribute("data-class-id");
           if (cid) typeOverrides[cid] = sel.value;
         });
@@ -2705,8 +3792,12 @@
           const [eY, eM, eD] = endVal.split("-").map(Number);
           if (sY && sM && sD && eY && eM && eD) {
             dateOverrides = {
-              startYear: sY, startMonth: sM, startDay: sD,
-              endYear: eY, endMonth: eM, endDay: eD
+              startYear: sY,
+              startMonth: sM,
+              startDay: sD,
+              endYear: eY,
+              endMonth: eM,
+              endDay: eD,
             };
           }
         }
@@ -2728,7 +3819,8 @@
           const sec = Math.floor((Date.now() - generationStartTime) / 1000);
           const m = String(Math.floor(sec / 60)).padStart(2, "0");
           const s = String(sec % 60).padStart(2, "0");
-          if (progressElapsedTimer) progressElapsedTimer.innerText = `⏱️ ${m}:${s}`;
+          if (progressElapsedTimer)
+            progressElapsedTimer.innerText = `⏱️ ${m}:${s}`;
         }, 1000);
 
         if (btnCancel) {
@@ -2747,16 +3839,19 @@
           typeOverrides,
           dateOverrides,
           selectedClasses,
-          enabledEngines
+          enabledEngines,
         );
 
-        if (payload && (payload.status === "error" || payload.status === "cancelled")) {
+        if (
+          payload &&
+          (payload.status === "error" || payload.status === "cancelled")
+        ) {
           onGenerationComplete(payload);
         }
       }
 
       // Telemetry callback called continuously from Python background thread
-      window.onGenerationProgress = function(info) {
+      window.onGenerationProgress = function (info) {
         const fill = document.getElementById("progressFill");
         const pctDisplay = document.getElementById("progressPercent");
         const taskDisplay = document.getElementById("progressTaskLabel");
@@ -2767,7 +3862,7 @@
       };
 
       // Completion callback called when background thread finishes
-      window.onGenerationComplete = function(payload) {
+      window.onGenerationComplete = function (payload) {
         const btn = document.getElementById("processBtn");
         const btnLabel = document.getElementById("processBtnLabel");
         const progressFill = document.getElementById("progressFill");
@@ -2803,16 +3898,25 @@
         progressFill.style.width = "100%";
         if (pctDisplay) pctDisplay.innerText = "100%";
 
-        resultsCard.classList.remove("d-none", "results-success", "results-error");
+        resultsCard.classList.remove(
+          "d-none",
+          "results-success",
+          "results-error",
+        );
 
         if (payload.status === "cancelled") {
           resultsCard.classList.add("results-error");
           resultsIcon.innerHTML = `<circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line>`;
           resultsTitleText.innerText = "Generation Cancelled";
           resultsTitleText.style.color = "var(--accent-amber)";
-          resultsMessage.innerText = payload.message || "Generation was stopped by the user.";
+          resultsMessage.innerText =
+            payload.message || "Generation was stopped by the user.";
           if (taskDisplay) taskDisplay.innerText = "Generation stopped by user";
-          showToast("Generation Cancelled", payload.message || "Process stopped.", "warning");
+          showToast(
+            "Generation Cancelled",
+            payload.message || "Process stopped.",
+            "warning",
+          );
           treeContainer.innerHTML = `<div class="file-tree-item" style="color: var(--text-secondary);">Generation was safely halted. Files created before cancellation are preserved in the output folder.</div>`;
         } else if (payload.status === "error") {
           resultsCard.classList.add("results-error");
@@ -2820,7 +3924,8 @@
           resultsTitleText.innerText = "Generation Encountered Issues";
           resultsTitleText.style.color = "var(--accent-rose)";
           resultsMessage.innerText = payload.message;
-          if (taskDisplay) taskDisplay.innerText = "Workflow failed with errors";
+          if (taskDisplay)
+            taskDisplay.innerText = "Workflow failed with errors";
           showToast("Generation Encountered Issues", payload.message, "error");
           treeContainer.innerHTML = `<div class="file-tree-item" style="color: var(--accent-rose);">Click 'Logs' at the top right to view exact failure stack traces.</div>`;
         } else {
@@ -2829,8 +3934,13 @@
           resultsTitleText.innerText = "Document Generation Succeeded!";
           resultsTitleText.style.color = "var(--accent-emerald)";
           resultsMessage.innerText = payload.message;
-          if (taskDisplay) taskDisplay.innerText = "All tasks completed successfully";
-          showToast("Documents Ready", payload.message || "All academic forms and grade sheets generated.", "success");
+          if (taskDisplay)
+            taskDisplay.innerText = "All tasks completed successfully";
+          showToast(
+            "Documents Ready",
+            payload.message || "All academic forms and grade sheets generated.",
+            "success",
+          );
 
           // Render Metrics Pills
           const details = payload.details;
@@ -2857,23 +3967,32 @@
 
           // Render Interactive File Artifact Tree
           treeContainer.innerHTML = "";
-          if (details && details.by_class && Object.keys(details.by_class).length > 0) {
+          if (
+            details &&
+            details.by_class &&
+            Object.keys(details.by_class).length > 0
+          ) {
             for (const [courseSec, pkgs] of Object.entries(details.by_class)) {
               const classCard = document.createElement("div");
               classCard.className = "artifact-class-card";
 
-              const totalClassFiles = (pkgs.ceit?.length || 0) + (pkgs.attendance?.length || 0) + (pkgs.grades?.length || 0);
+              const totalClassFiles =
+                (pkgs.ceit?.length || 0) +
+                (pkgs.attendance?.length || 0) +
+                (pkgs.grades?.length || 0);
 
               let fileRowsHtml = "";
               const addCategoryRows = (catName, files, icon) => {
                 if (!files || files.length === 0) return;
                 fileRowsHtml += `<div style="font-weight: 700; color: var(--text-primary); font-size: 11.5px; margin-top: 6px; margin-bottom: 2px;">${catName} (${files.length}):</div>`;
-                files.forEach(item => {
+                files.forEach((item) => {
                   let fPath = "";
                   let fname = "";
                   if (typeof item === "object" && item !== null) {
                     fPath = item.path || item.name || "";
-                    fname = item.name || (fPath ? fPath.split(/[\\/]/).pop() : "File");
+                    fname =
+                      item.name ||
+                      (fPath ? fPath.split(/[\\/]/).pop() : "File");
                   } else {
                     fPath = String(item || "");
                     fname = fPath ? fPath.split(/[\\/]/).pop() : "File";
@@ -2916,23 +4035,25 @@
 
             if (ceit.length > 0) {
               treeContainer.innerHTML += `<div style="font-weight: 700; color: var(--text-primary); margin-top: 4px;">📁 CEIT Department Forms (${ceit.length} files):</div>`;
-              ceit.slice(0, 10).forEach(f => {
+              ceit.slice(0, 10).forEach((f) => {
                 treeContainer.innerHTML += `<div class="file-tree-item">📄 ${escapeHTML(f)}</div>`;
               });
-              if (ceit.length > 10) treeContainer.innerHTML += `<div class="file-tree-item text-muted">... and ${ceit.length - 10} more CEIT files</div>`;
+              if (ceit.length > 10)
+                treeContainer.innerHTML += `<div class="file-tree-item text-muted">... and ${ceit.length - 10} more CEIT files</div>`;
             }
 
             if (att.length > 0) {
               treeContainer.innerHTML += `<div style="font-weight: 700; color: var(--text-primary); margin-top: 8px;">📁 Attendance Sheets (${att.length} files):</div>`;
-              att.slice(0, 8).forEach(f => {
+              att.slice(0, 8).forEach((f) => {
                 treeContainer.innerHTML += `<div class="file-tree-item">📅 ${escapeHTML(f)}</div>`;
               });
-              if (att.length > 8) treeContainer.innerHTML += `<div class="file-tree-item text-muted">... and ${att.length - 8} more attendance files</div>`;
+              if (att.length > 8)
+                treeContainer.innerHTML += `<div class="file-tree-item text-muted">... and ${att.length - 8} more attendance files</div>`;
             }
 
             if (grades.length > 0) {
               treeContainer.innerHTML += `<div style="font-weight: 700; color: var(--text-primary); margin-top: 8px;">📁 Official Grade Sheets (${grades.length} files):</div>`;
-              grades.forEach(f => {
+              grades.forEach((f) => {
                 treeContainer.innerHTML += `<div class="file-tree-item">📊 ${escapeHTML(f)}</div>`;
               });
             }
@@ -2941,23 +4062,28 @@
         updateStepperStatus();
       };
 
-      window.onGenerationError = function() {
+      window.onGenerationError = function () {
         const btn = document.getElementById("processBtn");
         btn.disabled = false;
-        document.getElementById("processBtnLabel").innerText = "Initialize Workflow";
+        document.getElementById("processBtnLabel").innerText =
+          "Initialize Workflow";
         const btnCancel = document.getElementById("btnCancelGeneration");
         if (btnCancel) btnCancel.classList.add("d-none");
         if (elapsedTimerInterval) {
           clearInterval(elapsedTimerInterval);
           elapsedTimerInterval = null;
         }
-        showToast("Error", "Generation encountered an unexpected runtime error.", "error");
+        showToast(
+          "Error",
+          "Generation encountered an unexpected runtime error.",
+          "error",
+        );
       };
 
       // ── Help Drawer Navigation & Search ───────────────────────────────────
       function switchHelpTab(tabName) {
         const tabs = ["Overview", "Naming", "Formats", "Faq"];
-        tabs.forEach(t => {
+        tabs.forEach((t) => {
           const tabBtn = document.getElementById(`helpTab${t}`);
           const content = document.getElementById(`helpContent${t}`);
           if (tabBtn) tabBtn.classList.toggle("active", t === tabName);
@@ -2970,18 +4096,22 @@
         const tabs = ["Overview", "Naming", "Formats", "Faq"];
         if (!q) {
           const activeTab = document.querySelector(".drawer-tab.active");
-          const activeName = activeTab ? activeTab.id.replace("helpTab", "") : "Overview";
+          const activeName = activeTab
+            ? activeTab.id.replace("helpTab", "")
+            : "Overview";
           switchHelpTab(activeName);
-          document.querySelectorAll(".drawer-section").forEach(s => s.style.display = "");
+          document
+            .querySelectorAll(".drawer-section")
+            .forEach((s) => (s.style.display = ""));
           return;
         }
 
-        tabs.forEach(t => {
+        tabs.forEach((t) => {
           const content = document.getElementById(`helpContent${t}`);
           if (content) content.classList.remove("d-none");
         });
 
-        document.querySelectorAll(".drawer-section").forEach(sec => {
+        document.querySelectorAll(".drawer-section").forEach((sec) => {
           const txt = (sec.innerText || "").toLowerCase();
           sec.style.display = txt.includes(q) ? "" : "none";
         });
