@@ -16,14 +16,17 @@ All git commit messages must strictly follow the format:
 - **Example**: `43: dynamically calculate progress bar total steps and update completion telemetry`
 
 ## Git Branching & Merging Rules
-When merging branches (e.g., merging `dev` into `main`):
-- **Always use `--no-ff` (No Fast-Forward)**: Never perform fast-forward merges into `main`. Always force a dedicated merge commit using `git merge --no-ff <branch>` to ensure the Git commit history preserves a distinct visual branch tree with fork-and-merge nodes.
-- **Merge Commit Message Formatting**: Merge commits must also follow the commit numbering rule:
-  `<commit_number>: merge <source_branch> into <target_branch>`
-  Example: `44: merge dev into main`
-- **Standard Merge Workflow**:
-  1. Ensure all work is committed and pushed on `dev`.
-  2. `git checkout main`
-  3. `git merge --no-ff dev -m "<commit_number>: merge dev into main"`
-  4. `git push origin main`
-  5. `git checkout dev`
+- **Development on `dev`**: All active work, feature implementations, tests, and task commits belong strictly on the `dev` branch.
+- **Do NOT Auto-Merge to `main`**: Merging into `main` must **NEVER** happen automatically at the end of a task or chat. Merging to `main` requires an explicit user prompt or request.
+- **Merging into `main` (Only When Prompted by User)**:
+  When the user explicitly instructs to merge `dev` into `main`:
+  - **Always use `--no-ff` (No Fast-Forward)**: Never perform fast-forward merges into `main`. Always force a dedicated merge commit using `git merge --no-ff <branch>` to ensure the Git commit history preserves a distinct visual branch tree with fork-and-merge nodes.
+  - **Merge Commit Message Formatting**: Merge commits must also follow the commit numbering rule:
+    `<commit_number>: merge <source_branch> into <target_branch>`
+    Example: `44: merge dev into main`
+  - **Standard Merge Workflow**:
+    1. Ensure all work is committed and pushed on `dev`.
+    2. `git checkout main`
+    3. `git merge --no-ff dev -m "<commit_number>: merge dev into main"`
+    4. `git push origin main`
+    5. `git checkout dev`
