@@ -4,21 +4,26 @@ This repository contains Python scripts for generating standardized CvSU academi
 
 ## Included files
 
-- `ceit_generator.py` — generates the five CEIT document types from one student list and class metadata.
-- `attendancegen.py` — attendance sheet generator.
-- `templates/` — source Word templates used by the document generator.
+- `ceit_generator.py` — generates the 7 CEIT/departmental document types from one student list and class metadata.
+- `grade_generator.py` — generates official CvSU Grade Sheets (`.xlsx`) for Lecture and Lecture & Lab courses preserving formulas.
+- `attendancegen.py` — monthly attendance sheet generator (`.docx`).
+- `process_schedule.py` — unified orchestration script that parses master teacher schedules and rosters to generate all documents automatically.
+- `executable/` — standalone desktop GUI application (`CvSU Gen (Beta)`) built with `pywebview` and `PyInstaller`.
+- `templates/` — source Word (`.docx`) and Excel (`.xlsx`) templates used by the document generators.
 - `output/` — generated document output folders.
-- `tests/` — automated checks for the attendance-related utilities.
+- `tests/` — automated test suites for generators and parsers.
 
 ## CEIT document generator
 
-The main generator is `ceit_generator.py`. It creates the following documents from one class input:
+The main generator is `ceit_generator.py`. It creates the following 7 documents from one class input:
 
 - Course Syllabus Acceptance Form
 - Exam Returns Form — Midterm
 - Exam Returns Form — Finals
 - TOS Acknowledgment — Midterm
 - TOS Acknowledgment — Finals
+- Grade Discussion Form — Midterm
+- Grade Discussion Form — Finals
 
 ## Prerequisites
 
@@ -82,7 +87,7 @@ When you run the script without all arguments, it will:
 2. prompt for class details
 3. prompt for the student list file
 4. confirm the template folder and output folder
-5. ask for final confirmation before generating all 5 documents
+5. ask for final confirmation before generating all 7 documents
 
 ## Output folder
 
@@ -118,6 +123,7 @@ The final verification checked that the generated files contain the expected hea
 
 - The script reads Excel files by parsing the XML inside the workbook, which avoids some openpyxl compatibility issues.
 - The script also accepts CSV student lists if the file is not Excel.
+- **Roster File Columns:** Student lists from `registrar.cvsu.edu.ph` must contain **strictly two columns: `Name` and `Student number`**. Any extra columns (e.g. Email, Course, Remarks) will cause parser errors.
 - If the template folder is missing, the script prompts for a valid path before generation continues.
 
 ## Run the Attendance Generator
@@ -272,31 +278,35 @@ When executed, it natively parses your schedule, evaluates which student lists m
 
 ## Requirements
 
-- Python 3
-- `xlrd` (Install via `python -m pip install xlrd`)
+- Python 3.10+
+- `lxml` (`pip install lxml`)
+- `xlrd` (`pip install xlrd`)
+- `openpyxl` (`pip install openpyxl`)
+- `pywebview` (for desktop GUI app)
 
 ## How It Works
 
 1. **Native Schedule Parsing (`ORTEGA_SCHEDULE.xls`)**
-   - Uses `xlrd` to traverse the natively formatted Excel 97-2003 schedule blocks.
-   - Extracts your name and the current academic semester automatically.
+   - Uses `xlrd` / `openpyxl` to traverse the schedule blocks.
+   - Extracts instructor name, college header (e.g. `"COLLEGE OF ..."`), semester, and academic year automatically.
    - Traces the exact Class, Room, Times, and Day placements by analyzing block offsets against recognized prefixes (`CVSU`, `DCIT`, `COSC`).
    - **Async Intelligent Filtering**: Completely filters out blocks mapped as "Async" or "Asynch" to ensure offline output documents accurately reflect only face-to-face slotted sessions.
 
 2. **Student List Extraction**
-   - Automatically crawls the root directory for `.xlsx` lists using the standard naming schema:
+   - Automatically crawls for `.xlsx` lists using the standard naming schema:
      `{Course/Sec} List of Students for {ScheduleCode}-{Subject}.xlsx`
      _(Example: `BSCS1-4 List of Students for 202612040-DCIT 21A...xlsx`)_
+   - **Header Requirement:** Roster files must strictly contain `Name` and `Student number` columns only.
 
 3. **Categorized Document Output**
    - Using the extracted parameters, the script simultaneously triggers the generator factories.
-   - Generated `.docx` outputs are perfectly scoped and organized within nested categorical directories to eliminate clutter:
+   - Generated outputs are scoped and organized within nested categorical directories:
      ```
-     dev/
-      ├── BSCS 1-4/
-      │     ├── Attendance/    (August-December attendance lists)
-      │     └── CEIT_Forms/    (Syllabus, Exams, and TOS Acknowledgment forms)
-      └── BSCS 1-6/
+     output/
+     └── BSCS 1-4/
+         ├── Attendance/    (Monthly attendance sheets with scheduled days)
+         ├── CEIT_Forms/    (Syllabus, Exams, TOS, and Grade Discussion forms)
+         └── Grades/        (Official CvSU Lecture or Lecture & Lab Grade Sheet)
      ```
 
 ## Usage

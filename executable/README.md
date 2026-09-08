@@ -3,8 +3,8 @@
 A desktop application for Cavite State University (CvSU) faculty members to automatically generate complete, submission-ready academic documents in a single click:
 
 - 📅 **Attendance Sheets (.docx)**: Monthly attendance logs with exact calendar days matching your schedule.
-- 📋 **CEIT Department Forms (.docx)**: Syllabus Acceptance, Exam Returns (Midterm/Finals), and Table of Specifications (TOS).
-- 📊 **Official CvSU Grade Sheets (.xlsx)**: Pre-formatted grade sheets for **Lecture** and **Lecture & Lab** courses, preserving all formulas, student data, and signature metadata.
+- 📋 **CEIT Department Forms (.docx)**: 7 complete forms including Syllabus Acceptance, Exam Returns (Midterm/Finals), Table of Specifications (TOS - Midterm/Finals), and Grade Discussion Forms (Midterm/Finals).
+- 📊 **Official CvSU Grade Sheets (.xlsx)**: Pre-formatted grade sheets for **Lecture** and **Lecture & Lab** courses, preserving all formulas, student data, dynamic college title, and signature metadata.
 
 ---
 
@@ -34,12 +34,16 @@ Before generating, make sure you have the following files ready:
 ### 1. Instructor Master Schedule (`.xls` or `.xlsx`)
 
 - Download your official schedule spreadsheet from the faculty portal.
-- The generator automatically extracts your instructor name, semester, academic year, class times, days, and rooms.
+- The generator automatically extracts your instructor name, college header, semester, academic year, class times, days, and rooms.
 - _Note:_ Any schedule blocks labeled as `Async` or `Asynch` are automatically filtered out so only in-person sessions receive attendance columns.
 
 ### 2. Student Roster Files (`.xlsx`, `.xls`, or `.csv`)
 
 - Download class student rosters directly from [registrar.cvsu.edu.ph](https://registrar.cvsu.edu.ph/).
+
+> [!CAUTION]
+> **Strict Column Requirement:** Roster files must contain **only** the `Name` and `Student number` columns. If the file contains more than these two headers (such as Email, Course, Year, Section, Status, or Remarks), the parser will produce an error. Remove all extra columns before importing.
+
 - **Crucial:** Keep the official file naming format:
 
   ```text
@@ -83,28 +87,30 @@ All files will be cleanly arranged into subfolders by course and section:
 <Your Selected Output Folder>/
 └── BSCS 1-4/
     ├── Attendance/
-    │   ├── BSCS1-4_202612040_ATTENDANCE_SEPTEMBER.docx
-    │   ├── BSCS1-4_202612040_ATTENDANCE_OCTOBER.docx
+    │   ├── BSCS1-4_202612040_ATTENDANCE_Mon_September.docx
+    │   ├── BSCS1-4_202612040_ATTENDANCE_Mon_October.docx
     │   └── ...
     ├── CEIT_Forms/
-    │   ├── BSCS1-4_202612040_SYLLABUS.docx
-    │   ├── BSCS1-4_202612040_EXAM_MIDTERM.docx
-    │   ├── BSCS1-4_202612040_EXAM_FINALS.docx
+    │   ├── BSCS1-4_202612040_SYLLABUS_ACCEPTANCE.docx
+    │   ├── BSCS1-4_202612040_EXAM_RETURNS_MIDTERM.docx
+    │   ├── BSCS1-4_202612040_EXAM_RETURNS_FINALS.docx
     │   ├── BSCS1-4_202612040_TOS_MIDTERM.docx
-    │   └── BSCS1-4_202612040_TOS_FINALS.docx
+    │   ├── BSCS1-4_202612040_TOS_FINALS.docx
+    │   ├── BSCS1-4_202612040_GRADE_DISCUSSION_MIDTERM.docx
+    │   └── BSCS1-4_202612040_GRADE_DISCUSSION_FINALS.docx
     └── Grades/
-        └── BSCS1-4_202612040_GRADE_SHEET.xlsx
+        └── BSCS1-4_202612040_GRADING_SHEET.xlsx
 ```
 
 ---
 
 ## ❓ Frequently Asked Questions (FAQ)
 
-#### Q: The app says a student roster was "skipped". Why?
+#### Q: The app says a student roster was "skipped" or failed with an error. Why?
 
-Make sure the roster file name matches the official registrar naming convention:
-`{Course/Sec} List of Students for {ScheduleCode}-{Subject}.xlsx`
-If the file name was altered, rename it back to match this pattern.
+1. **File Naming:** Make sure the roster file name matches the official registrar naming convention:
+   `{Course/Sec} List of Students for {ScheduleCode}-{Subject}.xlsx`
+2. **Column Headers:** Verify that your file contains **only** two columns: `Name` and `Student number`. If any additional columns are present (such as Email, Course, Remarks, etc.), the parser will encounter an error. Delete any extra columns and save the file.
 
 #### Q: Can I keep my Excel files open while generating?
 

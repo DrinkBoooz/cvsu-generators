@@ -482,7 +482,7 @@
                 The unified automation pipeline natively connects your official master schedule with registrar student lists to concurrently build 3 complete document packages:<br /><br />
                 <ul class="mb-3" style="padding-left: 20px;">
                   <li><strong>1. Attendance Sheets (.docx):</strong> Individual monthly documents (e.g., Aug–Dec or Jan–May) customized with your exact scheduled weekdays and dates.</li>
-                  <li><strong>2. CEIT Department Forms (.docx):</strong> Course Syllabus Acceptance Form, Midterm & Finals Exam Returns, and Midterm & Finals Table of Specifications (TOS) Acknowledgments.</li>
+                  <li><strong>2. CEIT Department Forms (.docx):</strong> 7 standardized forms including Course Syllabus Acceptance Form, Midterm & Finals Exam Returns, Midterm & Finals Table of Specifications (TOS) Acknowledgments, and Midterm & Finals Grade Discussion Forms.</li>
                   <li><strong>3. Official CvSU Grade Sheets (.xlsx):</strong> Native workbooks using official Lecture or Lecture & Lab templates with student records and signature metadata while preserving all formula calculations.</li>
                 </ul>
                 All documents are generated in a single click, completely eliminating repetitive manual data entry.
@@ -513,13 +513,16 @@
               <div class="accordion-body">
                 <strong>1. Instructor Master Schedule (.xls / .xlsx):</strong>
                 <p class="mt-1 mb-3">
-                  Upload your raw Excel schedule file. The parser traces your name, academic year, semester, and individual class blocks (Course/Section, Schedule Code, Subject Code & Description, Time/Days, and Room). Any blocks designated as <code>Async</code> or <code>Asynch</code> are automatically omitted to target only in-person sessions.
+                  Upload your raw Excel schedule file. The parser traces your name, college header, academic year, semester, and individual class blocks (Course/Section, Schedule Code, Subject Code & Description, Time/Days, and Room). Any blocks designated as <code>Async</code> or <code>Asynch</code> are automatically omitted to target only in-person sessions.
                 </p>
 
-                <strong>2. Student Rosters (.xlsx):</strong>
+                <strong>2. Student Rosters (.xlsx / .xls / .csv):</strong>
                 <p class="mt-1 mb-2">
-                  Student lists must be downloaded directly from <a href="https://registrar.cvsu.edu.ph/" target="_blank" style="color: var(--ios-blue); text-decoration: underline;">registrar.cvsu.edu.ph</a> containing <strong>Student Name</strong> and <strong>Student Number</strong> columns.
+                  Student lists must be downloaded directly from <a href="https://registrar.cvsu.edu.ph/" target="_blank" style="color: var(--ios-blue); text-decoration: underline;">registrar.cvsu.edu.ph</a>.
                 </p>
+                <div class="alert alert-danger p-2 mb-3" style="font-size: 13px; border-radius: 10px;">
+                  <strong>⚠️ Critical Roster Column Requirement:</strong> Rosters must contain strictly <strong>Name</strong> and <strong>Student number</strong> columns only. If files contain more than these two headers (e.g., Email, Course, Remarks, Status), the parser will produce an error.
+                </div>
                 <p class="mb-2">Files must be saved using the standard university naming format:</p>
                 <code class="d-block p-2" style="background: var(--ios-gray); border-radius: 8px;">{Course/Sec} List of Students for {ScheduleCode}-{Subject}.xlsx</code>
                 <em class="d-block mt-2 text-secondary" style="font-size: 12px;">
@@ -616,16 +619,19 @@
                 <pre class="p-3 my-2" style="background: var(--ios-gray); border-radius: 10px; font-size: 12px; color: var(--ios-fg);"><code>&lt;Output Folder&gt;/
 └── &lt;Course Section&gt;/ (e.g. BSCS 1-4)
     ├── Attendance/
-    │   └── &lt;Course_Sec&gt;_&lt;ScheduleCode&gt;_ATTENDANCE_&lt;MONTH&gt;.docx
+    │   └── &lt;Course_Sec&gt;_&lt;ScheduleCode&gt;_ATTENDANCE_&lt;Days&gt;_&lt;Month&gt;.docx
     ├── CEIT_Forms/
-    │   ├── &lt;Course_Sec&gt;_&lt;ScheduleCode&gt;_SYLLABUS.docx
-    │   ├── &lt;Course_Sec&gt;_&lt;ScheduleCode&gt;_EXAM_MIDTERM.docx
-    │   ├── &lt;Course_Sec&gt;_&lt;ScheduleCode&gt;_EXAM_FINALS.docx
+    │   ├── &lt;Course_Sec&gt;_&lt;ScheduleCode&gt;_SYLLABUS_ACCEPTANCE.docx
+    │   ├── &lt;Course_Sec&gt;_&lt;ScheduleCode&gt;_EXAM_RETURNS_MIDTERM.docx
+    │   ├── &lt;Course_Sec&gt;_&lt;ScheduleCode&gt;_EXAM_RETURNS_FINALS.docx
     │   ├── &lt;Course_Sec&gt;_&lt;ScheduleCode&gt;_TOS_MIDTERM.docx
-    │   └── &lt;Course_Sec&gt;_&lt;ScheduleCode&gt;_TOS_FINALS.docx
+    │   ├── &lt;Course_Sec&gt;_&lt;ScheduleCode&gt;_TOS_FINALS.docx
+    │   ├── &lt;Course_Sec&gt;_&lt;ScheduleCode&gt;_GRADE_DISCUSSION_MIDTERM.docx
+    │   └── &lt;Course_Sec&gt;_&lt;ScheduleCode&gt;_GRADE_DISCUSSION_FINALS.docx
     └── Grades/
-        └── &lt;Course_Sec&gt;_&lt;ScheduleCode&gt;_GRADE_SHEET.xlsx</code></pre>
+        └── &lt;Course_Sec&gt;_&lt;ScheduleCode&gt;_GRADING_SHEET.xlsx</code></pre>
                 <p class="mt-3 mb-0" style="font-size: 13px;">
+                  <strong>Dynamic College Header:</strong> Automatically applies the detected College title to Grade Sheets (cell A9) and document headers.<br />
                   <strong>File Lock Resilience:</strong> Files are written using atomic replacements. You can safely keep reference rosters open in Excel during generation.<br />
                   <strong>Diagnostics:</strong> Detailed execution logs are stored at <code>%APPDATA%/CVSU_Generators/logs/generator.log</code>.
                 </p>

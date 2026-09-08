@@ -10,30 +10,34 @@ When executed, it natively parses your schedule, evaluates which student lists m
 
 ## Requirements
 
-- Python 3
-- `xlrd` (Install via `python -m pip install xlrd`)
+- Python 3.10+
+- `xlrd` (`pip install xlrd`)
+- `lxml` (`pip install lxml`)
+- `openpyxl` (`pip install openpyxl`)
 
 ## How It Works
 
 1. **Native Schedule Parsing (`ORTEGA_SCHEDULE.xls`)**
-   - Uses `xlrd` to traverse the natively formatted Excel 97-2003 schedule blocks.
-   - Extracts your name and the current academic semester automatically.
+   - Uses `xlrd` / `openpyxl` to traverse the natively formatted Excel schedule blocks.
+   - Extracts instructor name, college header, and the current academic semester automatically.
    - Traces the exact Class, Room, Times, and Day placements by analyzing block offsets against recognized prefixes (`CVSU`, `DCIT`, `COSC`).
    - **Async Intelligent Filtering**: Completely filters out blocks mapped as "Async" or "Asynch" to ensure offline output documents accurately reflect only face-to-face slotted sessions.
 
 2. **Student List Extraction**
-   - Automatically crawls the root directory for `.xlsx` lists using the standard naming schema:
+   - Automatically crawls the directory for `.xlsx` lists using the standard naming schema:
      `{Course/Sec} List of Students for {ScheduleCode}-{Subject}.xlsx`
      _(Example: `BSCS1-4 List of Students for 202612040-DCIT 21A...xlsx`)_
+   - **Column Requirement:** Roster files must contain **only** `Name` and `Student number` columns. Extra columns will cause parser errors.
 
 3. **Categorized Document Output**
    - Using the extracted parameters, the script simultaneously triggers the generator factories.
-   - Generated `.docx` outputs are perfectly scoped and organized within nested categorical directories to eliminate clutter:
+   - Generated outputs are perfectly scoped and organized within nested categorical directories:
      ```
      dev/
       ├── BSCS 1-4/
-      │     ├── Attendance/    (August-December attendance lists)
-      │     └── CEIT_Forms/    (Syllabus, Exams, and TOS Acknowledgment forms)
+      │     ├── Attendance/    (Monthly attendance lists with days)
+      │     ├── CEIT_Forms/    (Syllabus, Exams, TOS, and Grade Discussion forms)
+      │     └── Grades/        (Official Lecture or Lecture & Lab Grade Sheet)
       └── BSCS 1-6/
      ```
 
