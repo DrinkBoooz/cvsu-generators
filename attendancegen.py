@@ -708,123 +708,16 @@ def build_attendance_sheet(
     print(f"  [SUCCESS]  Saved: {output_path}")
 
 # ── Student file loaders ──────────────────────────────────────────────────────
+# Delegated to centralized roster_parser module
+import roster_parser
 
-def _fix_encoding(text: str) -> str:
-    if not text:
-        return text
-    # Try standard double-encoding recovery (e.g. 'JosÃ©' -> 'José', 'PEÃ‘A' -> 'PEÑA')
-    for enc in ("cp1252", "latin1"):
-        try:
-            return text.encode(enc).decode("utf-8")
-        except (UnicodeEncodeError, UnicodeDecodeError):
-            pass
-    text = text.replace("Ã±", "ñ")
-    text = text.replace("Ã\x91", "Ñ")
-    text = text.replace("Ã‘", "Ñ")
-    text = text.replace("Ã", "Ñ")
-    return text
-
-def load_students_excel(path: str) -> list:
-    """Read Excel by parsing XML directly — no openpyxl dependency."""
-    import zipfile as zf
-    from xml.etree import ElementTree as ET
-
-    NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
-    ns = {"x": NS}
-    
-    import uuid
-    tmp_path = path + f".{uuid.uuid4().hex[:8]}.tmp"
-    shutil.copy2(path, tmp_path)
-
-    try:
-        with zf.ZipFile(tmp_path) as z:
-            names = z.namelist()
-            shared_strings = []
-            if "xl/sharedStrings.xml" in names:
-                ss_root = ET.fromstring(z.read("xl/sharedStrings.xml"))
-                for si in ss_root.findall("x:si", ns):
-                    text = "".join(t.text or "" for t in si.iter(f"{{{NS}}}t"))
-                    shared_strings.append(text)
-
-            sheet_file = next(
-                (n for n in names if n.startswith("xl/worksheets/sheet") and n.endswith(".xml")),
-                None
-            )
-            if not sheet_file:
-                raise RuntimeError("No worksheet found in Excel file.")
-
-            sheet_root = ET.fromstring(z.read(sheet_file))
-
-            def cell_value(c) -> str:
-                t = c.get("t", "")
-                if t == "inlineStr":
-                    is_el = c.find("x:is", ns)
-                    if is_el is not None:
-                        return "".join(t_el.text or "" for t_el in is_el.iter(f"{{{NS}}}t"))
-                    return ""
-                v_el = c.find("x:v", ns)
-                if v_el is None or v_el.text is None: return ""
-                if t == "s":
-                    idx = int(v_el.text)
-                    return shared_strings[idx] if idx < len(shared_strings) else ""
-                return v_el.text
-
-            students = []
-            for i, row_el in enumerate(sheet_root.findall(".//x:sheetData/x:row", ns)):
-                # Map cells by their coordinate letter (e.g. r="A12" -> "A") to avoid empty cell positional misalignment
-                cell_dict = {}
-                for c_el in row_el.findall("x:c", ns):
-                    ref = c_el.get("r", "")
-                    col_let = re.sub(r'\d+', '', ref).upper()
-                    if col_let:
-                        cell_dict[col_let] = cell_value(c_el).strip()
-                
-                if "A" in cell_dict or "B" in cell_dict:
-                    col_a = cell_dict.get("A", "")
-                    col_b = cell_dict.get("B", "")
-                else:
-                    cells = row_el.findall("x:c", ns)
-                    col_a = cell_value(cells[0]).strip() if cells else ""
-                    col_b = cell_value(cells[1]).strip() if len(cells) > 1 else ""
-
-                if i == 0 and col_a.lower() in ("name", "student name", "full name"):
-                    continue
-                if col_a:
-                    students.append((_fix_encoding(col_a), _fix_encoding(col_b)))
-    finally:
-        if os.path.exists(tmp_path):
-            try:
-                os.remove(tmp_path)
-            except Exception:
-                pass
-
-    return students
-
-def load_students_csv(path: str) -> list:
-    students = []
-    encodings = ["utf-8", "utf-16", "utf-8-sig", "cp1252"]
-    for enc in encodings:
-        try:
-            with open(path, newline="", encoding=enc) as f:
-                reader = csv.reader(f)
-                for i, row in enumerate(reader):
-                    if i == 0 and row and row[0].lower() in ("name", "student name", "full name"):
-                        continue
-                    if len(row) >= 2:
-                        students.append((_fix_encoding(row[0].strip()), _fix_encoding(row[1].strip())))
-                    elif len(row) == 1 and row[0].strip():
-                        students.append((_fix_encoding(row[0].strip()), ""))
-            return students
-        except UnicodeDecodeError:
-            continue
-    raise RuntimeError(f"Could not parse CSV {path} with any known encoding.")
-
-
-def load_students(path: str) -> list:
-    ext = os.path.splitext(path)[1].lower()
-    if ext in (".xlsx", ".xls", ".xlsm"):
-        return load_students_excel(path)
-    return load_students_csv(path)
+_fix_encoding = roster_parser._fix_encoding
+_is_id_header = roster_parser._is_id_header
+_is_name_header = roster_parser._is_name_header
+_detect_roster_columns = roster_parser._detect_roster_columns
+load_students_excel = roster_parser.load_students_excel
+load_students_csv = roster_parser.load_students_csv
+load_students = roster_parser.load_students
 
 
 def get_default_template_path(has_lab: bool = False) -> str:

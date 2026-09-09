@@ -64,6 +64,127 @@ def test_validate_rosters_valid_and_invalid(tmp_path):
     assert reports[2]["column_count"] == 4
     assert reports[2]["student_count"] == 1
 
+def test_validate_and_process_xlsx_extra_columns(tmp_path):
+    import openpyxl
+    import ceit_generator
+    import attendancegen
+
+    schedule_path = os.path.join(WORKSPACE_DIR, "ORTEGA_SCHEDULE.xls")
+    assert os.path.exists(schedule_path)
+
+    # Create an actual .xlsx file with 8 columns (Name, Student number + 6 extra columns)
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Sheet1"
+    headers = ["Name", "Student number", "Email", "Course", "Year", "Section", "Status", "Remarks"]
+    ws.append(headers)
+    ws.append(["DELA CRUZ, JUAN A.", "202110001", "juan.delacruz@cvsu.edu.ph", "BSCS", "4", "1", "Enrolled", "Regular"])
+    ws.append(["SANTOS, MARIA B.", "202110002", "maria.santos@cvsu.edu.ph", "BSCS", "4", "1", "Enrolled", "Irregular"])
+
+    xlsx_path = os.path.join(tmp_path, "BSCS4-1 List of Students for 202612731-COSC 111A - C S ELECTIVE 3 (INTERNET OF THINGS).xlsx")
+    wb.save(xlsx_path)
+
+    # 1. Test load_students isolation
+    students_ceit = ceit_generator.load_students(xlsx_path)
+    assert len(students_ceit) == 2
+    assert students_ceit[0] == ("DELA CRUZ, JUAN A.", "202110001")
+    assert students_ceit[1] == ("SANTOS, MARIA B.", "202110002")
+
+    students_att = attendancegen.load_students(xlsx_path)
+    assert len(students_att) == 2
+    assert students_att[0] == ("DELA CRUZ, JUAN A.", "202110001")
+
+    # 2. Test pre-flight roster validation
+    val = process_schedule.validate_rosters(schedule_path, [xlsx_path])
+    assert len(val) == 1
+    assert val[0]["status"] == "warning"
+    assert val[0]["issue"] == "extra_columns"
+    assert val[0]["column_count"] == 8
+    assert val[0]["student_count"] == 2
+    assert "auto-cleaned" in val[0]["message"]
+
+    # 3. Test end-to-end execution with extra columns
+    out_dir = os.path.join(tmp_path, "output")
+    res = process_schedule.process_all(
+        schedule_path=schedule_path,
+        xlsx_files=[xlsx_path],
+        output_dir_base=out_dir
+    )
+    assert len(res["generated"]["ceit"]) > 0
+    assert len(res["generated"]["attendance"]) > 0
+    assert len(res["generated"]["grades"]) > 0
+    assert len(res["errors"]["ceit"]) == 0
+    assert len(res["errors"]["attendance"]) == 0
+    assert len(res["errors"]["grades"]) == 0
+
+def test_intelligent_header_detection_arbitrary_columns(tmp_path):
+    import openpyxl
+    import ceit_generator
+    import attendancegen
+
+    schedule_path = os.path.join(WORKSPACE_DIR, "ORTEGA_SCHEDULE.xls")
+
+    # Case 1: Swapped columns in XLSX (Col A: Student Number, Col B: Student Name)
+    wb1 = openpyxl.Workbook()
+    ws1 = wb1.active
+    ws1.append(["Student Number", "Student Name"])
+    ws1.append(["202110001", "DELA CRUZ, JUAN A."])
+    p1 = os.path.join(tmp_path, "BSCS4-1 List of Students for 202612731-COSC 111A - C S ELECTIVE 3 (INTERNET OF THINGS).xlsx")
+    wb1.save(p1)
+
+    s1 = ceit_generator.load_students(p1)
+    assert len(s1) == 1
+    assert s1[0] == ("DELA CRUZ, JUAN A.", "202110001")
+    s1_att = attendancegen.load_students(p1)
+    assert s1_att[0] == ("DELA CRUZ, JUAN A.", "202110001")
+
+    # Case 2: Leading '#' / 'No.' column in XLSX (Col A: '#', Col B: Student ID, Col C: Full Name, Col D: Email)
+    wb2 = openpyxl.Workbook()
+    ws2 = wb2.active
+    ws2.append(["#", "Student ID", "Full Name", "Email"])
+    ws2.append(["1", "202110002", "SANTOS, MARIA B.", "maria@cvsu.edu.ph"])
+    p2 = os.path.join(tmp_path, "case2_leading_no.xlsx")
+    wb2.save(p2)
+
+    s2 = ceit_generator.load_students(p2)
+    assert len(s2) == 1
+    assert s2[0] == ("SANTOS, MARIA B.", "202110002")
+
+    # Case 3: Top title metadata in CSV before actual headers
+    p3 = os.path.join(tmp_path, "case3_top_metadata.csv")
+    with open(p3, "w", encoding="utf-8") as f:
+        f.write("CAVITE STATE UNIVERSITY\n")
+        f.write("OFFICIAL CLASS LIST 2026\n")
+        f.write("Department,Student No.,Student's Name,Status\n")
+        f.write('DIT,202110003,"REYES, CARLOS C.",Regular\n')
+
+    s3 = ceit_generator.load_students(p3)
+    assert len(s3) == 1
+    assert s3[0] == ("REYES, CARLOS C.", "202110003")
+
+    # Case 4: Headerless swapped CSV (Col 0: ID, Col 1: Name)
+    p4 = os.path.join(tmp_path, "case4_headerless_swapped.csv")
+    with open(p4, "w", encoding="utf-8") as f:
+        f.write('202110004,"GARCIA, ANA D."\n')
+        f.write('202110005,"LOPEZ, MARK E."\n')
+
+
+    s4 = ceit_generator.load_students(p4)
+    assert len(s4) == 2
+    assert s4[0] == ("GARCIA, ANA D.", "202110004")
+    assert s4[1] == ("LOPEZ, MARK E.", "202110005")
+
+    # Case 5: Empty roster validation check (headers only, no students)
+    p5 = os.path.join(tmp_path, "BSCS1-4 List of Students for 202612040-DCIT 21A - INTRODUCTION TO COMPUTING.csv")
+    with open(p5, "w", encoding="utf-8") as f:
+        f.write("Name,Student number\n")
+
+    val = process_schedule.validate_rosters(schedule_path, [p5])
+    assert len(val) == 1
+    assert val[0]["status"] == "warning"
+    assert val[0]["issue"] == "no_students"
+    assert "No students detected" in val[0]["message"]
+
 def test_script_api_methods(tmp_path):
     api = ScriptAPI()
     assert api.schedule_path == ""
@@ -218,4 +339,44 @@ def test_cancel_generation_and_by_class_artifacts(tmp_path):
     assert results["cancelled"] is True
     # Verify by_class exists in results
     assert "by_class" in results
+
+
+def test_generation_by_class_payload_structure_and_ui_compatibility(tmp_path):
+    schedule_path = os.path.join(WORKSPACE_DIR, "ORTEGA_SCHEDULE.xls")
+    roster_file = tmp_path / "BSCS1-4 List of Students for 202612040-DCIT 21A - INTRODUCTION TO COMPUTING.csv"
+    roster_file.write_text("Name,Student number\nOrtega, Dan,20261001\n", encoding="utf-8")
+
+    out_dir = tmp_path / "output"
+    out_dir.mkdir()
+
+    results = process_schedule.process_all(
+        schedule_path=schedule_path,
+        xlsx_files=[str(roster_file)],
+        output_dir_base=str(out_dir),
+        class_filter=["202612040_CS1-4"],
+        engine_filter=["ceit", "attendance", "grades"]
+    )
+
+    assert "by_class" in results
+    assert len(results["by_class"]) > 0
+
+    # Ensure each entry in by_class categories contains dictionaries with 'name' and 'path'
+    for course_sec, cat_dict in results["by_class"].items():
+        assert "ceit" in cat_dict
+        assert "attendance" in cat_dict
+        assert "grades" in cat_dict
+        for cat_name, file_list in cat_dict.items():
+            for item in file_list:
+                assert isinstance(item, dict), f"Expected dict in by_class[{course_sec}][{cat_name}], got {type(item)}"
+                assert "name" in item and isinstance(item["name"], str) and len(item["name"]) > 0
+                assert "path" in item and isinstance(item["path"], str) and len(item["path"]) > 0
+
+    # Verify ui.html contains defensive object-aware handling for item.path and item.name
+    ui_path = os.path.join(WORKSPACE_DIR, "executable", "ui.html")
+    with open(ui_path, "r", encoding="utf-8") as f:
+        ui_html = f.read()
+
+    assert 'typeof item === "object"' in ui_html
+    assert 'item.path || item.name' in ui_html
+    assert 'data-path=' in ui_html
 

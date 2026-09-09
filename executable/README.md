@@ -41,8 +41,8 @@ Before generating, make sure you have the following files ready:
 
 - Download class student rosters directly from [registrar.cvsu.edu.ph](https://registrar.cvsu.edu.ph/).
 
-> [!CAUTION]
-> **Strict Column Requirement:** Roster files must contain **only** the `Name` and `Student number` columns. If the file contains more than these two headers (such as Email, Course, Year, Section, Status, or Remarks), the parser will produce an error. Remove all extra columns before importing.
+> [!TIP]
+> **Roster Column Guidelines:** Roster files require `Name` and `Student number` in Columns A & B. Extra portal columns (such as Email, Course, Year, Section, Status, or Remarks) are automatically cleaned and ignored by the generator.
 
 - **Crucial:** Keep the official file naming format:
 
@@ -133,3 +133,16 @@ Please send the error logs, screenshots, and description of issue to **danjoseph
 ```
 
 _(e.g., `[CvSU Gen (Beta) - Schedule Parsing Error]`)_
+
+---
+
+## 🏷️ Version History
+
+- **v1.3 Beta**:
+  - **Smart Roster Parsing & Interactive Column Mapping**: Unified roster parsing engine with raw row inspection, custom header row selection, configurable Student Name and Student Number columns, and live parsed preview modal.
+  - **Offline Local Persistence**: Automatically saves custom column mappings and class linkages in browser `localStorage` (`cvsu_roster_mappings`, `cvsu_parsing_rules`) across sessions.
+  - **Complete CEIT Department & Subject Directory**: Integrated all 15 official CEIT prefixes (`AGEN`, `ABEN`, `ARCH`, `CENG`, `CIVL`, `COSC`, `CPEN`, `DCEE`, `DCIT`, `ECEN`, `EENG`, `IENG`, `INDT`, `SMT`, `ITEC`) with department badges and dedicated Help Drawer directory.
+  - **Manual Timetable Linking**: Non-standard roster filenames can be linked directly to timetable classes using an inline dropdown or the mapping modal.
+  - **Theme System Overhaul**: Declared native `color-scheme` support for both Dark and Light themes, high-contrast calendar picker indicators, glassmorphism scrollbars, and dynamic Sun/Moon toggle.
+- **v1.2 Beta**:
+  - Initial beta release with Stepper readiness tracker, toast notification engine, responsive help drawer, and graceful execution cancellation.

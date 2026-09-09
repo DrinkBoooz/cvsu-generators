@@ -4,6 +4,7 @@ import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import process_schedule
+import roster_parser
 
 import threading
 import json
@@ -26,6 +27,7 @@ class ScriptAPI:
         self.schedule_path = ""
         self.output_dir = ""
         self.rosters = []
+        self.roster_configs = {}
         self._is_processing = False
         self._cancel_event = threading.Event()
         self._lock = threading.Lock()
@@ -48,7 +50,7 @@ class ScriptAPI:
         if result and len(result) > 0:
             self.schedule_path = result[0]
             metadata = process_schedule.inspect_schedule_file(self.schedule_path)
-            validation = process_schedule.validate_rosters(self.schedule_path, self.rosters) if self.rosters else []
+            validation = process_schedule.validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs) if self.rosters else []
             return {
                 "path": self.schedule_path,
                 "metadata": metadata,
@@ -80,7 +82,7 @@ class ScriptAPI:
         if target_path and os.path.exists(target_path):
             self.schedule_path = target_path
             metadata = process_schedule.inspect_schedule_file(self.schedule_path)
-            validation = process_schedule.validate_rosters(self.schedule_path, self.rosters) if self.rosters else []
+            validation = process_schedule.validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs) if self.rosters else []
             return {
                 "path": self.schedule_path,
                 "metadata": metadata,
@@ -88,7 +90,9 @@ class ScriptAPI:
             }
         return {"path": "", "metadata": None, "validation": []}
 
-    def browse_rosters(self):
+    def browse_rosters(self, roster_configs=None):
+        if roster_configs is not None:
+            self.roster_configs = roster_configs
         file_types = ('Student Lists (*.csv;*.xlsx;*.xls)', 'All files (*.*)')
         result = self._window.create_file_dialog(
             webview.OPEN_DIALOG,
@@ -101,7 +105,7 @@ class ScriptAPI:
             for r in result:
                 if r not in existing:
                     self.rosters.append(r)
-            validation = process_schedule.validate_rosters(self.schedule_path, self.rosters)
+            validation = process_schedule.validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs)
             return {
                 "count": len(self.rosters),
                 "rosters": self.rosters,
@@ -110,10 +114,12 @@ class ScriptAPI:
         return {
             "count": len(self.rosters),
             "rosters": self.rosters,
-            "validation": process_schedule.validate_rosters(self.schedule_path, self.rosters) if self.rosters else []
+            "validation": process_schedule.validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs) if self.rosters else []
         }
 
-    def handle_dropped_rosters(self, files_payload):
+    def handle_dropped_rosters(self, files_payload, roster_configs=None):
+        if roster_configs is not None:
+            self.roster_configs = roster_configs
         cache_dir = os.path.join(tempfile.gettempdir(), "cvsu_cache", "rosters")
         os.makedirs(cache_dir, exist_ok=True)
 
@@ -140,14 +146,16 @@ class ScriptAPI:
                 self.rosters.append(p)
                 existing.add(p)
 
-        validation = process_schedule.validate_rosters(self.schedule_path, self.rosters)
+        validation = process_schedule.validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs)
         return {
             "count": len(self.rosters),
             "rosters": self.rosters,
             "validation": validation
         }
 
-    def remove_roster(self, path_or_index):
+    def remove_roster(self, path_or_index, roster_configs=None):
+        if roster_configs is not None:
+            self.roster_configs = roster_configs
         if isinstance(path_or_index, int) and 0 <= path_or_index < len(self.rosters):
             self.rosters.pop(path_or_index)
         elif path_or_index in self.rosters:
@@ -155,17 +163,34 @@ class ScriptAPI:
         return {
             "count": len(self.rosters),
             "rosters": self.rosters,
-            "validation": process_schedule.validate_rosters(self.schedule_path, self.rosters) if self.rosters else []
+            "validation": process_schedule.validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs) if self.rosters else []
         }
 
     def clear_rosters(self):
         self.rosters = []
         return {"count": 0, "rosters": [], "validation": []}
 
-    def validate_rosters(self):
+    def validate_rosters(self, roster_configs=None):
+        if roster_configs is not None:
+            self.roster_configs = roster_configs
         if not self.rosters:
             return []
-        return process_schedule.validate_rosters(self.schedule_path, self.rosters)
+        return process_schedule.validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs)
+
+    def inspect_roster(self, path_or_filename, overrides=None):
+        target_path = None
+        for r in self.rosters:
+            if r == path_or_filename or os.path.basename(r) == path_or_filename:
+                target_path = r
+                break
+        if not target_path and os.path.exists(path_or_filename):
+            target_path = path_or_filename
+        if not target_path:
+            return {"status": "error", "message": f"File not found: {path_or_filename}"}
+        return roster_parser.inspect_roster(target_path, overrides=overrides)
+
+    def get_ceit_prefix_directory(self):
+        return roster_parser.CEIT_PREFIX_MAP
 
     def browse_output(self):
         result = self._window.create_file_dialog(
@@ -217,16 +242,20 @@ class ScriptAPI:
                 return {"status": "error", "message": str(e)}
         return {"status": "error", "message": "Logs directory does not exist"}
 
-    def detect_classes(self):
+    def detect_classes(self, roster_configs=None):
+        if roster_configs is not None:
+            self.roster_configs = roster_configs
         if not self.schedule_path or not self.rosters:
             return []
         try:
-            return process_schedule.detect_classes(self.schedule_path, self.rosters)
+            return process_schedule.detect_classes(self.schedule_path, self.rosters, roster_configs=self.roster_configs)
         except Exception as e:
             process_schedule.logger.error(f"Error in detect_classes: {e}")
             return []
 
-    def run_generation(self, type_overrides=None, date_overrides=None, class_filter=None, engine_filter=None):
+    def run_generation(self, type_overrides=None, date_overrides=None, class_filter=None, engine_filter=None, roster_configs=None):
+        if roster_configs is not None:
+            self.roster_configs = roster_configs
         with self._lock:
             if self._is_processing:
                 return {"status": "error", "message": "A generation task is already in progress."}
@@ -271,7 +300,8 @@ class ScriptAPI:
                         class_filter=class_filter,
                         engine_filter=engine_filter,
                         progress_callback=_progress_hook,
-                        cancel_event=self._cancel_event
+                        cancel_event=self._cancel_event,
+                        roster_configs=self.roster_configs
                     )
                     
                     gen = results["generated"]

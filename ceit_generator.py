@@ -747,89 +747,18 @@ class GeneratorFactory:
         ]
 
 # ══ Student file loaders ══════════════════════════════════════════════════════
-def _fix_encoding(text: str) -> str:
-    if not text:
-        return text
-    text = text.replace("Ã±", "ñ")
-    text = text.replace("Ã\x91", "Ñ")
-    text = text.replace("Ã", "Ñ")
-    return text
+import roster_parser
 
-def load_students_excel(path: str) -> list:
-    """Read Excel via ZIP/XML — avoids openpyxl style compatibility bugs."""
-    from xml.etree import ElementTree as ET
-    import re
-    NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
-    ns = {"x": NS}
-
-    with zipfile.ZipFile(path) as z:
-        names = z.namelist()
-        shared = []
-        if "xl/sharedStrings.xml" in names:
-            for si in ET.fromstring(z.read("xl/sharedStrings.xml")).findall("x:si", ns):
-                shared.append("".join(t.text or "" for t in si.iter(f"{{{NS}}}t")))
-
-        sheet = next((n for n in names
-                      if n.startswith("xl/worksheets/sheet") and n.endswith(".xml")), None)
-        if not sheet:
-            raise RuntimeError("No worksheet found.")
-
-        def cell_val(c):
-            t = c.get("t", "")
-            if t == "inlineStr":
-                is_el = c.find("x:is", ns)
-                if is_el is not None:
-                    return "".join(x.text or "" for x in is_el.iter(f"{{{NS}}}t"))
-                return ""
-            v = c.find("x:v", ns)
-            if v is None or v.text is None: return ""
-            return shared[int(v.text)] if t == "s" else v.text
-
-        students = []
-        for i, row in enumerate(
-                ET.fromstring(z.read(sheet)).findall(".//x:sheetData/x:row", ns)):
-            cell_dict = {}
-            for c_el in row.findall("x:c", ns):
-                ref = c_el.get("r", "")
-                col_let = re.sub(r'\d+', '', ref).upper()
-                if col_let:
-                    cell_dict[col_let] = cell_val(c_el).strip()
-            if "A" in cell_dict or "B" in cell_dict:
-                a = cell_dict.get("A", "")
-                b = cell_dict.get("B", "")
-            else:
-                cells = row.findall("x:c", ns)
-                a = cell_val(cells[0]).strip() if cells else ""
-                b = cell_val(cells[1]).strip() if len(cells) > 1 else ""
-            if i == 0 and a.lower() in ("name", "student name", "full name"):
-                continue
-            if a:
-                students.append((_fix_encoding(a), _fix_encoding(b)))
-    return students
-
-def load_students_csv(path: str) -> list:
-    students = []
-    encodings = ["utf-8", "utf-16", "utf-8-sig", "cp1252"]
-    for enc in encodings:
-        try:
-            with open(path, newline="", encoding=enc) as f:
-                for i, row in enumerate(csv.reader(f)):
-                    if i == 0 and row and row[0].lower() in ("name","student name","full name"):
-                        continue
-                    if len(row) >= 2:
-                        students.append((_fix_encoding(row[0].strip()), _fix_encoding(row[1].strip())))
-                    elif len(row) == 1 and row[0].strip():
-                        students.append((_fix_encoding(row[0].strip()), ""))
-            return students
-        except (UnicodeDecodeError, csv.Error):
-            continue
-    raise RuntimeError(f"Could not parse CSV {path} with any known encoding.")
+# Delegate to unified roster_parser module while maintaining backwards compatibility
+_fix_encoding = roster_parser._fix_encoding
+_is_id_header = roster_parser._is_id_header
+_is_name_header = roster_parser._is_name_header
+_detect_roster_columns = roster_parser._detect_roster_columns
+load_students_excel = roster_parser.load_students_excel
+load_students_csv = roster_parser.load_students_csv
+load_students = roster_parser.load_students
 
 
-def load_students(path: str) -> list:
-    ext = os.path.splitext(path)[1].lower()
-    return load_students_excel(path) if ext in (".xlsx", ".xls", ".xlsm") \
-           else load_students_csv(path)
 
 # ══ CLI ═══════════════════════════════════════════════════════════════════════
 def prompt(label: str, default: str = "") -> str:

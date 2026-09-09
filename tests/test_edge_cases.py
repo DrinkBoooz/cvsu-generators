@@ -111,7 +111,7 @@ def test_encoding_anomalies(temp_env):
     # We can directly test load_students
     try:
         students = ceit_generator.load_students(roster_path)
-        assert students[1][1] == "Niño, Peña"
-        assert students[2][1] == "O’Connor, John"
+        assert students[0] == ("Niño, Peña", "123")
+        assert students[1] == ("O’Connor, John", "124")
     except Exception as e:
         pytest.fail(f"Encoding failed: {e}")
