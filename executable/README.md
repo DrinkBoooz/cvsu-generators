@@ -133,3 +133,15 @@ Please send the error logs, screenshots, and description of issue to **danjoseph
 ```
 
 _(e.g., `[CvSU Gen (Beta) - Schedule Parsing Error]`)_
+
+---
+
+## 🏷️ Version History
+
+- **v1.3 Beta**:
+  - **Theme System Overhaul**: Declared native `color-scheme` support for both Dark and Light themes.
+  - **Calendar Picker Visibility**: Enhanced `::-webkit-calendar-picker-indicator` with automatic contrast inversion and brightness boost in Dark Mode, eliminating the dark-on-dark calendar icon issue.
+  - **Themed Form Controls & Scrollbars**: Added modern glassmorphism scrollbars, select dropdown option theming, input placeholder styling, and date input focus rings.
+  - **Dynamic Theme Toggle**: Header theme button dynamically toggles Sun/Moon icons, dynamic labels ("Light" / "Dark"), and accessible tooltips.
+- **v1.2 Beta**:
+  - Initial beta release with Stepper readiness tracker, toast notification engine, responsive help drawer, and graceful execution cancellation.

@@ -18,6 +18,7 @@
       }
 
       :root {
+        color-scheme: light;
         --bg-base: #f8fafc;
         --surface-card: rgba(255, 255, 255, 0.88);
         --surface-subtle: rgba(0, 0, 0, 0.03);
@@ -45,6 +46,7 @@
       }
 
       [data-bs-theme="dark"] {
+        color-scheme: dark;
         --bg-base: #0b0f17;
         --surface-card: rgba(17, 24, 39, 0.72);
         --surface-subtle: rgba(255, 255, 255, 0.04);
@@ -89,6 +91,39 @@
       input,
       textarea {
         user-select: text !important;
+      }
+
+      /* Institutional Emerald text selection highlight */
+      ::selection {
+        background: var(--accent-emerald);
+        color: #ffffff;
+      }
+
+      /* Unified input placeholder contrast */
+      input::placeholder,
+      textarea::placeholder {
+        color: var(--text-muted);
+        opacity: 0.8;
+      }
+
+      /* Modern themed scrollbars for WebView2 & Chromium */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: var(--border-subtle);
+        border-radius: 999px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: var(--text-muted);
+      }
+      * {
+        scrollbar-width: thin;
+        scrollbar-color: var(--border-subtle) transparent;
       }
 
       .app-container {
@@ -549,6 +584,10 @@
       .type-dropdown:focus {
         border-color: var(--border-focus);
       }
+      .type-dropdown option {
+        background-color: var(--surface-elevated);
+        color: var(--text-primary);
+      }
 
       /* ── Form Inputs & Date Presets ────────────────────────────────────── */
       .form-group {
@@ -618,6 +657,31 @@
         color: var(--text-primary);
         font-size: 13px;
         outline: none;
+        transition: border-color 0.2s ease, background 0.2s ease;
+      }
+      .date-input:focus {
+        border-color: var(--border-focus);
+        background: var(--surface-elevated);
+      }
+      .date-input::-webkit-calendar-picker-indicator {
+        cursor: pointer;
+        opacity: 0.7;
+        border-radius: 4px;
+        padding: 2px;
+        transition: opacity 0.2s ease, filter 0.2s ease, transform 0.15s ease;
+      }
+      .date-input::-webkit-calendar-picker-indicator:hover {
+        opacity: 1;
+        transform: scale(1.08);
+      }
+      /* Dark mode calendar icon inversion for high contrast and crystal clarity */
+      [data-bs-theme="dark"] .date-input::-webkit-calendar-picker-indicator {
+        filter: invert(1) brightness(1.25);
+        opacity: 0.85;
+      }
+      [data-bs-theme="dark"] .date-input::-webkit-calendar-picker-indicator:hover {
+        filter: invert(1) brightness(1.5);
+        opacity: 1;
       }
       .preset-chips {
         display: flex;
@@ -1413,7 +1477,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 8px">
               <span class="brand-title">CvSU Gen</span>
-              <span class="badge-version">v1.2 Beta</span>
+              <span class="badge-version">v1.3 Beta</span>
             </div>
             <div class="brand-subtitle">
               Cavite State University Document Automation
@@ -1424,30 +1488,34 @@
         <div class="header-actions">
           <button
             class="nav-btn"
+            id="btnToggleTheme"
             onclick="toggleTheme()"
-            title="Toggle Dark/Light Mode"
+            title="Switch to Light Mode"
+            aria-label="Toggle Dark/Light Mode"
           >
-            <svg
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <circle cx="12" cy="12" r="5"></circle>
-              <line x1="12" y1="1" x2="12" y2="3"></line>
-              <line x1="12" y1="21" x2="12" y2="23"></line>
-              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-              <line x1="1" y1="12" x2="3" y2="12"></line>
-              <line x1="21" y1="12" x2="23" y2="12"></line>
-              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-            </svg>
-            Theme
+            <span id="themeIcon" style="display: inline-flex; align-items: center">
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="12" cy="12" r="5"></circle>
+                <line x1="12" y1="1" x2="12" y2="3"></line>
+                <line x1="12" y1="21" x2="12" y2="23"></line>
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                <line x1="1" y1="12" x2="3" y2="12"></line>
+                <line x1="21" y1="12" x2="23" y2="12"></line>
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+              </svg>
+            </span>
+            <span id="themeLabel">Light</span>
           </button>
           <button
             class="nav-btn"
@@ -3074,11 +3142,35 @@
       });
 
       // ── Theme Management ──────────────────────────────────────────────────
+      const SUN_ICON_SVG = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>`;
+
+      const MOON_ICON_SVG = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>`;
+
+      function updateThemeButtonState(theme) {
+        const btn = document.getElementById("btnToggleTheme");
+        const iconSpan = document.getElementById("themeIcon");
+        const labelSpan = document.getElementById("themeLabel");
+        if (!btn || !iconSpan || !labelSpan) return;
+
+        if (theme === "dark") {
+          iconSpan.innerHTML = SUN_ICON_SVG;
+          labelSpan.textContent = "Light";
+          btn.title = "Switch to Light Mode";
+          btn.setAttribute("aria-label", "Switch to Light Mode");
+        } else {
+          iconSpan.innerHTML = MOON_ICON_SVG;
+          labelSpan.textContent = "Dark";
+          btn.title = "Switch to Dark Mode";
+          btn.setAttribute("aria-label", "Switch to Dark Mode");
+        }
+      }
+
       function toggleTheme() {
         const doc = document.documentElement;
         const newTheme =
           doc.getAttribute("data-bs-theme") === "dark" ? "light" : "dark";
         doc.setAttribute("data-bs-theme", newTheme);
+        updateThemeButtonState(newTheme);
         try {
           localStorage.setItem("cvsu_gen_theme", newTheme);
         } catch (e) {}
@@ -3086,9 +3178,9 @@
 
       function loadSavedTheme() {
         const saved = localStorage.getItem("cvsu_gen_theme");
-        if (saved) {
-          document.documentElement.setAttribute("data-bs-theme", saved);
-        }
+        const theme = saved || "dark";
+        document.documentElement.setAttribute("data-bs-theme", theme);
+        updateThemeButtonState(theme);
       }
 
       // ── Drawers Controller ────────────────────────────────────────────────
