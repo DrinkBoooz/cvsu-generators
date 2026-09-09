@@ -132,6 +132,8 @@ def get_prefix_metadata(text: str) -> dict:
                 "name": meta["name"],
                 "dept": meta["dept"],
                 "dept_code": meta["dept_code"],
+                "department_name": meta["dept"],
+                "department_code": meta["dept_code"],
                 "icon": meta["icon"],
                 "badge": meta["badge"]
             }
@@ -499,36 +501,92 @@ def inspect_roster(path: str, max_rows: int = 8, overrides: dict = None) -> dict
         # Determine columns & header row
         auto_name, auto_id, auto_header_idx = _detect_roster_columns(raw_rows)
 
-        name_col = overrides.get("name_col") if overrides.get("name_col") is not None else auto_name
-        id_col = overrides.get("id_col") if overrides.get("id_col") is not None else auto_id
-        header_row = overrides.get("header_row") if overrides.get("header_row") is not None else auto_header_idx
+        # Normalize incoming overrides (support name_col/name_column, id_col/id_column)
+        raw_name = overrides.get("name_col") if overrides.get("name_col") is not None else overrides.get("name_column")
+        raw_id = overrides.get("id_col") if overrides.get("id_col") is not None else overrides.get("id_column")
+        raw_header = overrides.get("header_row")
 
-        # If name_col or id_col are integers in string format, normalize
-        if not is_excel:
-            try:
-                name_col = int(name_col) if name_col is not None else auto_name
-            except (ValueError, TypeError):
-                pass
-            try:
-                id_col = int(id_col) if id_col is not None else auto_id
-            except (ValueError, TypeError):
-                pass
+        if raw_name is not None:
+            if is_excel:
+                if isinstance(raw_name, int) and 0 <= raw_name < len(available_cols):
+                    name_col = available_cols[raw_name]
+                elif str(raw_name).isdigit() and 0 <= int(raw_name) < len(available_cols):
+                    name_col = available_cols[int(raw_name)]
+                else:
+                    name_col = str(raw_name).upper()
+            else:
+                try:
+                    name_col = int(raw_name)
+                except (ValueError, TypeError):
+                    name_col = raw_name
+        else:
+            name_col = auto_name
 
-        # Build raw table preview
+        if raw_id is not None:
+            if is_excel:
+                if isinstance(raw_id, int) and 0 <= raw_id < len(available_cols):
+                    id_col = available_cols[raw_id]
+                elif str(raw_id).isdigit() and 0 <= int(raw_id) < len(available_cols):
+                    id_col = available_cols[int(raw_id)]
+                else:
+                    id_col = str(raw_id).upper()
+            else:
+                try:
+                    id_col = int(raw_id)
+                except (ValueError, TypeError):
+                    id_col = raw_id
+        else:
+            id_col = auto_id
+
+        if raw_header is not None:
+            try:
+                header_row = int(raw_header)
+            except (ValueError, TypeError):
+                header_row = auto_header_idx
+        else:
+            header_row = auto_header_idx
+
+        # Build raw table previews: both list-of-lists (raw_rows) and list-of-dicts (raw_preview)
+        raw_rows_list = []
         preview_rows = []
         for r_idx in range(min(max_rows, len(raw_rows))):
             row_data = raw_rows[r_idx]
             if is_excel and isinstance(row_data, dict):
                 row_cells = {c: row_data.get(c, "") for c in available_cols}
+                row_as_list = [row_data.get(c, "") for c in available_cols]
             elif isinstance(row_data, list):
                 row_cells = {c: (row_data[c] if c < len(row_data) else "") for c in available_cols}
+                row_as_list = [str(row_data[c]) if c < len(row_data) else "" for c in range(len(available_cols))]
             else:
                 row_cells = {}
+                row_as_list = []
+            raw_rows_list.append(row_as_list)
             preview_rows.append({
                 "row_index": r_idx,
                 "is_header": (r_idx == header_row),
                 "cells": row_cells
             })
+
+        # Build rich available_columns objects
+        available_cols_obj = []
+        for idx, col_ref in enumerate(available_cols):
+            col_header = ""
+            if header_row is not None and 0 <= header_row < len(raw_rows):
+                hr = raw_rows[header_row]
+                if is_excel and isinstance(hr, dict):
+                    col_header = hr.get(col_ref, "")
+                elif isinstance(hr, list) and idx < len(hr):
+                    col_header = str(hr[idx])
+            col_name = f"Col {col_ref}: {col_header}" if col_header else f"Column {col_ref}"
+            available_cols_obj.append({
+                "index": idx,
+                "col_ref": col_ref,
+                "letter": str(col_ref),
+                "name": col_name
+            })
+
+        auto_name_idx = available_cols.index(auto_name) if auto_name in available_cols else 0
+        auto_id_idx = available_cols.index(auto_id) if auto_id in available_cols else (1 if len(available_cols) > 1 else 0)
 
         # Parse students with active config
         students = load_students(
@@ -538,26 +596,40 @@ def inspect_roster(path: str, max_rows: int = 8, overrides: dict = None) -> dict
             header_row=header_row
         )
 
+        parsed_students_obj = [
+            {"name": s[0], "student_number": s[1]}
+            for s in students
+        ]
+
         hints = parse_filename_hints(filename)
+        fmt = "XLSX" if ext in (".xlsx", ".xlsm") else ("XLS" if ext == ".xls" else "CSV")
+
         return {
             "status": "success",
             "filename": filename,
             "path": path,
             "is_excel": is_excel,
+            "format": fmt,
             "total_rows": len(raw_rows),
-            "available_columns": available_cols,
+            "available_columns": available_cols_obj,
             "columns": available_cols,
+            "raw_rows": raw_rows_list,
+            "raw_preview": preview_rows,
+            "detected_header_row": auto_header_idx,
+            "detected_name_column": auto_name_idx,
+            "detected_id_column": auto_id_idx,
             "auto_name_col": auto_name,
             "auto_id_col": auto_id,
             "auto_header_row": auto_header_idx,
             "active_name_col": name_col,
             "active_id_col": id_col,
             "active_header_row": header_row,
-            "raw_preview": preview_rows,
+            "parsed_students": parsed_students_obj,
             "parsed_preview": students[:6],
             "student_count": len(students),
             "ceit_metadata": get_prefix_metadata(filename),
-            "filename_hints": hints
+            "filename_hints": hints,
+            "recommended_filename": hints.get("recommended_filename", "")
         }
     except Exception as e:
         return {

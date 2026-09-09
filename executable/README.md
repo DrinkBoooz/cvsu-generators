@@ -138,6 +138,10 @@ _(e.g., `[CvSU Gen (Beta) - Schedule Parsing Error]`)_
 
 ## 🏷️ Version History
 
+- **v1.4 Beta**:
+  - **Modern Studio Split-Grid Dashboard**: Re-architected the main workspace into a responsive two-column dashboard layout (Data Ingestion on the left, Configuration & Document Packages Control Deck on the right) providing zero-scroll efficiency on standard 1080p+ viewports.
+  - **Floating Bottom Action Deck**: Pinned frosted glassmorphism dock featuring real-time system readiness checklist pills (`Schedule`, `Rosters`, `Output`) and an immediate **Initialize Workflow** primary CTA accessible from anywhere on screen.
+  - **Visual Polish & Glassmorphism Depth**: Enhanced frosted glass backdrop filters (`backdrop-filter: blur(24px)`), gradient borders, glowing micro-interactions, responsive dropzone hover states, and streamlined layout density.
 - **v1.3 Beta**:
   - **Smart Roster Parsing & Interactive Column Mapping**: Unified roster parsing engine with raw row inspection, custom header row selection, configurable Student Name and Student Number columns, and live parsed preview modal.
   - **Offline Local Persistence**: Automatically saves custom column mappings and class linkages in browser `localStorage` (`cvsu_roster_mappings`, `cvsu_parsing_rules`) across sessions.
