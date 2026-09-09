@@ -78,9 +78,6 @@
         -webkit-font-smoothing: antialiased;
         min-height: 100vh;
         padding-bottom: 60px;
-        transition:
-          background-color 0.3s ease,
-          color 0.3s ease;
         user-select: none;
       }
 
@@ -143,10 +140,6 @@
         -webkit-backdrop-filter: blur(20px) saturate(180%);
         border-bottom: 1px solid var(--border-subtle);
         box-shadow: var(--header-shadow);
-        transition:
-          background-color 0.3s ease,
-          border-color 0.3s ease,
-          box-shadow 0.3s ease;
       }
       .top-header {
         max-width: 1400px;
@@ -221,7 +214,7 @@
         display: flex;
         align-items: center;
         gap: 6px;
-        transition: all 0.2s ease;
+        transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
       }
       .nav-btn:hover {
         color: var(--text-primary);
@@ -243,8 +236,8 @@
         padding: 24px 26px;
         margin-bottom: 0;
         transition:
-          border-color 0.3s ease,
-          box-shadow 0.3s ease,
+          border-color 0.2s ease,
+          box-shadow 0.2s ease,
           transform 0.2s ease;
       }
       .glass-card:hover {
@@ -321,7 +314,7 @@
         padding: 22px 18px;
         text-align: center;
         cursor: pointer;
-        transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -515,7 +508,7 @@
         border-radius: var(--radius-md);
         padding: 14px;
         cursor: pointer;
-        transition: all 0.2s ease;
+        transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
         display: flex;
         align-items: center;
         gap: 10px;
@@ -650,7 +643,7 @@
         font-weight: 500;
         width: 100%;
         outline: none;
-        transition: all 0.2s;
+        transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
       }
       .text-input:focus {
         border-color: var(--border-focus);
@@ -666,7 +659,7 @@
         font-size: 14px;
         cursor: pointer;
         white-space: nowrap;
-        transition: all 0.2s;
+        transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
       }
       .btn-browse:hover {
         background: var(--surface-card);
@@ -757,7 +750,7 @@
         justify-content: center;
         gap: 10px;
         box-shadow: 0 8px 24px var(--accent-emerald-glow);
-        transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, opacity 0.2s ease;
       }
       .btn-primary-action:hover:not(:disabled) {
         transform: translateY(-2px);
@@ -869,7 +862,7 @@
         align-items: center;
         gap: 8px;
         box-shadow: 0 4px 12px var(--accent-emerald-glow);
-        transition: all 0.2s;
+        transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
       }
       .btn-open-folder:hover {
         transform: translateY(-1px);
@@ -1067,7 +1060,6 @@
         border-top: 1px solid var(--border-subtle);
         background: var(--header-bg);
         padding: 8px 20px;
-        transition: all 0.3s ease;
       }
       .stepper-track {
         max-width: 1400px;
@@ -1090,7 +1082,7 @@
         font-weight: 600;
         color: var(--text-secondary);
         cursor: pointer;
-        transition: all 0.2s ease;
+        transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
         white-space: nowrap;
       }
       .step-chip:hover {
@@ -1194,7 +1186,7 @@
         border: 1px solid var(--border-subtle);
         background: var(--surface-card);
         color: var(--text-secondary);
-        transition: all 0.25s ease;
+        transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
       }
       .summary-pill.ready {
         border-color: rgba(16, 185, 129, 0.45);
@@ -1210,7 +1202,7 @@
         height: 7px;
         border-radius: 50%;
         background: var(--text-muted);
-        transition: all 0.25s ease;
+        transition: background-color 0.15s ease, box-shadow 0.15s ease;
       }
       .action-bar-hint {
         font-size: 12px;
@@ -1235,7 +1227,7 @@
         gap: 8px;
         cursor: pointer;
         box-shadow: 0 4px 14px var(--accent-emerald-glow);
-        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.15s ease, opacity 0.15s ease;
       }
       .btn-dock-action:hover:not(:disabled) {
         background: linear-gradient(135deg, var(--accent-emerald-hover), var(--accent-emerald));
@@ -1419,7 +1411,7 @@
         font-weight: 600;
         color: var(--text-secondary);
         cursor: pointer;
-        transition: all 0.2s ease;
+        transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
       }
       .filter-pill:hover,
       .filter-pill.active {
@@ -1475,7 +1467,7 @@
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        transition: all 0.2s ease;
+        transition: color 0.15s ease, background-color 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
         margin-top: 12px;
       }
       .btn-cancel-gen:hover {
@@ -1542,7 +1534,7 @@
         display: inline-flex;
         align-items: center;
         gap: 4px;
-        transition: all 0.15s ease;
+        transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
         flex-shrink: 0;
       }
       .btn-launch-file:hover {
@@ -1570,7 +1562,7 @@
         color: var(--text-secondary);
         cursor: pointer;
         white-space: nowrap;
-        transition: all 0.2s ease;
+        transition: color 0.15s ease, background-color 0.15s ease;
       }
       .drawer-tab.active,
       .drawer-tab:hover {
@@ -1648,7 +1640,7 @@
         display: inline-flex;
         align-items: center;
         gap: 4px;
-        transition: all 0.15s ease;
+        transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
         flex-shrink: 0;
       }
       .btn-map-columns:hover {
@@ -1846,7 +1838,7 @@
         font-weight: 700;
         cursor: pointer;
         box-shadow: 0 2px 8px var(--accent-emerald-glow);
-        transition: all 0.2s ease;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
       }
       .btn-primary-compact:hover {
         transform: translateY(-1px);
@@ -1919,7 +1911,7 @@
         display: inline-flex;
         align-items: center;
         gap: 4px;
-        transition: all 0.15s ease;
+        transition: color 0.15s ease, border-color 0.15s ease;
       }
       .btn-copy-recommended:hover {
         border-color: var(--accent-emerald);
@@ -1993,7 +1985,7 @@
         padding: 2px 6px;
         font-size: 10.5px;
         cursor: pointer;
-        transition: all 0.15s ease;
+        transition: color 0.15s ease, border-color 0.15s ease;
         white-space: nowrap;
       }
       .btn-copy-rec-sm:hover {
@@ -2009,7 +2001,7 @@
         font-size: 11px;
         font-weight: 700;
         cursor: pointer;
-        transition: all 0.15s ease;
+        transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
         white-space: nowrap;
       }
       .btn-use-match:hover {
@@ -2025,6 +2017,28 @@
         padding: 2px 6px;
         border-radius: 4px;
         white-space: nowrap;
+      }
+
+      /* ── Theme Transition Performance & View Transitions Engine ─────────── */
+      .theme-transitioning,
+      .theme-transitioning *,
+      .theme-transitioning *::before,
+      .theme-transitioning *::after {
+        transition: none !important;
+      }
+
+      ::view-transition-old(root),
+      ::view-transition-new(root) {
+        animation-duration: 0.22s;
+        animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        ::view-transition-group(*),
+        ::view-transition-old(*),
+        ::view-transition-new(*) {
+          animation: none !important;
+        }
       }
     </style>
   </head>
@@ -2057,7 +2071,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 8px">
               <span class="brand-title">CvSU Gen</span>
-              <span class="badge-version">v1.5 Beta</span>
+              <span class="badge-version">v1.6 Beta</span>
             </div>
             <div class="brand-subtitle">
               Cavite State University Document Automation
@@ -4240,13 +4254,34 @@
 
       function toggleTheme() {
         const doc = document.documentElement;
-        const newTheme =
-          doc.getAttribute("data-bs-theme") === "dark" ? "light" : "dark";
-        doc.setAttribute("data-bs-theme", newTheme);
-        updateThemeButtonState(newTheme);
-        try {
-          localStorage.setItem("cvsu_gen_theme", newTheme);
-        } catch (e) {}
+        const currentTheme = doc.getAttribute("data-bs-theme") || "dark";
+        const newTheme = currentTheme === "dark" ? "light" : "dark";
+
+        const applyTheme = () => {
+          doc.classList.add("theme-transitioning");
+          doc.setAttribute("data-bs-theme", newTheme);
+          updateThemeButtonState(newTheme);
+          try {
+            localStorage.setItem("cvsu_gen_theme", newTheme);
+          } catch (e) {}
+          // Force layout flush and remove suppression on next animation frame
+          void doc.offsetHeight;
+          requestAnimationFrame(() => {
+            doc.classList.remove("theme-transitioning");
+          });
+        };
+
+        const prefersReducedMotion =
+          window.matchMedia &&
+          window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+        if (document.startViewTransition && !prefersReducedMotion) {
+          document.startViewTransition(() => {
+            applyTheme();
+          });
+        } else {
+          applyTheme();
+        }
       }
 
       function loadSavedTheme() {

@@ -138,6 +138,10 @@ _(e.g., `[CvSU Gen (Beta) - Schedule Parsing Error]`)_
 
 ## 🏷️ Version History
 
+- **v1.6 Beta**:
+  - **Zero-Lag Theme Engine & View Transitions**: Eliminated light-to-dark mode transition stutter and frame drops using the modern View Transitions API (`document.startViewTransition`) for silky smooth, GPU-composited cross-fades.
+  - **Transition Storm Elimination**: Resolved runaway cascade of 720+ concurrent CSS transition events across scrollbars, borders, text colors, and backgrounds during theme toggles by introducing synchronous `.theme-transitioning` transition suppression.
+  - **Backdrop-Filter Compositor Optimization**: Prevented GPU shader thrashing across frosted glass containers (`.top-nav-bar`, `.bottom-action-bar`, `.glass-card`), replacing wildcard `transition: all` rules across ~35 UI components with targeted GPU-friendly property transitions (`transform`, `box-shadow`, `border-color`).
 - **v1.5 Beta**:
   - **Modularized Architecture (`modules/`)**: Re-architected the entire Python backend into a cleanly structured single package (`modules/common`, `modules/models`, `modules/parsers`, `modules/generators`, `modules/services`) with backward-compatible facades at the root.
   - **Output Parity & Roster Preservation**: Eliminated false header rejection ensuring students with surnames matching header keywords (e.g. `NAME, ZULEIKAH MARIJ C.`) are preserved, and normalized university portal enye encoding glitches (e.g. `SAÃEZ` $\rightarrow$ `SAÑEZ`).
