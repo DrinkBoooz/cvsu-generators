@@ -43,7 +43,7 @@ def test_ui_html_matches_readme_instructions():
     assert "Columns A &amp; B" in ui_content or "Columns A & B" in ui_content
 
     # Verify current application version badge
-    assert "v1.3 Beta" in ui_content
+    assert "v1.5 Beta" in ui_content
 
     # Verify official roster naming format from README.md
     assert "{Course/Sec} List of Students for {ScheduleCode}-{Subject}.xlsx" in ui_content

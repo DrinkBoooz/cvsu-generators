@@ -127,9 +127,9 @@
       }
 
       .app-container {
-        max-width: 900px;
+        max-width: 1400px;
         margin: 0 auto;
-        padding: 24px 20px 60px 20px;
+        padding: 20px 24px 110px 24px;
       }
 
       /* ── Top Header Navigation (Sticky Glassmorphism Bar) ──────────────── */
@@ -149,9 +149,9 @@
           box-shadow 0.3s ease;
       }
       .top-header {
-        max-width: 900px;
+        max-width: 1400px;
         margin: 0 auto;
-        padding: 14px 20px;
+        padding: 12px 24px;
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -240,11 +240,38 @@
         border: 1px solid var(--border-subtle);
         border-radius: var(--radius-xl);
         box-shadow: var(--shadow-card);
-        padding: 28px;
-        margin-bottom: 24px;
+        padding: 24px 26px;
+        margin-bottom: 0;
         transition:
           border-color 0.3s ease,
-          box-shadow 0.3s ease;
+          box-shadow 0.3s ease,
+          transform 0.2s ease;
+      }
+      .glass-card:hover {
+        border-color: rgba(16, 185, 129, 0.22);
+      }
+
+      /* ── Modern Studio 2-Column Dashboard Grid ─────────────────────────── */
+      .dashboard-grid {
+        display: grid;
+        grid-template-columns: minmax(380px, 1fr) minmax(420px, 1.15fr);
+        gap: 20px;
+        align-items: start;
+        margin-bottom: 20px;
+      }
+      @media (max-width: 980px) {
+        .dashboard-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+      .dashboard-col {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+      .execution-card {
+        margin-top: 4px;
+        margin-bottom: 24px;
       }
       .step-header {
         display: flex;
@@ -1043,7 +1070,7 @@
         transition: all 0.3s ease;
       }
       .stepper-track {
-        max-width: 900px;
+        max-width: 1400px;
         margin: 0 auto;
         display: flex;
         align-items: center;
@@ -1106,6 +1133,130 @@
         min-width: 8px;
         max-width: 32px;
         border-radius: 2px;
+      }
+
+      /* ── Floating Action Deck (Bottom Dock) ─────────────────────────── */
+      .bottom-action-bar {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        z-index: 999;
+        background: var(--header-bg);
+        backdrop-filter: blur(24px) saturate(190%);
+        -webkit-backdrop-filter: blur(24px) saturate(190%);
+        border-top: 1px solid var(--border-subtle);
+        box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.12);
+        padding: 12px 24px;
+        transform: translateY(0);
+        opacity: 1;
+        visibility: visible;
+        transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.35s;
+      }
+      .bottom-action-bar.dock-hidden {
+        transform: translateY(100%);
+        opacity: 0;
+        pointer-events: none;
+        visibility: hidden;
+      }
+      [data-bs-theme="dark"] .bottom-action-bar {
+        box-shadow: 0 -8px 36px rgba(0, 0, 0, 0.55);
+      }
+      .bottom-action-content {
+        max-width: 1400px;
+        margin: 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+      .action-status-block {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        flex-wrap: wrap;
+      }
+      .action-pills-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .summary-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11.5px;
+        font-weight: 600;
+        padding: 4px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--border-subtle);
+        background: var(--surface-card);
+        color: var(--text-secondary);
+        transition: all 0.25s ease;
+      }
+      .summary-pill.ready {
+        border-color: rgba(16, 185, 129, 0.45);
+        background: rgba(16, 185, 129, 0.12);
+        color: var(--text-primary);
+      }
+      .summary-pill.ready .pill-dot {
+        background: var(--accent-emerald);
+        box-shadow: 0 0 8px var(--accent-emerald);
+      }
+      .summary-pill .pill-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--text-muted);
+        transition: all 0.25s ease;
+      }
+      .action-bar-hint {
+        font-size: 12px;
+        color: var(--text-secondary);
+        font-weight: 500;
+      }
+      .action-bar-controls {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .btn-dock-action {
+        background: linear-gradient(135deg, var(--accent-emerald), #047857);
+        color: #ffffff;
+        border: none;
+        border-radius: 12px;
+        padding: 10px 22px;
+        font-size: 13.5px;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        box-shadow: 0 4px 14px var(--accent-emerald-glow);
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      .btn-dock-action:hover:not(:disabled) {
+        background: linear-gradient(135deg, var(--accent-emerald-hover), var(--accent-emerald));
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(16, 185, 129, 0.35);
+      }
+      .btn-dock-action:active:not(:disabled) {
+        transform: scale(0.97);
+      }
+      .btn-dock-action:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+        filter: grayscale(0.5);
+      }
+      .btn-dock-action.ready-pulse {
+        animation: pulse-emerald 2s infinite;
+      }
+      @keyframes pulse-emerald {
+        0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5); }
+        70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
       }
 
       /* ── Non-Blocking Toast Notifications ───────────────────────────────── */
@@ -1906,7 +2057,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 8px">
               <span class="brand-title">CvSU Gen</span>
-              <span class="badge-version">v1.3 Beta</span>
+              <span class="badge-version">v1.5 Beta</span>
             </div>
             <div class="brand-subtitle">
               Cavite State University Document Automation
@@ -2071,8 +2222,12 @@
     <div id="toastContainer" class="toast-container"></div>
 
     <div class="app-container">
-      <!-- ── STEP 1: Select Instructor Schedule ────────────────────────── -->
-      <section class="glass-card" id="cardStep1">
+      <!-- ── Modern Studio 2-Column Dashboard Grid ─────────────────────────── -->
+      <div class="dashboard-grid">
+        <!-- ── LEFT COLUMN: Data Ingestion (Schedule & Rosters) ──────────── -->
+        <div class="dashboard-col col-ingestion">
+          <!-- ── STEP 1: Select Instructor Schedule ────────────────────────── -->
+          <section class="glass-card" id="cardStep1">
         <div class="step-header">
           <div class="step-number">1</div>
           <div class="step-title">
@@ -2362,7 +2517,10 @@
           <div id="rosterRowsContainer"></div>
         </div>
       </section>
+    </div>
 
+    <!-- ── RIGHT COLUMN: Control Deck (Packages, Classes, Dates, Output) ── -->
+    <div class="dashboard-col col-controls">
       <!-- ── STEP 3: Confirm Detected Classes & Subject Types ──────────── -->
       <section class="glass-card" id="cardStep3">
         <div class="step-header">
@@ -2649,9 +2807,11 @@
           "
         ></div>
       </section>
+    </div>
+  </div>
 
       <!-- ── STEP 6: Initialize Workflow ───────────────────────────────── -->
-      <section class="glass-card" id="cardStep6">
+      <section class="glass-card execution-card" id="cardStep6">
         <div class="step-header">
           <div class="step-number">6</div>
           <div class="step-title">Initialize Workflow</div>
@@ -2786,6 +2946,28 @@
           </div>
         </div>
       </section>
+    </div>
+
+    <!-- ── Floating Bottom Action Deck ────────────────────────────────── -->
+    <div class="bottom-action-bar" id="bottomActionBar">
+      <div class="bottom-action-content">
+        <div class="action-status-block">
+          <div class="action-pills-row">
+            <span class="summary-pill" id="actionPillSchedule"><span class="pill-dot"></span> Schedule</span>
+            <span class="summary-pill" id="actionPillRosters"><span class="pill-dot"></span> 0 Rosters</span>
+            <span class="summary-pill" id="actionPillOutput"><span class="pill-dot"></span> Output Ready</span>
+          </div>
+          <div class="action-bar-hint" id="actionBarHint">Drop or browse your master schedule (.xls / .xlsx) to begin</div>
+        </div>
+        <div class="action-bar-controls">
+          <button id="btnDockProcess" class="btn-dock-action" type="button" onclick="triggerWorkflowFromDock()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+            <span id="btnDockProcessLabel">Initialize Workflow</span>
+          </button>
+        </div>
+      </div>
     </div>
 
     <!-- ── Drawers: Guides & Documentation ──────────────────────────────── -->
@@ -3697,6 +3879,92 @@
         }
       }
 
+      // ── Scroll-Aware Floating Bottom Action Bar ───────────────────────────
+      function initScrollAwareDock() {
+        const dock = document.getElementById("bottomActionBar");
+        const step6 = document.getElementById("cardStep6");
+        if (!dock || !step6) return;
+
+        const checkVisibility = () => {
+          if (window._isGenerationRunning) {
+            dock.classList.add("dock-hidden");
+            return;
+          }
+          const rect = step6.getBoundingClientRect();
+          // If Step 6 is currently visible within or near the viewport,
+          // hide the floating action bar to prevent duplicate "Initialize Workflow" buttons.
+          const isStep6Visible = rect.top < (window.innerHeight - 40) && rect.bottom > 60;
+          if (isStep6Visible) {
+            dock.classList.add("dock-hidden");
+          } else {
+            dock.classList.remove("dock-hidden");
+          }
+        };
+
+        if ("IntersectionObserver" in window) {
+          const observer = new IntersectionObserver(
+            (entries) => {
+              entries.forEach((entry) => {
+                if (window._isGenerationRunning) {
+                  dock.classList.add("dock-hidden");
+                  return;
+                }
+                if (entry.isIntersecting) {
+                  dock.classList.add("dock-hidden");
+                } else {
+                  dock.classList.remove("dock-hidden");
+                }
+              });
+            },
+            {
+              root: null,
+              threshold: 0.05,
+              rootMargin: "0px 0px -40px 0px",
+            }
+          );
+          observer.observe(step6);
+        }
+
+        window.addEventListener("scroll", checkVisibility, { passive: true });
+        window.addEventListener("resize", checkVisibility, { passive: true });
+
+        // Initial check after DOM render and layout calculations
+        setTimeout(checkVisibility, 150);
+      }
+
+      function triggerWorkflowFromDock() {
+        const step6 = document.getElementById("cardStep6");
+        const dock = document.getElementById("bottomActionBar");
+        if (dock) {
+          dock.classList.add("dock-hidden");
+        }
+        if (step6) {
+          step6.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+        startGeneration();
+      }
+
+      function setGenerationRunningState(isRunning, labelText = "Initialize Workflow") {
+        window._isGenerationRunning = !!isRunning;
+        const btn = document.getElementById("processBtn");
+        const btnLabel = document.getElementById("processBtnLabel");
+        const dock = document.getElementById("bottomActionBar");
+        const dockBtn = document.getElementById("btnDockProcess");
+        const dockLabel = document.getElementById("btnDockProcessLabel");
+
+        if (btn) btn.disabled = isRunning;
+        if (btnLabel) btnLabel.innerText = isRunning ? (labelText || "Compiling Documents...") : "Initialize Workflow";
+        if (dockBtn) {
+          dockBtn.disabled = isRunning;
+          dockBtn.classList.toggle("ready-pulse", !isRunning);
+        }
+        if (dockLabel) dockLabel.innerText = isRunning ? (labelText || "Compiling Documents...") : "Initialize Workflow";
+
+        if (dock && isRunning) {
+          dock.classList.add("dock-hidden");
+        }
+      }
+
       function updateStepperStatus() {
         const s1Ready = !!state.schedulePath;
         const s2Ready = state.rosters && state.rosters.length > 0;
@@ -3735,6 +4003,49 @@
         );
         setChip("chipStep5", "statusStep5", s5Ready);
         setChip("chipStep6", "statusStep6", s6Ready, "🚀");
+
+        // Synchronize Floating Bottom Action Deck
+        const pillSched = document.getElementById("actionPillSchedule");
+        const pillRost = document.getElementById("actionPillRosters");
+        const pillOut = document.getElementById("actionPillOutput");
+        const barHint = document.getElementById("actionBarHint");
+        const dockBtn = document.getElementById("btnDockProcess");
+
+        if (pillSched) {
+          pillSched.classList.toggle("ready", s1Ready);
+          const schedLabel = s1Ready
+            ? (state.scheduleMeta?.instructor ? state.scheduleMeta.instructor.split(" ")[0] : "Schedule Ready")
+            : "Schedule";
+          pillSched.innerHTML = `<span class="pill-dot"></span> ${schedLabel}`;
+        }
+        if (pillRost) {
+          const rCount = state.rosters ? state.rosters.length : 0;
+          pillRost.classList.toggle("ready", s2Ready);
+          pillRost.innerHTML = `<span class="pill-dot"></span> ${rCount} Roster${rCount === 1 ? "" : "s"}`;
+        }
+        if (pillOut) {
+          pillOut.classList.toggle("ready", s5Ready);
+          pillOut.innerHTML = `<span class="pill-dot"></span> ${s5Ready ? "Output Ready" : "Output Folder"}`;
+        }
+        if (barHint) {
+          if (s6Ready) {
+            const totalStuds = state.rosterReports
+              ? state.rosterReports.reduce((acc, r) => acc + (r.student_count || 0), 0)
+              : 0;
+            barHint.innerText = `Ready to compile: 1 Schedule · ${state.rosters.length} Rosters (${totalStuds} Students)`;
+          } else if (!s1Ready) {
+            barHint.innerText = "Select or drop master schedule (.xls / .xlsx) to begin";
+          } else if (!s2Ready) {
+            barHint.innerText = "Add class student rosters (.xlsx / .csv)";
+          } else if (!s5Ready) {
+            barHint.innerText = "Select a target output folder";
+          } else {
+            barHint.innerText = "Configure document packages or verify classes";
+          }
+        }
+        if (dockBtn) {
+          dockBtn.classList.toggle("ready-pulse", s6Ready);
+        }
       }
 
       // ── Callbacks Invoked from Python (Bridge / Native DnD) ────────────────
@@ -3900,6 +4211,7 @@
         renderActiveMonths();
         updateStepperStatus();
         updateFileEstimate();
+        initScrollAwareDock();
       });
 
       // ── Theme Management ──────────────────────────────────────────────────
@@ -4483,8 +4795,9 @@
           // Badges
           const ceitBadge = document.getElementById("mapModalCeitBadge");
           if (res.ceit_metadata) {
-            ceitBadge.innerText = `${res.ceit_metadata.prefix} · ${res.ceit_metadata.department_code}`;
-            ceitBadge.title = res.ceit_metadata.department_name;
+            const dCode = res.ceit_metadata.department_code || res.ceit_metadata.dept_code || "";
+            ceitBadge.innerText = dCode ? `${res.ceit_metadata.prefix} · ${dCode}` : res.ceit_metadata.prefix;
+            ceitBadge.title = res.ceit_metadata.department_name || res.ceit_metadata.dept || "";
             ceitBadge.classList.remove("d-none");
           } else {
             ceitBadge.classList.add("d-none");
@@ -4492,7 +4805,8 @@
 
           const formatBadge = document.getElementById("mapModalFormatBadge");
           if (formatBadge) {
-            formatBadge.innerText = (res.format || "CSV").toUpperCase();
+            const fmt = res.format || (res.is_excel ? "XLSX" : "CSV");
+            formatBadge.innerText = fmt.toUpperCase();
           }
 
           // Pre-populate manual metadata inputs from config or hints
@@ -4521,10 +4835,11 @@
           // Populate Header Row Select
           const selHeader = document.getElementById("mapSelectHeaderRow");
           selHeader.innerHTML = "";
-          const previewRows = res.raw_rows || [];
-          const detectedHeader = res.detected_header_row !== undefined ? res.detected_header_row : 0;
+          const previewRows = res.raw_rows || res.raw_preview || [];
+          const detectedHeader = res.detected_header_row !== undefined ? res.detected_header_row : (res.auto_header_row !== undefined ? res.auto_header_row : 0);
           previewRows.forEach((r, idx) => {
-            const previewText = r.slice(0, 4).filter(Boolean).join(" | ");
+            const rowArr = Array.isArray(r) ? r : (r.cells ? Object.values(r.cells) : Object.values(r));
+            const previewText = rowArr.slice(0, 4).filter(Boolean).join(" | ");
             const isSel = idx === detectedHeader ? "selected" : "";
             selHeader.innerHTML += `<option value="${idx}" ${isSel}>Row ${idx + 1}: ${escapeHTML(previewText.slice(0, 45))}${previewText.length > 45 ? "..." : ""}</option>`;
           });
@@ -4535,9 +4850,14 @@
           selName.innerHTML = "";
           selId.innerHTML = "";
 
-          const availableCols = res.available_columns || [];
-          const detectedName = res.detected_name_column !== undefined ? res.detected_name_column : 0;
-          const detectedId = res.detected_id_column !== undefined ? res.detected_id_column : 1;
+          const rawCols = res.available_columns || res.columns || [];
+          const availableCols = rawCols.map((c, i) => {
+            if (typeof c === "object" && c !== null) return c;
+            return { index: i, col_ref: c, name: `Col ${c}` };
+          });
+
+          const detectedName = res.detected_name_column !== undefined ? res.detected_name_column : (res.auto_name_col !== undefined ? (typeof res.auto_name_col === "number" ? res.auto_name_col : 0) : 0);
+          const detectedId = res.detected_id_column !== undefined ? res.detected_id_column : (res.auto_id_col !== undefined ? (typeof res.auto_id_col === "number" ? res.auto_id_col : 1) : 1);
 
           availableCols.forEach((col) => {
             const isNameSel = col.index === detectedName ? "selected" : "";
@@ -4548,7 +4868,8 @@
 
           // Render Raw Grid and Parsed Students
           renderSpreadsheetGrid(previewRows, availableCols, detectedHeader, detectedName, detectedId);
-          renderParsedPreview(res.parsed_students || [], res.student_count || 0);
+          const parsedList = res.parsed_students || res.parsed_preview || [];
+          renderParsedPreview(parsedList, res.student_count || 0);
 
           modal.classList.remove("d-none");
         } catch (err) {
@@ -4627,10 +4948,15 @@
           const res = await window.pywebview.api.inspect_roster(currentMappingFilename, overrides);
           if (res && res.status !== "error") {
             currentInspectionData = res;
-            const previewRows = res.raw_rows || [];
-            const availableCols = res.available_columns || [];
+            const previewRows = res.raw_rows || res.raw_preview || [];
+            const rawCols = res.available_columns || res.columns || [];
+            const availableCols = rawCols.map((c, i) => {
+              if (typeof c === "object" && c !== null) return c;
+              return { index: i, col_ref: c, name: `Col ${c}` };
+            });
             renderSpreadsheetGrid(previewRows, availableCols, overrides.header_row, overrides.name_column, overrides.id_column);
-            renderParsedPreview(res.parsed_students || [], res.student_count || 0);
+            const parsedList = res.parsed_students || res.parsed_preview || [];
+            renderParsedPreview(parsedList, res.student_count || 0);
           }
         } catch (err) {
           console.error("Failed to live re-inspect roster:", err);
@@ -4647,7 +4973,8 @@
 
         let maxCols = 0;
         previewRows.forEach((r) => {
-          if (r.length > maxCols) maxCols = r.length;
+          const rowArr = Array.isArray(r) ? r : (r.cells ? Object.values(r.cells) : Object.values(r));
+          if (rowArr.length > maxCols) maxCols = rowArr.length;
         });
         if (availableCols && availableCols.length > maxCols) {
           maxCols = availableCols.length;
@@ -4672,12 +4999,13 @@
         previewRows.forEach((row, rIdx) => {
           const isHeaderRow = rIdx === activeHeader;
           const rowClass = isHeaderRow ? "row-header-highlight" : "";
+          const rowArr = Array.isArray(row) ? row : (row.cells ? Object.values(row.cells) : Object.values(row));
           tableHtml += `<tr class="${rowClass}"><td style="font-weight: 700; color: var(--text-muted);">${rIdx + 1}${isHeaderRow ? " [H]" : ""}</td>`;
           for (let c = 0; c < maxCols; c++) {
             let colClass = "";
             if (c === activeName) colClass = "col-name-highlight";
             else if (c === activeId) colClass = "col-id-highlight";
-            const val = row[c] !== undefined && row[c] !== null ? String(row[c]) : "";
+            const val = rowArr[c] !== undefined && rowArr[c] !== null ? String(rowArr[c]) : "";
             tableHtml += `<td class="${colClass}" title="${escapeHTML(val)}">${escapeHTML(val)}</td>`;
           }
           tableHtml += `</tr>`;
@@ -4700,10 +5028,12 @@
 
         let itemsHtml = "";
         parsedStudents.slice(0, 15).forEach((s) => {
+          const sName = s.name !== undefined ? s.name : (Array.isArray(s) ? s[0] : "");
+          const sId = s.student_number !== undefined ? s.student_number : (s.id !== undefined ? s.id : (Array.isArray(s) ? s[1] : ""));
           itemsHtml += `
             <div class="parsed-student-item">
-              <span class="parsed-student-name">${escapeHTML(s.name)}</span>
-              <span class="parsed-student-id">${escapeHTML(s.student_number)}</span>
+              <span class="parsed-student-name">${escapeHTML(sName)}</span>
+              <span class="parsed-student-id">${escapeHTML(sId)}</span>
             </div>
           `;
         });
@@ -5182,8 +5512,7 @@
         }
 
         // Lock button and open progress container
-        btn.disabled = true;
-        btnLabel.innerText = "Compiling Documents...";
+        setGenerationRunningState(true, "Compiling Documents...");
         progressContainer.classList.remove("d-none");
         resultsCard.classList.add("d-none");
         progressFill.style.width = "5%";
@@ -5261,8 +5590,7 @@
           elapsedTimerInterval = null;
         }
 
-        btn.disabled = false;
-        btnLabel.innerText = "Initialize Workflow";
+        setGenerationRunningState(false, "Initialize Workflow");
         if (btnCancel) {
           btnCancel.disabled = false;
           btnCancel.innerHTML = `
@@ -5443,10 +5771,7 @@
       };
 
       window.onGenerationError = function () {
-        const btn = document.getElementById("processBtn");
-        btn.disabled = false;
-        document.getElementById("processBtnLabel").innerText =
-          "Initialize Workflow";
+        setGenerationRunningState(false, "Initialize Workflow");
         const btnCancel = document.getElementById("btnCancelGeneration");
         if (btnCancel) btnCancel.classList.add("d-none");
         if (elapsedTimerInterval) {

@@ -148,3 +148,156 @@ def test_script_api_inspect_and_ceit_directory(tmp_path):
     assert inspect_res["student_count"] == 1
     assert inspect_res["active_name_col"] == 1
     assert inspect_res["active_id_col"] == 0
+
+def test_roster_xlsx_with_multiple_columns_and_multi_row_headers(tmp_path):
+    """Verify Excel roster with 10 columns and 3 metadata header rows before table headers."""
+    import openpyxl
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Class Roster"
+
+    # 3 metadata / banner rows before the column headers
+    ws.append(["CAVITE STATE UNIVERSITY", "", "", "", "", "", "", "", "", ""])
+    ws.append(["College of Engineering and Information Technology", "", "", "", "", "", "", "", "", ""])
+    ws.append(["First Semester, Academic Year 2026-2027", "", "", "", "", "", "", "", "", ""])
+
+    # 10 column headers at row index 3
+    headers = ["#", "Student ID", "Full Name", "Sex", "Course", "Year", "Section", "Email Address", "Contact Number", "Remarks"]
+    ws.append(headers)
+
+    # 3 student rows
+    ws.append(["1", "202610001", "DELA CRUZ, JUAN A.", "M", "BSCS", "1", "4", "juan@cvsu.edu.ph", "09123456789", "Regular"])
+    ws.append(["2", "202610002", "SANTOS, MARIA B.", "F", "BSCS", "1", "4", "maria@cvsu.edu.ph", "09987654321", "Regular"])
+    ws.append(["3", "202610003", "REYES, CARLOS C.", "M", "BSCS", "1", "4", "carlos@cvsu.edu.ph", "09112233445", "Irregular"])
+
+    xlsx_path = tmp_path / "multi_header_10_cols.xlsx"
+    wb.save(str(xlsx_path))
+
+    # 1. Automatic header and column detection
+    res = roster_parser.inspect_roster(str(xlsx_path))
+    assert res["status"] == "success"
+    assert res["detected_header_row"] == 3
+    assert res["active_header_row"] == 3
+    assert res["active_id_col"] == "B"
+    assert res["active_name_col"] == "C"
+    assert len(res["columns"]) == 10
+    assert res["columns"] == ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"]
+    assert len(res["available_columns"]) == 10
+    assert res["available_columns"][0]["name"] == "Col A: #"
+    assert res["available_columns"][1]["name"] == "Col B: Student ID"
+    assert res["available_columns"][2]["name"] == "Col C: Full Name"
+    assert res["student_count"] == 3
+    assert res["parsed_students"][0]["name"] == "DELA CRUZ, JUAN A."
+    assert res["parsed_students"][0]["student_number"] == "202610001"
+
+    # 2. Unified load_students directly
+    students = roster_parser.load_students(str(xlsx_path))
+    assert len(students) == 3
+    assert students[0] == ("DELA CRUZ, JUAN A.", "202610001")
+    assert students[1] == ("SANTOS, MARIA B.", "202610002")
+    assert students[2] == ("REYES, CARLOS C.", "202610003")
+
+    # 3. Manual override on 10-column layout
+    overrides = {
+        "header_row": 3,
+        "name_col": "C",
+        "id_col": "A"  # user maps column A (#) as ID
+    }
+    res_ovr = roster_parser.inspect_roster(str(xlsx_path), overrides=overrides)
+    assert res_ovr["status"] == "success"
+    assert res_ovr["active_header_row"] == 3
+    assert res_ovr["active_id_col"] == "A"
+    assert res_ovr["parsed_students"][0]["student_number"] == "1"
+    assert res_ovr["parsed_students"][1]["student_number"] == "2"
+
+def test_roster_xlsx_with_stacked_two_tier_headers(tmp_path):
+    """Verify Excel roster with 2-tier stacked headers (category headers on row 0, column headers on row 1)."""
+    import openpyxl
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+
+    # Row 0: Group / Category headers
+    ws.append(["STUDENT INFORMATION", "", "", "ACADEMIC ENROLLMENT", "", "", "COMMUNICATION", "", ""])
+    # Row 1: Sub / Column headers
+    ws.append(["#", "Student Number", "Full Name", "Degree / Program", "Year", "Section", "Email Address", "Mobile No.", "Remarks"])
+    # Student rows
+    ws.append(["1", "202610001", "DELA CRUZ, JUAN A.", "BSCS", "1", "4", "juan@cvsu.edu.ph", "09123456789", "Regular"])
+    ws.append(["2", "202610002", "SANTOS, MARIA B.", "BSCS", "1", "4", "maria@cvsu.edu.ph", "09987654321", "Regular"])
+
+    path = tmp_path / "stacked_headers.xlsx"
+    wb.save(str(path))
+
+    res = roster_parser.inspect_roster(str(path))
+    assert res["status"] == "success"
+    assert res["detected_header_row"] == 1
+    assert res["active_id_col"] == "B"
+    assert res["active_name_col"] == "C"
+    assert len(res["columns"]) == 9
+    assert res["student_count"] == 2
+    assert res["parsed_students"][0]["name"] == "DELA CRUZ, JUAN A."
+    assert res["parsed_students"][0]["student_number"] == "202610001"
+
+def test_roster_csv_with_multiple_columns_and_multi_row_headers(tmp_path):
+    """Verify CSV roster with 9 columns and 2 banner metadata rows before headers."""
+    csv_file = tmp_path / "multi_header_9_cols.csv"
+    csv_file.write_text(
+        "CAVITE STATE UNIVERSITY - MAIN CAMPUS\n"
+        "OFFICE OF THE UNIVERSITY REGISTRAR - OFFICIAL ROSTER\n"
+        "Index,Department,Student ID,Degree,Student Full Name,Gender,YearLevel,Section,Status\n"
+        "1,DIT,20261001,BSCS,\"DELA CRUZ, JUAN A.\",M,1,4,Enrolled\n"
+        "2,DIT,20261002,BSCS,\"SANTOS, MARIA B.\",F,1,4,Enrolled\n",
+        encoding="utf-8"
+    )
+
+    res = roster_parser.inspect_roster(str(csv_file))
+    assert res["status"] == "success"
+    assert res["detected_header_row"] == 2
+    assert res["active_header_row"] == 2
+    assert res["active_id_col"] == 2  # Student ID is Col 2
+    assert res["active_name_col"] == 4  # Student Full Name is Col 4
+    assert len(res["columns"]) == 9
+    assert res["student_count"] == 2
+    assert res["parsed_students"][0]["name"] == "DELA CRUZ, JUAN A."
+    assert res["parsed_students"][0]["student_number"] == "20261001"
+
+def test_process_schedule_with_multi_column_multi_header_roster(tmp_path):
+    """Verify end-to-end processing with a 10-column multi-header XLSX roster."""
+    import openpyxl
+
+    schedule_path = os.path.join(os.path.dirname(__file__), "..", "ORTEGA_SCHEDULE.xls")
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.append(["CAVITE STATE UNIVERSITY", "", "", "", "", "", "", "", "", ""])
+    ws.append(["Department of Information Technology", "", "", "", "", "", "", "", "", ""])
+    ws.append(["#", "Student ID", "Full Name", "Sex", "Course", "Year", "Section", "Email Address", "Contact", "Status"])
+    ws.append(["1", "202110001", "DELA CRUZ, JUAN A.", "M", "BSCS", "4", "1", "juan@cvsu.edu.ph", "09123456789", "Regular"])
+    ws.append(["2", "202110002", "SANTOS, MARIA B.", "F", "BSCS", "4", "1", "maria@cvsu.edu.ph", "09987654321", "Regular"])
+
+    roster_path = tmp_path / "BSCS4-1 List of Students for 202612731-COSC 111A - C S ELECTIVE 3 (INTERNET OF THINGS).xlsx"
+    wb.save(str(roster_path))
+
+    # Pre-flight validation
+    val = process_schedule.validate_rosters(schedule_path, [str(roster_path)])
+    assert len(val) == 1
+    assert val[0]["status"] == "warning"
+    assert val[0]["issue"] == "extra_columns"
+    assert val[0]["column_count"] == 10
+    assert val[0]["student_count"] == 2
+
+    # End-to-end generation
+    out_dir = tmp_path / "output"
+    res = process_schedule.process_all(
+        schedule_path=schedule_path,
+        xlsx_files=[str(roster_path)],
+        output_dir_base=str(out_dir)
+    )
+    assert len(res["generated"]["ceit"]) > 0
+    assert len(res["generated"]["attendance"]) > 0
+    assert len(res["generated"]["grades"]) > 0
+    assert len(res["errors"]["ceit"]) == 0
+    assert len(res["errors"]["attendance"]) == 0
+    assert len(res["errors"]["grades"]) == 0
+
