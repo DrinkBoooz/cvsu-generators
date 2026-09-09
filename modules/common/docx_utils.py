@@ -23,15 +23,12 @@ def get_full_text(el) -> str:
 def get_student_name_font_sz(text: str) -> str:
     """
     Dynamic font scaling ladder for student names:
-      - <= 25 characters: 9pt (sz="18")
-      - 26-30 characters: 8pt (sz="16")
+      - <= 30 characters: 8pt (sz="16", matching reference SCHOOL FILES 2026)
       - 31-35 characters: 7pt (sz="14")
       - > 35 characters: 6pt (sz="12")
     """
     length = len(text.strip())
-    if length <= 25:
-        return "18"  # 9pt
-    elif length <= 30:
+    if length <= 30:
         return "16"  # 8pt
     elif length <= 35:
         return "14"  # 7pt

@@ -65,17 +65,16 @@ def test_roster_parser_fixes_portal_enye_corruption():
 
 def test_dynamic_font_scaling_ladder():
     """
-    Verify dynamic font size scaling ladder:
-      - <= 25 characters: 9pt (sz="18")
-      - 26-30 characters: 8pt (sz="16")
+    Verify font size scaling ladder matching reference SCHOOL FILES 2026:
+      - <= 30 characters: 8pt (sz="16")
       - 31-35 characters: 7pt (sz="14")
       - > 35 characters: 6pt (sz="12")
     """
-    assert get_student_name_font_sz("CRUZ, JUAN A.") == "18"                 # 13 chars <= 25 -> 9pt
-    assert get_student_name_font_sz("1234567890123456789012345") == "18"     # 25 chars <= 25 -> 9pt
-    assert get_student_name_font_sz("12345678901234567890123456") == "16"    # 26 chars 26-30 -> 8pt
-    assert get_student_name_font_sz("ALCANTARA, CHRISTINE ANNE C.") == "16"  # 28 chars 26-30 -> 8pt
-    assert get_student_name_font_sz("123456789012345678901234567890") == "16" # 30 chars -> 8pt
+    assert get_student_name_font_sz("CRUZ, JUAN A.") == "16"                 # 13 chars <= 30 -> 8pt
+    assert get_student_name_font_sz("1234567890123456789012345") == "16"     # 25 chars <= 30 -> 8pt
+    assert get_student_name_font_sz("12345678901234567890123456") == "16"    # 26 chars <= 30 -> 8pt
+    assert get_student_name_font_sz("ALCANTARA, CHRISTINE ANNE C.") == "16"  # 28 chars <= 30 -> 8pt
+    assert get_student_name_font_sz("123456789012345678901234567890") == "16" # 30 chars <= 30 -> 8pt
     assert get_student_name_font_sz("DE RUEDA, ALELHY ALLESSANDRA M.") == "14" # 31 chars 31-35 -> 7pt
     assert get_student_name_font_sz("CRISOSTOMO, NEIL ANGELO MARQUEZ JR.") == "14" # 35 chars 31-35 -> 7pt
     assert get_student_name_font_sz("123456789012345678901234567890123456") == "12" # 36 chars > 35 -> 6pt
@@ -145,3 +144,76 @@ def test_cs41_subject_reconciliation():
     classes = process_schedule.detect_classes(SCHEDULE_PATH, rosters)
     cs41 = [c for c in classes if c["course_sec"] == "CS4-1"][0]
     assert cs41["subject_name"] == "COSC 111 - C S ELECTIVE 3 (INTERNET OF THINGS)"
+
+
+def test_attendance_formatting_parity(tmp_path):
+    """Verify generated Attendance sheets preserve Table 0 headers (sz=22, sz=18) and Table 1 (sz=16)."""
+    from modules.generators.attendance_gen import build_attendance_sheet, get_default_template_path
+    
+    tmpl = get_default_template_path(has_lab=True)
+    out_docx = str(tmp_path / "test_attendance.docx")
+    
+    build_attendance_sheet(
+        template_path=tmpl,
+        output_path=out_docx,
+        course_code_title="DCIT 21 - INTRODUCTION TO COMPUTING",
+        class_schedule="Mon: 05:00PM-07:00PM",
+        semester_ay="FIRST SEMESTER, AY 2026 - 2027",
+        room_assignment="LEC: ITC 402 / ORTEGA",
+        instructor="DAN JOSEPH A. ORTEGA",
+        months=[9],
+        year=2026,
+        weekdays=[0],
+        students=[("ARCA, BRENCH LORENZ B.", "261014253"), ("BERNAL, RUTHERFORD Q.", "261013992")]
+    )
+    
+    doc = docx.Document(out_docx)
+    W_URI = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+    
+    # Check Table 0 Month/Year sz="22"
+    m_sz = [r.find(f"{{{W_URI}}}rPr/{{{W_URI}}}sz").attrib.get(f"{{{W_URI}}}val") if r.find(f"{{{W_URI}}}rPr/{{{W_URI}}}sz") is not None else "def" for r in doc.tables[0].rows[0].cells[4]._tc.findall(f".//{{{W_URI}}}r")]
+    assert "22" in m_sz, f"Month/Year in Table 0 must have sz=22, got {m_sz}"
+    
+    # Check Table 0 Schedule sz="18"
+    s_sz = [r.find(f"{{{W_URI}}}rPr/{{{W_URI}}}sz").attrib.get(f"{{{W_URI}}}val") if r.find(f"{{{W_URI}}}rPr/{{{W_URI}}}sz") is not None else "def" for r in doc.tables[0].rows[1].cells[1]._tc.findall(f".//{{{W_URI}}}r")]
+    assert "18" in s_sz, f"Schedule in Table 0 must have sz=18, got {s_sz}"
+    
+    # Check Table 1 student ID sz="16"
+    id_sz = [r.find(f"{{{W_URI}}}rPr/{{{W_URI}}}sz").attrib.get(f"{{{W_URI}}}val") if r.find(f"{{{W_URI}}}rPr/{{{W_URI}}}sz") is not None else "def" for r in doc.tables[1].rows[2].cells[2]._tc.findall(f".//{{{W_URI}}}r")]
+    assert "16" in id_sz, f"Student ID in Table 1 must have sz=16, got {id_sz}"
+
+
+def test_grade_discussion_finals_formatting_parity(tmp_path):
+    """Verify Finals Grade Discussion has sz=22 for Table 0 labels, Table 1 header, and Paragraph 3."""
+    from modules.generators.ceit_gen import GradeDiscussionGenerator
+    
+    tmpl = os.path.join(WORKSPACE_DIR, "templates", "Final-Grade-Discussion_LATEST.docx")
+    out_docx = str(tmp_path / "test_gd_finals.docx")
+    
+    gen = GradeDiscussionGenerator(tmpl, "Finals")
+    info = ClassInfo(
+        instructor="DAN JOSEPH A. ORTEGA",
+        course_section="CS1-4",
+        schedule_code="202612040",
+        subject="DCIT 21 - INTRODUCTION TO COMPUTING",
+        time_days_room="Mon: 05:00PM-07:00PM / ITC 402",
+        semester_ay="FIRST SEMESTER, AY 2026 - 2027",
+        students=[("ARCA, BRENCH LORENZ B.", "261014253")]
+    )
+    gen.generate(info, out_docx)
+    
+    doc = docx.Document(out_docx)
+    W_URI = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+    
+    # Table 0 label sz="22"
+    t0_lbl_sz = [r.find(f"{{{W_URI}}}rPr/{{{W_URI}}}sz").attrib.get(f"{{{W_URI}}}val") if r.find(f"{{{W_URI}}}rPr/{{{W_URI}}}sz") is not None else "def" for r in doc.tables[0].rows[0].cells[0]._tc.findall(f".//{{{W_URI}}}r")]
+    assert "22" in t0_lbl_sz, f"Table 0 label must have sz=22, got {t0_lbl_sz}"
+    
+    # Table 1 header sz="22"
+    t1_hdr_sz = [r.find(f"{{{W_URI}}}rPr/{{{W_URI}}}sz").attrib.get(f"{{{W_URI}}}val") if r.find(f"{{{W_URI}}}rPr/{{{W_URI}}}sz") is not None else "def" for r in doc.tables[1].rows[0].cells[0]._tc.findall(f".//{{{W_URI}}}r")]
+    assert "22" in t1_hdr_sz, f"Table 1 header must have sz=22, got {t1_hdr_sz}"
+    
+    # Paragraph 3 sz="22"
+    p3_sz = [r.find(f"{{{W_URI}}}rPr/{{{W_URI}}}sz").attrib.get(f"{{{W_URI}}}val") if r.find(f"{{{W_URI}}}rPr/{{{W_URI}}}sz") is not None else "def" for r in doc.paragraphs[3]._p.findall(f".//{{{W_URI}}}r")]
+    assert "22" in p3_sz, f"Paragraph 3 must have sz=22, got {p3_sz}"
+

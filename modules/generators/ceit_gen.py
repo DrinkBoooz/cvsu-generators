@@ -166,7 +166,7 @@ class SyllabusGenerator(DocumentGenerator):
                     set_cell_text(cells[1], val, shrink_threshold=thresh, shrink_sz="18")
 
     def _fill_student_row(self, cells, idx, name, stnum):
-        set_cell_text(cells[1], name, is_student_name=True)
+        set_cell_text(cells[1], name, shrink_threshold=32, shrink_sz="18")
         set_cell_text(cells[2], stnum)
 
     def fill_table(self, body, info: ClassInfo) -> None:
@@ -254,7 +254,7 @@ class ExamReturnsGenerator(DocumentGenerator):
                     paras[9].remove(r)
 
     def _fill_student_row(self, cells, idx, name, stnum):
-        set_cell_text(cells[0], name, is_student_name=True)
+        set_cell_text(cells[0], name, shrink_threshold=32, shrink_sz="18")
         set_cell_text(cells[1], stnum)
 
 
@@ -307,7 +307,7 @@ class TOSGenerator(DocumentGenerator):
             )
 
     def _fill_student_row(self, cells, idx, name, stnum):
-        set_cell_text(cells[0], name, is_student_name=True)
+        set_cell_text(cells[0], name, shrink_threshold=32, shrink_sz="18")
         set_cell_text(cells[1], stnum)
 
 
@@ -379,7 +379,7 @@ class GradeDiscussionGenerator(DocumentGenerator):
                 set_cell_text(cells[2], val, shrink_threshold=thresh, shrink_sz="18")
 
     def _fill_student_row(self, cells, idx, name, stnum):
-        set_cell_text(cells[0], name, is_student_name=True)
+        set_cell_text(cells[0], name, shrink_threshold=32, shrink_sz="18")
         set_cell_text(cells[1], stnum)
 
 

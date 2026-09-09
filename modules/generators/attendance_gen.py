@@ -233,23 +233,28 @@ def get_class_dates_for_weekdays(months: list, year: int, weekdays: list, start_
 def _auto_scale_attendance_name(r_el, text: str, para=None):
     """
     Progressively scale font for student names in the attendance table
-    according to the dynamic font ladder:
-      - <= 25 chars: 9pt (sz="18")
-      - 26-30 chars: 8pt (sz="16")
-      - 31-35 chars: 7pt (sz="14")
-      - > 35 chars: 6pt (sz="12")
+    so names fit on a single line and prevent row height expansion.
+    The attendance table name column is ~1.76 inches (1277 pct) with standard 8pt (sz=16) bold Arial.
+      - <= 24 chars: 8pt (sz="16", default template font)
+      - 25-28 chars: 7pt (sz="14")
+      - 29-33 chars: 6.5pt (sz="13")
+      - 34-37 chars: 5.5pt (sz="11")
+      - >= 38 chars: 5pt (sz="10")
     """
     length = len(text.strip())
     unbold = False
-    if length <= 25:
-        target_sz = "18"  # 9pt
-    elif length <= 30:
-        target_sz = "16"  # 8pt
-    elif length <= 35:
+    if length >= 38:
+        target_sz = "10"  # 5pt
+        unbold = True
+    elif length >= 34:
+        target_sz = "11"  # 5.5pt
+        unbold = True
+    elif length >= 29:
+        target_sz = "13"  # 6.5pt
+    elif length >= 25:
         target_sz = "14"  # 7pt
     else:
-        target_sz = "12"  # 6pt
-        unbold = True
+        return
 
     rpr = r_el.find(w("rPr"))
     if rpr is None:
@@ -292,10 +297,38 @@ def _auto_scale_attendance_name(r_el, text: str, para=None):
                         ppr_rpr.remove(pb_cs)
 
 def set_para_text(para, text: str, shrink_threshold: int = 0, shrink_sz: str = "18", is_attendance_student: bool = False):
-    for t in para.findall(w("r")):
-        para.remove(t)
+    """
+    Replace text content of a paragraph while preserving the formatting
+    of the first run found. Removes all runs then writes one clean run.
+    """
+    ppr = para.find(w("pPr"))
+    if ppr is not None:
+        ind = ppr.find(w("ind"))
+        if ind is not None:
+            ppr.remove(ind)
+        jc = ppr.find(w("jc"))
+        if jc is not None and jc.get(w("val")) == "both":
+            jc.set(w("val"), "left")
+
+    # Find first run to clone its rPr
+    first_run = para.find(w("r"))
+    rpr_clone = None
+    if first_run is not None:
+        rpr = first_run.find(w("rPr"))
+        if rpr is not None:
+            rpr_clone = copy.deepcopy(rpr)
+
+    # Remove all runs and bookmarks
+    for child in list(para):
+        tag = child.tag.split("}")[-1] if "}" in child.tag else child.tag
+        if tag in ("r", "hyperlink", "ins", "del"):
+            para.remove(child)
+
+    # Build a new run
     r = etree.SubElement(para, w("r"))
-    
+    if rpr_clone is not None:
+        r.insert(0, rpr_clone)
+        
     if is_attendance_student:
         _auto_scale_attendance_name(r, text, para=para)
     else:
@@ -533,7 +566,7 @@ def build_attendance_sheet(
             etree.SubElement(trpr, w("cantSplit"))
 
         set_para_text(cells[0].find(w("p")), str(row_idx + 1))
-        set_para_text(cells[1].find(w("p")), name, is_attendance_student=True)
+        set_para_text(cells[1].find(w("p")), name, shrink_threshold=32, shrink_sz="18")
         set_para_text(cells[2].find(w("p")), stnum)
 
         for tc in cells[3:]:
