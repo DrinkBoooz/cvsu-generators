@@ -108,3 +108,54 @@ def test_ui_html_new_ux_components():
     assert "switchHelpTab" in ui_content
     assert "filterHelpContent" in ui_content
 
+def test_ui_smart_roster_mapping_and_ceit_directory():
+    with open(UI_HTML_PATH, "r", encoding="utf-8") as f:
+        ui_content = f.read()
+
+    # Verify Interactive Column Mapping Modal Elements
+    assert 'id="modalRosterMappingBackdrop"' in ui_content
+    assert 'id="mapModalFilename"' in ui_content
+    assert 'id="mapModalCeitBadge"' in ui_content
+    assert 'id="mapModalFormatBadge"' in ui_content
+    assert 'id="mapSelectHeaderRow"' in ui_content
+    assert 'id="mapSelectNameCol"' in ui_content
+    assert 'id="mapSelectIdCol"' in ui_content
+    assert 'id="mapSelectClassLink"' in ui_content
+    assert 'id="mapSpreadsheetTableContainer"' in ui_content
+    assert 'id="mapParsedCount"' in ui_content
+    assert 'id="mapParsedStudentsPreview"' in ui_content
+    assert 'id="mapCheckRememberSimilar"' in ui_content
+
+    # Verify Modal & Mapping JS Functions
+    assert "openColumnMappingModal" in ui_content
+    assert "closeColumnMappingModal" in ui_content
+    assert "onMappingConfigChanged" in ui_content
+    assert "renderSpreadsheetGrid" in ui_content
+    assert "renderParsedPreview" in ui_content
+    assert "applyRosterMapping" in ui_content
+    assert "resetToAutoMapping" in ui_content
+    assert "linkRosterToClass" in ui_content
+    assert "cvsu_roster_mappings" in ui_content
+
+    # Verify Naming Recommendation Banner and Manual Fallback Inputs
+    assert 'id="mapNamingRecommendationBanner"' in ui_content
+    assert 'id="btnCopyRecommendedFilename"' in ui_content
+    assert 'id="mapModalRecommendedFilename"' in ui_content
+    assert 'id="mapInputCourseSec"' in ui_content
+    assert 'id="mapInputScheduleCode"' in ui_content
+    assert 'id="mapInputSubjectName"' in ui_content
+    assert "copyRecommendedFilename" in ui_content
+    assert "applySuggestedMatch" in ui_content
+    assert "onClassLinkSelectChanged" in ui_content
+    assert "onManualMetadataChanged" in ui_content
+    assert "updateModalRecommendedFilename" in ui_content
+
+    # Verify CEIT Department & Subject Directory in Help Drawer
+    ceit_prefixes = [
+        "AGEN", "ABEN", "ARCH", "CENG", "CIVL", "COSC",
+        "CPEN", "DCEE", "DCIT", "ECEN", "EENG", "IENG",
+        "INDT", "SMT", "ITEC"
+    ]
+    for prefix in ceit_prefixes:
+        assert prefix in ui_content, f"CEIT prefix {prefix} must be documented in ui.html help directory"
+

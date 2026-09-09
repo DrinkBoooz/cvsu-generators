@@ -20,9 +20,10 @@ def test_date_picker_indicator_theme_rules(ui_content):
     # Verify webkit-calendar-picker-indicator rules exist
     assert "::-webkit-calendar-picker-indicator" in ui_content, "Calendar picker indicator must be styled"
     
-    # Verify dark mode inversion exists for high visibility
-    dark_indicator_pattern = r'\[data-bs-theme=["\']dark["\']\]\s*\.date-input::-webkit-calendar-picker-indicator\s*\{[^}]*filter:\s*invert\(1\)'
-    assert re.search(dark_indicator_pattern, ui_content), "Dark mode must invert calendar picker indicator for contrast"
+    # Verify dark mode date input has explicit color-scheme: dark and indicator avoids black-inverting filter
+    assert '[data-bs-theme="dark"] .date-input' in ui_content, "Dark mode must explicitly configure .date-input"
+    dark_indicator_pattern = r'\[data-bs-theme=["\']dark["\']\]\s*\.date-input::-webkit-calendar-picker-indicator\s*\{[^}]*filter:\s*none'
+    assert re.search(dark_indicator_pattern, ui_content), "Dark mode calendar indicator must use filter: none to prevent turning black"
 
     # Verify focus state for .date-input
     assert ".date-input:focus" in ui_content, ".date-input:focus must be explicitly defined"

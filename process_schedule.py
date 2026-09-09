@@ -7,6 +7,7 @@ from collections import defaultdict
 from ceit_generator import GeneratorFactory
 import ceit_generator
 import attendancegen
+import roster_parser
 import sys
 import xlrd
 import openpyxl 
@@ -14,6 +15,14 @@ import traceback
 from grade_generator import GradeGenerator
 import logging
 from logging.handlers import RotatingFileHandler
+
+BASE_SUBJECT_PREFIXES = (
+    "CVSU", "DCIT", "COSC", "ITEC", "INSY", "GNED", "MATH", "STAT",
+    "FITT", "NSTP", "PHYS", "PHED", "ECON", "BAMG", "ENGR", "BSCE",
+    "COEN", "ELET", "MECH", "AENG", "CHEM", "BIOL", "FILI", "HIST",
+    "COMM", "SOCS", "HUMA", "AGRI", "CRIM", "BMGT"
+)
+SUBJECT_PREFIXES = tuple(sorted(set(list(BASE_SUBJECT_PREFIXES) + list(roster_parser.CEIT_PREFIX_MAP.keys()))))
 
 def _get_live_logger():
     app_data = os.getenv('APPDATA') or os.path.expanduser("~")
@@ -308,12 +317,6 @@ def find_blocks_for_section(grid, section, start_row, end_row):
             if c < len(grid[r]):
                 cell = grid[r][c].strip()
                 if search_str in cell:
-                    SUBJECT_PREFIXES = (
-                        "CVSU", "DCIT", "COSC", "ITEC", "INSY", "GNED", "MATH", "STAT",
-                        "FITT", "NSTP", "PHYS", "PHED", "ECON", "BAMG", "ENGR", "BSCE",
-                        "COEN", "ELET", "MECH", "AENG", "CHEM", "BIOL", "FILI", "HIST",
-                        "COMM", "SOCS", "HUMA", "AGRI", "CRIM", "BMGT"
-                    )
                     subject_row = r
                     for i in range(r, start_row-1, -1):
                         val = grid[i][c].strip()
@@ -434,18 +437,128 @@ def inspect_schedule_file(schedule_path):
         logger.error(f"Error in inspect_schedule_file: {e}", exc_info=True)
         return None
 
-def validate_rosters(schedule_path, roster_paths):
+def _find_class_details_by_schedule_code(parsed_schedules, schedule_code):
+    """
+    Search parsed schedules for a timetable cell containing schedule_code.
+    Returns dict with (course_sec, subject_name, instructor, semester, college) or None.
+    """
+    if not parsed_schedules or not schedule_code:
+        return None
+    code_str = str(schedule_code).strip()
+    for sched in parsed_schedules:
+        grid = sched["grid"]
+        start_row = sched["start_row"]
+        end_row = sched["end_row"]
+        for r in range(start_row, min(end_row + 1, len(grid))):
+            for c in range(3, min(9, len(grid[r]))):
+                val = grid[r][c].strip()
+                if code_str in val:
+                    subj_row = r
+                    for i in range(r, start_row - 1, -1):
+                        v = grid[i][c].strip()
+                        if v.startswith(SUBJECT_PREFIXES):
+                            subj_row = i
+                            break
+                    subject_name = grid[subj_row][c].strip()
+                    m_sec = re.findall(r'\b(BS[A-Z]+|[A-Z]{2,4})\s*\d[-–]\d+\b', val, re.IGNORECASE)
+                    c_sec = m_sec[0] if m_sec else ""
+                    return {
+                        "course_sec": c_sec,
+                        "subject_name": subject_name,
+                        "instructor": sched.get("instructor", ""),
+                        "semester": sched.get("semester", ""),
+                        "college": sched.get("college", "")
+                    }
+    return None
+
+def _find_candidate_classes_from_hints(parsed_schedules, hints):
+    """
+    Search parsed schedules for classes matching section or subject hints from a loose filename.
+    Returns list of matching dicts: [{'schedule_code': ..., 'course_sec': ..., 'subject_name': ..., 'score': ...}, ...]
+    """
+    if not parsed_schedules or not hints:
+        return []
+
+    matches = []
+    seen_codes = set()
+
+    hint_sec = (hints.get("course_sec") or "").replace(" ", "").upper()
+    hint_prefix = (hints.get("subject_prefix") or "").upper()
+    hint_code = (hints.get("subject_code") or "").replace(" ", "").upper()
+
+    for sched in parsed_schedules:
+        grid = sched["grid"]
+        start_row = sched["start_row"]
+        end_row = sched["end_row"]
+        for r in range(start_row, min(end_row + 1, len(grid))):
+            for c in range(3, min(9, len(grid[r]))):
+                val = grid[r][c].strip()
+                m_code = re.search(r'\b(20\d{6,7}|\d{8,9})\b', val)
+                if not m_code:
+                    continue
+                code_str = m_code.group(1)
+                if code_str in seen_codes:
+                    continue
+
+                # Find subject name
+                subj_row = r
+                for i in range(r, start_row - 1, -1):
+                    v = grid[i][c].strip()
+                    if v.startswith(SUBJECT_PREFIXES):
+                        subj_row = i
+                        break
+                subject_name = grid[subj_row][c].strip()
+
+                # Find course section
+                m_sec = re.findall(r'\b(?:BS)?([A-Za-z]{2,4})\s*(\d[-–]\d+)\b', val, re.IGNORECASE)
+                c_sec = f"{m_sec[0][0].upper()} {m_sec[0][1]}" if m_sec else ""
+
+                # Scoring
+                score = 0
+                norm_c_sec = c_sec.replace(" ", "").upper()
+                norm_subj = subject_name.replace(" ", "").upper()
+
+                if hint_sec:
+                    h_dig = re.findall(r'\d-\d+', hint_sec)
+                    s_dig = re.findall(r'\d-\d+', norm_c_sec)
+                    if h_dig and s_dig and h_dig[0] == s_dig[0]:
+                        score += 3
+                    if hint_sec in norm_c_sec or norm_c_sec in hint_sec:
+                        score += 3
+
+                if hint_code and hint_code in norm_subj:
+                    score += 4
+                elif hint_prefix and hint_prefix in norm_subj:
+                    score += 2
+
+                if score >= 3:
+                    seen_codes.add(code_str)
+                    matches.append({
+                        "schedule_code": code_str,
+                        "course_sec": c_sec,
+                        "subject_name": subject_name,
+                        "score": score
+                    })
+
+    matches.sort(key=lambda x: x["score"], reverse=True)
+    return matches
+
+
+def validate_rosters(schedule_path, roster_paths, roster_configs=None):
     """
     Perform pre-flight checks on a list of student roster files:
-    - Match against expected filename pattern
+    - Match against expected filename pattern or manual roster configuration
     - Check column counts and extract student count
     - Determine if schedule code matches schedule timetable
+    - Attach CEIT subject prefix and department metadata
+    - Provide intelligent suggested matches and recommended official filename for incomplete files
     """
     known_schedule_codes = set()
+    parsed_schedules = []
     if schedule_path and os.path.exists(schedule_path):
         try:
-            parsed = parse_schedule(schedule_path)
-            for s in parsed:
+            parsed_schedules = parse_schedule(schedule_path)
+            for s in parsed_schedules:
                 grid = s["grid"]
                 for r in grid:
                     for cell in r:
@@ -460,42 +573,121 @@ def validate_rosters(schedule_path, roster_paths):
         if filename.startswith("~$"):
             continue
             
+        cfg = (roster_configs or {}).get(path) or (roster_configs or {}).get(filename) or {}
+        linked_code = str(cfg.get("linked_schedule_code") or cfg.get("schedule_code") or "").strip()
+        user_course_sec = str(cfg.get("course_sec") or "").strip()
+        user_subject_name = str(cfg.get("subject_name") or "").strip()
+
+        hints = roster_parser.parse_filename_hints(filename)
+        candidates = _find_candidate_classes_from_hints(parsed_schedules, hints) if parsed_schedules else []
+
         m = re.match(r'^(.*?)\s*list of students for\s+(\d+)\s*-\s*(.+?)\.(xlsx|xls|csv)', filename, re.IGNORECASE)
-        if not m:
+        has_custom_info = bool(linked_code and (user_course_sec or user_subject_name or _find_class_details_by_schedule_code(parsed_schedules, linked_code)))
+
+        if not m and not has_custom_info and not linked_code:
+            # Build recommended official filename
+            if candidates:
+                top = candidates[0]
+                rec_course = top["course_sec"].replace(" ", "")
+                rec_code = top["schedule_code"]
+                rec_subj = top["subject_name"]
+                rec_filename = f"{rec_course} List of Students for {rec_code}-{rec_subj}.xlsx"
+            else:
+                rec_filename = hints.get("recommended_filename", "")
+
+            # Student count check for preview
+            student_count = 0
+            try:
+                students = roster_parser.load_students(
+                    path,
+                    name_col=cfg.get("name_col"),
+                    id_col=cfg.get("id_col"),
+                    header_row=cfg.get("header_row")
+                )
+                student_count = len(students)
+            except Exception:
+                student_count = 0
+
+            # Column count check
+            col_count = 2
+            ext = os.path.splitext(path)[1].lower()
+            if ext == ".csv":
+                try:
+                    with open(path, "r", encoding="utf-8-sig", errors="ignore") as f:
+                        rdr = csv.reader(f)
+                        row0 = next(rdr, None)
+                        if row0:
+                            col_count = len(row0)
+                except Exception:
+                    col_count = 2
+
+            has_hints = bool(candidates or hints.get("course_sec") or hints.get("subject_prefix") or hints.get("subject_code") or hints.get("schedule_code"))
+            issue_type = "incomplete_filename" if has_hints else "invalid_filename"
+            msg = ("Incomplete filename details (Missing Schedule Code or Subject Title). Recommendation: rename file to official format."
+                   if has_hints else
+                   f"Invalid filename: {filename}. Expected format: [Course/Sec] List of Students for [ScheduleCode]-[Subject].xlsx")
+
             results.append({
                 "path": path,
                 "filename": filename,
-                "status": "error",
-                "issue": "invalid_filename",
-                "message": "Filename does not match expected pattern: '{Course/Sec} List of Students for {Code}-{Subject}'",
-                "student_count": 0,
-                "course_sec": "",
+                "status": "warning" if candidates else "error",
+                "issue": issue_type,
+                "message": msg,
+                "student_count": student_count,
+                "course_sec": hints.get("course_sec", ""),
                 "schedule_code": "",
-                "subject_name": "",
-                "column_count": 0,
-                "in_timetable": False
+                "subject_name": hints.get("subject_name", ""),
+                "column_count": col_count,
+                "in_timetable": False,
+                "can_link": True,
+                "ceit_metadata": hints.get("ceit_metadata") or roster_parser.get_prefix_metadata(filename),
+                "filename_hints": hints,
+                "suggested_matches": candidates,
+                "recommended_filename": rec_filename,
+                "active_config": cfg
             })
             continue
 
-        raw_course = m.group(1).strip()
-        schedule_code = m.group(2).strip()
-        subject_name = m.group(3).strip()
+        if m:
+            raw_course = m.group(1).strip()
+            schedule_code = m.group(2).strip()
+            subject_name = m.group(3).strip()
 
-        # Parse course_sec normalized
-        letters = re.sub(r'[^A-Za-z]', '', raw_course).upper()
-        if letters.startswith('BS'):
-            letters = letters[2:]
-        if letters == 'CSCS':
-            letters = 'CS'
-        digits = re.sub(r'[^0-9]', '', raw_course)
-        if len(digits) >= 2:
-            course_sec = f"{letters}{digits[0]}-{digits[1:]}"
+            # Parse course_sec normalized
+            letters = re.sub(r'[^A-Za-z]', '', raw_course).upper()
+            if letters.startswith('BS'):
+                letters = letters[2:]
+            if letters == 'CSCS':
+                letters = 'CS'
+            digits = re.sub(r'[^0-9]', '', raw_course)
+            if len(digits) >= 2:
+                course_sec = f"{letters}{digits[0]}-{digits[1:]}"
+            else:
+                course_sec = re.sub(r'\s+', '', raw_course).replace("CSCS", "CS")
         else:
-            course_sec = re.sub(r'\s+', '', raw_course).replace("CSCS", "CS")
+            schedule_code = linked_code
+            course_sec = user_course_sec
+            subject_name = user_subject_name
+            if not course_sec or not subject_name:
+                class_info = _find_class_details_by_schedule_code(parsed_schedules, schedule_code)
+                if class_info:
+                    if not course_sec:
+                        course_sec = class_info["course_sec"]
+                    if not subject_name:
+                        subject_name = class_info["subject_name"]
+            if not course_sec:
+                course_sec = hints.get("course_sec") or "MANUAL"
+            if not subject_name:
+                subject_name = hints.get("subject_name") or os.path.splitext(filename)[0]
 
         student_count = 0
         try:
-            students = ceit_generator.load_students(path)
+            students = roster_parser.load_students(
+                path,
+                name_col=cfg.get("name_col"),
+                id_col=cfg.get("id_col"),
+                header_row=cfg.get("header_row")
+            )
             student_count = len(students)
         except Exception:
             student_count = 0
@@ -515,12 +707,12 @@ def validate_rosters(schedule_path, roster_paths):
         elif ext in (".xlsx", ".xls", ".xlsm"):
             try:
                 import zipfile
-                from lxml import etree
+                from xml.etree import ElementTree as ET
                 with zipfile.ZipFile(path, 'r') as z:
                     for sname in z.namelist():
                         if sname.startswith('xl/worksheets/sheet1') or sname.startswith('xl/worksheets/sheet'):
                             xml = z.read(sname)
-                            root = etree.fromstring(xml)
+                            root = ET.fromstring(xml)
                             ns = {'x': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
                             first_row = root.find('.//x:row', ns)
                             if first_row is not None:
@@ -542,7 +734,13 @@ def validate_rosters(schedule_path, roster_paths):
             issue = "extra_columns"
             msg = f"{col_count} columns found (auto-cleaned to Name & Student number)"
 
+        if linked_code and not m:
+            issue = "custom_linked" if not issue else f"{issue},custom_linked"
+            msg = f"{student_count} students ready (linked to {schedule_code})"
+
         in_timetable = (schedule_code in known_schedule_codes) if known_schedule_codes else True
+
+        ceit_meta = roster_parser.get_prefix_metadata(subject_name) or roster_parser.get_prefix_metadata(filename)
 
         results.append({
             "path": path,
@@ -555,12 +753,15 @@ def validate_rosters(schedule_path, roster_paths):
             "schedule_code": schedule_code,
             "subject_name": subject_name,
             "column_count": col_count,
-            "in_timetable": in_timetable
+            "in_timetable": in_timetable,
+            "can_link": True,
+            "ceit_metadata": ceit_meta,
+            "active_config": cfg
         })
 
     return results
 
-def detect_classes(schedule_path, roster_paths):
+def detect_classes(schedule_path, roster_paths, roster_configs=None):
     if not os.path.exists(schedule_path):
         return []
     
@@ -571,27 +772,46 @@ def detect_classes(schedule_path, roster_paths):
         filename = os.path.basename(student_file)
         if filename.startswith("~$") or filename == os.path.basename(schedule_path):
             continue
+
+        cfg = (roster_configs or {}).get(student_file) or (roster_configs or {}).get(filename) or {}
+        linked_code = str(cfg.get("linked_schedule_code") or "").strip()
+
         m = re.match(r'^(.*?)\s*list of students for\s+(\d+)\s*-\s*(.+?)\.(xlsx|xls|csv)', filename, re.IGNORECASE)
-        if not m:
+        if not m and not linked_code:
             continue
             
-        raw_course = m.group(1).strip()
-        
-        # Robustly parse course and section (e.g., BS_CS_1_4 -> CS 1-4)
-        letters = re.sub(r'[^A-Za-z]', '', raw_course).upper()
-        if letters.startswith('BS'):
-            letters = letters[2:]
-        if letters == 'CSCS':
-            letters = 'CS'
-            
-        digits = re.sub(r'[^0-9]', '', raw_course)
-        if len(digits) >= 2:
-            course_sec = f"{letters}{digits[0]}-{digits[1:]}" # Output like CS1-4 for searching
+        if m:
+            raw_course = m.group(1).strip()
+            # Robustly parse course and section (e.g., BS_CS_1_4 -> CS 1-4)
+            letters = re.sub(r'[^A-Za-z]', '', raw_course).upper()
+            if letters.startswith('BS'):
+                letters = letters[2:]
+            if letters == 'CSCS':
+                letters = 'CS'
+                
+            digits = re.sub(r'[^0-9]', '', raw_course)
+            if len(digits) >= 2:
+                course_sec = f"{letters}{digits[0]}-{digits[1:]}" # Output like CS1-4 for searching
+            else:
+                course_sec = re.sub(r'\s+', '', raw_course).replace("CSCS", "CS")
+                
+            schedule_code = m.group(2)
+            subject_name = m.group(3)
         else:
-            course_sec = re.sub(r'\s+', '', raw_course).replace("CSCS", "CS")
-            
-        schedule_code = m.group(2)
-        subject_name = m.group(3)
+            schedule_code = linked_code
+            course_sec = cfg.get("course_sec", "")
+            subject_name = cfg.get("subject_name", "")
+            if not course_sec or not subject_name:
+                class_info = _find_class_details_by_schedule_code(parsed_schedules, schedule_code)
+                if class_info:
+                    if not course_sec:
+                        course_sec = class_info["course_sec"]
+                    if not subject_name:
+                        subject_name = class_info["subject_name"]
+            if not course_sec:
+                course_sec = "MANUAL"
+            if not subject_name:
+                subject_name = os.path.splitext(filename)[0]
         
         blocks = []
         for sched in parsed_schedules:
@@ -611,7 +831,9 @@ def detect_classes(schedule_path, roster_paths):
             time_days_room = "; ".join(parts)
         else:
             time_days_room = "SEE SCHEDULE"
-            
+
+        ceit_meta = roster_parser.get_prefix_metadata(subject_name) or roster_parser.get_prefix_metadata(filename)
+
         detected.append({
             "id": f"{schedule_code}_{course_sec}",
             "schedule_code": schedule_code,
@@ -620,12 +842,13 @@ def detect_classes(schedule_path, roster_paths):
             "schedule_desc": time_days_room,
             "has_lab": has_lab,
             "detected_type": "lecture_lab" if has_lab else "lecture_only",
-            "roster_file": student_file
+            "roster_file": student_file,
+            "ceit_metadata": ceit_meta
         })
         
     return detected
 
-def process_all(schedule_path, xlsx_files, output_dir_base, type_overrides=None, date_overrides=None, class_filter=None, engine_filter=None, progress_callback=None, cancel_event=None):
+def process_all(schedule_path, xlsx_files, output_dir_base, type_overrides=None, date_overrides=None, class_filter=None, engine_filter=None, progress_callback=None, cancel_event=None, roster_configs=None):
     schedule_path = get_long_path(schedule_path)
     output_dir_base = get_long_path(output_dir_base)
     xlsx_files = [get_long_path(f) for f in xlsx_files]
@@ -661,24 +884,39 @@ def process_all(schedule_path, xlsx_files, output_dir_base, type_overrides=None,
         fn = os.path.basename(student_file)
         if fn.startswith("~$") or fn == os.path.basename(schedule_path):
             continue
+        cfg = (roster_configs or {}).get(student_file) or (roster_configs or {}).get(fn) or {}
+        linked_code = str(cfg.get("linked_schedule_code") or "").strip()
+
         m = re.match(r'^(.*?)\s*list of students for\s+(\d+)\s*-\s*(.+?)\.(xlsx|xls|csv)', fn, re.IGNORECASE)
-        if not m:
+        if not m and not linked_code:
             continue
 
-        raw_c = m.group(1).strip()
-        let = re.sub(r'[^A-Za-z]', '', raw_c).upper()
-        if let.startswith('BS'):
-            let = let[2:]
-        if let == 'CSCS':
-            let = 'CS'
+        if m:
+            raw_c = m.group(1).strip()
+            let = re.sub(r'[^A-Za-z]', '', raw_c).upper()
+            if let.startswith('BS'):
+                let = let[2:]
+            if let == 'CSCS':
+                let = 'CS'
 
-        dig = re.sub(r'[^0-9]', '', raw_c)
-        if len(dig) >= 2:
-            c_sec = f"{let}{dig[0]}-{dig[1:]}"
+            dig = re.sub(r'[^0-9]', '', raw_c)
+            if len(dig) >= 2:
+                c_sec = f"{let}{dig[0]}-{dig[1:]}"
+            else:
+                c_sec = re.sub(r'\s+', '', raw_c).replace("CSCS", "CS")
+            s_code = m.group(2)
+            s_name = m.group(3)
         else:
-            c_sec = re.sub(r'\s+', '', raw_c).replace("CSCS", "CS")
-        s_code = m.group(2)
-        s_name = m.group(3)
+            s_code = linked_code
+            c_sec = cfg.get("course_sec", "")
+            s_name = cfg.get("subject_name", "")
+            if not c_sec or not s_name:
+                c_info = _find_class_details_by_schedule_code(parsed_schedules, s_code)
+                if c_info:
+                    if not c_sec: c_sec = c_info["course_sec"]
+                    if not s_name: s_name = c_info["subject_name"]
+            if not c_sec: c_sec = "MANUAL"
+            if not s_name: s_name = os.path.splitext(fn)[0]
 
         c_id = f"{s_code}_{c_sec}"
         if class_filter and (c_id not in class_filter and s_code not in class_filter and c_sec not in class_filter):
@@ -695,6 +933,8 @@ def process_all(schedule_path, xlsx_files, output_dir_base, type_overrides=None,
 
         int_code = get_subject_code(s_name)
         flt_blocks = [b for b in pre_blocks if int_code in get_subject_code(b['subject_title']) or get_subject_code(b['subject_title']) in int_code]
+        if not flt_blocks and linked_code and pre_blocks:
+            flt_blocks = pre_blocks
         if not flt_blocks:
             continue
 
@@ -768,27 +1008,42 @@ def process_all(schedule_path, xlsx_files, output_dir_base, type_overrides=None,
         filename = os.path.basename(student_file)
         if filename.startswith("~$") or filename == os.path.basename(schedule_path):
             continue
+
+        cfg = (roster_configs or {}).get(student_file) or (roster_configs or {}).get(filename) or {}
+        linked_code = str(cfg.get("linked_schedule_code") or "").strip()
+
         m = re.match(r'^(.*?)\s*list of students for\s+(\d+)\s*-\s*(.+?)\.(xlsx|xls|csv)', filename, re.IGNORECASE)
-        if not m:
+        if not m and not linked_code:
             results["skipped"]["rosters"].append(filename)
             continue
             
-        raw_course = m.group(1).strip()
-        
-        # Robustly parse course and section (e.g., BS_CS_1_4 -> CS 1-4)
-        letters = re.sub(r'[^A-Za-z]', '', raw_course).upper()
-        if letters.startswith('BS'):
-            letters = letters[2:]
-        if letters == 'CSCS':
-            letters = 'CS'
-            
-        digits = re.sub(r'[^0-9]', '', raw_course)
-        if len(digits) >= 2:
-            course_sec = f"{letters}{digits[0]}-{digits[1:]}" # Output like CS1-4 for searching
+        if m:
+            raw_course = m.group(1).strip()
+            # Robustly parse course and section (e.g., BS_CS_1_4 -> CS 1-4)
+            letters = re.sub(r'[^A-Za-z]', '', raw_course).upper()
+            if letters.startswith('BS'):
+                letters = letters[2:]
+            if letters == 'CSCS':
+                letters = 'CS'
+                
+            digits = re.sub(r'[^0-9]', '', raw_course)
+            if len(digits) >= 2:
+                course_sec = f"{letters}{digits[0]}-{digits[1:]}" # Output like CS1-4 for searching
+            else:
+                course_sec = re.sub(r'\s+', '', raw_course).replace("CSCS", "CS")
+            schedule_code = m.group(2)
+            subject_name = m.group(3)
         else:
-            course_sec = re.sub(r'\s+', '', raw_course).replace("CSCS", "CS")
-        schedule_code = m.group(2)
-        subject_name = m.group(3)
+            schedule_code = linked_code
+            course_sec = cfg.get("course_sec", "")
+            subject_name = cfg.get("subject_name", "")
+            if not course_sec or not subject_name:
+                c_info = _find_class_details_by_schedule_code(parsed_schedules, schedule_code)
+                if c_info:
+                    if not course_sec: course_sec = c_info["course_sec"]
+                    if not subject_name: subject_name = c_info["subject_name"]
+            if not course_sec: course_sec = "MANUAL"
+            if not subject_name: subject_name = os.path.splitext(filename)[0]
 
         # Check class filter
         class_id = f"{schedule_code}_{course_sec}"
@@ -854,6 +1109,8 @@ def process_all(schedule_path, xlsx_files, output_dir_base, type_overrides=None,
         intended_code = get_subject_code(subject_name)
         # Use substring match to allow 'DCIT21' to match 'DCIT21A'
         filtered_blocks = [b for b in blocks if intended_code in get_subject_code(b['subject_title']) or get_subject_code(b['subject_title']) in intended_code]
+        if not filtered_blocks and linked_code and blocks:
+            filtered_blocks = blocks
         
         if not filtered_blocks:
             msg = f"Skipping {course_sec} - {subject_name} because no blocks matched its subject code."
@@ -876,7 +1133,12 @@ def process_all(schedule_path, xlsx_files, output_dir_base, type_overrides=None,
         print(f"  Schedule: {time_days_room}")
         print(f"  Instructor: {instructor}")
         
-        students = ceit_generator.load_students(student_file)
+        students = roster_parser.load_students(
+            student_file,
+            name_col=cfg.get("name_col"),
+            id_col=cfg.get("id_col"),
+            header_row=cfg.get("header_row")
+        )
         info = ceit_generator.ClassInfo(
             instructor=instructor,
             course_section=course_sec,

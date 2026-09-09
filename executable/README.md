@@ -139,9 +139,10 @@ _(e.g., `[CvSU Gen (Beta) - Schedule Parsing Error]`)_
 ## 🏷️ Version History
 
 - **v1.3 Beta**:
-  - **Theme System Overhaul**: Declared native `color-scheme` support for both Dark and Light themes.
-  - **Calendar Picker Visibility**: Enhanced `::-webkit-calendar-picker-indicator` with automatic contrast inversion and brightness boost in Dark Mode, eliminating the dark-on-dark calendar icon issue.
-  - **Themed Form Controls & Scrollbars**: Added modern glassmorphism scrollbars, select dropdown option theming, input placeholder styling, and date input focus rings.
-  - **Dynamic Theme Toggle**: Header theme button dynamically toggles Sun/Moon icons, dynamic labels ("Light" / "Dark"), and accessible tooltips.
+  - **Smart Roster Parsing & Interactive Column Mapping**: Unified roster parsing engine with raw row inspection, custom header row selection, configurable Student Name and Student Number columns, and live parsed preview modal.
+  - **Offline Local Persistence**: Automatically saves custom column mappings and class linkages in browser `localStorage` (`cvsu_roster_mappings`, `cvsu_parsing_rules`) across sessions.
+  - **Complete CEIT Department & Subject Directory**: Integrated all 15 official CEIT prefixes (`AGEN`, `ABEN`, `ARCH`, `CENG`, `CIVL`, `COSC`, `CPEN`, `DCEE`, `DCIT`, `ECEN`, `EENG`, `IENG`, `INDT`, `SMT`, `ITEC`) with department badges and dedicated Help Drawer directory.
+  - **Manual Timetable Linking**: Non-standard roster filenames can be linked directly to timetable classes using an inline dropdown or the mapping modal.
+  - **Theme System Overhaul**: Declared native `color-scheme` support for both Dark and Light themes, high-contrast calendar picker indicators, glassmorphism scrollbars, and dynamic Sun/Moon toggle.
 - **v1.2 Beta**:
   - Initial beta release with Stepper readiness tracker, toast notification engine, responsive help drawer, and graceful execution cancellation.
