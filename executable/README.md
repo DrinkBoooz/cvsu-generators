@@ -138,6 +138,13 @@ _(e.g., `[CvSU Gen (Beta) - Schedule Parsing Error]`)_
 
 ## 🏷️ Version History
 
+- **v1.5 Beta**:
+  - **Modularized Architecture (`modules/`)**: Re-architected the entire Python backend into a cleanly structured single package (`modules/common`, `modules/models`, `modules/parsers`, `modules/generators`, `modules/services`) with backward-compatible facades at the root.
+  - **Output Parity & Roster Preservation**: Eliminated false header rejection ensuring students with surnames matching header keywords (e.g. `NAME, ZULEIKAH MARIJ C.`) are preserved, and normalized university portal enye encoding glitches (e.g. `SAÃEZ` $\rightarrow$ `SAÑEZ`).
+  - **Dynamic Student Name Font Scaling**: Standardized student name font scaling ladder across all CEIT forms and Attendance sheets ($\le 25 \rightarrow 9\text{pt}$, $26\text{--}30 \rightarrow 8\text{pt}$, $31\text{--}35 \rightarrow 7\text{pt}$, $> 35 \rightarrow 6\text{pt}$).
+  - **Template Hygiene & Lab Auto-Detection**: Restored clean 6-row Table 0 layout in Grade Discussion forms, curriculum-aware lab auto-detection for hybrid subjects (`DCIT 21`), and canonical schedule code reconciliation (`COSC 111A` $\rightarrow$ `COSC 111`).
+  - **Enhanced Parsing & Resilience**: Robust OpenPyXL column letter calculation beyond 52/702 columns (`AA`..`ZZ`), automated CSV delimiter detection (`csv.Sniffer`), sandboxed temporary file handling in OS temp directory to eliminate file lock collisions, and unified CEIT directory heuristic extraction.
+  - **Full PyInstaller Bundle**: Standalone binary compilation with comprehensive submodules packaging.
 - **v1.4 Beta**:
   - **Modern Studio Split-Grid Dashboard**: Re-architected the main workspace into a responsive two-column dashboard layout (Data Ingestion on the left, Configuration & Document Packages Control Deck on the right) providing zero-scroll efficiency on standard 1080p+ viewports.
   - **Floating Bottom Action Deck**: Pinned frosted glassmorphism dock featuring real-time system readiness checklist pills (`Schedule`, `Rosters`, `Output`) and an immediate **Initialize Workflow** primary CTA accessible from anywhere on screen.

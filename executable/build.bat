@@ -18,6 +18,7 @@ rem --noconsole hides the cmd window
 rem --onefile makes it a single executable payload
 python -m PyInstaller --noconfirm --clean --workpath "%TEMP%\cvsu_build" --distpath "%TEMP%\cvsu_dist" --name "CvSU Gen (Beta)" --onefile --windowed --icon "app_icon.ico" ^
     --hidden-import pycparser.lextab --hidden-import pycparser.yacctab ^
+    --collect-submodules modules ^
     --paths ".." ^
     --add-data "ui.html;." ^
     --add-data "..\templates;templates/" ^

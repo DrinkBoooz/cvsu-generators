@@ -1,4 +1,8 @@
 # -*- mode: python ; coding: utf-8 -*-
+from PyInstaller.utils.hooks import collect_submodules
+
+hiddenimports = ['pycparser.lextab', 'pycparser.yacctab']
+hiddenimports += collect_submodules('modules')
 
 
 a = Analysis(
@@ -6,7 +10,7 @@ a = Analysis(
     pathex=['..'],
     binaries=[],
     datas=[('ui.html', '.'), ('../templates', 'templates'), ('../attendance', 'attendance')],
-    hiddenimports=['pycparser.lextab', 'pycparser.yacctab'],
+    hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
