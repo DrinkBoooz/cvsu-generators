@@ -21,9 +21,12 @@ A desktop application for Cavite State University (CvSU) faculty members to auto
 1. Locate **`CvSU Gen (Beta).exe`**.
 2. Double-click **`CvSU Gen (Beta).exe`** to open the program.
 
-> **Note on Windows Defender / SmartScreen:**
-> Because this is a custom institutional tool, Windows may display a blue prompt stating _"Windows protected your PC"_.
-> Simply click **"More info"** and then select **"Run anyway"**.
+> **Note on Windows Defender / SmartScreen & Publisher Identity:**
+> Because this is a custom institutional tool developed specifically for Cavite State University, Windows may display a prompt stating _"Windows protected your PC"_.
+> - **Verified Author & Copyright**: You can right-click **`CvSU Gen (Beta).exe`** &rarr; **Properties** &rarr; **Details** or **Digital Signatures** tab to verify the official copyright, company, and developer signature (**Dan Joseph Ortega**).
+> - **Standard Launch**: Simply click **"More info"** and then select **"Run anyway"**.
+> - **Permanent Trust (Optional)**: Run **`install_trusted_publisher.bat`** once to add the verified institutional publisher certificate to your computer, permanently enabling clean launches without SmartScreen warnings.
+
 
 ---
 

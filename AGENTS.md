@@ -40,4 +40,13 @@ All git commit messages must strictly follow the format:
   1. `executable/ui.html`: Update the header badge `<span class="badge-version">vX.Y Beta</span>`.
   2. `tests/test_ui_consistency.py`: Ensure test assertions verify the current version badge.
   3. `executable/README.md`: If version numbers or changelog items are listed, keep them synchronized.
+  4. `executable/file_version_info.txt`: Synchronize `filevers`, `prodvers`, `FileVersion`, and `ProductVersion`.
+
+## Executable Packaging, Copyright & Code Signing
+Whenever the application is exported, compiled, or packaged as a standalone Windows executable (`.exe`):
+- **Windows PE Version Information**: `executable/file_version_info.txt` must always be maintained with official copyright (`Copyright © 2026 Dan Joseph Ortega. All rights reserved.`), company/author name (`Dan Joseph Ortega`), product name (`CvSU Document Generator`), and version numbers synchronized with `ui.html`.
+- **PyInstaller Integration**: Both `executable/build.bat` and `executable/CvSU Gen (Beta).spec` must embed `file_version_info.txt` via `--version-file` / `version='file_version_info.txt'` so Windows Explorer (Properties -> Details), hover tooltips, and Task Manager display the author and copyright.
+- **Authenticode Code Signing**: Executable binaries compiled in `executable/dist/` should be digitally signed via `executable/sign_exe.ps1` (or automated post-build in `build.bat`) using `signtool.exe` and the author's Authenticode certificate (`Dan Joseph Ortega`). This ensures Windows SmartScreen and UAC prompts identify the verified author/publisher instead of "Unknown Publisher".
+- **Automated Tests**: Any changes to versioning or executable metadata must be validated by tests under `tests/` (including `tests/test_pe_version_info.py`).
+
 
