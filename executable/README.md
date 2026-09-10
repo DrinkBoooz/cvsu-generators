@@ -138,6 +138,10 @@ _(e.g., `[CvSU Gen (Beta) - Schedule Parsing Error]`)_
 
 ## 🏷️ Version History
 
+- **v1.7 Beta**:
+  - **Apple HIG UI Cleanup & Spacious Redesign**: Eliminated visual density and cramped layout by adopting macOS Human Interface Guidelines—progressive disclosure accordions (`<details class="step-disclosure">`) for technical formatting rules, spacious layout rhythm, and SF Pro system typography.
+  - **Apple-Style Segmented Controls & Feature Tiles**: Re-architected package toggles into modern tactile feature tiles with glowing active borders, replaced legacy chip filters with frictionless Apple-style sliding capsule segmented controls (`.segmented-control`), and refined the floating bottom dock into a sleek floating macOS capsule island.
+  - **Optimized Window Canvas (1120x780)**: Expanded default desktop window dimensions from `920x720` to `1120x780` (min `880x640`), providing immediate breathing room, eliminating vertical compression, and preventing premature column collapse.
 - **v1.6 Beta**:
   - **Zero-Lag Theme Engine & View Transitions**: Eliminated light-to-dark mode transition stutter and frame drops using the modern View Transitions API (`document.startViewTransition`) for silky smooth, GPU-composited cross-fades.
   - **Transition Storm Elimination**: Resolved runaway cascade of 720+ concurrent CSS transition events across scrollbars, borders, text colors, and backgrounds during theme toggles by introducing synchronous `.theme-transitioning` transition suppression.

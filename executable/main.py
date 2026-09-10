@@ -523,9 +523,9 @@ if __name__ == '__main__':
         title='CvSU Gen (Beta)',
         url=html_template,
         js_api=api,
-        width=920,
-        height=720,
-        min_size=(840, 640),
+        width=1120,
+        height=780,
+        min_size=(880, 640),
         text_select=True
     )
     api._window = window

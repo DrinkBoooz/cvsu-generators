@@ -20,41 +20,43 @@
       :root {
         color-scheme: light;
         --bg-base: #f8fafc;
-        --surface-card: rgba(255, 255, 255, 0.88);
-        --surface-subtle: rgba(0, 0, 0, 0.03);
+        --surface-card: rgba(255, 255, 255, 0.82);
+        --surface-subtle: rgba(0, 0, 0, 0.025);
         --surface-elevated: #ffffff;
-        --border-subtle: rgba(226, 232, 240, 0.9);
+        --border-subtle: rgba(226, 232, 240, 0.85);
         --border-focus: #059669;
-        --header-bg: rgba(248, 250, 252, 0.85);
-        --header-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
+        --header-bg: rgba(248, 250, 252, 0.82);
+        --header-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.04);
         --text-primary: #0f172a;
         --text-secondary: #475569;
         --text-muted: #94a3b8;
         --accent-emerald: #059669;
         --accent-emerald-hover: #10b981;
-        --accent-emerald-glow: rgba(5, 150, 105, 0.2);
+        --accent-emerald-glow: rgba(5, 150, 105, 0.18);
         --accent-amber: #d97706;
         --accent-blue: #2563eb;
         --accent-rose: #dc2626;
+        --radius-xs: 6px;
         --radius-sm: 8px;
-        --radius-md: 14px;
-        --radius-lg: 20px;
-        --radius-xl: 28px;
+        --radius-md: 12px;
+        --radius-lg: 16px;
+        --radius-xl: 22px;
+        --radius-pill: 999px;
         --shadow-card:
-          0 10px 30px -5px rgba(0, 0, 0, 0.05),
-          0 4px 6px -2px rgba(0, 0, 0, 0.02);
+          0 10px 30px -5px rgba(0, 0, 0, 0.04),
+          0 2px 6px -2px rgba(0, 0, 0, 0.02);
       }
 
       [data-bs-theme="dark"] {
         color-scheme: dark;
         --bg-base: #0b0f17;
         --surface-card: rgba(17, 24, 39, 0.72);
-        --surface-subtle: rgba(255, 255, 255, 0.04);
+        --surface-subtle: rgba(255, 255, 255, 0.035);
         --surface-elevated: #141c2e;
         --border-subtle: rgba(255, 255, 255, 0.08);
         --border-focus: #10b981;
-        --header-bg: rgba(11, 15, 23, 0.85);
-        --header-shadow: 0 4px 24px -2px rgba(0, 0, 0, 0.35);
+        --header-bg: rgba(11, 15, 23, 0.82);
+        --header-shadow: 0 4px 24px -2px rgba(0, 0, 0, 0.4);
         --text-primary: #f9fafb;
         --text-secondary: #9ca3af;
         --text-muted: #6b7280;
@@ -65,7 +67,7 @@
         --accent-blue: #3b82f6;
         --accent-rose: #ef4444;
         --shadow-card:
-          0 16px 40px -10px rgba(0, 0, 0, 0.4),
+          0 16px 40px -10px rgba(0, 0, 0, 0.45),
           inset 0 1px 0 rgba(255, 255, 255, 0.06);
       }
 
@@ -73,11 +75,11 @@
         background-color: var(--bg-base);
         color: var(--text-primary);
         font-family:
-          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", Roboto,
           "Helvetica Neue", Arial, sans-serif;
         -webkit-font-smoothing: antialiased;
         min-height: 100vh;
-        padding-bottom: 60px;
+        padding-bottom: 70px;
         user-select: none;
       }
 
@@ -126,7 +128,7 @@
       .app-container {
         max-width: 1400px;
         margin: 0 auto;
-        padding: 20px 24px 110px 24px;
+        padding: 20px 28px 120px 28px;
       }
 
       /* ── Top Header Navigation (Sticky Glassmorphism Bar) ──────────────── */
@@ -225,15 +227,15 @@
         transform: scale(0.96);
       }
 
-      /* ── Glass Cards & Step Containers ─────────────────────────────────── */
+      /* ── Glass Cards & Step Containers (Apple HIG) ─────────────────────── */
       .glass-card {
         background: var(--surface-card);
-        backdrop-filter: blur(24px) saturate(180%);
-        -webkit-backdrop-filter: blur(24px) saturate(180%);
+        backdrop-filter: blur(28px) saturate(180%);
+        -webkit-backdrop-filter: blur(28px) saturate(180%);
         border: 1px solid var(--border-subtle);
-        border-radius: var(--radius-xl);
+        border-radius: var(--radius-lg);
         box-shadow: var(--shadow-card);
-        padding: 24px 26px;
+        padding: 20px 22px;
         margin-bottom: 0;
         transition:
           border-color 0.2s ease,
@@ -247,14 +249,15 @@
       /* ── Modern Studio 2-Column Dashboard Grid ─────────────────────────── */
       .dashboard-grid {
         display: grid;
-        grid-template-columns: minmax(380px, 1fr) minmax(420px, 1.15fr);
-        gap: 20px;
+        grid-template-columns: minmax(420px, 1fr) minmax(460px, 1.18fr);
+        gap: 22px;
         align-items: start;
-        margin-bottom: 20px;
+        margin-bottom: 22px;
       }
-      @media (max-width: 980px) {
+      @media (max-width: 940px) {
         .dashboard-grid {
           grid-template-columns: 1fr;
+          gap: 18px;
         }
       }
       .dashboard-col {
@@ -268,31 +271,139 @@
       }
       .step-header {
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         gap: 12px;
-        margin-bottom: 20px;
+        margin-bottom: 16px;
+      }
+      .step-header-text {
+        flex: 1;
+        min-width: 0;
       }
       .step-number {
-        width: 28px;
-        height: 28px;
+        width: 26px;
+        height: 26px;
         border-radius: 8px;
         background: var(--accent-emerald);
         color: white;
-        font-size: 13px;
+        font-size: 12px;
         font-weight: 700;
         display: flex;
         align-items: center;
         justify-content: center;
+        flex-shrink: 0;
+        margin-top: 1px;
       }
       .step-title {
-        font-size: 17px;
+        font-size: 15.5px;
         font-weight: 700;
-        letter-spacing: -0.02em;
+        letter-spacing: -0.015em;
+        line-height: 1.3;
+      }
+      .step-sub {
+        font-size: 12px;
+        color: var(--text-secondary);
+        margin-top: 2px;
+        font-weight: 500;
+        line-height: 1.4;
       }
       .step-desc {
-        font-size: 13px;
-        color: var(--text-secondary);
+        font-size: 11.5px;
+        font-weight: 600;
+        color: var(--accent-emerald);
+        background: rgba(16, 185, 129, 0.08);
+        border: 1px solid rgba(16, 185, 129, 0.2);
+        padding: 2px 8px;
+        border-radius: var(--radius-pill);
         margin-left: auto;
+        white-space: nowrap;
+        flex-shrink: 0;
+      }
+
+      /* ── Progressive Disclosure Accordion (Apple HIG) ─────────────────── */
+      .step-disclosure {
+        margin-top: 12px;
+        margin-bottom: 12px;
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        background: var(--surface-subtle);
+        overflow: hidden;
+        transition: border-color 0.2s ease, background 0.2s ease;
+      }
+      .step-disclosure[open] {
+        background: var(--surface-card);
+        border-color: rgba(16, 185, 129, 0.3);
+      }
+      .disclosure-summary {
+        list-style: none;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 9px 14px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        cursor: pointer;
+        user-select: none;
+        transition: color 0.15s ease, background 0.15s ease;
+      }
+      .disclosure-summary::-webkit-details-marker {
+        display: none;
+      }
+      .disclosure-summary:hover {
+        color: var(--accent-emerald);
+        background: rgba(16, 185, 129, 0.05);
+      }
+      .disclosure-summary .chevron-icon {
+        margin-left: auto;
+        transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        color: var(--text-muted);
+      }
+      .step-disclosure[open] .disclosure-summary .chevron-icon {
+        transform: rotate(180deg);
+        color: var(--accent-emerald);
+      }
+      .disclosure-content {
+        padding: 4px 14px 14px 14px;
+        border-top: 1px solid var(--border-subtle);
+      }
+      .disclosure-content .step-instructions {
+        margin-bottom: 8px;
+      }
+
+      /* ── Apple HIG Segmented Controls ──────────────────────────────────── */
+      .segmented-control {
+        display: inline-flex;
+        background: var(--surface-subtle);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-pill);
+        padding: 3px;
+        gap: 2px;
+      }
+      .segmented-btn,
+      .filter-pill {
+        background: transparent;
+        border: 1px solid transparent;
+        border-radius: var(--radius-pill);
+        padding: 4px 12px;
+        font-size: 11.5px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        cursor: pointer;
+        transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+        white-space: nowrap;
+        outline: none;
+      }
+      .segmented-btn:hover,
+      .filter-pill:hover {
+        color: var(--text-primary);
+      }
+      .segmented-btn.active,
+      .filter-pill.active {
+        background: var(--accent-emerald);
+        color: #ffffff;
+        border-color: var(--accent-emerald);
+        box-shadow: 0 2px 10px var(--accent-emerald-glow);
+        font-weight: 700;
       }
 
       /* ── Dropzones ─────────────────────────────────────────────────────── */
@@ -490,12 +601,12 @@
         color: var(--accent-rose);
       }
 
-      /* ── Document Engine Chip Toggles ──────────────────────────────────── */
+      /* ── Document Engine Feature Tiles (Apple HIG) ─────────────────────── */
       .engine-selector {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
         gap: 12px;
-        margin-bottom: 20px;
+        margin-bottom: 16px;
       }
       @media (max-width: 640px) {
         .engine-selector {
@@ -506,31 +617,44 @@
         background: var(--surface-subtle);
         border: 1px solid var(--border-subtle);
         border-radius: var(--radius-md);
-        padding: 14px;
+        padding: 12px 14px;
         cursor: pointer;
-        transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         gap: 10px;
+        user-select: none;
+      }
+      .engine-chip:hover {
+        background: var(--surface-card);
+        border-color: rgba(16, 185, 129, 0.3);
+        transform: translateY(-1px);
       }
       .engine-chip.active {
         background: var(--surface-elevated);
         border-color: var(--accent-emerald);
-        box-shadow: 0 4px 12px var(--accent-emerald-glow);
+        box-shadow: 0 4px 16px var(--accent-emerald-glow);
       }
       .engine-checkbox {
-        width: 18px;
-        height: 18px;
+        width: 17px;
+        height: 17px;
         accent-color: var(--accent-emerald);
         cursor: pointer;
+        margin-top: 2px;
+      }
+      .engine-chip-content {
+        flex: 1;
+        min-width: 0;
       }
       .engine-chip-title {
-        font-size: 13.5px;
+        font-size: 13px;
         font-weight: 700;
+        line-height: 1.3;
       }
       .engine-chip-desc {
         font-size: 11px;
         color: var(--text-secondary);
+        margin-top: 2px;
       }
 
       /* ── Detected Classes Table / Cards ────────────────────────────────── */
@@ -672,9 +796,24 @@
       .date-boundary-box {
         display: flex;
         align-items: center;
+        justify-content: space-between;
         gap: 12px;
         flex-wrap: wrap;
-        margin-bottom: 10px;
+        margin-bottom: 12px;
+      }
+      .date-inputs-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .date-input-group {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-secondary);
       }
       .date-input {
         background: var(--surface-subtle);
@@ -718,6 +857,15 @@
         display: flex;
         gap: 6px;
         flex-wrap: wrap;
+        align-items: center;
+      }
+      .preset-chips.segmented-control {
+        display: inline-flex;
+        background: var(--surface-subtle);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-pill);
+        padding: 3px;
+        gap: 2px;
       }
       .chip-preset {
         background: var(--surface-subtle);
@@ -728,10 +876,25 @@
         font-weight: 600;
         color: var(--text-secondary);
         cursor: pointer;
+        transition: all 0.15s ease;
       }
       .chip-preset:hover {
         color: var(--accent-emerald);
         border-color: var(--accent-emerald);
+      }
+      .preset-chips.segmented-control .chip-preset {
+        background: transparent;
+        border: 1px solid transparent;
+        border-radius: var(--radius-pill);
+        padding: 5px 12px;
+      }
+      .preset-chips.segmented-control .chip-preset:hover {
+        background: var(--surface-card);
+        color: var(--text-primary);
+      }
+      .preset-chips.segmented-control .chip-preset:active {
+        background: var(--accent-emerald);
+        color: #ffffff;
       }
 
       /* ── Execution & Progress Hub ──────────────────────────────────────── */
@@ -1055,11 +1218,11 @@
         color: var(--text-primary);
       }
 
-      /* ── Stepper Bar (Readiness Tracker) ─────────────────────────────────── */
+      /* ── Stepper Bar (Readiness Tracker - Apple HIG) ───────────────────────── */
       .stepper-bar {
         border-top: 1px solid var(--border-subtle);
         background: var(--header-bg);
-        padding: 8px 20px;
+        padding: 6px 28px;
       }
       .stepper-track {
         max-width: 1400px;
@@ -1073,16 +1236,16 @@
       .step-chip {
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: 7px;
         background: var(--surface-subtle);
         border: 1px solid var(--border-subtle);
-        border-radius: 20px;
-        padding: 4px 12px;
-        font-size: 12px;
+        border-radius: var(--radius-pill);
+        padding: 4px 11px;
+        font-size: 11.5px;
         font-weight: 600;
         color: var(--text-secondary);
         cursor: pointer;
-        transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
+        transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
         white-space: nowrap;
       }
       .step-chip:hover {
@@ -1093,19 +1256,19 @@
       }
       .step-chip.ready {
         border-color: rgba(16, 185, 129, 0.4);
-        background: rgba(16, 185, 129, 0.08);
+        background: rgba(16, 185, 129, 0.09);
         color: var(--text-primary);
       }
       .chip-num {
-        width: 18px;
-        height: 18px;
+        width: 17px;
+        height: 17px;
         border-radius: 50%;
         background: var(--border-subtle);
         color: var(--text-secondary);
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 10px;
+        font-size: 9.5px;
         font-weight: 700;
       }
       .step-chip.ready .chip-num {
@@ -1120,48 +1283,52 @@
       }
       .stepper-connector {
         flex: 1;
-        height: 2px;
+        height: 1.5px;
         background: var(--border-subtle);
-        min-width: 8px;
-        max-width: 32px;
+        min-width: 6px;
+        max-width: 28px;
         border-radius: 2px;
       }
 
-      /* ── Floating Action Deck (Bottom Dock) ─────────────────────────── */
+      /* ── Floating Action Deck (Apple Capsule Island) ─────────────────────── */
       .bottom-action-bar {
         position: fixed;
-        bottom: 0;
+        bottom: 14px;
         left: 0;
         right: 0;
         z-index: 999;
-        background: var(--header-bg);
-        backdrop-filter: blur(24px) saturate(190%);
-        -webkit-backdrop-filter: blur(24px) saturate(190%);
-        border-top: 1px solid var(--border-subtle);
-        box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.12);
-        padding: 12px 24px;
+        background: transparent;
+        padding: 0 20px;
+        pointer-events: none;
         transform: translateY(0);
         opacity: 1;
         visibility: visible;
         transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.35s;
       }
       .bottom-action-bar.dock-hidden {
-        transform: translateY(100%);
+        transform: translateY(140%);
         opacity: 0;
         pointer-events: none;
         visibility: hidden;
       }
-      [data-bs-theme="dark"] .bottom-action-bar {
-        box-shadow: 0 -8px 36px rgba(0, 0, 0, 0.55);
-      }
       .bottom-action-content {
-        max-width: 1400px;
+        max-width: 860px;
         margin: 0 auto;
+        pointer-events: auto;
+        background: var(--header-bg);
+        backdrop-filter: blur(28px) saturate(200%);
+        -webkit-backdrop-filter: blur(28px) saturate(200%);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-pill);
+        box-shadow: 0 12px 36px -4px rgba(0, 0, 0, 0.18), 0 4px 12px rgba(0, 0, 0, 0.06);
+        padding: 9px 18px 9px 22px;
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 16px;
-        flex-wrap: wrap;
+      }
+      [data-bs-theme="dark"] .bottom-action-content {
+        box-shadow: 0 16px 44px -4px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.08);
       }
       .action-status-block {
         display: flex;
@@ -2071,7 +2238,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 8px">
               <span class="brand-title">CvSU Gen</span>
-              <span class="badge-version">v1.6 Beta</span>
+              <span class="badge-version">v1.7 Beta</span>
             </div>
             <div class="brand-subtitle">
               Cavite State University Document Automation
@@ -2242,132 +2409,129 @@
         <div class="dashboard-col col-ingestion">
           <!-- ── STEP 1: Select Instructor Schedule ────────────────────────── -->
           <section class="glass-card" id="cardStep1">
-        <div class="step-header">
-          <div class="step-number">1</div>
-          <div class="step-title">
-            Select Instructor Schedule (.xls or .xlsx)
-          </div>
-          <div class="step-desc">Master Schedule</div>
-        </div>
-
-        <p class="step-instructions">
-          Download your official schedule spreadsheet from the faculty portal.
-          Click <strong>"Browse File"</strong> below to select your master
-          schedule. The generator automatically extracts your instructor name,
-          college header, semester, academic year, class times, days, and
-          rooms.<br />
-          <em
-            >Note: Schedule blocks labeled as Async or Asynch are automatically
-            filtered out so only in-person sessions receive attendance
-            columns.</em
-          >
-        </p>
-
-        <!-- Schedule Dropzone with Browse File button -->
-        <div id="scheduleDropzone" class="dropzone" onclick="loadSchedule()">
-          <svg
-            class="dropzone-icon"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-            <line x1="16" y1="2" x2="16" y2="6"></line>
-            <line x1="8" y1="2" x2="8" y2="6"></line>
-            <line x1="3" y1="10" x2="21" y2="10"></line>
-          </svg>
-          <div class="dropzone-title">
-            Instructor Schedule Spreadsheet
-            <span
-              id="scheduleFormatBadge"
-              class="badge-version d-none"
-              style="margin-left: 6px"
-              >.XLS</span
-            >
-          </div>
-          <div id="schedulePrompt" class="dropzone-hint">
-            Click "Browse File" or drop master schedule (.xls / .xlsx)
-          </div>
-          <div style="display: flex; gap: 8px; margin-top: 6px">
-            <button
-              class="btn-browse"
-              type="button"
-              onclick="
-                event.stopPropagation();
-                loadSchedule();
-              "
-            >
-              Browse File
-            </button>
-            <button
-              class="nav-btn d-none"
-              id="btnResetSchedule"
-              type="button"
-              style="padding: 4px 10px; font-size: 11px"
-              onclick="
-                event.stopPropagation();
-                resetSchedule();
-              "
-            >
-              Reset File
-            </button>
-          </div>
-          <div
-            id="scheduleFilename"
-            class="dropzone-status d-none selectable"
-          ></div>
-        </div>
-
-        <!-- Instructor Profile Instant Banner -->
-        <div
-          id="instructorBanner"
-          class="instructor-banner d-none"
-          style="margin-top: 16px"
-        >
-          <div class="instructor-info">
-            <div id="instructorInitials" class="instructor-avatar">DO</div>
-            <div>
-              <div id="instructorName" class="instructor-name selectable">
-                Instructor Name
+            <div class="step-header">
+              <div class="step-number">1</div>
+              <div class="step-header-text">
+                <div class="step-title">Select Instructor Schedule (.xls or .xlsx)</div>
+                <div class="step-sub">Official master schedule spreadsheet from the faculty portal</div>
               </div>
-              <div id="instructorCollege" class="instructor-meta selectable">
-                College of Engineering and Information Technology
+              <div class="step-desc">Master Schedule</div>
+            </div>
+
+            <!-- Schedule Dropzone with Browse File button -->
+            <div id="scheduleDropzone" class="dropzone" onclick="loadSchedule()">
+              <svg
+                class="dropzone-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="16" y1="2" x2="16" y2="6"></line>
+                <line x1="8" y1="2" x2="8" y2="6"></line>
+                <line x1="3" y1="10" x2="21" y2="10"></line>
+              </svg>
+              <div class="dropzone-title">
+                Instructor Schedule Spreadsheet
+                <span
+                  id="scheduleFormatBadge"
+                  class="badge-version d-none"
+                  style="margin-left: 6px"
+                  >.XLS</span
+                >
+              </div>
+              <div id="schedulePrompt" class="dropzone-hint">
+                Click "Browse File" or drop master schedule (.xls / .xlsx)
+              </div>
+              <div style="display: flex; gap: 8px; margin-top: 6px">
+                <button
+                  class="btn-browse"
+                  type="button"
+                  onclick="
+                    event.stopPropagation();
+                    loadSchedule();
+                  "
+                >
+                  Browse File
+                </button>
+                <button
+                  class="nav-btn d-none"
+                  id="btnResetSchedule"
+                  type="button"
+                  style="padding: 4px 10px; font-size: 11px"
+                  onclick="
+                    event.stopPropagation();
+                    resetSchedule();
+                  "
+                >
+                  Reset File
+                </button>
+              </div>
+              <div
+                id="scheduleFilename"
+                class="dropzone-status d-none selectable"
+              ></div>
+            </div>
+
+            <!-- Progressive Disclosure Details: Schedule Notes -->
+            <details class="step-disclosure" id="disclosureStep1">
+              <summary class="disclosure-summary">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                <span>Schedule Instructions &amp; Async Filtering Notes</span>
+                <svg class="chevron-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </summary>
+              <div class="disclosure-content">
+                <p class="step-instructions">
+                  Download your official schedule spreadsheet from the faculty portal.
+                  Click <strong>"Browse File"</strong> below to select your master schedule. The generator automatically extracts your instructor name, college header, semester, academic year, class times, days, and rooms.<br />
+                  <em>Note: Schedule blocks labeled as Async or Asynch are automatically filtered out so only in-person sessions receive attendance columns.</em>
+                </p>
+              </div>
+            </details>
+
+            <!-- Instructor Profile Instant Banner -->
+            <div
+              id="instructorBanner"
+              class="instructor-banner d-none"
+              style="margin-top: 16px"
+            >
+              <div class="instructor-info">
+                <div id="instructorInitials" class="instructor-avatar">DO</div>
+                <div>
+                  <div id="instructorName" class="instructor-name selectable">
+                    Instructor Name
+                  </div>
+                  <div id="instructorCollege" class="instructor-meta selectable">
+                    College of Engineering and Information Technology
+                  </div>
+                </div>
+              </div>
+              <div class="instructor-pills">
+                <span id="instructorSemPill" class="meta-pill">Semester</span>
+                <span id="instructorSlotsPill" class="meta-pill"
+                  >0 Class Blocks</span
+                >
               </div>
             </div>
-          </div>
-          <div class="instructor-pills">
-            <span id="instructorSemPill" class="meta-pill">Semester</span>
-            <span id="instructorSlotsPill" class="meta-pill"
-              >0 Class Blocks</span
-            >
-          </div>
-        </div>
-      </section>
+          </section>
 
       <!-- ── STEP 2: Select Student Rosters ───────────────────────────── -->
       <section class="glass-card" id="cardStep2">
         <div class="step-header">
           <div class="step-number">2</div>
-          <div class="step-title">
-            Select Student Rosters (.xlsx, .xls, or .csv)
+          <div class="step-header-text">
+            <div class="step-title">
+              Select Student Rosters (.xlsx, .xls, or .csv)
+            </div>
+            <div class="step-sub">
+              Class student rosters from <a href="https://registrar.cvsu.edu.ph/" target="_blank" class="text-link">registrar.cvsu.edu.ph</a>
+            </div>
           </div>
           <div class="step-desc">Class Lists</div>
         </div>
-
-        <p class="step-instructions">
-          Download class student rosters directly from
-          <a
-            href="https://registrar.cvsu.edu.ph/"
-            target="_blank"
-            class="text-link"
-            >registrar.cvsu.edu.ph</a
-          >. Click <strong>"Browse Data"</strong> below. You can select
-          <strong>multiple files at once</strong> by holding <kbd>Ctrl</kbd> or
-          <kbd>Shift</kbd> to load all your class rosters together.
-        </p>
 
         <!-- Auto-Strip Extra Columns Toggle -->
         <div class="auto-strip-box">
@@ -2389,54 +2553,6 @@
               extra portal columns.
             </div>
           </div>
-        </div>
-
-        <!-- Roster Column Info Box -->
-        <div class="alert-info">
-          <div
-            style="color: var(--accent-blue); flex-shrink: 0; margin-top: 2px"
-          >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <circle cx="12" cy="12" r="10"></circle>
-              <line x1="12" y1="16" x2="12" y2="12"></line>
-              <line x1="12" y1="8" x2="12.01" y2="8"></line>
-            </svg>
-          </div>
-          <div>
-            <strong>Roster Columns:</strong> Columns A &amp; B must contain the
-            student <code>Name</code> and <code>Student number</code>. Extra
-            portal columns (Email, Course, Section, Status, Remarks) are
-            automatically cleaned and ignored.
-          </div>
-        </div>
-
-        <div
-          style="
-            font-size: 12.5px;
-            color: var(--text-secondary);
-            margin-bottom: 12px;
-          "
-        >
-          <strong>Crucial:</strong> Keep the official file naming format:
-          <div class="code-block" style="margin: 6px 0">
-            {Course/Sec} List of Students for {ScheduleCode}-{Subject}.xlsx
-          </div>
-          <span style="font-size: 12px"
-            >Example:
-            <code
-              >BSCS1-4 List of Students for 202612040-DCIT 21A - INTRODUCTION TO
-              COMPUTING.xlsx</code
-            ></span
-          >
         </div>
 
         <!-- Rosters Dropzone with Browse Data button -->
@@ -2473,6 +2589,76 @@
           </button>
           <div id="rostersFilename" class="dropzone-status d-none"></div>
         </div>
+
+        <!-- Progressive Disclosure Details: Roster Column Guidelines & Official Naming -->
+        <details class="step-disclosure" id="disclosureStep2">
+          <summary class="disclosure-summary">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+            <span>Roster Column Guidelines &amp; Official Naming Rules</span>
+            <svg class="chevron-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </summary>
+          <div class="disclosure-content">
+            <p class="step-instructions">
+              Download class student rosters directly from
+              <a
+                href="https://registrar.cvsu.edu.ph/"
+                target="_blank"
+                class="text-link"
+                >registrar.cvsu.edu.ph</a
+              >. Click <strong>"Browse Data"</strong> below. You can select
+              <strong>multiple files at once</strong> by holding <kbd>Ctrl</kbd> or
+              <kbd>Shift</kbd> to load all your class rosters together.
+            </p>
+
+            <!-- Roster Column Info Box -->
+            <div class="alert-info">
+              <div
+                style="color: var(--accent-blue); flex-shrink: 0; margin-top: 2px"
+              >
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="16" x2="12" y2="12"></line>
+                  <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                </svg>
+              </div>
+              <div>
+                <strong>Roster Columns:</strong> Columns A &amp; B must contain the
+                student <code>Name</code> and <code>Student number</code>. Extra
+                portal columns (Email, Course, Section, Status, Remarks) are
+                automatically cleaned and ignored.
+              </div>
+            </div>
+
+            <div
+              style="
+                font-size: 12.5px;
+                color: var(--text-secondary);
+                margin-bottom: 8px;
+              "
+            >
+              <strong>Crucial:</strong> Keep the official file naming format:
+              <div class="code-block" style="margin: 6px 0">
+                {Course/Sec} List of Students for {ScheduleCode}-{Subject}.xlsx
+              </div>
+              <span style="font-size: 12px"
+                >Example:
+                <code
+                  >BSCS1-4 List of Students for 202612040-DCIT 21A - INTRODUCTION TO
+                  COMPUTING.xlsx</code
+                ></span
+              >
+            </div>
+          </div>
+        </details>
 
         <!-- Roster Pre-flight List -->
         <div
@@ -2539,52 +2725,19 @@
       <section class="glass-card" id="cardStep3">
         <div class="step-header">
           <div class="step-number">3</div>
-          <div class="step-title">
-            Confirm Detected Classes &amp; Subject Types
+          <div class="step-header-text">
+            <div class="step-title">
+              Confirm Detected Classes &amp; Subject Types
+            </div>
+            <div class="step-sub">
+              Select packages to compile &amp; confirm grading templates
+            </div>
           </div>
           <div class="step-desc">Templates &amp; Packages</div>
         </div>
 
-        <p class="step-instructions">
-          Once your schedule and rosters are loaded, the panel below displays
-          all detected classes paired with official CvSU grading templates:
-        </p>
-
-        <div class="template-spec-box">
-          <ul
-            style="
-              padding-left: 18px;
-              font-size: 12.5px;
-              color: var(--text-secondary);
-              line-height: 1.6;
-            "
-          >
-            <li>
-              <strong>Lecture and Lab:</strong> Uses
-              <code>GRADING_LECTURE_LAB_TEMPLATE.xlsx</code> (includes Lecture,
-              Laboratory, Consolidated, and Grading Sheet tabs).
-            </li>
-            <li>
-              <strong>Lecture only:</strong> Uses
-              <code>GRADING_LECTURE_TEMPLATE.xlsx</code> (includes Lecture and
-              Grading Sheet tabs).
-            </li>
-          </ul>
-          <div
-            style="
-              font-size: 12px;
-              color: var(--text-muted);
-              margin-top: 6px;
-              font-style: italic;
-            "
-          >
-            The system automatically detects labs from your schedule hours, but
-            you can change this anytime using the dropdown menu.
-          </div>
-        </div>
-
-        <!-- Document Engine Toggles -->
-        <label class="form-label">Document Packages to Compile</label>
+        <!-- Document Engine Toggles (Apple Feature Tiles) -->
+        <label class="form-label" style="margin-bottom: 8px">Document Packages to Compile</label>
         <div class="engine-selector">
           <div
             class="engine-chip active"
@@ -2597,7 +2750,7 @@
               class="engine-checkbox"
               checked
             />
-            <div>
+            <div class="engine-chip-content">
               <div class="engine-chip-title">Attendance Sheets</div>
               <div class="engine-chip-desc">Monthly logs (.docx)</div>
             </div>
@@ -2613,7 +2766,7 @@
               class="engine-checkbox"
               checked
             />
-            <div>
+            <div class="engine-chip-content">
               <div class="engine-chip-title">CEIT Dept Forms</div>
               <div class="engine-chip-desc">7 Forms (.docx)</div>
             </div>
@@ -2629,12 +2782,59 @@
               class="engine-checkbox"
               checked
             />
-            <div>
+            <div class="engine-chip-content">
               <div class="engine-chip-title">Official Grade Sheets</div>
               <div class="engine-chip-desc">Lecture / Lab (.xlsx)</div>
             </div>
           </div>
         </div>
+
+        <!-- Progressive Disclosure Details: Template Specifications -->
+        <details class="step-disclosure" id="disclosureStep3">
+          <summary class="disclosure-summary">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+            <span>Grading Template Specifications &amp; Detection Rules</span>
+            <svg class="chevron-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </summary>
+          <div class="disclosure-content">
+            <p class="step-instructions" style="margin-bottom: 6px;">
+              Once your schedule and rosters are loaded, the panel below displays
+              all detected classes paired with official CvSU grading templates:
+            </p>
+            <div class="template-spec-box">
+              <ul
+                style="
+                  padding-left: 18px;
+                  font-size: 12px;
+                  color: var(--text-secondary);
+                  line-height: 1.5;
+                "
+              >
+                <li>
+                  <strong>Lecture and Lab:</strong> Uses
+                  <code>GRADING_LECTURE_LAB_TEMPLATE.xlsx</code> (includes Lecture,
+                  Laboratory, Consolidated, and Grading Sheet tabs).
+                </li>
+                <li>
+                  <strong>Lecture only:</strong> Uses
+                  <code>GRADING_LECTURE_TEMPLATE.xlsx</code> (includes Lecture and
+                  Grading Sheet tabs).
+                </li>
+              </ul>
+              <div
+                style="
+                  font-size: 11.5px;
+                  color: var(--text-muted);
+                  margin-top: 6px;
+                  font-style: italic;
+                "
+              >
+                The system automatically detects labs from your schedule hours, but
+                you can change this anytime using the dropdown menu.
+              </div>
+            </div>
+          </div>
+        </details>
 
         <!-- Live File Estimate Badge -->
         <div id="fileEstimateBadge" class="estimate-badge d-none">
@@ -2677,18 +2877,10 @@
             </div>
           </div>
 
-          <!-- Quick Filters -->
-          <div class="filter-chip-group">
-            <span
-              style="
-                font-size: 12px;
-                font-weight: 700;
-                color: var(--text-secondary);
-              "
-              >Filter:</span
-            >
+          <!-- Quick Filters (Apple Segmented Control) -->
+          <div class="filter-chip-group segmented-control">
             <button
-              class="filter-pill active"
+              class="segmented-btn filter-pill active"
               id="filterAllClasses"
               type="button"
               onclick="filterClassCards('all')"
@@ -2696,7 +2888,7 @@
               All
             </button>
             <button
-              class="filter-pill"
+              class="segmented-btn filter-pill"
               id="filterLabClasses"
               type="button"
               onclick="filterClassCards('lab')"
@@ -2704,7 +2896,7 @@
               Lecture &amp; Lab Only
             </button>
             <button
-              class="filter-pill"
+              class="segmented-btn filter-pill"
               id="filterLecClasses"
               type="button"
               onclick="filterClassCards('lec')"
@@ -2713,7 +2905,7 @@
             </button>
           </div>
 
-          <div id="classesListContainer" class="classes-container"></div>
+          <div id="classesListContainer" class="classes-container" style="margin-top: 10px;"></div>
         </div>
       </section>
 
@@ -2721,7 +2913,10 @@
       <section class="glass-card" id="cardStep4">
         <div class="step-header">
           <div class="step-number">4</div>
-          <div class="step-title">(Optional) Set Semester Date Boundaries</div>
+          <div class="step-header-text">
+            <div class="step-title">(Optional) Set Semester Date Boundaries</div>
+            <div class="step-sub">Standard calendar (Aug–Dec / Jan–May) or custom range</div>
+          </div>
           <div class="step-desc">Attendance Calendar</div>
         </div>
 
@@ -2737,38 +2932,35 @@
         </p>
 
         <div class="date-boundary-box">
-          <span style="font-size: 13px; color: var(--text-secondary)"
-            >Start:</span
-          >
-          <input
-            type="date"
-            id="startDate"
-            class="date-input"
-            onchange="saveDates()"
-          />
-          <span
-            style="
-              font-size: 13px;
-              color: var(--text-secondary);
-              margin-left: 10px;
-            "
-            >End:</span
-          >
-          <input
-            type="date"
-            id="endDate"
-            class="date-input"
-            onchange="saveDates()"
-          />
-          <div class="preset-chips">
-            <span class="chip-preset" onclick="setSemesterPreset('1st')"
-              >1st Sem (Aug-Dec)</span
+          <div class="date-inputs-row">
+            <div class="date-input-group">
+              <span>Start:</span>
+              <input
+                type="date"
+                id="startDate"
+                class="date-input"
+                onchange="saveDates()"
+              />
+            </div>
+            <div class="date-input-group">
+              <span>End:</span>
+              <input
+                type="date"
+                id="endDate"
+                class="date-input"
+                onchange="saveDates()"
+              />
+            </div>
+          </div>
+          <div class="preset-chips segmented-control">
+            <button type="button" class="chip-preset segmented-btn" onclick="setSemesterPreset('1st')"
+              >1st Sem (Aug-Dec)</button
             >
-            <span class="chip-preset" onclick="setSemesterPreset('2nd')"
-              >2nd Sem (Jan-May)</span
+            <button type="button" class="chip-preset segmented-btn" onclick="setSemesterPreset('2nd')"
+              >2nd Sem (Jan-May)</button
             >
-            <span class="chip-preset" onclick="clearDatePresets()"
-              >Reset Dates</span
+            <button type="button" class="chip-preset segmented-btn" onclick="clearDatePresets()"
+              >Reset Dates</button
             >
           </div>
         </div>
@@ -2781,7 +2973,10 @@
       <section class="glass-card" id="cardStep5">
         <div class="step-header">
           <div class="step-number">5</div>
-          <div class="step-title">Choose Target Output Folder</div>
+          <div class="step-header-text">
+            <div class="step-title">Choose Target Output Folder</div>
+            <div class="step-sub">Destination directory for compiled document packages</div>
+          </div>
           <div class="step-desc">Destination Directory</div>
         </div>
 
@@ -2828,7 +3023,10 @@
       <section class="glass-card execution-card" id="cardStep6">
         <div class="step-header">
           <div class="step-number">6</div>
-          <div class="step-title">Initialize Workflow</div>
+          <div class="step-header-text">
+            <div class="step-title">Initialize Workflow</div>
+            <div class="step-sub">Automated document compilation &amp; verification</div>
+          </div>
           <div class="step-desc">Automated Generation</div>
         </div>
 
