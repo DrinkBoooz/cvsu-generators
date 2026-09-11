@@ -2413,32 +2413,27 @@
         transition: none !important;
       }
 
-      ::view-transition-group(root) {
-        animation-duration: 0.34s;
-        animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
-      }
-
       ::view-transition-old(root),
       ::view-transition-new(root) {
+        animation: none;
         mix-blend-mode: normal !important;
       }
 
       ::view-transition-old(root) {
-        animation: none;
         z-index: 1;
       }
 
       ::view-transition-new(root) {
-        animation: 0.34s cubic-bezier(0.32, 0.72, 0, 1) both appleThemeCrossFade;
         z-index: 2;
+        animation: 0.45s cubic-bezier(0.22, 1, 0.36, 1) both appleThemeIrisReveal;
       }
 
-      @keyframes appleThemeCrossFade {
+      @keyframes appleThemeIrisReveal {
         from {
-          opacity: 0;
+          clip-path: circle(0px at var(--vt-x, 90vw) var(--vt-y, 30px));
         }
         to {
-          opacity: 1;
+          clip-path: circle(var(--vt-radius, 2000px) at var(--vt-x, 90vw) var(--vt-y, 30px));
         }
       }
 
@@ -2505,7 +2500,7 @@
           <button
             class="nav-btn"
             id="btnToggleTheme"
-            onclick="toggleTheme()"
+            onclick="toggleTheme(event)"
             title="Switch to Light Mode"
             aria-label="Toggle Dark/Light Mode"
           >
@@ -5176,15 +5171,16 @@
         }
       }
 
-      function toggleTheme() {
+      function toggleTheme(event) {
         const doc = document.documentElement;
         const currentTheme = doc.getAttribute("data-bs-theme") || "dark";
         const newTheme = currentTheme === "dark" ? "light" : "dark";
 
+        const btn = document.getElementById("btnToggleTheme");
         const iconSpan = document.getElementById("themeIcon");
         if (iconSpan) {
           iconSpan.classList.add("spin-morph");
-          setTimeout(() => iconSpan.classList.remove("spin-morph"), 280);
+          setTimeout(() => iconSpan.classList.remove("spin-morph"), 350);
         }
 
         const applyTheme = () => {
@@ -5198,11 +5194,27 @@
           void doc.offsetHeight;
         };
 
-        const prefersReducedMotion =
-          window.matchMedia &&
-          window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        if (document.startViewTransition) {
+          let x = window.innerWidth - 80;
+          let y = 30;
+          if (event && typeof event.clientX === "number" && event.clientX > 0) {
+            x = event.clientX;
+            y = event.clientY;
+          } else if (btn) {
+            const rect = btn.getBoundingClientRect();
+            x = rect.left + rect.width / 2;
+            y = rect.top + rect.height / 2;
+          }
 
-        if (document.startViewTransition && !prefersReducedMotion) {
+          const endRadius = Math.hypot(
+            Math.max(x, window.innerWidth - x),
+            Math.max(y, window.innerHeight - y)
+          );
+
+          doc.style.setProperty("--vt-x", `${x}px`);
+          doc.style.setProperty("--vt-y", `${y}px`);
+          doc.style.setProperty("--vt-radius", `${endRadius}px`);
+
           const transition = document.startViewTransition(() => {
             applyTheme();
           });
