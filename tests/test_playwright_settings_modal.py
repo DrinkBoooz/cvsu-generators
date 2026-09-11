@@ -98,3 +98,86 @@ def test_playwright_parser_settings_modal_flow():
         assert modal.is_hidden(), "Modal must be hidden after clicking close"
 
         browser.close()
+
+def test_playwright_settings_table_sticky_header_and_scroll():
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.goto(FILE_URL)
+
+        # Open settings modal
+        page.click("#btnOpenSettings")
+        page.wait_for_selector("#cfgPrefixTableBody tr")
+
+        # Verify table styles prevent overlap/bleed-through
+        table_style = page.evaluate("""() => {
+            const table = document.querySelector('.settings-data-table');
+            const th = table.querySelector('th');
+            const wrapper = document.querySelector('.settings-table-wrapper');
+            const style = getComputedStyle(th);
+            return {
+                borderCollapse: getComputedStyle(table).borderCollapse,
+                position: style.position,
+                top: style.top,
+                zIndex: parseInt(style.zIndex, 10),
+                backgroundColor: style.backgroundColor
+            };
+        }""")
+
+        assert table_style["borderCollapse"] == "separate", "Table must use border-collapse: separate for sticky headers"
+        assert table_style["position"] == "sticky", "Headers must have position: sticky"
+        assert table_style["top"] == "0px", "Headers must stick to top: 0px"
+        assert table_style["zIndex"] >= 2, "Headers must have z-index to stay above rows"
+        
+        # Verify dark mode header background is opaque (not rgba with alpha < 0.9)
+        bg = table_style["backgroundColor"]
+        assert "rgba" not in bg or ", 1)" in bg or ", 0.9" in bg, f"Header background must be opaque in dark mode, got {bg}"
+
+        # Populate sufficient rows to make table scrollable
+        page.evaluate("""() => {
+            const prefixes = ['AGEN', 'AENG', 'BCE', 'BSE', 'CE', 'COSC', 'CPEN', 'DCIT', 'ECEN', 'EENG', 'IENG', 'INDT', 'ITEC', 'MATH', 'PHYS'];
+            const map = {};
+            prefixes.forEach(p => {
+                map[p] = {dept_code: 'DCEE', name: 'Department of ' + p, badge: '📚 ' + p};
+            });
+            activeParserConfig = {
+                ceit_prefix_map: map,
+                known_lab_subject_codes: [],
+                degree_program_aliases: { 'CENG': 'BSCE', 'CIVL': 'BSCE', 'CPE': 'BSCPE' },
+                roster_column_keywords: { name_tokens: [], id_tokens: [] },
+                schedule_defaults: {}
+            };
+            renderConfigPrefixes();
+        }""")
+
+        # Scroll down and verify header stays pinned at top
+        scroll_info = page.evaluate("""() => {
+            const wrapper = document.querySelector('.settings-table-wrapper');
+            const th = wrapper.querySelector('th');
+            const initialTop = th.getBoundingClientRect().top;
+            
+            wrapper.scrollTop = 50;
+            const scrolledTop = th.getBoundingClientRect().top;
+            
+            return {
+                initialTop: initialTop,
+                scrolledTop: scrolledTop,
+                wrapperScrollTop: wrapper.scrollTop
+            };
+        }""")
+        assert scroll_info["wrapperScrollTop"] >= 40, "Wrapper must scroll down"
+        assert abs(scroll_info["initialTop"] - scroll_info["scrolledTop"]) <= 1.0, "Sticky header must stay pinned to the top of wrapper"
+
+        # Toggle to Light mode and verify header remains opaque
+        page.click("#btnCloseSettingsModal")
+        page.click("#btnToggleTheme")
+        page.click("#btnOpenSettings")
+
+        light_bg = page.evaluate("""() => {
+            const th = document.querySelector('.settings-data-table th');
+            return getComputedStyle(th).backgroundColor;
+        }""")
+        assert "rgba" not in light_bg or ", 1)" in light_bg or ", 0.9" in light_bg, f"Header background must be opaque in light mode, got {light_bg}"
+
+        browser.close()
+

@@ -2571,26 +2571,34 @@
         border: 1px solid var(--border-subtle);
         border-radius: var(--radius-md);
         overflow: hidden;
-        background: var(--surface-card);
+        background: var(--surface-elevated);
         margin-top: 10px;
         max-height: 280px;
         overflow-y: auto;
       }
       .settings-data-table {
         width: 100%;
-        border-collapse: collapse;
+        border-collapse: separate;
+        border-spacing: 0;
         font-size: 12px;
         text-align: left;
       }
       .settings-data-table th {
-        background: var(--surface-subtle);
+        background: var(--surface-elevated);
         padding: 10px 12px;
         font-weight: 600;
         color: var(--text-secondary);
         border-bottom: 1px solid var(--border-subtle);
         position: sticky;
         top: 0;
-        z-index: 2;
+        z-index: 10;
+        box-shadow: 0 1px 0 var(--border-subtle);
+      }
+      [data-bs-theme="dark"] .settings-data-table th {
+        background: #141c2e;
+      }
+      [data-bs-theme="light"] .settings-data-table th {
+        background: #ffffff;
       }
       .settings-data-table td {
         padding: 9px 12px;
