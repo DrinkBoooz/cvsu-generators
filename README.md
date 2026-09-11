@@ -1,10 +1,10 @@
 # Cavite State University (CvSU) Document Generator
 
 [![Release](https://img.shields.io/badge/version-v2.0%20Beta-blue.svg)](file:///c:/Users/danjo/OneDrive/CVSU%20GENERATORS/executable/ui.html)
-[![Tests](https://img.shields.io/badge/tests-153%20passed%20(100%25)-brightgreen.svg)](file:///c:/Users/danjo/OneDrive/CVSU%20GENERATORS/tests)
-[![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011%20(x64)-lightgrey.svg)](file:///c:/Users/danjo/OneDrive/CVSU%20GENERATORS/executable)
+[![Tests](<https://img.shields.io/badge/tests-153%20passed%20(100%25)-brightgreen.svg>)](file:///c:/Users/danjo/OneDrive/CVSU%20GENERATORS/tests)
+[![Platform](<https://img.shields.io/badge/platform-Windows%2010%20%7C%2011%20(x64)-lightgrey.svg>)](file:///c:/Users/danjo/OneDrive/CVSU%20GENERATORS/executable)
 [![License](https://img.shields.io/badge/copyright-%C2%A9%202026%20Dan%20Joseph%20Ortega-purple.svg)](file:///c:/Users/danjo/OneDrive/CVSU%20GENERATORS/executable/file_version_info.txt)
-[![Authenticode](https://img.shields.io/badge/Authenticode-Digitally%20Signed%20(DigiCert%20RFC%203161)-success.svg)](file:///c:/Users/danjo/OneDrive/CVSU%20GENERATORS/executable/sign_exe.ps1)
+[![Authenticode](<https://img.shields.io/badge/Authenticode-Digitally%20Signed%20(DigiCert%20RFC%203161)-success.svg>)](file:///c:/Users/danjo/OneDrive/CVSU%20GENERATORS/executable/sign_exe.ps1)
 
 A high-performance, institutional desktop application and automation engine engineered for Cavite State University (CvSU) faculty members. The system ingests raw instructor master schedules (`.xls`/`.xlsx`) and student rosters (`.xlsx`/`.xls`/`.csv`) to automatically generate submission-ready, standardized academic forms, monthly attendance sheets, Excel grading sheets with preserved mathematical formulas, and custom dynamic documents via an offline heuristic analysis engine.
 
@@ -13,25 +13,25 @@ A high-performance, institutional desktop application and automation engine engi
 ## Table of Contents
 
 1. [Architectural Overview](#architectural-overview)
-2. [Technology Stack & Dependencies](#technology-stack--dependencies)
+2. [Technology Stack &amp; Dependencies](#technology-stack--dependencies)
 3. [Repository File Map](#repository-file-map)
-4. [Package & Module Deep Dive](#package--module-deep-dive)
+4. [Package &amp; Module Deep Dive](#package--module-deep-dive)
    - [modules.common](#modulescommon)
    - [modules.models](#modulesmodels)
    - [modules.parsers](#modulesparsers)
    - [modules.generators](#modulesgenerators)
    - [modules.services](#modulesservices)
    - [executable Desktop Application](#executable-desktop-application)
-5. [End-to-End Processing Logic & Data Pipelines](#end-to-end-processing-logic--data-pipelines)
-   - [1. Schedule Ingestion & Async Filtering](#1-schedule-ingestion--async-filtering)
-   - [2. Roster Parsing & Fuzzy Schedule Pairing](#2-roster-parsing--fuzzy-schedule-pairing)
+5. [End-to-End Processing Logic &amp; Data Pipelines](#end-to-end-processing-logic--data-pipelines)
+   - [1. Schedule Ingestion &amp; Async Filtering](#1-schedule-ingestion--async-filtering)
+   - [2. Roster Parsing &amp; Fuzzy Schedule Pairing](#2-roster-parsing--fuzzy-schedule-pairing)
    - [3. Deterministic Heuristic Template Inspection](#3-deterministic-heuristic-template-inspection)
-   - [4. Dynamic Document Generation & OpenXML AST Injection](#4-dynamic-document-generation--openxml-ast-injection)
+   - [4. Dynamic Document Generation &amp; OpenXML AST Injection](#4-dynamic-document-generation--openxml-ast-injection)
    - [5. Grading Sheet OpenXML Formula Preservation](#5-grading-sheet-openxml-formula-preservation)
-6. [User Configuration & Custom Templates Store](#user-configuration--custom-templates-store)
-7. [Comprehensive Verification & Automated Testing Suite](#comprehensive-verification--automated-testing-suite)
-8. [Standalone Compilation & Authenticode Code Signing](#standalone-compilation--authenticode-code-signing)
-9. [Command-Line & Programmatic Usage](#command-line--programmatic-usage)
+6. [User Configuration &amp; Custom Templates Store](#user-configuration--custom-templates-store)
+7. [Comprehensive Verification &amp; Automated Testing Suite](#comprehensive-verification--automated-testing-suite)
+8. [Standalone Compilation &amp; Authenticode Code Signing](#standalone-compilation--authenticode-code-signing)
+9. [Command-Line &amp; Programmatic Usage](#command-line--programmatic-usage)
 
 ---
 
@@ -81,16 +81,16 @@ CvSU Document Generator is designed as a decoupled, modular system adhering to C
 
 ## Technology Stack & Dependencies
 
-| Component | Technology / Library | Purpose |
-| :--- | :--- | :--- |
-| **Core Runtime** | Python 3.10 – 3.14 (x64) | Primary execution engine |
-| **GUI Framework** | `pywebview` | Native Windows webview host (Edge Chromium / WebView2) |
-| **Frontend UI** | HTML5, Vanilla CSS3, Modern JavaScript | Apple HIG-inspired interface with CSS design tokens |
-| **Word Processing** | `python-docx` + `lxml.etree` | High-speed XML AST manipulation (<20ms per document) |
-| **Spreadsheet Engine** | `openpyxl` + `xlrd` | Native reading of `.xls` (BIFF8) and `.xlsx` formula workbooks |
-| **Packaging** | `PyInstaller` | Bundles runtime, Python standard library, assets into standalone `.exe` |
-| **Security & Signing** | Microsoft `signtool.exe` + DigiCert | Authenticode digital signing with RFC 3161 SHA-256 timestamping |
-| **Automated Testing** | `pytest`, `pytest-mock`, `playwright` | Comprehensive unit, integration, and UI automation |
+| Component              | Technology / Library                   | Purpose                                                                |
+| :--------------------- | :------------------------------------- | :--------------------------------------------------------------------- |
+| **Core Runtime**       | Python 3.10 – 3.14 (x64)               | Primary execution engine                                               |
+| **GUI Framework**      | `pywebview`                            | Native Windows webview host (Edge Chromium / WebView2)                 |
+| **Frontend UI**        | HTML5, Vanilla CSS3, Modern JavaScript | Apple HIG-inspired interface with CSS design tokens                    |
+| **Word Processing**    | `python-docx` + `lxml.etree`           | High-speed XML AST manipulation (<20ms per document)                   |
+| **Spreadsheet Engine** | `openpyxl` + `xlrd`                    | Native reading of`.xls` (BIFF8) and `.xlsx` formula workbooks          |
+| **Packaging**          | `PyInstaller`                          | Bundles runtime, Python standard library, assets into standalone`.exe` |
+| **Security & Signing** | Microsoft`signtool.exe` + DigiCert     | Authenticode digital signing with RFC 3161 SHA-256 timestamping        |
+| **Automated Testing**  | `pytest`, `pytest-mock`, `playwright`  | Comprehensive unit, integration, and UI automation                     |
 
 ---
 
@@ -174,6 +174,7 @@ CVSU GENERATORS/
 ### `modules.common`
 
 #### 1. `config_manager.py` (`ParserConfigManager`)
+
 - **Persistence Location**: `%APPDATA%/CVSU_Generators/config/parser_settings.json` and `%APPDATA%/CVSU_Generators/custom_templates/`.
 - **Key Responsibilities**:
   - Maintains persistent overrides for subject prefixes, lab-bearing subjects, degree aliases, column header keywords, and fallback schedule defaults.
@@ -183,6 +184,7 @@ CVSU GENERATORS/
   - Implements listener callbacks (`register_listener`) to notify active components when user settings change.
 
 #### 2. `docx_utils.py`
+
 - **Low-Level OpenXML Manipulation**:
   - `load_docx(path)`: Unpacks `.docx` container via `zipfile.ZipFile`, reads `word/document.xml`, parses into an `lxml.etree` element tree, and returns `(zin, root, body)`.
   - `save_docx(zin, root, output_path)`: Recompresses all original media, styles, and headers, serializing the modified `word/document.xml` with XML declaration and UTF-8 encoding.
@@ -191,9 +193,11 @@ CVSU GENERATORS/
   - `auto_scale_font(run, text, threshold, shrink_sz)`: Dynamically injects `<w:sz w:val="...">` and `<w:szCs w:val="...">` into `<w:rPr>` to prevent undesirable line wraps.
 
 #### 3. `excel_utils.py`
+
 - Direct ZIP/XML parsing helpers for legacy workbooks and shared string tables, bypassing `openpyxl` locks when inspecting workbook metadata.
 
 #### 4. `logger.py`
+
 - Structured logging service writing to standard output and local rotating logs (`%APPDATA%/CVSU_Generators/logs/`).
 
 ---
@@ -201,6 +205,7 @@ CVSU GENERATORS/
 ### `modules.models`
 
 #### 1. `schedule.py`
+
 - `ClassInfo`: Domain representation of an academic section:
   ```python
   @dataclass
@@ -220,6 +225,7 @@ CVSU GENERATORS/
 - `ScheduleEntry`: Represents an individual timeslot block parsed from teacher schedules (`day`, `time_start`, `time_end`, `room`, `class_name`, `subject_code`, `is_async`).
 
 #### 2. `student.py`
+
 - `Student`: Normalized student record with helper methods for capitalisation, surname-first formatting, and student number sanitation.
 
 ---
@@ -227,12 +233,14 @@ CVSU GENERATORS/
 ### `modules.parsers`
 
 #### 1. `schedule_parser.py` (`ScheduleParser`)
+
 - Ingests raw teacher schedule spreadsheets (`.xls` via `xlrd`, `.xlsx` via `openpyxl`).
 - **AST Block Tracking**: Discovers instructor name from cell labels (`"Instructor:"`, `"Name:"`), college header (`"COLLEGE OF ..."`), and semester/AY (`"1st Semester..."`).
 - Scans timetable grid coordinates, extracting days (`Monday`–`Sunday`), time intervals (`07:00AM-10:00AM`), room assignments, schedule codes, and subject titles.
 - **Async Intelligent Filtering**: Detects `Async` or `Asynch` tags, filtering out remote blocks so attendance sheets only generate columns for physical meetings.
 
 #### 2. `roster_parser.py` (`RosterParser`)
+
 - Ingests student enrollment lists downloaded from `registrar.cvsu.edu.ph` (`.xlsx`, `.xls`, `.csv`).
 - **Dynamic Header Detection**: Scans the first 10 rows to locate header columns using token recognition (`Name`, `Student Number`, `ID`, `Student's Name`).
 - **Fault-Tolerant Extra Column Stripping**: Automatically detects and strips auxiliary portal columns (e.g. Email, Gender, Remarks) without failing.
@@ -240,6 +248,7 @@ CVSU GENERATORS/
   `{Course_Sec} List of Students for {SchedCode}-{Subject}.xlsx`
 
 #### 3. `ceit_directory.py`
+
 - University curriculum registry mapping course prefixes to academic departments:
   - `COSC`, `DCIT`, `ITEC` &rarr; Department of Information Technology (DIT)
   - `CENG`, `CIVL` &rarr; Department of Civil Engineering (DCE)
@@ -248,6 +257,7 @@ CVSU GENERATORS/
 - Identifies whether a subject contains laboratory sessions by cross-referencing user configuration and catalog defaults.
 
 #### 4. `template_inspector.py` (`TemplateInspector`)
+
 - **Deterministic Heuristic Template Analyzer**: 100% offline, local analysis (<20ms) of any arbitrary Word (`.docx`) file.
 - **Zero-AI / Zero-LLM**: Operates using deterministic OpenXML syntax trees and pattern heuristics.
 - **Analyzes**:
@@ -262,6 +272,7 @@ CVSU GENERATORS/
 ### `modules.generators`
 
 #### 1. `ceit_gen.py`
+
 - Base class `DocumentGenerator(ABC)` orchestrating the document pipeline:
   ```python
   def generate(self, info: ClassInfo, output_path: str) -> None:
@@ -281,12 +292,14 @@ CVSU GENERATORS/
 - `GeneratorFactory`: Factory class loading all built-in generators alongside any user-defined custom template generators registered in `ParserConfigManager`.
 
 #### 2. `attendance_gen.py` (`AttendanceGenerator`)
+
 - Generates monthly attendance sheets (`.docx`) for each month across the semester.
 - **Calendar Engine**: Calculates the exact calendar meeting dates (e.g. every Monday and Thursday in September) based on the class's scheduled days.
 - **Multi-Slot Times**: Combines lecture and lab meeting times on the header.
 - Formats table columns with meeting dates, populating student rows with auto-scaled font widths.
 
 #### 3. `grade_gen.py` (`GradeGenerator`)
+
 - Generates official CvSU Excel grading workbooks (`.xlsx`).
 - **Two Formats Supported**:
   - `GRADING_LECTURE_TEMPLATE.xlsx`: Lecture courses (Lecture & Grade Sheet tabs).
@@ -294,6 +307,7 @@ CVSU GENERATORS/
 - **Formula Preservation**: Injects student names, student numbers, instructor, course, and schedule metadata directly into existing cell references without recalculating or stripping Excel formulas (`SUM`, `AVERAGE`, `VLOOKUP`, conditional formatting).
 
 #### 4. `generic_doc_gen.py` (`ConfigurableDocumentGenerator`)
+
 - Dynamic generator that consumes a declarative recipe produced by `TemplateInspector` (or modified by the user).
 - Directly populates arbitrary Word documents with `ClassInfo` and student rosters according to detected table coordinates, paragraph colons, and tag placeholders.
 
@@ -302,6 +316,7 @@ CVSU GENERATORS/
 ### `modules.services`
 
 #### 1. `orchestrator.py` (`GenerationOrchestrator`)
+
 - Coordinates the complete batch execution:
   1. Validates inputs and pairs schedules with rosters.
   2. Dynamically calculates total progress steps:
@@ -310,6 +325,7 @@ CVSU GENERATORS/
   4. Supports thread-safe cancellation via `threading.Event`.
 
 #### 2. `validator.py` (`PreflightValidator`)
+
 - Performs sanity checks before generation begins:
   - Verifies presence and readability of all template files.
   - Flags orphaned student rosters that do not match any schedule block.
@@ -320,6 +336,7 @@ CVSU GENERATORS/
 ### `executable` Desktop Application
 
 #### 1. `main.py`
+
 - PyWebView application controller and native Python-to-JavaScript bridge.
 - Methods exposed to UI:
   - `browse_schedule()`, `browse_rosters()`, `browse_output_dir()`
@@ -328,6 +345,7 @@ CVSU GENERATORS/
   - `inspect_custom_template()`, `save_custom_template()`, `delete_custom_template()`
 
 #### 2. `ui.html`
+
 - Modern, Apple HIG-inspired single-page desktop UI.
 - Features:
   - **Dark / Light Theme Engine**: System-responsive palette with instantaneous transitions.
@@ -340,6 +358,7 @@ CVSU GENERATORS/
 ## End-to-End Processing Logic & Data Pipelines
 
 ### 1. Schedule Ingestion & Async Filtering
+
 ```text
 Schedule File (.xls/.xlsx)
        │
@@ -357,13 +376,17 @@ Group into Assigned Classes (Section, Subject, Days, Times, Rooms)
 ```
 
 ### 2. Roster Parsing & Fuzzy Schedule Pairing
+
 Each roster file is parsed and paired with a schedule entry using a 3-tier matching heuristic:
+
 1. **Schedule Code Match**: If the filename or internal cell contains `202612040`, pair with the matching schedule entry.
 2. **Normalized Section & Subject Match**: Matches section (`BSCS 1-4` &rarr; `BSCS1-4`) and subject code (`DCIT 21`).
 3. **Program Alias Match**: Resolves informal abbreviations (e.g. `CS 1-4` &rarr; `BSCS 1-4`) via `ceit_directory.py`.
 
 ### 3. Deterministic Heuristic Template Inspection
+
 When any Word `.docx` file is analyzed by `TemplateInspector`:
+
 1. **Roster Detection**: Examines all tables with $\ge 2$ rows. Scans the first 5 rows for header cells matching index, id, name, or signature tokens. Scores and selects the highest-ranking candidate.
 2. **Column Disambiguation**: Identifies ID tokens (`Student Number`, `ID`, `LRN`, `Numero`) first, ensuring they are never misassigned as Name columns.
 3. **Metadata Mapping**: Scans non-roster tables for known labels (`Instructor:`, `Course:`, `Subject:`), binding target value cells. Scans paragraphs for colon bindings.
@@ -371,13 +394,16 @@ When any Word `.docx` file is analyzed by `TemplateInspector`:
 5. **Confidence Rating**: Computes overall quality percentage and suggests an official file suffix (e.g. `CONSULTATION_LOG`).
 
 ### 4. Dynamic Document Generation & OpenXML AST Injection
+
 During generation with `ConfigurableDocumentGenerator` or built-in generators:
+
 - Metadata is written to bound table cells and paragraph colons using `replace_after_colon()`.
 - Placeholder tokens `{{...}}` are replaced in direct runs and across fragmented paragraph runs.
 - The template student row is cloned for each student in `info.students`.
 - Long student names automatically receive font scaling (`auto_scale_font`) to prevent awkward cell wrapping.
 
 ### 5. Grading Sheet OpenXML Formula Preservation
+
 - Uses `openpyxl` with `data_only=False` to preserve all formulas.
 - Injects student rosters into the Lecture and Laboratory sheets.
 - Updates header metadata cells in all sheets.
@@ -388,6 +414,7 @@ During generation with `ConfigurableDocumentGenerator` or built-in generators:
 ## User Configuration & Custom Templates Store
 
 User settings are saved in `%APPDATA%/CVSU_Generators/`:
+
 - `config/parser_settings.json`: User overrides for prefixes, lab subjects, aliases, keywords, and fallbacks.
 - `custom_templates/templates.json`: Index of registered custom templates and recipes.
 - `custom_templates/<template_id>.docx`: Persisted template files.
@@ -436,6 +463,7 @@ tests/test_ui_consistency.py ....                                        [100%]
 ```
 
 ### Running the Tests
+
 ```bash
 # Run all automated tests (excluding Playwright UI headless browser)
 pytest tests/ -k "not test_playwright"
@@ -466,6 +494,7 @@ The application packages into a standalone Windows binary (`CvSU Gen (Beta).exe`
 ## Command-Line & Programmatic Usage
 
 ### 1. Python API Usage
+
 ```python
 from modules.models.schedule import ClassInfo
 from modules.parsers.template_inspector import TemplateInspector
@@ -496,6 +525,7 @@ generator.generate(info, "output/BSCS_3-1_CUSTOM_FORM.docx")
 ```
 
 ### 2. Launching Desktop Application
+
 ```bash
 # From python environment
 python executable/main.py
@@ -508,6 +538,6 @@ python executable/main.py
 
 ## Author & Copyright
 
-**Developer**: Dan Joseph Ortega  
-**Institution**: Cavite State University (CvSU)  
+**Developer**: Dan Joseph Ortega
+**Institution**: Cavite State University (CvSU)
 **Copyright**: © 2026 Dan Joseph Ortega. All rights reserved.
