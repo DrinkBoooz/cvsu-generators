@@ -5,8 +5,8 @@
 #
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(1, 8, 0, 0),
-    prodvers=(1, 8, 0, 0),
+    filevers=(1, 9, 0, 0),
+    prodvers=(1, 9, 0, 0),
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
@@ -22,12 +22,12 @@ VSVersionInfo(
           [
             StringStruct('CompanyName', 'Dan Joseph Ortega'),
             StringStruct('FileDescription', 'CvSU Grade & Attendance Sheet Generator'),
-            StringStruct('FileVersion', '1.8.0.0'),
+            StringStruct('FileVersion', '1.9.0.0'),
             StringStruct('InternalName', 'CvSU Gen'),
             StringStruct('LegalCopyright', 'Copyright © 2026 Dan Joseph Ortega. All rights reserved.'),
             StringStruct('OriginalFilename', 'CvSU Gen (Beta).exe'),
             StringStruct('ProductName', 'CvSU Document Generator'),
-            StringStruct('ProductVersion', '1.8.0.0'),
+            StringStruct('ProductVersion', '1.9.0.0'),
             StringStruct('Comments', 'Academic document automation utility for Cavite State University faculty. Contact: danjoseph.ortega@cvsu.edu.ph')
           ]
         )

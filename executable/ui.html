@@ -2450,6 +2450,25 @@
         background: var(--accent-emerald);
         color: #ffffff;
       }
+      .btn-config-add {
+        background: rgba(16, 185, 129, 0.12);
+        border: 1px solid var(--accent-emerald);
+        color: var(--accent-emerald);
+        border-radius: 6px;
+        padding: 4px 12px;
+        font-size: 11.5px;
+        font-weight: 700;
+        cursor: pointer;
+        transition:
+          color 0.15s ease,
+          border-color 0.15s ease,
+          background-color 0.15s ease;
+        white-space: nowrap;
+      }
+      .btn-config-add:hover {
+        background: var(--accent-emerald);
+        color: #ffffff;
+      }
       .badge-suggested-match {
         font-size: 11px;
         font-weight: 600;
@@ -2503,6 +2522,154 @@
         transform: rotate(45deg) scale(0.85);
       }
 
+      /* ── Parser & Curriculum Settings Modal Styling (Apple HIG) ────────── */
+      .settings-nav-tabs {
+        display: flex;
+        gap: 6px;
+        background: var(--surface-subtle);
+        padding: 4px;
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border-subtle);
+        margin-bottom: 18px;
+        overflow-x: auto;
+      }
+      .settings-nav-tab {
+        flex: 1;
+        min-width: 120px;
+        padding: 8px 12px;
+        border-radius: var(--radius-sm);
+        border: none;
+        background: transparent;
+        color: var(--text-secondary);
+        font-size: 12.5px;
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        transition: all 0.18s ease;
+        white-space: nowrap;
+      }
+      .settings-nav-tab:hover {
+        color: var(--text-primary);
+        background: var(--surface-card);
+      }
+      .settings-nav-tab.active {
+        color: #ffffff;
+        background: var(--accent-emerald);
+        box-shadow: 0 2px 8px var(--accent-emerald-glow);
+      }
+      [data-bs-theme="dark"] .settings-nav-tab.active {
+        color: #0b0f17;
+        background: var(--accent-emerald);
+      }
+      .settings-tab-pane {
+        animation: fadeIn 0.18s ease;
+      }
+      .settings-table-wrapper {
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        overflow: hidden;
+        background: var(--surface-card);
+        margin-top: 10px;
+        max-height: 280px;
+        overflow-y: auto;
+      }
+      .settings-data-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+        text-align: left;
+      }
+      .settings-data-table th {
+        background: var(--surface-subtle);
+        padding: 10px 12px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        border-bottom: 1px solid var(--border-subtle);
+        position: sticky;
+        top: 0;
+        z-index: 2;
+      }
+      .settings-data-table td {
+        padding: 9px 12px;
+        border-bottom: 1px solid var(--border-subtle);
+        color: var(--text-primary);
+      }
+      .settings-data-table tr:last-child td {
+        border-bottom: none;
+      }
+      .settings-data-table tr:hover td {
+        background: var(--surface-subtle);
+      }
+      .tag-cloud-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        padding: 12px;
+        background: var(--surface-subtle);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        min-height: 80px;
+        max-height: 220px;
+        overflow-y: auto;
+        align-content: flex-start;
+      }
+      .config-tag-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 9px;
+        font-size: 11.5px;
+        font-weight: 600;
+        border-radius: var(--radius-pill);
+        background: var(--surface-elevated);
+        border: 1px solid var(--border-subtle);
+        color: var(--text-primary);
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        transition: border-color 0.15s ease;
+      }
+      .config-tag-chip:hover {
+        border-color: var(--accent-emerald);
+      }
+      .btn-tag-remove {
+        background: none;
+        border: none;
+        color: var(--text-muted);
+        cursor: pointer;
+        font-size: 13px;
+        line-height: 1;
+        padding: 0 2px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .btn-tag-remove:hover {
+        color: var(--accent-rose);
+      }
+      .settings-form-row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-top: 10px;
+      }
+      .btn-table-action-delete {
+        background: none;
+        border: none;
+        color: var(--accent-rose);
+        cursor: pointer;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 600;
+        transition: background-color 0.15s ease;
+      }
+      .btn-table-action-delete:hover {
+        background: rgba(239, 68, 68, 0.1);
+      }
+
     </style>
   </head>
   <body>
@@ -2534,7 +2701,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 8px">
               <span class="brand-title">CvSU Gen</span>
-              <span class="badge-version">v1.8 Beta</span>
+              <span class="badge-version">v1.9 Beta</span>
             </div>
             <div class="brand-subtitle">
               Cavite State University Document Automation
@@ -2576,6 +2743,28 @@
               </svg>
             </span>
             <span id="themeLabel">Light</span>
+          </button>
+          <button
+            class="nav-btn"
+            id="btnOpenSettings"
+            onclick="openSettingsModal()"
+            title="Curriculum & Parser Settings"
+            aria-label="Open Curriculum and Parser Configuration"
+          >
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+            Settings
           </button>
           <button
             class="nav-btn"
@@ -4660,6 +4849,287 @@
               onclick="applyRosterMapping()"
             >
               Apply &amp; Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Modal: Curriculum & Parser Configuration (Apple HIG) ───────── -->
+    <div
+      id="modalParserSettingsBackdrop"
+      class="modal-backdrop-custom d-none"
+      onclick="closeSettingsModal(event)"
+    >
+      <div class="modal-dialog-custom" style="max-width: 900px;" onclick="event.stopPropagation()">
+        <div class="modal-header-custom">
+          <div>
+            <div style="display: flex; align-items: center; gap: 8px">
+              <h3 class="modal-title-custom">Curriculum &amp; Parser Settings</h3>
+              <span class="badge-version">Live Overrides</span>
+            </div>
+            <div class="modal-subtitle-custom">
+              Customize recognized subject prefixes, departments, lab courses, column tokens, and faculty defaults.
+            </div>
+          </div>
+          <button
+            id="btnCloseSettingsModal"
+            class="drawer-close"
+            type="button"
+            onclick="closeSettingsModal()"
+            title="Close modal"
+          >
+            &times;
+          </button>
+        </div>
+
+        <div class="modal-body-custom">
+          <!-- Segmented Navigation Tabs -->
+          <div class="settings-nav-tabs">
+            <button
+              class="settings-nav-tab active"
+              id="cfgTabPrefixes"
+              type="button"
+              onclick="switchConfigTab('Prefixes')"
+            >
+              🏷️ Subject Prefixes
+            </button>
+            <button
+              class="settings-nav-tab"
+              id="cfgTabLab"
+              type="button"
+              onclick="switchConfigTab('Lab')"
+            >
+              🧪 Lab Courses
+            </button>
+            <button
+              class="settings-nav-tab"
+              id="cfgTabDegrees"
+              type="button"
+              onclick="switchConfigTab('Degrees')"
+            >
+              🎓 Degree Aliases
+            </button>
+            <button
+              class="settings-nav-tab"
+              id="cfgTabKeywords"
+              type="button"
+              onclick="switchConfigTab('Keywords')"
+            >
+              📋 Roster Keywords
+            </button>
+            <button
+              class="settings-nav-tab"
+              id="cfgTabSchedule"
+              type="button"
+              onclick="switchConfigTab('Schedule')"
+            >
+              🏛️ Faculty Defaults
+            </button>
+          </div>
+
+          <!-- Tab 1: Subject Prefixes & Departments -->
+          <div id="cfgPanePrefixes" class="settings-tab-pane">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 8px;">
+              <input
+                type="text"
+                id="cfgSearchPrefix"
+                class="form-control-custom"
+                style="max-width: 280px;"
+                placeholder="Search prefix, code, or department..."
+                oninput="filterConfigPrefixes(this.value)"
+              />
+              <span style="font-size: 11.5px; color: var(--text-secondary);" id="cfgPrefixCount">0 Prefixes</span>
+            </div>
+
+            <!-- Add New Prefix Toolbar -->
+            <div class="mapping-toolbar-grid" style="margin-bottom: 8px;">
+              <div class="mapping-field">
+                <label class="mapping-label">Prefix (e.g. COSC, CRIM)</label>
+                <input type="text" id="cfgNewPrefix" class="form-control-custom" placeholder="e.g. CRIM" />
+              </div>
+              <div class="mapping-field">
+                <label class="mapping-label">Dept Code (e.g. DIT, CCJ)</label>
+                <input type="text" id="cfgNewDeptCode" class="form-control-custom" placeholder="e.g. CCJ" />
+              </div>
+              <div class="mapping-field">
+                <label class="mapping-label">Icon / Emoji</label>
+                <input type="text" id="cfgNewIcon" class="form-control-custom" placeholder="e.g. 🛡️" style="max-width: 80px;" value="📚" />
+              </div>
+              <div class="mapping-field" style="grid-column: span 2;">
+                <label class="mapping-label">Department / College Full Name</label>
+                <input type="text" id="cfgNewDeptName" class="form-control-custom" placeholder="e.g. College of Criminal Justice" />
+              </div>
+              <div style="display: flex; align-items: flex-end;">
+                <button type="button" class="btn-config-add" style="height: 34px; padding: 0 14px;" onclick="addConfigPrefix()">
+                  + Add Prefix
+                </button>
+              </div>
+            </div>
+
+            <div class="settings-table-wrapper selectable">
+              <table class="settings-data-table">
+                <thead>
+                  <tr>
+                    <th>Prefix</th>
+                    <th>Department Code</th>
+                    <th>Department Name</th>
+                    <th>Badge Preview</th>
+                    <th style="text-align: right;">Action</th>
+                  </tr>
+                </thead>
+                <tbody id="cfgPrefixTableBody">
+                  <!-- Dynamically populated -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Tab 2: Lab Courses -->
+          <div id="cfgPaneLab" class="settings-tab-pane d-none">
+            <p style="font-size: 12.5px; color: var(--text-secondary); margin-bottom: 10px; line-height: 1.5;">
+              Subjects listed here automatically activate <strong>Lecture &amp; Lab</strong> grading sheets and forms, even if not explicitly labeled "LAB" in the master timetable schedule.
+            </p>
+            <div class="settings-form-row" style="margin-bottom: 12px;">
+              <input
+                type="text"
+                id="cfgNewLabCode"
+                class="form-control-custom"
+                style="max-width: 240px;"
+                placeholder="e.g. CHEM 101, DCIT 21"
+                onkeydown="if(event.key==='Enter'){event.preventDefault();addConfigLabCode();}"
+              />
+              <button type="button" class="btn-config-add" onclick="addConfigLabCode()">+ Add Lab Code</button>
+              <span style="font-size: 11.5px; color: var(--text-muted); margin-left: 8px;">(Press Enter to add)</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+              <span class="mapping-label">Active Lab-Bearing Subject Codes (<span id="cfgLabCount">0</span>)</span>
+            </div>
+            <div class="tag-cloud-container selectable" id="cfgLabTagCloud">
+              <!-- Dynamically populated chips -->
+            </div>
+          </div>
+
+          <!-- Tab 3: Degree & Program Aliases -->
+          <div id="cfgPaneDegrees" class="settings-tab-pane d-none">
+            <p style="font-size: 12.5px; color: var(--text-secondary); margin-bottom: 10px; line-height: 1.5;">
+              Maps informal section degree abbreviations to official CvSU curriculum codes (e.g. <code>CS 1-4</code> &rarr; <code>BSCS 1-4</code>).
+            </p>
+            <div class="settings-form-row" style="margin-bottom: 12px;">
+              <input type="text" id="cfgNewAliasShort" class="form-control-custom" style="max-width: 140px;" placeholder="Short (e.g. CRIM)" />
+              <span style="color: var(--text-muted);">&rarr;</span>
+              <input type="text" id="cfgNewAliasFull" class="form-control-custom" style="max-width: 160px;" placeholder="Full (e.g. BSCRIM)" />
+              <button type="button" class="btn-config-add" onclick="addConfigDegreeAlias()">+ Add Degree Alias</button>
+            </div>
+            <div class="settings-table-wrapper selectable" style="max-height: 240px;">
+              <table class="settings-data-table">
+                <thead>
+                  <tr>
+                    <th>Abbreviation / Search Term</th>
+                    <th>Official Section Prefix</th>
+                    <th style="text-align: right;">Action</th>
+                  </tr>
+                </thead>
+                <tbody id="cfgDegreesTableBody">
+                  <!-- Dynamically populated -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Tab 4: Column Header Keywords -->
+          <div id="cfgPaneKeywords" class="settings-tab-pane d-none">
+            <p style="font-size: 12.5px; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.5;">
+              Keywords and aliases used by the roster reader to automatically detect Student Name and Student Number columns.
+            </p>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+              <div>
+                <div class="mapping-label" style="margin-bottom: 6px;">Student Name Tokens</div>
+                <div class="settings-form-row" style="margin-bottom: 8px;">
+                  <input type="text" id="cfgNewNameToken" class="form-control-custom" placeholder="e.g. pangalan, pupil" onkeydown="if(event.key==='Enter'){event.preventDefault();addConfigKeyword('name');}" />
+                  <button type="button" class="btn-config-add" onclick="addConfigKeyword('name')">+</button>
+                </div>
+                <div class="tag-cloud-container selectable" id="cfgNameTokensCloud" style="max-height: 180px;"></div>
+              </div>
+              <div>
+                <div class="mapping-label" style="margin-bottom: 6px;">Student ID / Number Tokens</div>
+                <div class="settings-form-row" style="margin-bottom: 8px;">
+                  <input type="text" id="cfgNewIdToken" class="form-control-custom" placeholder="e.g. lrn, matricula" onkeydown="if(event.key==='Enter'){event.preventDefault();addConfigKeyword('id');}" />
+                  <button type="button" class="btn-config-add" onclick="addConfigKeyword('id')">+</button>
+                </div>
+                <div class="tag-cloud-container selectable" id="cfgIdTokensCloud" style="max-height: 180px;"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab 5: Faculty & Schedule Defaults -->
+          <div id="cfgPaneSchedule" class="settings-tab-pane d-none">
+            <p style="font-size: 12.5px; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.5;">
+              Fallback defaults applied when schedule spreadsheet headers cannot be cleanly detected from merged title cells.
+            </p>
+            <div style="display: flex; flex-direction: column; gap: 12px; max-width: 600px;">
+              <div class="mapping-field">
+                <label class="mapping-label">Default Instructor Full Name</label>
+                <input type="text" id="cfgDefaultInstructor" class="form-control-custom" placeholder="e.g. DAN JOSEPH A. ORTEGA" />
+              </div>
+              <div class="mapping-field">
+                <label class="mapping-label">Default College Name</label>
+                <input type="text" id="cfgDefaultCollege" class="form-control-custom" placeholder="e.g. COLLEGE OF ENGINEERING AND INFORMATION TECHNOLOGY" />
+              </div>
+              <div class="mapping-field">
+                <label class="mapping-label">Default Semester &amp; Academic Year</label>
+                <input type="text" id="cfgDefaultSemester" class="form-control-custom" placeholder="e.g. FIRST SEMESTER, AY 2026 - 2027" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer-custom">
+          <div style="display: flex; gap: 8px;">
+            <button
+              class="nav-btn"
+              id="btnResetSettings"
+              type="button"
+              onclick="resetConfigSettings()"
+              style="color: var(--accent-amber); border-color: rgba(245, 158, 11, 0.3);"
+              title="Revert all settings to factory built-in presets"
+            >
+              ↺ Reset to Defaults
+            </button>
+            <button
+              class="nav-btn"
+              id="btnImportSettings"
+              type="button"
+              onclick="importConfigSettings()"
+              title="Import JSON settings file"
+            >
+              📥 Import
+            </button>
+            <button
+              class="nav-btn"
+              id="btnExportSettings"
+              type="button"
+              onclick="exportConfigSettings()"
+              title="Export JSON settings file"
+            >
+              📤 Export
+            </button>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button
+              class="nav-btn"
+              type="button"
+              onclick="closeSettingsModal()"
+            >
+              Cancel
+            </button>
+            <button
+              class="btn-primary-compact"
+              id="btnSaveSettings"
+              type="button"
+              onclick="saveConfigSettings()"
+            >
+              Save &amp; Apply Changes
             </button>
           </div>
         </div>
@@ -7170,6 +7640,433 @@
           "error",
         );
       };
+
+      // ── Curriculum & Parser Configuration State & Logic ───────────────────
+      let activeParserConfig = null;
+      let activeConfigTab = "Prefixes";
+      let prefixFilterQuery = "";
+
+      async function openSettingsModal() {
+        const modal = document.getElementById("modalParserSettingsBackdrop");
+        if (!modal) return;
+        modal.classList.remove("d-none");
+        switchConfigTab(activeConfigTab || "Prefixes");
+
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.get_parser_config) {
+          try {
+            activeParserConfig = await window.pywebview.api.get_parser_config();
+          } catch (err) {
+            console.error("Failed to load parser config:", err);
+          }
+        }
+        if (!activeParserConfig) {
+          // Fallback defaults if in browser mock or offline preview
+          activeParserConfig = {
+            ceit_prefix_map: {
+              "COSC": { name: "Computer Science", dept: "Department of Information Technology", dept_code: "DIT", icon: "🖥️", badge: "🖥️ Computer Science" },
+              "DCIT": { name: "DIT Core / Common IT", dept: "Department of Information Technology", dept_code: "DIT", icon: "💻", badge: "💻 DIT Core" },
+              "ITEC": { name: "Information Technology", dept: "Department of Information Technology", dept_code: "DIT", icon: "🌐", badge: "🌐 Info Tech" }
+            },
+            base_subject_prefixes: ["CVSU", "DCIT", "COSC", "ITEC", "MATH", "GNED"],
+            known_lab_subjects: ["DCIT 21", "COSC 70", "ITEC 50"],
+            program_aliases: { "CS": "BSCS", "IT": "BSIT" },
+            roster_keywords: {
+              name_tokens: ["name", "studentname", "fullname", "pangalan"],
+              id_tokens: ["studentnumber", "studentno", "studentid", "lrn"]
+            },
+            schedule_config: {
+              default_instructor: "DAN JOSEPH A. ORTEGA",
+              default_semester: "FIRST SEMESTER, AY 2026 - 2027",
+              default_college: "COLLEGE OF ENGINEERING AND INFORMATION TECHNOLOGY"
+            }
+          };
+        }
+        renderConfigUI();
+      }
+
+      function closeSettingsModal(event) {
+        if (event && event.target && event.target.id !== "modalParserSettingsBackdrop" && event.target.id !== "btnCloseSettingsModal") {
+          return;
+        }
+        const modal = document.getElementById("modalParserSettingsBackdrop");
+        if (modal) modal.classList.add("d-none");
+      }
+
+      function switchConfigTab(tabName) {
+        activeConfigTab = tabName;
+        const tabs = ["Prefixes", "Lab", "Degrees", "Keywords", "Schedule"];
+        tabs.forEach(t => {
+          const tabBtn = document.getElementById(`cfgTab${t}`);
+          const pane = document.getElementById(`cfgPane${t}`);
+          if (tabBtn) tabBtn.classList.toggle("active", t === tabName);
+          if (pane) pane.classList.toggle("d-none", t !== tabName);
+        });
+      }
+
+      function renderConfigUI() {
+        if (!activeParserConfig) return;
+        renderConfigPrefixes();
+        renderConfigLabCodes();
+        renderConfigDegreeAliases();
+        renderConfigKeywords();
+        renderConfigScheduleDefaults();
+      }
+
+      function renderConfigPrefixes() {
+        const tbody = document.getElementById("cfgPrefixTableBody");
+        const countSpan = document.getElementById("cfgPrefixCount");
+        if (!tbody || !activeParserConfig) return;
+
+        const map = activeParserConfig.ceit_prefix_map || {};
+        const q = (prefixFilterQuery || "").trim().toUpperCase();
+        const entries = Object.entries(map).sort((a, b) => a[0].localeCompare(b[0]));
+        
+        let filtered = entries;
+        if (q) {
+          filtered = entries.filter(([p, m]) => {
+            return p.includes(q) || (m.dept_code || "").toUpperCase().includes(q) || (m.name || "").toUpperCase().includes(q);
+          });
+        }
+
+        if (countSpan) countSpan.innerText = `${filtered.length} of ${entries.length} Prefixes`;
+
+        if (filtered.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 20px; color: var(--text-muted);">No subject prefixes matched '${escapeHTML(q)}'</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = filtered.map(([p, m]) => {
+          const icon = m.icon || "📚";
+          const deptCode = m.dept_code || "";
+          const deptName = m.name || m.dept || "";
+          const badge = m.badge || `${icon} ${deptCode || p}`;
+          return `
+            <tr>
+              <td><strong style="font-family: ui-monospace, monospace; color: var(--accent-emerald);">${escapeHTML(p)}</strong></td>
+              <td><span class="badge-subtle-hint">${escapeHTML(deptCode)}</span></td>
+              <td>${escapeHTML(deptName)}</td>
+              <td><span class="badge-ceit-pill" style="display:inline-flex;">${escapeHTML(badge)}</span></td>
+              <td style="text-align: right;">
+                <button type="button" class="btn-table-action-delete" onclick="deleteConfigPrefix('${escapeHTML(p)}')" title="Delete Prefix">&times; Remove</button>
+              </td>
+            </tr>
+          `;
+        }).join("");
+      }
+
+      function filterConfigPrefixes(val) {
+        prefixFilterQuery = val || "";
+        renderConfigPrefixes();
+      }
+
+      function addConfigPrefix() {
+        if (!activeParserConfig) return;
+        const pInput = document.getElementById("cfgNewPrefix");
+        const codeInput = document.getElementById("cfgNewDeptCode");
+        const nameInput = document.getElementById("cfgNewDeptName");
+        const iconInput = document.getElementById("cfgNewIcon");
+
+        const prefix = (pInput.value || "").trim().toUpperCase();
+        const deptCode = (codeInput.value || "").trim().toUpperCase();
+        const deptName = (nameInput.value || "").trim();
+        const icon = (iconInput.value || "📚").trim();
+
+        if (!prefix) {
+          showToast("Validation Warning", "Subject prefix code cannot be empty.", "warning");
+          return;
+        }
+
+        if (!activeParserConfig.ceit_prefix_map) activeParserConfig.ceit_prefix_map = {};
+        activeParserConfig.ceit_prefix_map[prefix] = {
+          name: deptName || prefix,
+          dept: deptName || prefix,
+          dept_code: deptCode || prefix,
+          icon: icon,
+          badge: `${icon} ${deptCode || prefix}`
+        };
+
+        if (!activeParserConfig.base_subject_prefixes) activeParserConfig.base_subject_prefixes = [];
+        if (!activeParserConfig.base_subject_prefixes.includes(prefix)) {
+          activeParserConfig.base_subject_prefixes.push(prefix);
+        }
+
+        pInput.value = "";
+        codeInput.value = "";
+        nameInput.value = "";
+        renderConfigPrefixes();
+        showToast("Prefix Added", `Added '${prefix}' to recognized curriculum prefixes.`, "success");
+      }
+
+      function deleteConfigPrefix(prefix) {
+        if (!activeParserConfig || !activeParserConfig.ceit_prefix_map) return;
+        delete activeParserConfig.ceit_prefix_map[prefix];
+        if (activeParserConfig.base_subject_prefixes) {
+          activeParserConfig.base_subject_prefixes = activeParserConfig.base_subject_prefixes.filter(p => p !== prefix);
+        }
+        renderConfigPrefixes();
+      }
+
+      function renderConfigLabCodes() {
+        const cloud = document.getElementById("cfgLabTagCloud");
+        const countSpan = document.getElementById("cfgLabCount");
+        if (!cloud || !activeParserConfig) return;
+
+        const codes = (activeParserConfig.known_lab_subjects || []).sort();
+        if (countSpan) countSpan.innerText = codes.length;
+
+        if (codes.length === 0) {
+          cloud.innerHTML = `<span style="color: var(--text-muted); font-size: 12px;">No laboratory subject codes configured.</span>`;
+          return;
+        }
+
+        cloud.innerHTML = codes.map(c => `
+          <span class="config-tag-chip">
+            <span>${escapeHTML(c)}</span>
+            <button type="button" class="btn-tag-remove" onclick="removeConfigLabCode('${escapeHTML(c)}')" title="Remove">&times;</button>
+          </span>
+        `).join("");
+      }
+
+      function addConfigLabCode() {
+        if (!activeParserConfig) return;
+        const input = document.getElementById("cfgNewLabCode");
+        const raw = (input.value || "").trim().toUpperCase();
+        if (!raw) return;
+
+        if (!activeParserConfig.known_lab_subjects) activeParserConfig.known_lab_subjects = [];
+        if (!activeParserConfig.known_lab_subjects.includes(raw)) {
+          activeParserConfig.known_lab_subjects.push(raw);
+          renderConfigLabCodes();
+          showToast("Lab Code Added", `Added '${raw}' to lab-bearing subject codes.`, "success");
+        }
+        input.value = "";
+      }
+
+      function removeConfigLabCode(code) {
+        if (!activeParserConfig || !activeParserConfig.known_lab_subjects) return;
+        activeParserConfig.known_lab_subjects = activeParserConfig.known_lab_subjects.filter(c => c !== code);
+        renderConfigLabCodes();
+      }
+
+      function renderConfigDegreeAliases() {
+        const tbody = document.getElementById("cfgDegreesTableBody");
+        if (!tbody || !activeParserConfig) return;
+
+        const aliases = activeParserConfig.program_aliases || {};
+        const entries = Object.entries(aliases).sort((a, b) => a[0].localeCompare(b[0]));
+
+        if (entries.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding: 15px; color: var(--text-muted);">No degree aliases configured.</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = entries.map(([short, full]) => `
+          <tr>
+            <td><code style="color: var(--accent-emerald);">${escapeHTML(short)}</code></td>
+            <td><strong>${escapeHTML(full)}</strong></td>
+            <td style="text-align: right;">
+              <button type="button" class="btn-table-action-delete" onclick="deleteConfigDegreeAlias('${escapeHTML(short)}')">&times; Remove</button>
+            </td>
+          </tr>
+        `).join("");
+      }
+
+      function addConfigDegreeAlias() {
+        if (!activeParserConfig) return;
+        const sInput = document.getElementById("cfgNewAliasShort");
+        const fInput = document.getElementById("cfgNewAliasFull");
+        const s = (sInput.value || "").trim().toUpperCase();
+        const f = (fInput.value || "").trim().toUpperCase();
+        if (!s || !f) {
+          showToast("Validation Warning", "Please provide both short acronym and full degree prefix.", "warning");
+          return;
+        }
+        if (!activeParserConfig.program_aliases) activeParserConfig.program_aliases = {};
+        activeParserConfig.program_aliases[s] = f;
+        sInput.value = "";
+        fInput.value = "";
+        renderConfigDegreeAliases();
+        showToast("Alias Added", `Mapped '${s}' to '${f}'.`, "success");
+      }
+
+      function deleteConfigDegreeAlias(short) {
+        if (!activeParserConfig || !activeParserConfig.program_aliases) return;
+        delete activeParserConfig.program_aliases[short];
+        renderConfigDegreeAliases();
+      }
+
+      function renderConfigKeywords() {
+        if (!activeParserConfig) return;
+        const rk = activeParserConfig.roster_keywords || { name_tokens: [], id_tokens: [] };
+        
+        const nameCloud = document.getElementById("cfgNameTokensCloud");
+        if (nameCloud) {
+          const names = (rk.name_tokens || []).sort();
+          nameCloud.innerHTML = names.map(t => `
+            <span class="config-tag-chip">
+              <span>${escapeHTML(t)}</span>
+              <button type="button" class="btn-tag-remove" onclick="removeConfigKeyword('name', '${escapeHTML(t)}')">&times;</button>
+            </span>
+          `).join("");
+        }
+
+        const idCloud = document.getElementById("cfgIdTokensCloud");
+        if (idCloud) {
+          const ids = (rk.id_tokens || []).sort();
+          idCloud.innerHTML = ids.map(t => `
+            <span class="config-tag-chip">
+              <span>${escapeHTML(t)}</span>
+              <button type="button" class="btn-tag-remove" onclick="removeConfigKeyword('id', '${escapeHTML(t)}')">&times;</button>
+            </span>
+          `).join("");
+        }
+      }
+
+      function addConfigKeyword(type) {
+        if (!activeParserConfig) return;
+        if (!activeParserConfig.roster_keywords) activeParserConfig.roster_keywords = { name_tokens: [], id_tokens: [] };
+        const inputId = type === 'name' ? "cfgNewNameToken" : "cfgNewIdToken";
+        const input = document.getElementById(inputId);
+        const val = (input.value || "").trim().toLowerCase();
+        if (!val) return;
+
+        const key = type === 'name' ? "name_tokens" : "id_tokens";
+        if (!activeParserConfig.roster_keywords[key]) activeParserConfig.roster_keywords[key] = [];
+        if (!activeParserConfig.roster_keywords[key].includes(val)) {
+          activeParserConfig.roster_keywords[key].push(val);
+          renderConfigKeywords();
+          showToast("Token Added", `Added '${val}' to ${type} column detection tokens.`, "success");
+        }
+        input.value = "";
+      }
+
+      function removeConfigKeyword(type, token) {
+        if (!activeParserConfig || !activeParserConfig.roster_keywords) return;
+        const key = type === 'name' ? "name_tokens" : "id_tokens";
+        if (activeParserConfig.roster_keywords[key]) {
+          activeParserConfig.roster_keywords[key] = activeParserConfig.roster_keywords[key].filter(t => t !== token);
+          renderConfigKeywords();
+        }
+      }
+
+      function renderConfigScheduleDefaults() {
+        if (!activeParserConfig) return;
+        const sc = activeParserConfig.schedule_config || {};
+        const instr = document.getElementById("cfgDefaultInstructor");
+        const college = document.getElementById("cfgDefaultCollege");
+        const sem = document.getElementById("cfgDefaultSemester");
+        if (instr) instr.value = sc.default_instructor || "";
+        if (college) college.value = sc.default_college || "";
+        if (sem) sem.value = sc.default_semester || "";
+      }
+
+      async function saveConfigSettings() {
+        if (!activeParserConfig) return;
+        const btn = document.getElementById("btnSaveSettings");
+        if (btn) {
+          btn.disabled = true;
+          btn.innerText = "Applying...";
+        }
+
+        // Collect schedule defaults inputs
+        const instr = document.getElementById("cfgDefaultInstructor");
+        const college = document.getElementById("cfgDefaultCollege");
+        const sem = document.getElementById("cfgDefaultSemester");
+        if (!activeParserConfig.schedule_config) activeParserConfig.schedule_config = {};
+        if (instr) activeParserConfig.schedule_config.default_instructor = instr.value.trim();
+        if (college) activeParserConfig.schedule_config.default_college = college.value.trim();
+        if (sem) activeParserConfig.schedule_config.default_semester = sem.value.trim();
+
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.save_parser_config) {
+          try {
+            const res = await window.pywebview.api.save_parser_config(activeParserConfig);
+            if (res && res.status === "success") {
+              if (res.validation) state.rosterReports = res.validation;
+              if (res.detected_classes) state.detectedClasses = res.detected_classes;
+              renderRosterStatus();
+              renderClassesSection();
+              updateStepperStatus();
+              showToast("Settings Saved", "Custom curriculum and parser settings applied successfully.", "success");
+              closeSettingsModal();
+            } else {
+              showToast("Save Error", (res && res.message) || "Failed to save configuration.", "error");
+            }
+          } catch (err) {
+            console.error("Error saving parser configuration:", err);
+            showToast("Save Error", String(err), "error");
+          } finally {
+            if (btn) {
+              btn.disabled = false;
+              btn.innerText = "Save & Apply Changes";
+            }
+          }
+        } else {
+          // In browser / test mode
+          showToast("Settings Saved (Mock)", "Settings applied to browser state.", "success");
+          if (btn) {
+            btn.disabled = false;
+            btn.innerText = "Save & Apply Changes";
+          }
+          closeSettingsModal();
+        }
+      }
+
+      async function resetConfigSettings() {
+        if (!confirm("Are you sure you want to revert all curriculum prefixes, lab codes, and keywords to factory defaults?")) {
+          return;
+        }
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.reset_parser_config) {
+          try {
+            const res = await window.pywebview.api.reset_parser_config();
+            if (res && res.status === "success") {
+              activeParserConfig = res.config;
+              if (res.validation) state.rosterReports = res.validation;
+              if (res.detected_classes) state.detectedClasses = res.detected_classes;
+              renderConfigUI();
+              renderRosterStatus();
+              renderClassesSection();
+              updateStepperStatus();
+              showToast("Reset Complete", "Reverted parser configuration to university presets.", "success");
+            }
+          } catch (err) {
+            console.error("Error resetting parser config:", err);
+            showToast("Reset Error", String(err), "error");
+          }
+        }
+      }
+
+      async function exportConfigSettings() {
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.export_parser_config) {
+          try {
+            const res = await window.pywebview.api.export_parser_config();
+            if (res && res.status === "success") {
+              showToast("Export Successful", `Saved settings to ${res.path}`, "success");
+            }
+          } catch (err) {
+            console.error("Failed to export config:", err);
+          }
+        }
+      }
+
+      async function importConfigSettings() {
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.import_parser_config) {
+          try {
+            const res = await window.pywebview.api.import_parser_config();
+            if (res && res.status === "success") {
+              activeParserConfig = res.config;
+              if (res.validation) state.rosterReports = res.validation;
+              if (res.detected_classes) state.detectedClasses = res.detected_classes;
+              renderConfigUI();
+              renderRosterStatus();
+              renderClassesSection();
+              updateStepperStatus();
+              showToast("Import Successful", "Custom configuration imported and applied.", "success");
+            }
+          } catch (err) {
+            console.error("Failed to import config:", err);
+          }
+        }
+      }
 
       // ── Help Drawer Navigation & Search ───────────────────────────────────
       function switchHelpTab(tabName) {

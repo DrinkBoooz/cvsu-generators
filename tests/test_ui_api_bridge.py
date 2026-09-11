@@ -380,3 +380,32 @@ def test_generation_by_class_payload_structure_and_ui_compatibility(tmp_path):
     assert 'item.path || item.name' in ui_html
     assert 'data-path=' in ui_html
 
+def test_script_api_parser_config_endpoints():
+    api = ScriptAPI()
+    cfg = api.get_parser_config()
+    assert isinstance(cfg, dict)
+    assert "ceit_prefix_map" in cfg
+    assert "COSC" in cfg["ceit_prefix_map"]
+    assert "DCIT 21" in cfg["known_lab_subjects"]
+
+    # Test saving custom config
+    cfg["ceit_prefix_map"]["TESTP"] = {
+        "name": "Test Program",
+        "dept": "Department of Testing",
+        "dept_code": "DOT",
+        "icon": "🧪",
+        "badge": "🧪 DOT"
+    }
+    res = api.save_parser_config(cfg)
+    assert res["status"] == "success"
+
+    cfg_updated = api.get_parser_config()
+    assert "TESTP" in cfg_updated["ceit_prefix_map"]
+
+    # Test reset
+    reset_res = api.reset_parser_config()
+    assert reset_res["status"] == "success"
+    cfg_reset = api.get_parser_config()
+    assert "TESTP" not in cfg_reset["ceit_prefix_map"]
+
+
