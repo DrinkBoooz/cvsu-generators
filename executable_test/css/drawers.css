@@ -243,6 +243,616 @@
         color: var(--text-primary);
       }
 
+      /* ── Stepper Bar (Readiness Tracker - Apple HIG) ───────────────────────── */
+      .stepper-bar {
+        border-top: 1px solid var(--border-subtle);
+        background: var(--header-bg);
+        padding: 2px 28px;
+      }
+      .stepper-track {
+        max-width: 1400px;
+        margin: 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+        padding: 8px 6px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+      }
+      .stepper-track::-webkit-scrollbar {
+        display: none;
+      }
+      .step-chip {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        background: var(--surface-subtle);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-pill);
+        padding: 5px 12px;
+        font-size: 11.5px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        cursor: pointer;
+        transition:
+          transform 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+          box-shadow 0.18s ease;
+        white-space: nowrap;
+        outline: none;
+      }
+      .step-chip:hover {
+        background: var(--surface-card);
+        color: var(--text-primary);
+        border-color: var(--accent-emerald);
+        transform: translateY(-1px);
+      }
+      .step-chip:active {
+        transform: translateY(0);
+      }
+      .step-chip.ready {
+        border-color: rgba(16, 185, 129, 0.4);
+        background: rgba(16, 185, 129, 0.09);
+        color: var(--text-primary);
+      }
+      .step-chip.active-step {
+        border-color: var(--border-strong);
+        background: var(--surface-card);
+        color: var(--text-primary);
+        box-shadow:
+          0 0 0 1px var(--border-strong),
+          0 2px 8px rgba(0, 0, 0, 0.22);
+      }
+      .step-chip.ready.active-step {
+        border-color: var(--accent-emerald);
+        background: rgba(16, 185, 129, 0.12);
+        box-shadow:
+          0 0 0 1.5px var(--accent-emerald),
+          0 2px 8px var(--accent-emerald-glow);
+      }
+      .chip-num {
+        width: 17px;
+        height: 17px;
+        border-radius: 50%;
+        background: var(--border-subtle);
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 9.5px;
+        font-weight: 700;
+      }
+      .step-chip.active-step .chip-num {
+        background: var(--surface-hover);
+        color: var(--text-primary);
+      }
+      .step-chip.ready .chip-num,
+      .step-chip.ready.active-step .chip-num {
+        background: var(--accent-emerald);
+        color: white;
+      }
+      .chip-txt {
+        font-weight: 600;
+      }
+      .chip-status {
+        font-size: 10px;
+      }
+      .stepper-connector {
+        flex: 1;
+        height: 2px;
+        background: var(--border-subtle);
+        min-width: 6px;
+        max-width: 28px;
+        border-radius: 2px;
+        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      .stepper-connector.ready {
+        background: linear-gradient(
+          90deg,
+          var(--accent-emerald),
+          var(--accent-emerald-hover)
+        );
+        box-shadow: 0 0 6px var(--accent-emerald-glow);
+      }
+
+      /* ── Floating Action Deck (Apple Capsule Island) ─────────────────────── */
+      .bottom-action-bar {
+        position: fixed;
+        bottom: 14px;
+        left: 0;
+        right: 0;
+        z-index: 999;
+        background: transparent;
+        padding: 0 20px;
+        pointer-events: none;
+        transform: translateY(0);
+        opacity: 1;
+        visibility: visible;
+        transition:
+          transform 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+          opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+          visibility 0.35s;
+      }
+      .bottom-action-bar.dock-hidden {
+        transform: translateY(140%);
+        opacity: 0;
+        pointer-events: none;
+        visibility: hidden;
+      }
+      .bottom-action-content {
+        max-width: 860px;
+        margin: 0 auto;
+        pointer-events: auto;
+        background: var(--header-bg);
+        backdrop-filter: blur(28px) saturate(200%);
+        -webkit-backdrop-filter: blur(28px) saturate(200%);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-pill);
+        box-shadow:
+          0 12px 36px -4px rgba(0, 0, 0, 0.18),
+          0 4px 12px rgba(0, 0, 0, 0.06);
+        padding: 9px 18px 9px 22px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      [data-bs-theme="dark"] .bottom-action-content {
+        box-shadow:
+          0 16px 44px -4px rgba(0, 0, 0, 0.65),
+          inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      }
+      .action-status-block {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        flex-wrap: wrap;
+      }
+      .action-pills-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .summary-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11.5px;
+        font-weight: 600;
+        padding: 4px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--border-subtle);
+        background: var(--surface-card);
+        color: var(--text-secondary);
+        transition:
+          border-color 0.15s ease,
+          background-color 0.15s ease,
+          color 0.15s ease;
+      }
+      .summary-pill.ready {
+        border-color: rgba(16, 185, 129, 0.45);
+        background: rgba(16, 185, 129, 0.12);
+        color: var(--text-primary);
+      }
+      .summary-pill.ready .pill-dot {
+        background: var(--accent-emerald);
+        box-shadow: 0 0 8px var(--accent-emerald);
+      }
+      .summary-pill .pill-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--text-muted);
+        transition:
+          background-color 0.15s ease,
+          box-shadow 0.15s ease;
+      }
+      .action-bar-hint {
+        font-size: 12px;
+        color: var(--text-secondary);
+        font-weight: 500;
+      }
+      .action-bar-controls {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .btn-dock-action {
+        background: linear-gradient(135deg, var(--accent-emerald), #047857);
+        color: #ffffff;
+        border: none;
+        border-radius: 12px;
+        padding: 10px 22px;
+        font-size: 13.5px;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        box-shadow: 0 4px 14px var(--accent-emerald-glow);
+        transition:
+          transform 0.15s cubic-bezier(0.16, 1, 0.3, 1),
+          box-shadow 0.15s ease,
+          opacity 0.15s ease;
+      }
+      .btn-dock-action:hover:not(:disabled) {
+        background: linear-gradient(
+          135deg,
+          var(--accent-emerald-hover),
+          var(--accent-emerald)
+        );
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(16, 185, 129, 0.35);
+      }
+      .btn-dock-action:active:not(:disabled) {
+        transform: scale(0.97);
+      }
+      .btn-dock-action:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+        filter: grayscale(0.5);
+      }
+      .btn-dock-action.ready-pulse {
+        animation: pulse-emerald 2s infinite;
+      }
+      @keyframes pulse-emerald {
+        0% {
+          box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5);
+        }
+        70% {
+          box-shadow: 0 0 0 10px rgba(16, 185, 129, 0);
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+        }
+      }
+      @media (max-width: 768px) {
+        .bottom-action-bar {
+          bottom: 0;
+          padding: 0;
+        }
+        .bottom-action-content {
+          border-radius: 16px 16px 0 0;
+          max-width: 100%;
+          padding: 12px 18px 14px;
+          flex-direction: column;
+          align-items: stretch;
+          gap: 12px;
+        }
+        .action-status-block {
+          justify-content: space-between;
+          width: 100%;
+        }
+        .action-pills-row {
+          width: 100%;
+          justify-content: flex-start;
+        }
+        .action-bar-controls {
+          width: 100%;
+        }
+        .btn-dock-action {
+          width: 100%;
+          justify-content: center;
+        }
+      }
+
+      /* ── Non-Blocking Toast Notifications ───────────────────────────────── */
+      .toast-container {
+        position: fixed;
+        top: 86px;
+        right: 20px;
+        z-index: 12000;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        pointer-events: none;
+        max-width: 380px;
+        width: calc(100vw - 40px);
+      }
+      .toast {
+        pointer-events: auto;
+        background: var(--surface-elevated);
+        border: 1px solid var(--border-subtle);
+        border-left: 4px solid var(--accent-emerald);
+        border-radius: var(--radius-md);
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+        padding: 12px 16px;
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        animation: toastSlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        transition:
+          opacity 0.25s ease,
+          transform 0.25s ease;
+      }
+      .toast.toast-warning {
+        border-left-color: var(--accent-amber);
+      }
+      .toast.toast-error {
+        border-left-color: var(--accent-rose);
+      }
+      .toast.toast-info {
+        border-left-color: var(--accent-blue);
+      }
+      .toast-icon {
+        flex-shrink: 0;
+        margin-top: 2px;
+      }
+      .toast-content {
+        flex: 1;
+        min-width: 0;
+      }
+      .toast-title {
+        font-size: 13.5px;
+        font-weight: 700;
+        margin-bottom: 2px;
+      }
+      .toast-message {
+        font-size: 12px;
+        color: var(--text-secondary);
+        line-height: 1.4;
+        word-break: break-word;
+      }
+      .toast-close {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        min-width: 28px;
+        min-height: 28px;
+        background: transparent;
+        border: none;
+        color: var(--text-muted);
+        cursor: pointer;
+        font-size: 16px;
+        line-height: 1;
+        padding: 0;
+        border-radius: 6px;
+        transition: all 0.15s ease;
+      }
+      .toast-close:hover {
+        color: var(--text-primary);
+      }
+      @keyframes toastSlideIn {
+        from {
+          transform: translateX(110%);
+          opacity: 0;
+        }
+        to {
+          transform: translateX(0);
+          opacity: 1;
+        }
+      }
+
+      /* ── Auto-Strip Toggle & Roster Controls ────────────────────────────── */
+      .auto-strip-box {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        background: var(--surface-subtle);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        padding: 12px 16px;
+        margin: 12px 0;
+      }
+      .toggle-switch {
+        position: relative;
+        display: inline-block;
+        width: 38px;
+        height: 22px;
+        flex-shrink: 0;
+      }
+      .toggle-switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+      }
+      .toggle-slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: var(--border-subtle);
+        transition: 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        border-radius: 22px;
+      }
+      .toggle-slider:before {
+        position: absolute;
+        content: "";
+        height: 16px;
+        width: 16px;
+        left: 3px;
+        bottom: 3px;
+        background-color: white;
+        transition: 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        border-radius: 50%;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+      }
+      .toggle-switch input:checked + .toggle-slider {
+        background-color: var(--accent-emerald);
+      }
+      .toggle-switch input:checked + .toggle-slider:before {
+        transform: translateX(16px);
+      }
+      .toggle-label {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--text-primary);
+      }
+      .toggle-sub {
+        font-size: 11.5px;
+        color: var(--text-secondary);
+        margin-top: 2px;
+      }
+
+      /* ── Filter Chips & Estimate Badge ───────────────────────────────────── */
+      .filter-chip-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin: 10px 0;
+      }
+      .filter-pill {
+        background: var(--surface-subtle);
+        border: 1px solid var(--border-subtle);
+        border-radius: 16px;
+        padding: 4px 12px;
+        font-size: 11.5px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        cursor: pointer;
+        transition:
+          color 0.15s ease,
+          border-color 0.15s ease,
+          background-color 0.15s ease;
+      }
+      .filter-pill:hover,
+      .filter-pill.active {
+        background: var(--accent-emerald);
+        color: white;
+        border-color: var(--accent-emerald);
+      }
+      .estimate-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(16, 185, 129, 0.12);
+        border: 1px solid rgba(16, 185, 129, 0.3);
+        border-radius: 12px;
+        padding: 6px 14px;
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--accent-emerald);
+        margin-top: 10px;
+      }
+
+      /* ── Active Month Chips ──────────────────────────────────────────────── */
+      .month-chips-container {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin-top: 10px;
+      }
+      .month-chip {
+        background: var(--surface-card);
+        border: 1px solid var(--border-subtle);
+        border-radius: 8px;
+        padding: 3px 10px;
+        font-size: 11.5px;
+        font-weight: 600;
+        color: var(--text-primary);
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      /* ── Cancellation & Elapsed Stopwatch ────────────────────────────────── */
+      .btn-cancel-gen {
+        background: rgba(239, 68, 68, 0.12);
+        border: 1px solid rgba(239, 68, 68, 0.35);
+        color: var(--accent-rose);
+        border-radius: 12px;
+        padding: 8px 16px;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        transition:
+          color 0.15s ease,
+          background-color 0.15s ease,
+          transform 0.15s ease,
+          border-color 0.15s ease;
+        margin-top: 12px;
+      }
+      .btn-cancel-gen:hover {
+        background: var(--accent-rose);
+        color: white;
+        transform: translateY(-1px);
+      }
+      .progress-stopwatch {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-left: 8px;
+      }
+
+      /* ── Interactive File Artifact Tree ──────────────────────────────────── */
+      .artifact-class-card {
+        background: var(--surface-subtle);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        margin-bottom: 10px;
+        overflow: hidden;
+      }
+      .artifact-class-header {
+        padding: 10px 14px;
+        background: var(--surface-card);
+        font-weight: 700;
+        font-size: 13px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        cursor: pointer;
+        border-bottom: 1px solid var(--border-subtle);
+      }
+      .artifact-class-body {
+        padding: 8px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .artifact-file-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 8px 10px;
+        font-size: 12.5px;
+        border-radius: var(--radius-sm);
+        transition: background-color 0.15s ease;
+      }
+      .artifact-file-row:hover {
+        background: var(--surface-subtle);
+      }
+      .artifact-file-row:not(:last-child) {
+        margin-bottom: 2px;
+      }
+      .btn-launch-file {
+        background: var(--surface-card);
+        border: 1px solid var(--border-subtle);
+        color: var(--accent-emerald);
+        padding: 3px 10px;
+        border-radius: 8px;
+        font-size: 11px;
+        font-weight: 700;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        transition:
+          border-color 0.15s ease,
+          background-color 0.15s ease,
+          color 0.15s ease;
+        flex-shrink: 0;
+      }
+      .btn-launch-file:hover {
+        background: var(--accent-emerald);
+        color: white;
+        border-color: var(--accent-emerald);
+      }
 
       /* ── Help Drawer Tabs & Search ───────────────────────────────────────── */
       .drawer-tabs {
@@ -333,3 +943,5 @@
       .text-emerald {
         color: var(--accent-emerald);
       }
+
+      
