@@ -102,6 +102,10 @@ def test_ui_html_new_ux_components():
     assert 'id="rosterSearchInput"' in ui_content
     assert 'id="btnClearAllRosters"' in ui_content
 
+    # Verify Help & Logs Nav Buttons
+    assert 'id="btnOpenHelp"' in ui_content
+    assert 'id="btnOpenLogs"' in ui_content
+
     # Verify Help Drawer Tabs & Live Search
     for tab in ["Overview", "Naming", "Formats", "Faq"]:
         assert f'id="helpTab{tab}"' in ui_content
