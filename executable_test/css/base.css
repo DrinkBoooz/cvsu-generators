@@ -65,8 +65,4 @@ body {
         scrollbar-color: var(--border-subtle) transparent;
       }
 
-      .app-container {
-        max-width: 1400px;
-        margin: 0 auto;
-        padding: 20px 28px 120px 28px;
-      }
+      
