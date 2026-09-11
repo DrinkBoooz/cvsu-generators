@@ -2849,6 +2849,7 @@
             id="btnOpenLogs"
             onclick="openLogsDrawer()"
             title="View Execution Diagnostics"
+            aria-label="View Execution Diagnostics"
           >
             <svg
               width="15"
@@ -2874,6 +2875,7 @@
             class="nav-btn"
             onclick="openHelpDrawer()"
             title="View User Guide & Rules"
+            aria-label="View User Guide & Rules"
           >
             <svg
               width="15"
@@ -3037,6 +3039,7 @@
                   id="btnResetSchedule"
                   type="button"
                   style="padding: 4px 10px; font-size: 11px"
+                  aria-label="Reset master schedule"
                   onclick="
                     event.stopPropagation();
                     resetSchedule();
@@ -3383,6 +3386,7 @@
                     class="nav-btn"
                     id="btnClearAllRosters"
                     style="padding: 2px 8px; font-size: 11px"
+                    aria-label="Remove all imported rosters"
                     onclick="clearAllRosters()"
                   >
                     Clear All
@@ -3918,6 +3922,7 @@
             id="btnDockProcess"
             class="btn-dock-action"
             type="button"
+            aria-label="Initialize document generation workflow"
             onclick="triggerWorkflowFromDock()"
           >
             <svg
@@ -3945,12 +3950,13 @@
       onclick="closeAllDrawers()"
     ></div>
 
-    <aside id="helpDrawer" class="drawer-panel">
+    <aside id="helpDrawer" class="drawer-panel" role="region" aria-label="Documentation and help drawer">
       <div class="drawer-header">
         <span class="drawer-title">Documentation &amp; User Guide</span>
         <button
           id="btnCloseHelp"
           class="drawer-close"
+          aria-label="Close help drawer"
           onclick="closeAllDrawers()"
         >
           &times;
@@ -4634,10 +4640,10 @@
     </aside>
 
     <!-- ── Drawers: Diagnostics & Logs ─────────────────────────────────── -->
-    <aside id="logsDrawer" class="drawer-panel">
+    <aside id="logsDrawer" class="drawer-panel" role="region" aria-label="Execution and diagnostic logs">
       <div class="drawer-header">
         <span class="drawer-title">Execution Diagnostics & Logs</span>
-        <button class="drawer-close" onclick="closeAllDrawers()">
+        <button class="drawer-close" aria-label="Close logs drawer" onclick="closeAllDrawers()">
           &times;
         </button>
       </div>
@@ -4678,6 +4684,9 @@
     <div
       id="modalRosterMappingBackdrop"
       class="modal-backdrop-custom d-none"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="mapModalFilename"
       onclick="closeColumnMappingModal(event)"
     >
       <div class="modal-dialog-custom" onclick="event.stopPropagation()">
@@ -4702,6 +4711,7 @@
             id="btnCloseMappingModal"
             class="drawer-close"
             type="button"
+            aria-label="Close roster mapping modal"
             onclick="closeColumnMappingModal()"
             title="Close modal"
           >
@@ -4727,6 +4737,7 @@
                 type="button"
                 id="btnCopyRecommendedFilename"
                 class="btn-copy-recommended"
+                aria-label="Copy recommended roster filename"
                 onclick="copyRecommendedFilename()"
                 title="Copy recommended official filename to clipboard"
               >
@@ -4963,6 +4974,9 @@
     <div
       id="modalParserSettingsBackdrop"
       class="modal-backdrop-custom d-none"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="settingsModalTitle"
       onclick="closeSettingsModal(event)"
     >
       <div
@@ -4973,7 +4987,7 @@
         <div class="modal-header-custom">
           <div>
             <div style="display: flex; align-items: center; gap: 8px">
-              <h3 class="modal-title-custom">
+              <h3 class="modal-title-custom" id="settingsModalTitle">
                 Curriculum &amp; Parser Settings
               </h3>
               <span class="badge-version">Live Overrides</span>
@@ -4987,6 +5001,7 @@
             id="btnCloseSettingsModal"
             class="drawer-close"
             type="button"
+            aria-label="Close settings modal"
             onclick="closeSettingsModal()"
             title="Close modal"
           >
@@ -6377,6 +6392,11 @@
         // Global Escape dismissal for modal & slide-over drawers
         document.addEventListener("keydown", (e) => {
           if (e.key === "Escape") {
+            const settingsModal = document.getElementById("modalParserSettingsBackdrop");
+            if (settingsModal && !settingsModal.classList.contains("d-none")) {
+              closeSettingsModal();
+              return;
+            }
             const modal = document.getElementById("modalRosterMappingBackdrop");
             if (modal && !modal.classList.contains("d-none")) {
               closeColumnMappingModal();
@@ -6552,7 +6572,14 @@
           window.pywebview.api &&
           window.pywebview.api.open_log_folder
         ) {
-          await window.pywebview.api.open_log_folder();
+          try {
+            const res = await window.pywebview.api.open_log_folder();
+            if (res && res.status === "error") {
+              showToast("Logs Directory", res.message || "Logs folder does not exist", "error");
+            }
+          } catch (e) {
+            showToast("Logs Directory", String(e), "error");
+          }
         }
       }
 
@@ -6560,6 +6587,7 @@
       async function loadSchedule() {
         if (!window.pywebview || !window.pywebview.api) return;
         const res = await window.pywebview.api.browse_schedule();
+        if (res && res.cancelled) return;
         if (res && res.path) {
           state.schedulePath = res.path;
           state.scheduleMeta = res.metadata;
@@ -6634,6 +6662,17 @@
       }
 
       async function resetSchedule() {
+        if (
+          window.pywebview &&
+          window.pywebview.api &&
+          window.pywebview.api.clear_schedule
+        ) {
+          try {
+            await window.pywebview.api.clear_schedule();
+          } catch (e) {
+            console.error("Failed to clear schedule in backend:", e);
+          }
+        }
         state.schedulePath = "";
         state.scheduleMeta = null;
         renderScheduleStatus();
@@ -6653,6 +6692,7 @@
         const res = await window.pywebview.api.browse_rosters(
           state.rosterConfigs,
         );
+        if (res && res.cancelled) return;
         if (res) {
           state.rosters = res.rosters || [];
           state.rosterReports = res.validation || [];
@@ -7867,7 +7907,14 @@
 
       async function openOutputFolder() {
         if (!window.pywebview || !window.pywebview.api) return;
-        await window.pywebview.api.open_output_folder(state.outputDir);
+        try {
+          const res = await window.pywebview.api.open_output_folder(state.outputDir);
+          if (res && res.status === "error") {
+            showToast("Directory Error", res.message || "Target folder does not exist", "error");
+          }
+        } catch (e) {
+          showToast("Directory Error", String(e), "error");
+        }
       }
 
       // ── Step 3: Execution, Cancellation & Telemetry ───────────────────────
@@ -7905,7 +7952,11 @@
         )
           return;
         try {
-          await window.pywebview.api.open_file(filePath);
+          const res = await window.pywebview.api.open_file(filePath);
+          if (res && res.status === "error") {
+            showToast("Could Not Open File", res.message || "File not found", "error");
+            return;
+          }
           const name = filePath
             ? String(filePath).split(/[\\/]/).pop()
             : "Document";
