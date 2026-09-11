@@ -129,3 +129,22 @@ def test_main_py_template_dropzone_and_window_closing():
 
     # Verify closing event registration
     assert "window.events.closing +=" in main_py
+
+def test_apple_hig_confirm_modal_replaces_browser_confirm():
+    with open(UI_HTML_PATH, "r", encoding="utf-8") as f:
+        ui = f.read()
+
+    # Zero window.confirm calls allowed in ui.html
+    import re
+    confirm_calls = re.findall(r'[^a-zA-Z0-9_]confirm\(', ui)
+    assert len(confirm_calls) == 0, f"Found native browser confirm() calls: {confirm_calls}"
+
+    # Verify Apple HIG modal structure
+    assert 'id="modalAppleConfirmBackdrop"' in ui
+    assert 'id="appleConfirmTitle"' in ui
+    assert 'id="appleConfirmMessage"' in ui
+    assert 'id="btnAppleConfirmProceed"' in ui
+    assert 'id="btnAppleConfirmCancel"' in ui
+    assert 'showAppleConfirm' in ui
+    assert 'dismissAppleConfirm' in ui
+
