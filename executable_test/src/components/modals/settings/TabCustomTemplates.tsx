@@ -57,11 +57,11 @@ export const TabCustomTemplates: React.FC<TabCustomTemplatesProps> = ({
         onShowToast('warning', 'Invalid File', 'Only Word (.docx) documents can be analyzed.');
         return;
       }
-      const res = await pywebviewService.handleDroppedCustomTemplate({
-        filename: file.name,
-        path: (file as any).path,
-      });
-      if (res.path) {
+      const res = await pywebviewService.handleDroppedCustomTemplate(
+        file.name,
+        (file as any).path
+      );
+      if (res && res.path) {
         handleInspect(res.path);
       }
     }
@@ -74,8 +74,7 @@ export const TabCustomTemplates: React.FC<TabCustomTemplatesProps> = ({
         inspectedFile,
         customTitle.trim(),
         customSuffix.trim().toUpperCase(),
-        recipe,
-        true
+        recipe
       );
       if (res.status === 'success') {
         onShowToast('success', 'Custom Template Saved', `Registered "${customTitle}" as an active generator.`);
@@ -83,7 +82,7 @@ export const TabCustomTemplates: React.FC<TabCustomTemplatesProps> = ({
         setRecipe(null);
         onRefreshTemplates();
       } else {
-        onShowToast('error', 'Save Failed', res.message || 'Could not save template.');
+        onShowToast('error', 'Save Failed', (res as any).message || 'Could not save template.');
       }
     } catch (err: any) {
       onShowToast('error', 'Save Error', err.message);

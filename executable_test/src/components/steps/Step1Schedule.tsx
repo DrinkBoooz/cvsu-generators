@@ -180,10 +180,14 @@ export const Step1Schedule: React.FC<Step1ScheduleProps> = ({
           </div>
           <div className="instructor-pills">
             <span id="instructorSemPill" className="meta-pill">
-              {metadata.semester_ay || '1st Semester AY 2026-2027'}
+              {metadata.semester || metadata.semester_ay || '1st Semester AY 2026-2027'}
             </span>
             <span id="instructorSlotsPill" className="meta-pill">
-              {metadata.classes?.length || 0} Class Blocks
+              {metadata.total_slots !== undefined
+                ? `${metadata.total_slots} Scheduled Slots`
+                : metadata.classes
+                ? `${metadata.classes.length} Class Blocks`
+                : '0 Scheduled Slots'}
             </span>
           </div>
         </div>

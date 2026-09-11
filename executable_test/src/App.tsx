@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Header } from './components/Header';
 import { Stepper } from './components/Stepper';
 import { Step1Schedule } from './components/steps/Step1Schedule';
@@ -17,13 +17,14 @@ import { useTheme } from './hooks/useTheme';
 import { pywebviewService } from './services/pywebview';
 import {
   ScheduleMetadata,
-  ClassValidation,
   RosterConfigMap,
   ParserConfig,
   CustomTemplate,
   FileEstimate,
   GenerationSummary,
   ToastMessage,
+  DetectedClass,
+  RosterValidationReport,
 } from './types/api';
 
 export const App: React.FC = () => {
@@ -33,14 +34,23 @@ export const App: React.FC = () => {
   const [schedulePath, setSchedulePath] = useState<string>('');
   const [scheduleMetadata, setScheduleMetadata] = useState<ScheduleMetadata | null>(null);
   const [rosters, setRosters] = useState<string[]>([]);
-  const [validations, setValidations] = useState<ClassValidation[]>([]);
+  const [rosterReports, setRosterReports] = useState<RosterValidationReport[]>([]);
+  const [detectedClasses, setDetectedClasses] = useState<DetectedClass[]>([]);
+  const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
+  const [typeOverrides, setTypeOverrides] = useState<Record<string, string>>({});
   const [classConfigs, setClassConfigs] = useState<RosterConfigMap>({});
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [outputDir, setOutputDir] = useState<string>('');
 
+  // Engine toggles
+  const [engines, setEngines] = useState<{ attendance: boolean; ceit: boolean; grades: boolean }>({
+    attendance: true,
+    ceit: true,
+    grades: true,
+  });
+
   // Execution & Telemetry State
-  const [estimate, setEstimate] = useState<FileEstimate | null>(null);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [progressPercent, setProgressPercent] = useState<number>(0);
   const [progressStatus, setProgressStatus] = useState<string>('');
@@ -48,9 +58,10 @@ export const App: React.FC = () => {
   const [totalSteps, setTotalSteps] = useState<number>(0);
   const [summary, setSummary] = useState<GenerationSummary | null>(null);
 
-  // Modals & Drawers State
+  // Modals & Overlays State
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isMappingOpen, setIsMappingOpen] = useState<boolean>(false);
+  const [mappingFilename, setMappingFilename] = useState<string>('');
   const [isHelpOpen, setIsHelpOpen] = useState<boolean>(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
@@ -77,33 +88,149 @@ export const App: React.FC = () => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
-  // Telemetry Bindings
+  // Helper to re-detect classes from backend
+  const refreshClasses = useCallback(async (currentConfigs?: RosterConfigMap) => {
+    try {
+      const classes = await pywebviewService.detectClasses(currentConfigs || classConfigs);
+      setDetectedClasses(classes || []);
+      // Automatically select all detected classes by default
+      if (classes && classes.length > 0) {
+        setSelectedClassIds(classes.map((c) => c.id || `${c.course_sec}_${c.schedule_code}`));
+      }
+    } catch (err) {
+      console.error('Failed to detect classes:', err);
+    }
+  }, [classConfigs]);
+
+  // Telemetry & Python Bridge Bindings (Invoked by Python via PyWebView evaluate_js)
   useEffect(() => {
-    window.updateProgress = (percent, statusText, step, total) => {
-      setProgressPercent(percent);
-      setProgressStatus(statusText);
-      setCurrentStep(step);
-      setTotalSteps(total);
-      setIsGenerating(percent < 100);
+    window.onScheduleLoaded = async (res) => {
+      if (res && res.path) {
+        setSchedulePath(res.path);
+        setScheduleMetadata(res.metadata);
+        if (res.validation) setRosterReports(res.validation);
+        await refreshClasses();
+        showToast(
+          'success',
+          'Schedule Loaded',
+          `Loaded schedule for ${res.metadata?.instructor || 'Faculty'}`
+        );
+      }
     };
 
-    window.generationComplete = (resSummary) => {
-      setIsGenerating(false);
-      setSummary(resSummary);
-      showToast('success', 'Generation Succeeded', `Generated ${resSummary.total_documents} documents.`);
+    window.onRostersLoaded = async (res) => {
+      if (res) {
+        setRosters(res.rosters || []);
+        setRosterReports(res.validation || []);
+        await refreshClasses();
+        showToast('success', 'Rosters Loaded', `${res.rosters?.length || 0} student roster files loaded.`);
+      }
     };
 
-    window.generationError = (errMessage) => {
+    window.onGenerationProgress = (info) => {
+      setProgressPercent(info.percent);
+      setProgressStatus(`${info.current_class || 'Class'}: ${info.current_task || 'Processing'}`);
+      setCurrentStep(info.step);
+      setTotalSteps(info.total_steps);
+      setIsGenerating(info.percent < 100);
+    };
+
+    window.onGenerationComplete = (payload) => {
       setIsGenerating(false);
-      showToast('error', 'Generation Error', errMessage);
+      setProgressPercent(100);
+      if (payload.status === 'cancelled') {
+        showToast('warning', 'Cancelled', payload.message || 'Generation cancelled by user.');
+      } else if (payload.status === 'error') {
+        showToast('error', 'Generation Error', payload.message || 'Generation failed.');
+      } else {
+        const totalDocs = payload.stats?.generated || 0;
+        setSummary({
+          total_documents: totalDocs,
+          sections_processed: detectedClasses.length,
+          output_directory: payload.output_dir || outputDir,
+          generated_files: [],
+        });
+        showToast('success', 'Generation Succeeded', payload.message || `Generated ${totalDocs} documents.`);
+      }
+    };
+
+    window.onGenerationError = () => {
+      setIsGenerating(false);
+      showToast('error', 'Generation Error', 'A fatal error occurred during generation.');
     };
 
     return () => {
-      delete window.updateProgress;
-      delete window.generationComplete;
-      delete window.generationError;
+      delete window.onScheduleLoaded;
+      delete window.onRostersLoaded;
+      delete window.onGenerationProgress;
+      delete window.onGenerationComplete;
+      delete window.onGenerationError;
     };
-  }, [showToast]);
+  }, [refreshClasses, showToast, detectedClasses.length, outputDir]);
+
+  // Window-level Drag and Drop Listeners for Microsoft Edge WebView2
+  useEffect(() => {
+    const handleDragOver = (e: DragEvent) => {
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+    };
+
+    const handleDrop = async (e: DragEvent) => {
+      e.preventDefault();
+      const files = e.dataTransfer ? e.dataTransfer.files : null;
+      if (!files || files.length === 0) return;
+
+      const fileList = Array.from(files);
+      const scheduleFiles = fileList.filter((f) => {
+        const ext = f.name.split('.').pop()?.toLowerCase();
+        return ext === 'xls' || ext === 'xlsx' || ext === 'xlsm';
+      });
+      const rosterFiles = fileList.filter((f) => {
+        const ext = f.name.split('.').pop()?.toLowerCase();
+        return ext === 'csv' || (!f.name.toLowerCase().includes('schedule') && (ext === 'xlsx' || ext === 'xls'));
+      });
+
+      // If dropped schedule file
+      if (scheduleFiles.length > 0 && !schedulePath) {
+        const f = scheduleFiles[0];
+        const path = (f as any).pywebviewFullPath || (f as any).path;
+        if (path) {
+          const res = await pywebviewService.handleDroppedSchedule(f.name, path);
+          if (res && res.path) {
+            setSchedulePath(res.path);
+            setScheduleMetadata(res.metadata);
+            if (res.validation) setRosterReports(res.validation);
+            await refreshClasses();
+            showToast('success', 'Schedule Loaded', `Loaded ${f.name}`);
+          }
+        }
+      }
+
+      // If dropped roster files
+      if (rosterFiles.length > 0) {
+        const payloads = rosterFiles.map((f) => ({
+          filename: f.name,
+          path: (f as any).pywebviewFullPath || (f as any).path || null,
+          data: null,
+        }));
+        const res = await pywebviewService.handleDroppedRosters(payloads, classConfigs);
+        if (res) {
+          setRosters(res.rosters || []);
+          setRosterReports(res.validation || []);
+          await refreshClasses();
+          showToast('success', 'Rosters Ingested', `Added ${payloads.length} roster files.`);
+        }
+      }
+    };
+
+    window.addEventListener('dragover', handleDragOver);
+    window.addEventListener('drop', handleDrop);
+
+    return () => {
+      window.removeEventListener('dragover', handleDragOver);
+      window.removeEventListener('drop', handleDrop);
+    };
+  }, [schedulePath, classConfigs, refreshClasses, showToast]);
 
   // Initial Data Fetch
   useEffect(() => {
@@ -120,117 +247,144 @@ export const App: React.FC = () => {
     initData();
   }, []);
 
-  // Update File Estimate whenever relevant parameters change
-  useEffect(() => {
-    if (!schedulePath || rosters.length === 0) {
-      setEstimate(null);
-      return;
-    }
-    const updateEst = async () => {
-      try {
-        const est = await pywebviewService.getFileEstimate({
-          schedule_path: schedulePath,
-          rosters,
-          output_dir: outputDir,
-          start_date: startDate || undefined,
-          end_date: endDate || undefined,
-          class_configs: classConfigs,
-        });
-        setEstimate(est);
-      } catch (err) {
-        console.error('Failed to get estimate:', err);
-      }
-    };
-    updateEst();
-  }, [schedulePath, rosters, outputDir, startDate, endDate, classConfigs, customTemplates]);
+  // Calculate File Estimate dynamically
+  const estimate: FileEstimate | null = useMemo(() => {
+    const activeCustom = customTemplates.filter((t) => t.enabled).length;
+    return pywebviewService.calculateFileEstimate(
+      selectedClassIds.length,
+      engines,
+      activeCustom,
+      startDate || undefined,
+      endDate || undefined
+    );
+  }, [selectedClassIds.length, engines, customTemplates, startDate, endDate]);
 
-  // Actions
+  // Primary Actions
   const handleBrowseSchedule = async () => {
     try {
       const res = await pywebviewService.browseSchedule();
-      if (res.path) {
+      if (res && res.path) {
         setSchedulePath(res.path);
         setScheduleMetadata(res.metadata);
-        setValidations(res.validation || []);
-        showToast('info', 'Schedule Loaded', 'Ingested master schedule successfully.');
+        if (res.validation) setRosterReports(res.validation);
+        await refreshClasses();
+        showToast(
+          'success',
+          'Schedule Loaded',
+          `Loaded schedule for ${res.metadata?.instructor || 'Faculty'}`
+        );
       }
     } catch (err: any) {
-      showToast('error', 'File Error', err.message);
+      showToast('error', 'File Error', err.message || 'Failed to select schedule.');
     }
   };
 
-  const handleDropSchedule = async (file: File) => {
+  const handleDropScheduleFile = async (file: File) => {
     try {
-      const res = await pywebviewService.handleDroppedSchedule({
-        filename: file.name,
-        path: (file as any).path,
-      });
-      if (res.path) {
+      const path = (file as any).pywebviewFullPath || (file as any).path;
+      const res = await pywebviewService.handleDroppedSchedule(file.name, path);
+      if (res && res.path) {
         setSchedulePath(res.path);
         setScheduleMetadata(res.metadata);
-        setValidations(res.validation || []);
-        showToast('info', 'Schedule Loaded', `Loaded ${file.name}`);
+        if (res.validation) setRosterReports(res.validation);
+        await refreshClasses();
+        showToast('success', 'Schedule Loaded', `Loaded ${file.name}`);
       }
     } catch (err: any) {
-      showToast('error', 'Drop Error', err.message);
+      showToast('error', 'Drop Error', err.message || 'Failed to process dropped schedule.');
     }
   };
 
   const handleClearSchedule = () => {
     setSchedulePath('');
     setScheduleMetadata(null);
-    setValidations([]);
+    setDetectedClasses([]);
+    setSelectedClassIds([]);
+    showToast('info', 'Schedule Reset', 'Master schedule cleared.');
   };
 
   const handleBrowseRosters = async () => {
     try {
       const res = await pywebviewService.browseRosters(classConfigs);
-      setRosters(res.rosters);
-      setValidations(res.validation || []);
-      showToast('info', 'Rosters Updated', `${res.count} class rosters loaded.`);
+      if (res) {
+        setRosters(res.rosters || []);
+        setRosterReports(res.validation || []);
+        await refreshClasses();
+        showToast('success', 'Rosters Loaded', `${res.rosters?.length || 0} student roster files loaded.`);
+      }
     } catch (err: any) {
-      showToast('error', 'Roster Error', err.message);
+      showToast('error', 'Roster Error', err.message || 'Failed to load rosters.');
     }
   };
 
-  const handleDropRosters = async (files: FileList | File[]) => {
+  const handleDropRosterFiles = async (files: FileList | File[]) => {
     try {
       const payload = Array.from(files).map((f) => ({
         filename: f.name,
-        path: (f as any).path,
+        path: (f as any).pywebviewFullPath || (f as any).path || null,
+        data: null,
       }));
       const res = await pywebviewService.handleDroppedRosters(payload, classConfigs);
-      setRosters(res.rosters);
-      setValidations(res.validation || []);
-      showToast('info', 'Rosters Ingested', `Added ${payload.length} files.`);
+      if (res) {
+        setRosters(res.rosters || []);
+        setRosterReports(res.validation || []);
+        await refreshClasses();
+        showToast('success', 'Rosters Ingested', `Added ${payload.length} files.`);
+      }
     } catch (err: any) {
-      showToast('error', 'Drop Error', err.message);
+      showToast('error', 'Drop Error', err.message || 'Failed to drop rosters.');
     }
   };
 
   const handleRemoveRoster = async (index: number) => {
     try {
       const res = await pywebviewService.removeRoster(index, classConfigs);
-      setRosters(res.rosters);
-      setValidations(res.validation || []);
+      if (res) {
+        setRosters(res.rosters || []);
+        setRosterReports(res.validation || []);
+        await refreshClasses();
+      }
     } catch (err: any) {
-      showToast('error', 'Remove Error', err.message);
+      showToast('error', 'Remove Error', err.message || 'Failed to remove roster.');
     }
   };
 
-  const handleClearAllRosters = () => {
-    setRosters([]);
-    setValidations([]);
+  const handleClearAllRosters = async () => {
+    try {
+      const res = await pywebviewService.clearRosters();
+      setRosters([]);
+      setRosterReports([]);
+      setDetectedClasses([]);
+      setSelectedClassIds([]);
+      showToast('info', 'Rosters Cleared', 'All student rosters removed.');
+    } catch (err: any) {
+      showToast('error', 'Clear Error', err.message || 'Failed to clear rosters.');
+    }
   };
 
-  const handleToggleLab = (key: string, hasLab: boolean) => {
-    setClassConfigs((prev) => ({
+  const handleToggleClassSelection = (classId: string) => {
+    setSelectedClassIds((prev) =>
+      prev.includes(classId) ? prev.filter((id) => id !== classId) : [...prev, classId]
+    );
+  };
+
+  const handleSelectAllClasses = (select: boolean) => {
+    if (select) {
+      setSelectedClassIds(detectedClasses.map((c) => c.id || `${c.course_sec}_${c.schedule_code}`));
+    } else {
+      setSelectedClassIds([]);
+    }
+  };
+
+  const handleTypeOverrideChange = (classId: string, type: 'lecture_lab' | 'lecture_only') => {
+    setTypeOverrides((prev) => ({
       ...prev,
-      [key]: {
-        has_lab: hasLab,
-        manual_roster_path: prev[key]?.manual_roster_path,
-      },
+      [classId]: type,
     }));
+  };
+
+  const handleToggleEngine = (engine: 'attendance' | 'ceit' | 'grades') => {
+    setEngines((prev) => ({ ...prev, [engine]: !prev[engine] }));
   };
 
   const handleBrowseOutputDir = async () => {
@@ -241,49 +395,53 @@ export const App: React.FC = () => {
         showToast('info', 'Output Set', `Destination: ${res.path}`);
       }
     } catch (err: any) {
-      showToast('error', 'Folder Error', err.message);
+      showToast('error', 'Folder Error', err.message || 'Failed to select destination.');
     }
   };
 
   const handleStartGeneration = async () => {
     if (!schedulePath) {
-      showToast('warning', 'Missing Input', 'Please select a master schedule first.');
+      showToast('warning', 'Missing Schedule', 'Please select or drop a master schedule first.');
       return;
     }
     if (rosters.length === 0) {
-      showToast('warning', 'Missing Input', 'Please add at least one student class roster.');
+      showToast('warning', 'Missing Rosters', 'Please add at least one student roster file.');
       return;
     }
     if (!outputDir) {
-      showToast('warning', 'Missing Input', 'Please select a target destination folder.');
+      showToast('warning', 'Missing Output', 'Please choose a target destination folder.');
+      return;
+    }
+    if (selectedClassIds.length === 0) {
+      showToast('warning', 'No Classes Selected', 'Please check at least one class to compile.');
       return;
     }
 
     setIsGenerating(true);
     setProgressPercent(0);
-    setProgressStatus('Initializing document generator pipeline...');
+    setProgressStatus('Initializing document compilation pipeline...');
+
+    const dateOverrides = startDate || endDate ? { start_date: startDate, end_date: endDate } : undefined;
+
     try {
-      await pywebviewService.startGeneration({
-        schedule_path: schedulePath,
-        rosters,
-        output_dir: outputDir,
-        start_date: startDate || undefined,
-        end_date: endDate || undefined,
-        class_configs: classConfigs,
-      });
+      await pywebviewService.runGeneration(
+        typeOverrides,
+        dateOverrides,
+        selectedClassIds,
+        engines,
+        classConfigs
+      );
     } catch (err: any) {
       setIsGenerating(false);
-      showToast('error', 'Execution Error', err.message);
+      showToast('error', 'Execution Error', err.message || 'Failed to start generation.');
     }
   };
 
   const handleCancelGeneration = async () => {
     try {
       await pywebviewService.cancelGeneration();
-      setIsGenerating(false);
-      showToast('warning', 'Cancelled', 'Generation cancelled by user.');
     } catch (err: any) {
-      showToast('error', 'Cancel Error', err.message);
+      showToast('error', 'Cancel Error', err.message || 'Failed to cancel generation.');
     }
   };
 
@@ -292,11 +450,12 @@ export const App: React.FC = () => {
       const res = await pywebviewService.saveParserConfig(newCfg);
       if (res.status === 'success') {
         setConfig(newCfg);
-        if (res.validation) setValidations(res.validation);
+        if (res.validation) setRosterReports(res.validation);
+        if (res.detected_classes) setDetectedClasses(res.detected_classes);
         showToast('success', 'Settings Saved', 'Curriculum configuration applied.');
       }
     } catch (err: any) {
-      showToast('error', 'Config Error', err.message);
+      showToast('error', 'Config Error', err.message || 'Failed to save config.');
     }
   };
 
@@ -304,7 +463,8 @@ export const App: React.FC = () => {
     if (confirm('Reset all curriculum and parser preferences to factory defaults?')) {
       const res = await pywebviewService.resetParserConfig();
       if (res.config) setConfig(res.config);
-      if (res.validation) setValidations(res.validation);
+      if (res.validation) setRosterReports(res.validation);
+      if (res.detected_classes) setDetectedClasses(res.detected_classes);
       showToast('info', 'Defaults Restored', 'Reset to factory CEIT configuration.');
     }
   };
@@ -314,17 +474,19 @@ export const App: React.FC = () => {
     setCustomTemplates(list);
   };
 
-  // Determine Stepper Active Step
+  // Determine Stepper Active Step based on completion
   let stepperActive = 1;
   if (schedulePath) stepperActive = 2;
   if (schedulePath && rosters.length > 0) stepperActive = 3;
-  if (schedulePath && rosters.length > 0 && outputDir) stepperActive = 4;
+  if (schedulePath && rosters.length > 0 && selectedClassIds.length > 0) stepperActive = 4;
+  if (schedulePath && rosters.length > 0 && outputDir) stepperActive = 6;
 
-  const canGenerate = Boolean(schedulePath && rosters.length > 0 && outputDir && !isGenerating);
+  const canGenerate = Boolean(
+    schedulePath && rosters.length > 0 && outputDir && selectedClassIds.length > 0 && !isGenerating
+  );
 
   return (
-    <div className="min-h-screen flex flex-col bg-[var(--bg-base)] text-[var(--text-primary)]">
-      {/* Top Navigation */}
+    <div className="app-shell" data-bs-theme={isDark ? 'dark' : 'light'}>
       <Header
         isDark={isDark}
         onToggleTheme={toggleTheme}
@@ -332,43 +494,51 @@ export const App: React.FC = () => {
         onOpenHelp={() => setIsHelpOpen(true)}
       />
 
-      {/* Stepper Readiness Tracker Bar */}
-      <Stepper
-        hasSchedule={Boolean(schedulePath)}
-        rosterCount={rosters.length}
-        classCount={validations.length}
-        hasOutput={Boolean(outputDir)}
-        isGenerating={isGenerating}
-      />
+      <div className="main-content-layout">
+        <Stepper
+          hasSchedule={Boolean(schedulePath)}
+          rosterCount={rosters.length}
+          classCount={selectedClassIds.length}
+          hasOutput={Boolean(outputDir)}
+          isGenerating={isGenerating}
+        />
 
-      {/* Main Studio 2-Column Dashboard Grid */}
-      <div className="app-container">
         <div className="dashboard-grid">
-          {/* LEFT COLUMN: Data Ingestion (Schedule & Rosters) */}
-          <div className="dashboard-col col-ingestion">
+          {/* LEFT COLUMN: Input Deck (Schedule & Rosters) */}
+          <div className="dashboard-col col-inputs">
             <Step1Schedule
               schedulePath={schedulePath}
               metadata={scheduleMetadata}
               onBrowse={handleBrowseSchedule}
-              onDropFile={handleDropSchedule}
+              onDropFile={handleDropScheduleFile}
               onClear={handleClearSchedule}
             />
 
             <Step2Rosters
               rosters={rosters}
+              validations={rosterReports}
               onBrowse={handleBrowseRosters}
-              onDropFiles={handleDropRosters}
+              onDropFiles={handleDropRosterFiles}
               onRemoveRoster={handleRemoveRoster}
               onClearAll={handleClearAllRosters}
+              onOpenMappingModal={(fn) => {
+                setMappingFilename(fn);
+                setIsMappingOpen(true);
+              }}
             />
           </div>
 
           {/* RIGHT COLUMN: Control Deck (Packages, Classes, Dates, Output) */}
           <div className="dashboard-col col-controls">
             <Step3ClassReview
-              validations={validations}
-              classConfigs={classConfigs}
-              onToggleLab={handleToggleLab}
+              detectedClasses={detectedClasses}
+              selectedClassIds={selectedClassIds}
+              onToggleClassSelection={handleToggleClassSelection}
+              onSelectAllClasses={handleSelectAllClasses}
+              typeOverrides={typeOverrides}
+              onTypeOverrideChange={handleTypeOverrideChange}
+              engines={engines}
+              onToggleEngine={handleToggleEngine}
               onOpenMappingModal={() => setIsMappingOpen(true)}
             />
 
@@ -377,7 +547,7 @@ export const App: React.FC = () => {
               endDate={endDate}
               onStartDateChange={setStartDate}
               onEndDateChange={setEndDate}
-              semesterAy={scheduleMetadata?.semester_ay}
+              semesterAy={scheduleMetadata?.semester || scheduleMetadata?.semester_ay}
             />
 
             <Step5OutputFolder
@@ -407,7 +577,7 @@ export const App: React.FC = () => {
         hasSchedule={Boolean(schedulePath)}
         rosterCount={rosters.length}
         hasOutput={Boolean(outputDir)}
-        classCount={validations.length}
+        classCount={selectedClassIds.length}
         isGenerating={isGenerating}
         progressPercent={progressPercent}
         progressMessage={progressStatus}
@@ -418,11 +588,17 @@ export const App: React.FC = () => {
       {/* Modals & Overlays */}
       <RosterMappingModal
         isOpen={isMappingOpen}
-        onClose={() => setIsMappingOpen(false)}
-        validations={validations}
+        onClose={() => {
+          setIsMappingOpen(false);
+          setMappingFilename('');
+        }}
+        validations={[]}
         availableRosters={rosters}
         classConfigs={classConfigs}
-        onSaveMapping={setClassConfigs}
+        onSaveMapping={async (newMap) => {
+          setClassConfigs(newMap);
+          await refreshClasses(newMap);
+        }}
       />
 
       <SettingsModal
@@ -438,6 +614,7 @@ export const App: React.FC = () => {
           if (res.status === 'success') {
             const cfg = await pywebviewService.getParserConfig();
             setConfig(cfg);
+            if (res.detected_classes) setDetectedClasses(res.detected_classes);
             showToast('success', 'Config Imported', 'Configuration loaded from file.');
           }
         }}

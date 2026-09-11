@@ -1,51 +1,51 @@
 import React, { useState } from 'react';
-import { CheckCircle2, AlertCircle, SlidersHorizontal, Layers, Check } from 'lucide-react';
-import { ClassValidation, RosterConfigMap } from '../../types/api';
+import { CheckCircle2, AlertCircle, Layers, Check, Search, BookOpen } from 'lucide-react';
+import { DetectedClass } from '../../types/api';
 
 interface Step3ClassReviewProps {
-  validations: ClassValidation[];
-  classConfigs: RosterConfigMap;
-  onToggleLab: (key: string, hasLab: boolean) => void;
-  onOpenMappingModal: () => void;
+  detectedClasses: DetectedClass[];
+  selectedClassIds: string[];
+  onToggleClassSelection: (classId: string) => void;
+  onSelectAllClasses?: (select: boolean) => void;
+  typeOverrides: Record<string, string>;
+  onTypeOverrideChange: (classId: string, type: 'lecture_lab' | 'lecture_only') => void;
+  engines: { attendance: boolean; ceit: boolean; grades: boolean };
+  onToggleEngine: (engine: 'attendance' | 'ceit' | 'grades') => void;
+  onOpenMappingModal?: () => void;
 }
 
 export const Step3ClassReview: React.FC<Step3ClassReviewProps> = ({
-  validations,
-  classConfigs,
-  onToggleLab,
+  detectedClasses,
+  selectedClassIds,
+  onToggleClassSelection,
+  onSelectAllClasses,
+  typeOverrides,
+  onTypeOverrideChange,
+  engines,
+  onToggleEngine,
   onOpenMappingModal,
 }) => {
   const [filterType, setFilterType] = useState<'all' | 'lab' | 'lec'>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [engines, setEngines] = useState({
-    attendance: true,
-    ceit: true,
-    grades: true,
-  });
 
-  const toggleEngine = (key: 'attendance' | 'ceit' | 'grades') => {
-    setEngines(prev => ({ ...prev, [key]: !prev[key] }));
-  };
+  const filtered = detectedClasses.filter((cls) => {
+    const classId = cls.id || `${cls.course_sec}_${cls.schedule_code}`;
+    const activeType = typeOverrides[classId] || cls.detected_type;
+    const isLab = activeType === 'lecture_lab';
 
-  const filtered = validations.filter((v) => {
-    const key = `${v.course_section}_${v.schedule_code}`;
-    const hasLab = classConfigs[key]?.has_lab ?? v.has_lab;
-
-    if (filterType === 'lab' && !hasLab) return false;
-    if (filterType === 'lec' && hasLab) return false;
+    if (filterType === 'lab' && !isLab) return false;
+    if (filterType === 'lec' && isLab) return false;
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      const matchSec = v.course_section.toLowerCase().includes(q);
-      const matchSub = v.subject.toLowerCase().includes(q);
-      const matchCode = v.schedule_code.toLowerCase().includes(q);
+      const matchSec = cls.course_sec.toLowerCase().includes(q);
+      const matchSub = cls.subject_name.toLowerCase().includes(q);
+      const matchCode = cls.schedule_code.toLowerCase().includes(q);
       if (!matchSec && !matchSub && !matchCode) return false;
     }
 
     return true;
   });
-
-  const readyCount = validations.filter(v => v.status === 'paired').length;
 
   return (
     <section className="glass-card" id="cardStep3">
@@ -62,11 +62,19 @@ export const Step3ClassReview: React.FC<Step3ClassReviewProps> = ({
       <label className="form-label" style={{ marginBottom: '8px', display: 'block' }}>
         Document Packages to Compile
       </label>
-      <div className="engine-selector" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '16px' }}>
+      <div
+        className="engine-selector"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, 1fr)',
+          gap: '10px',
+          marginBottom: '16px',
+        }}
+      >
         <div
           className={`engine-chip ${engines.attendance ? 'active' : ''}`}
           id="chipAttendance"
-          onClick={() => toggleEngine('attendance')}
+          onClick={() => onToggleEngine('attendance')}
           style={{
             padding: '12px',
             borderRadius: '10px',
@@ -97,7 +105,7 @@ export const Step3ClassReview: React.FC<Step3ClassReviewProps> = ({
         <div
           className={`engine-chip ${engines.ceit ? 'active' : ''}`}
           id="chipCeit"
-          onClick={() => toggleEngine('ceit')}
+          onClick={() => onToggleEngine('ceit')}
           style={{
             padding: '12px',
             borderRadius: '10px',
@@ -128,7 +136,7 @@ export const Step3ClassReview: React.FC<Step3ClassReviewProps> = ({
         <div
           className={`engine-chip ${engines.grades ? 'active' : ''}`}
           id="chipGrades"
-          onClick={() => toggleEngine('grades')}
+          onClick={() => onToggleEngine('grades')}
           style={{
             padding: '12px',
             borderRadius: '10px',
@@ -149,241 +157,146 @@ export const Step3ClassReview: React.FC<Step3ClassReviewProps> = ({
             />
             <div>
               <div style={{ fontWeight: 700, fontSize: '12.5px', color: 'var(--text-primary)' }}>
-                Official Grade Sheets
+                Grading Sheets
               </div>
-              <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Lecture / Lab (.xlsx)</div>
+              <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Registrar Grade (.xlsx)</div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Classes Header & Filters */}
-      {validations.length > 0 ? (
-        <div id="classesSection">
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: '10px',
-              flexWrap: 'wrap',
-              gap: '8px',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '12.5px', fontWeight: 700, color: 'var(--text-primary)' }}>
-                Detected Classes ({validations.length})
-              </span>
-              <span className="badge-version" id="classesReadyBadge">
-                {readyCount} / {validations.length} Paired
-              </span>
-            </div>
+      {/* Detected Classes Section */}
+      <div id="classesSection">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <label className="form-label" style={{ margin: 0 }}>
+              Detected Timetable Classes
+            </label>
+            <span id="classesCountDisplay" className="badge-version" style={{ fontSize: '11px' }}>
+              {detectedClasses.length}
+            </span>
+          </div>
 
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <input
-                type="text"
-                placeholder="Search classes..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                style={{
-                  fontSize: '11.5px',
-                  padding: '4px 10px',
-                  borderRadius: '8px',
-                  border: '1px solid var(--border-subtle)',
-                  background: 'var(--surface-card)',
-                  color: 'var(--text-primary)',
-                  outline: 'none',
-                  width: '140px',
-                }}
-              />
+          {detectedClasses.length > 0 && onSelectAllClasses && (
+            <div style={{ display: 'flex', gap: '8px', fontSize: '11.5px' }}>
               <button
                 type="button"
-                onClick={onOpenMappingModal}
-                className="nav-btn"
-                id="btnOpenMappingModal"
-                style={{ padding: '4px 10px', fontSize: '11.5px' }}
+                className="text-link"
+                onClick={() => onSelectAllClasses(true)}
+                style={{ color: 'var(--accent-emerald)', cursor: 'pointer', background: 'none', border: 'none' }}
               >
-                <SlidersHorizontal className="w-3.5 h-3.5" />
-                Manual Section Mapping
+                Select All
+              </button>
+              <span style={{ color: 'var(--border-subtle)' }}>|</span>
+              <button
+                type="button"
+                className="text-link"
+                onClick={() => onSelectAllClasses(false)}
+                style={{ color: 'var(--text-muted)', cursor: 'pointer', background: 'none', border: 'none' }}
+              >
+                Deselect All
               </button>
             </div>
-          </div>
+          )}
+        </div>
 
-          {/* Quick Filters */}
-          <div className="segmented-control" style={{ marginBottom: '12px' }}>
-            <button
-              className={`segmented-btn filter-pill ${filterType === 'all' ? 'active' : ''}`}
-              type="button"
-              onClick={() => setFilterType('all')}
-            >
-              All
-            </button>
-            <button
-              className={`segmented-btn filter-pill ${filterType === 'lab' ? 'active' : ''}`}
-              type="button"
-              onClick={() => setFilterType('lab')}
-            >
-              Lecture &amp; Lab Only
-            </button>
-            <button
-              className={`segmented-btn filter-pill ${filterType === 'lec' ? 'active' : ''}`}
-              type="button"
-              onClick={() => setFilterType('lec')}
-            >
-              Lecture Only
-            </button>
-          </div>
-
-          {/* Classes Table */}
+        {detectedClasses.length === 0 ? (
           <div
-            className="classes-table-wrapper"
             style={{
-              maxHeight: '380px',
-              overflowY: 'auto',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: 'var(--radius-md)',
-              background: 'var(--surface-elevated)',
+              padding: '24px',
+              textAlign: 'center',
+              border: '1px dashed var(--border-subtle)',
+              borderRadius: '10px',
+              color: 'var(--text-secondary)',
+              fontSize: '12.5px',
             }}
           >
-            <table className="settings-data-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ background: 'var(--surface-subtle)', borderBottom: '1px solid var(--border-subtle)' }}>
-                  <th style={{ padding: '10px 14px', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-secondary)' }}>Section</th>
-                  <th style={{ padding: '10px 14px', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-secondary)' }}>Code</th>
-                  <th style={{ padding: '10px 14px', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-secondary)' }}>Subject Title</th>
-                  <th style={{ padding: '10px 14px', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-secondary)' }}>Paired Roster</th>
-                  <th style={{ padding: '10px 14px', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', textAlign: 'center', color: 'var(--text-secondary)' }}>Grading Template</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((v, idx) => {
-                  const key = `${v.course_section}_${v.schedule_code}`;
-                  const hasLab = classConfigs[key]?.has_lab ?? v.has_lab;
-                  const isPaired = v.status === 'paired';
+            <BookOpen className="w-6 h-6 mx-auto mb-2 text-muted" style={{ opacity: 0.6 }} />
+            <div>Upload your Master Schedule and Student Rosters to automatically detect classes.</div>
+          </div>
+        ) : (
+          <>
+            {detectedClasses.length > 3 && (
+              <div style={{ marginBottom: '10px' }}>
+                <input
+                  type="text"
+                  className="text-input"
+                  placeholder="Filter detected classes by code or title..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  style={{ width: '100%', fontSize: '12px' }}
+                />
+              </div>
+            )}
 
-                  return (
-                    <tr
-                      key={idx}
-                      style={{
-                        borderBottom: '1px solid var(--border-subtle)',
-                        transition: 'background-color 0.15s ease',
-                      }}
-                    >
-                      <td style={{ padding: '10px 14px', fontWeight: 700, fontSize: '12.5px', color: 'var(--text-primary)' }}>
-                        {v.course_section}
-                      </td>
-                      <td style={{ padding: '10px 14px', fontFamily: 'monospace', fontSize: '12px', color: 'var(--text-muted)' }}>
-                        {v.schedule_code}
-                      </td>
-                      <td style={{ padding: '10px 14px', fontSize: '12.5px', color: 'var(--text-primary)', maxWidth: '240px' }} className="truncate" title={v.subject}>
-                        {v.subject}
-                      </td>
-                      <td style={{ padding: '10px 14px' }}>
-                        {isPaired ? (
-                          <span
-                            className="badge-ceit-pill"
-                            style={{
-                              background: 'rgba(16, 185, 129, 0.12)',
-                              color: 'var(--accent-emerald)',
-                              border: '1px solid rgba(16, 185, 129, 0.3)',
-                              padding: '3px 8px',
-                              borderRadius: '999px',
-                              fontSize: '11px',
-                              fontWeight: 600,
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                            }}
-                          >
-                            <CheckCircle2 className="w-3 h-3" />
-                            <span>{v.student_count} Students</span>
-                          </span>
-                        ) : (
-                          <span
-                            style={{
-                              background: 'rgba(245, 158, 11, 0.12)',
-                              color: 'var(--accent-amber)',
-                              border: '1px solid rgba(245, 158, 11, 0.3)',
-                              padding: '3px 8px',
-                              borderRadius: '999px',
-                              fontSize: '11px',
-                              fontWeight: 600,
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                            }}
-                          >
-                            <AlertCircle className="w-3 h-3" />
-                            <span>Missing Roster</span>
+            <div id="classesListContainer" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {filtered.map((cls) => {
+                const classId = cls.id || `${cls.course_sec}_${cls.schedule_code}`;
+                const isSelected = selectedClassIds.includes(classId);
+                const activeType = typeOverrides[classId] || cls.detected_type;
+                const isLab = activeType === 'lecture_lab';
+
+                return (
+                  <div
+                    key={classId}
+                    id={`card_${classId}`}
+                    className="class-card"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      padding: '12px',
+                      borderRadius: '10px',
+                      border: '1px solid var(--border-subtle)',
+                      background: 'var(--surface-elevated)',
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      className="class-select-check item-class-check"
+                      checked={isSelected}
+                      onChange={() => onToggleClassSelection(classId)}
+                      style={{ cursor: 'pointer' }}
+                    />
+
+                    <div className="class-details" style={{ flex: 1, minWidth: 0 }}>
+                      <div className="class-header-row" style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                        <span className="course-badge">{cls.course_sec}</span>
+                        <span className="sched-badge">Sched: {cls.schedule_code}</span>
+                        {cls.ceit_metadata && (
+                          <span className="badge-ceit-pill" title={cls.ceit_metadata.department_name}>
+                            {cls.ceit_metadata.prefix}
                           </span>
                         )}
-                      </td>
-                      <td style={{ padding: '10px 14px', textAlign: 'center' }}>
-                        <div
-                          className="segmented-control"
-                          style={{
-                            display: 'inline-flex',
-                            borderRadius: '8px',
-                            padding: '2px',
-                            background: 'var(--surface-subtle)',
-                            border: '1px solid var(--border-subtle)',
-                          }}
-                        >
-                          <button
-                            type="button"
-                            onClick={() => onToggleLab(key, false)}
-                            style={{
-                              padding: '4px 10px',
-                              fontSize: '11px',
-                              fontWeight: 600,
-                              borderRadius: '6px',
-                              border: 'none',
-                              cursor: 'pointer',
-                              background: !hasLab ? 'var(--surface-elevated)' : 'transparent',
-                              color: !hasLab ? 'var(--accent-emerald)' : 'var(--text-muted)',
-                              boxShadow: !hasLab ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                            }}
-                          >
-                            Lecture
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => onToggleLab(key, true)}
-                            style={{
-                              padding: '4px 10px',
-                              fontSize: '11px',
-                              fontWeight: 600,
-                              borderRadius: '6px',
-                              border: 'none',
-                              cursor: 'pointer',
-                              background: hasLab ? 'var(--surface-elevated)' : 'transparent',
-                              color: hasLab ? 'var(--accent-emerald)' : 'var(--text-muted)',
-                              boxShadow: hasLab ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                            }}
-                          >
-                            Lec &amp; Lab
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ) : (
-        <div
-          style={{
-            textAlign: 'center',
-            padding: '32px 16px',
-            color: 'var(--text-muted)',
-            fontSize: '13px',
-          }}
-        >
-          Load your master schedule spreadsheet in Step 1 to populate detected classes.
-        </div>
-      )}
+                      </div>
+                      <div className="subject-title truncate" style={{ marginTop: '3px', fontWeight: 600, fontSize: '12.5px' }}>
+                        {cls.subject_name}
+                      </div>
+                      <div className="sched-schedule-line" style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                        {cls.schedule_desc}
+                      </div>
+                    </div>
+
+                    <div style={{ flexShrink: 0 }}>
+                      <select
+                        className="type-dropdown class-type-select"
+                        value={isLab ? 'lecture_lab' : 'lecture_only'}
+                        onChange={(e) =>
+                          onTypeOverrideChange(classId, e.target.value as 'lecture_lab' | 'lecture_only')
+                        }
+                        style={{ fontSize: '11.5px', padding: '4px 8px', borderRadius: '6px' }}
+                      >
+                        <option value="lecture_lab">Lecture and Lab</option>
+                        <option value="lecture_only">Lecture only</option>
+                      </select>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </div>
     </section>
   );
 };

@@ -30,7 +30,9 @@ def test_react_executable_package_manifest():
     assert "react" in deps
     assert "react-dom" in deps
     assert "lucide-react" in deps
-    assert "tailwindcss" in deps
+    # Pure Vanilla CSS / CSS Modules & Design Tokens per Apple HIG architectural decision
+    tokens_path = os.path.join(TEST_EXEC_DIR, "src", "design-system", "tokens.css")
+    assert os.path.exists(tokens_path), "Apple HIG design system tokens.css must exist"
 
 def test_react_executable_dist_bundle():
     """Verify the React + Vite build artifact exists and has proper asset links."""

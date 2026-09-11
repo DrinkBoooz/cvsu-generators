@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import "./design-system/tokens.css";
 
 /* ═══════════════════════════════════════════════════════════════════════
          CvSU Gen Design System — 100% Offline, Zero CDN Dependencies
@@ -2743,4 +2743,304 @@
       }
       .btn-table-action-delete:hover {
         background: rgba(239, 68, 68, 0.1);
+      }
+
+      /* ═══════════════════════════════════════════════════════════════════════
+         Apple HIG Component Primitives Styling
+         ═══════════════════════════════════════════════════════════════════════ */
+
+      /* ── HIG Button ── */
+      .hig-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: var(--hig-space-sm);
+        border-radius: var(--hig-radius-md);
+        border: 1px solid transparent;
+        font-family: var(--hig-font-family);
+        font-weight: 600;
+        cursor: pointer;
+        user-select: none;
+        transition: all var(--hig-duration-fast) var(--hig-ease-spring);
+        outline: none;
+      }
+
+      .hig-btn:focus-visible {
+        box-shadow: var(--hig-focus-ring);
+      }
+
+      .hig-btn:active:not(:disabled) {
+        transform: var(--hig-press-scale);
+      }
+
+      .hig-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .hig-btn-sm {
+        padding: 5px 10px;
+        font-size: 11.5px;
+        border-radius: var(--hig-radius-sm);
+      }
+
+      .hig-btn-md {
+        padding: 8px 16px;
+        font-size: 13px;
+        border-radius: var(--hig-radius-md);
+      }
+
+      .hig-btn-lg {
+        padding: 11px 22px;
+        font-size: 14px;
+        border-radius: var(--hig-radius-lg);
+      }
+
+      .hig-btn-primary {
+        background: var(--hig-color-primary);
+        color: #ffffff;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      }
+
+      .hig-btn-primary:hover:not(:disabled) {
+        background: var(--hig-color-primary-hover);
+        box-shadow: 0 4px 12px var(--hig-color-primary-glow);
+      }
+
+      .hig-btn-secondary {
+        background: var(--hig-bg-surface-raised);
+        border-color: var(--hig-border-subtle);
+        color: var(--hig-text-primary);
+        box-shadow: var(--hig-shadow-sm);
+      }
+
+      .hig-btn-secondary:hover:not(:disabled) {
+        border-color: var(--hig-color-primary);
+        background: var(--hig-bg-surface-subtle);
+      }
+
+      .hig-btn-destructive {
+        color: var(--hig-color-destructive) !important;
+      }
+
+      .hig-btn-destructive:hover:not(:disabled) {
+        background: var(--hig-color-destructive-bg) !important;
+      }
+
+      .hig-btn-ghost {
+        background: transparent;
+        border-color: transparent;
+        color: var(--hig-text-secondary);
+      }
+
+      .hig-btn-ghost:hover:not(:disabled) {
+        background: var(--hig-bg-surface-subtle);
+        color: var(--hig-text-primary);
+      }
+
+      /* ── HIG Toggle Switch ── */
+      .hig-toggle-row {
+        display: flex;
+        align-items: center;
+        gap: var(--hig-space-md);
+        user-select: none;
+      }
+
+      .hig-toggle-switch {
+        position: relative;
+        width: 42px;
+        height: 24px;
+        border-radius: var(--hig-radius-pill);
+        background: var(--hig-border-subtle);
+        cursor: pointer;
+        transition: background-color var(--hig-duration-base) var(--hig-ease-spring);
+        outline: none;
+        flex-shrink: 0;
+      }
+
+      .hig-toggle-switch:focus-visible {
+        box-shadow: var(--hig-focus-ring);
+      }
+
+      .hig-toggle-thumb {
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: #ffffff;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+        transition: transform var(--hig-duration-base) var(--hig-ease-spring);
+      }
+
+      .hig-toggle-switch.hig-checked {
+        background: var(--hig-color-primary);
+      }
+
+      .hig-toggle-switch.hig-checked .hig-toggle-thumb {
+        transform: translateX(18px);
+      }
+
+      .hig-toggle-text-block {
+        cursor: pointer;
+      }
+
+      .hig-toggle-label {
+        font-weight: 600;
+        font-size: 13px;
+        color: var(--hig-text-primary);
+      }
+
+      .hig-toggle-desc {
+        font-size: 11.5px;
+        color: var(--hig-text-secondary);
+        margin-top: 1px;
+      }
+
+      /* ── HIG Progress Bar ── */
+      .hig-progress-wrapper {
+        width: 100%;
+      }
+
+      .hig-progress-track {
+        width: 100%;
+        height: 7px;
+        border-radius: var(--hig-radius-pill);
+        background: var(--hig-bg-surface-subtle);
+        overflow: hidden;
+        border: 1px solid var(--hig-border-subtle);
+      }
+
+      .hig-progress-fill {
+        height: 100%;
+        border-radius: var(--hig-radius-pill);
+        background: linear-gradient(90deg, var(--hig-color-primary), var(--hig-color-primary-hover));
+        transition: width var(--hig-duration-base) var(--hig-ease-spring);
+      }
+
+      .hig-progress-meta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: var(--hig-space-sm);
+        font-size: 12px;
+      }
+
+      .hig-progress-status {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--hig-text-secondary);
+      }
+
+      .hig-pulse-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--hig-color-primary);
+        animation: higPulse 1.4s ease-in-out infinite;
+      }
+
+      @keyframes higPulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.4; transform: scale(0.85); }
+      }
+
+      .hig-progress-percent {
+        font-weight: 700;
+        color: var(--hig-color-primary);
+        font-feature-settings: "tnum";
+      }
+
+      /* ── HIG Dropzone ── */
+      .hig-dropzone {
+        display: flex;
+        align-items: center;
+        gap: var(--hig-space-md);
+        padding: var(--hig-space-md) var(--hig-space-lg);
+        border: 1.5px dashed var(--hig-border-prominent);
+        border-radius: var(--hig-radius-lg);
+        background: var(--hig-bg-surface-subtle);
+        cursor: pointer;
+        transition: all var(--hig-duration-fast) var(--hig-ease-spring);
+        outline: none;
+      }
+
+      .hig-dropzone:hover {
+        border-color: var(--hig-color-primary);
+        background: var(--hig-bg-surface);
+      }
+
+      .hig-dropzone:focus-visible {
+        box-shadow: var(--hig-focus-ring);
+      }
+
+      .hig-dropzone.hig-drag-active {
+        border-color: var(--hig-color-primary);
+        background: var(--hig-color-primary-subtle);
+        box-shadow: 0 0 20px var(--hig-color-primary-glow);
+      }
+
+      .hig-dropzone.hig-has-file {
+        border-style: solid;
+        border-color: var(--hig-color-primary);
+        background: var(--hig-bg-surface);
+      }
+
+      .hig-dropzone-icon-container {
+        color: var(--hig-color-primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+
+      .hig-dropzone-content {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .hig-dropzone-header {
+        display: flex;
+        align-items: center;
+        gap: var(--hig-space-sm);
+      }
+
+      .hig-dropzone-title {
+        font-weight: 600;
+        font-size: 13.5px;
+        color: var(--hig-text-primary);
+      }
+
+      .hig-badge-format {
+        font-size: 10.5px;
+        font-weight: 700;
+        padding: 1px 6px;
+        border-radius: var(--hig-radius-sm);
+        background: var(--hig-color-primary-subtle);
+        color: var(--hig-color-primary);
+        border: 1px solid var(--hig-color-primary);
+      }
+
+      .hig-dropzone-hint {
+        font-size: 12px;
+        color: var(--hig-text-secondary);
+        margin-top: 2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .hig-dropzone-formats {
+        font-size: 11px;
+        color: var(--hig-text-tertiary);
+        margin-top: 2px;
+      }
+
+      .hig-dropzone-actions {
+        display: flex;
+        align-items: center;
+        gap: var(--hig-space-xs);
+        flex-shrink: 0;
       }

@@ -5,8 +5,53 @@
 export interface ScheduleMetadata {
   instructor: string;
   college: string;
-  semester_ay: string;
-  classes: ScheduleClass[];
+  semester?: string;
+  semester_ay?: string;
+  total_slots?: number;
+  detected_sections?: string[];
+  classes?: ScheduleClass[];
+}
+
+export interface DetectedClass {
+  id?: string;
+  course_sec: string;
+  schedule_code: string;
+  subject_name: string;
+  schedule_desc: string;
+  has_lab: boolean;
+  detected_type: 'lecture_lab' | 'lecture_only';
+  roster_file?: string;
+  ceit_metadata?: {
+    prefix: string;
+    department_code?: string;
+    department_name?: string;
+    dept_code?: string;
+    dept?: string;
+  };
+}
+
+export interface RosterValidationReport {
+  filename: string;
+  path?: string;
+  status: 'valid' | 'warning' | 'error';
+  message?: string;
+  student_count?: number;
+  column_count?: number;
+  issue?: string;
+  suggested_matches?: Array<{
+    course_sec: string;
+    schedule_code: string;
+    subject_name: string;
+  }>;
+  recommended_filename?: string;
+  ceit_metadata?: {
+    prefix: string;
+    department_code?: string;
+    department_name?: string;
+    dept_code?: string;
+  };
+  linked_schedule_code?: string;
+  can_link?: boolean;
 }
 
 export interface ScheduleClass {

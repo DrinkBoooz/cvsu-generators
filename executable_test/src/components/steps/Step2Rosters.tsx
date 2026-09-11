@@ -1,23 +1,30 @@
 import React, { useState } from 'react';
-import { FileText, Trash2, X } from 'lucide-react';
+import { FileText, Trash2, X, Search, Sliders, CheckCircle2, AlertTriangle, AlertCircle } from 'lucide-react';
+import { RosterValidationReport } from '../../types/api';
+import { Toggle } from '../../design-system/components/Toggle';
 
 interface Step2RostersProps {
   rosters: string[];
+  validations?: RosterValidationReport[];
   onBrowse: () => void;
   onDropFiles: (files: FileList | File[]) => void;
   onRemoveRoster: (index: number) => void;
   onClearAll: () => void;
+  onOpenMappingModal?: (filename: string) => void;
 }
 
 export const Step2Rosters: React.FC<Step2RostersProps> = ({
   rosters,
+  validations = [],
   onBrowse,
   onDropFiles,
   onRemoveRoster,
   onClearAll,
+  onOpenMappingModal,
 }) => {
   const [isDragOver, setIsDragOver] = useState(false);
   const [stripExtraCols, setStripExtraCols] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -36,6 +43,12 @@ export const Step2Rosters: React.FC<Step2RostersProps> = ({
       onDropFiles(e.dataTransfer.files);
     }
   };
+
+  const filteredRosters = rosters.filter((rosterPath) => {
+    if (!searchQuery.trim()) return true;
+    const name = rosterPath.split(/[/\\]/).pop() || rosterPath;
+    return name.toLowerCase().includes(searchQuery.toLowerCase());
+  });
 
   return (
     <section className="glass-card" id="cardStep2">
@@ -60,27 +73,19 @@ export const Step2Rosters: React.FC<Step2RostersProps> = ({
       </div>
 
       {/* Auto-Strip Extra Columns Toggle */}
-      <div className="setting-toggle-row" style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
-        <label className="toggle-switch">
-          <input
-            type="checkbox"
-            id="toggleStripExtraCols"
-            checked={stripExtraCols}
-            onChange={(e) => setStripExtraCols(e.target.checked)}
-          />
-          <span className="toggle-slider" />
-        </label>
-        <div className="toggle-label-text">
-          <strong>Auto-strip extra portal columns</strong>
-          <div className="toggle-sub" style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-            Detects and drops unneeded columns exported by the portal
-          </div>
-        </div>
+      <div style={{ marginBottom: '14px' }}>
+        <Toggle
+          id="toggleStripExtraCols"
+          checked={stripExtraCols}
+          onChange={setStripExtraCols}
+          label="Auto-strip extra portal columns"
+          description="Detects and isolates Name and Student Number columns safely"
+        />
       </div>
 
-      {/* Rosters Dropzone */}
+      {/* Rosters Dropzone with correct ID for Python native bridge */}
       <div
-        id="rosterDropzone"
+        id="rostersDropzone"
         className={`dropzone ${isDragOver ? 'drag-active' : ''}`}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -140,44 +145,96 @@ export const Step2Rosters: React.FC<Step2RostersProps> = ({
       {/* Roster Pre-flight List */}
       {rosters.length > 0 && (
         <div id="rosterListBox" className="roster-list-box" style={{ marginTop: '14px' }}>
-          {rosters.map((rosterPath, idx) => {
-            const name = rosterPath.split(/[/\\]/).pop() || rosterPath;
-            return (
-              <div key={idx} className="roster-row">
-                <div className="roster-row-main">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-                    <FileText className="w-4 h-4 text-emerald-500 shrink-0" />
-                    <span className="roster-name selectable truncate" title={rosterPath}>
-                      {name}
-                    </span>
-                  </div>
+          {rosters.length > 3 && (
+            <div style={{ padding: '4px 0 10px 0' }}>
+              <input
+                type="text"
+                className="text-input"
+                placeholder="Filter loaded rosters..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{ width: '100%', fontSize: '12px' }}
+              />
+            </div>
+          )}
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-                    <button
-                      type="button"
-                      className="btn-remove-roster"
-                      style={{
-                        background: 'transparent',
-                        border: 'none',
-                        color: 'var(--text-muted)',
-                        cursor: 'pointer',
-                        padding: '2px 4px',
-                        display: 'flex',
-                        alignItems: 'center',
-                      }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onRemoveRoster(idx);
-                      }}
-                      title="Remove roster"
-                    >
-                      <X className="w-3.5 h-3.5 hover:text-red-500" />
-                    </button>
+          <div id="rosterRowsContainer">
+            {filteredRosters.map((rosterPath, idx) => {
+              const filename = rosterPath.split(/[/\\]/).pop() || rosterPath;
+              const rep = validations.find((v) => v.filename === filename);
+
+              let statusBadge = (
+                <span className="badge-status badge-valid" style={{ fontSize: '11px', padding: '2px 8px' }}>
+                  Ready
+                </span>
+              );
+
+              if (rep) {
+                if (rep.issue === 'incomplete_filename') {
+                  statusBadge = (
+                    <span className="badge-status badge-warning" title={rep.message || 'Incomplete details'}>
+                      ⚠️ Incomplete Details
+                    </span>
+                  );
+                } else if (rep.status === 'warning') {
+                  statusBadge = (
+                    <span className="badge-status badge-valid" title="Auto-Cleaned safely">
+                      🛡️ Auto-Cleaned
+                    </span>
+                  );
+                } else if (rep.status === 'error') {
+                  statusBadge = (
+                    <span className="badge-status badge-error" title={rep.message || 'Unrecognized format'}>
+                      Invalid Format
+                    </span>
+                  );
+                }
+              }
+
+              return (
+                <div key={idx} className="roster-row" style={{ marginTop: '6px' }}>
+                  <div className="roster-row-main" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
+                      <FileText className="w-4 h-4 text-emerald-500 shrink-0" />
+                      <span className="roster-name selectable truncate" title={rosterPath} style={{ fontSize: '12.5px', fontWeight: 500 }}>
+                        {filename}
+                      </span>
+                      {rep?.ceit_metadata && (
+                        <span className="badge-ceit-pill" style={{ fontSize: '10px', padding: '1px 6px' }}>
+                          {rep.ceit_metadata.prefix}
+                        </span>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                      {statusBadge}
+                      {onOpenMappingModal && (
+                        <button
+                          type="button"
+                          className="btn-map-columns"
+                          onClick={() => onOpenMappingModal(filename)}
+                          title="Configure class details and column mapping"
+                        >
+                          ⚙️ Map
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="btn-remove-roster"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRemoveRoster(idx);
+                        }}
+                        title="Remove file"
+                      >
+                        <X className="w-3.5 h-3.5 hover:text-red-500" />
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       )}
     </section>
