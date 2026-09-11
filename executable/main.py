@@ -10,6 +10,15 @@ import threading
 import json
 import tempfile
 import base64
+import re
+
+def sanitize_filename(filename):
+    """Sanitize filename to prevent directory traversal and invalid OS characters."""
+    if not filename:
+        return "unnamed_file"
+    base = os.path.basename(filename)
+    clean = re.sub(r'[\r\n\t\\/:*?"<>|]', '_', base).strip().strip('.')
+    return clean or "unnamed_file"
 
 def get_resource_path(relative_path):
     """Get absolute path to resource, works for dev and for PyInstaller"""
@@ -40,6 +49,12 @@ class ScriptAPI:
                 return {"status": "success", "message": "Cancellation requested."}
         return {"status": "error", "message": "No active generation to cancel."}
 
+    def clear_schedule(self):
+        with self._lock:
+            self.schedule_path = ""
+        validation = process_schedule.validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs) if self.rosters else []
+        return {"status": "success", "path": "", "metadata": None, "validation": validation}
+
     def browse_schedule(self):
         file_types = ('Excel files (*.xls;*.xlsx;*.xlsm)', 'All files (*.*)')
         result = self._window.create_file_dialog(
@@ -48,15 +63,17 @@ class ScriptAPI:
             file_types=file_types
         )
         if result and len(result) > 0:
-            self.schedule_path = result[0]
+            with self._lock:
+                self.schedule_path = result[0]
             metadata = process_schedule.inspect_schedule_file(self.schedule_path)
             validation = process_schedule.validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs) if self.rosters else []
             return {
+                "cancelled": False,
                 "path": self.schedule_path,
                 "metadata": metadata,
                 "validation": validation
             }
-        return {"path": self.schedule_path, "metadata": None, "validation": []}
+        return {"cancelled": True, "path": self.schedule_path}
 
     def inspect_schedule(self, path=None):
         target = path or self.schedule_path
@@ -69,9 +86,10 @@ class ScriptAPI:
         if original_path and os.path.exists(original_path):
             target_path = original_path
         elif base64_data and filename:
+            clean_filename = sanitize_filename(filename)
             cache_dir = os.path.join(tempfile.gettempdir(), "cvsu_cache", "schedules")
             os.makedirs(cache_dir, exist_ok=True)
-            target_path = os.path.join(cache_dir, filename)
+            target_path = os.path.join(cache_dir, clean_filename)
             try:
                 with open(target_path, "wb") as f:
                     f.write(base64.b64decode(base64_data))
@@ -80,15 +98,17 @@ class ScriptAPI:
                 return {"path": "", "metadata": None, "validation": []}
 
         if target_path and os.path.exists(target_path):
-            self.schedule_path = target_path
+            with self._lock:
+                self.schedule_path = target_path
             metadata = process_schedule.inspect_schedule_file(self.schedule_path)
             validation = process_schedule.validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs) if self.rosters else []
             return {
+                "cancelled": False,
                 "path": self.schedule_path,
                 "metadata": metadata,
                 "validation": validation
             }
-        return {"path": "", "metadata": None, "validation": []}
+        return {"cancelled": False, "path": "", "metadata": None, "validation": []}
 
     def browse_rosters(self, roster_configs=None):
         if roster_configs is not None:
@@ -107,11 +127,13 @@ class ScriptAPI:
                     self.rosters.append(r)
             validation = process_schedule.validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs)
             return {
+                "cancelled": False,
                 "count": len(self.rosters),
                 "rosters": self.rosters,
                 "validation": validation
             }
         return {
+            "cancelled": True,
             "count": len(self.rosters),
             "rosters": self.rosters,
             "validation": process_schedule.validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs) if self.rosters else []
@@ -127,7 +149,7 @@ class ScriptAPI:
         for item in files_payload:
             original_path = item.get("path")
             base64_data = item.get("data")
-            filename = item.get("filename")
+            filename = sanitize_filename(item.get("filename", ""))
 
             if original_path and os.path.exists(original_path):
                 new_paths.append(original_path)
@@ -190,7 +212,181 @@ class ScriptAPI:
         return roster_parser.inspect_roster(target_path, overrides=overrides)
 
     def get_ceit_prefix_directory(self):
-        return roster_parser.CEIT_PREFIX_MAP
+        from modules.common.config_manager import config_manager
+        return config_manager.get_ceit_prefix_map()
+
+    def get_parser_config(self):
+        from modules.common.config_manager import config_manager
+        return config_manager.get_config()
+
+    def save_parser_config(self, config_dict):
+        from modules.common.config_manager import config_manager
+        res = config_manager.save_config(config_dict)
+        validation = []
+        detected_classes = []
+        if self.rosters:
+            try:
+                validation = process_schedule.validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs)
+            except Exception as e:
+                process_schedule.logger.error(f"Error re-validating rosters: {e}")
+        if self.schedule_path and self.rosters:
+            try:
+                detected_classes = process_schedule.detect_classes(self.schedule_path, self.rosters, roster_configs=self.roster_configs)
+            except Exception as e:
+                process_schedule.logger.error(f"Error re-detecting classes: {e}")
+        res["validation"] = validation
+        res["detected_classes"] = detected_classes
+        return res
+
+    def reset_parser_config(self):
+        from modules.common.config_manager import config_manager
+        res = config_manager.reset_to_defaults()
+        validation = []
+        detected_classes = []
+        if self.rosters:
+            try:
+                validation = process_schedule.validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs)
+            except Exception as e:
+                process_schedule.logger.error(f"Error re-validating rosters: {e}")
+        if self.schedule_path and self.rosters:
+            try:
+                detected_classes = process_schedule.detect_classes(self.schedule_path, self.rosters, roster_configs=self.roster_configs)
+            except Exception as e:
+                process_schedule.logger.error(f"Error re-detecting classes: {e}")
+        res["validation"] = validation
+        res["detected_classes"] = detected_classes
+        return res
+
+    def export_parser_config(self):
+        if not self._window:
+            return {"status": "error", "message": "Window context unavailable"}
+        result = self._window.create_file_dialog(
+            webview.SAVE_DIALOG,
+            save_filename="cvsu_parser_config.json",
+            file_types=('JSON files (*.json)', 'All files (*.*)')
+        )
+        if result:
+            save_path = result if isinstance(result, str) else result[0]
+            from modules.common.config_manager import config_manager
+            return config_manager.export_config(save_path)
+        return {"status": "cancelled"}
+
+    def import_parser_config(self):
+        if not self._window:
+            return {"status": "error", "message": "Window context unavailable"}
+        result = self._window.create_file_dialog(
+            webview.OPEN_DIALOG,
+            allow_multiple=False,
+            file_types=('JSON files (*.json)', 'All files (*.*)')
+        )
+        if result and len(result) > 0:
+            import_path = result[0]
+            from modules.common.config_manager import config_manager
+            res = config_manager.import_config(import_path)
+            validation = []
+            detected_classes = []
+            if self.rosters:
+                try:
+                    validation = process_schedule.validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs)
+                except Exception as e:
+                    process_schedule.logger.error(f"Error re-validating rosters: {e}")
+            if self.schedule_path and self.rosters:
+                try:
+                    detected_classes = process_schedule.detect_classes(self.schedule_path, self.rosters, roster_configs=self.roster_configs)
+                except Exception as e:
+                    process_schedule.logger.error(f"Error re-detecting classes: {e}")
+            res["validation"] = validation
+            res["detected_classes"] = detected_classes
+            return res
+        return {"status": "cancelled"}
+
+    def browse_custom_template(self):
+        """File browser dialog for selecting a .docx template to inspect."""
+        if not self._window:
+            return {"status": "error", "message": "Window context unavailable"}
+        file_types = ('Word Documents (*.docx)', 'All files (*.*)')
+        result = self._window.create_file_dialog(
+            webview.OPEN_DIALOG,
+            allow_multiple=False,
+            file_types=file_types
+        )
+        if result and len(result) > 0:
+            target_path = result[0]
+            return self.inspect_custom_template(target_path)
+        return {"status": "cancelled"}
+
+    def handle_dropped_custom_template(self, filename, base64_data=None, original_path=None):
+        """Handles drag-and-drop of a .docx template."""
+        target_path = None
+        if original_path and os.path.exists(original_path):
+            target_path = original_path
+        elif base64_data and filename:
+            clean_filename = sanitize_filename(filename)
+            cache_dir = os.path.join(tempfile.gettempdir(), "cvsu_cache", "custom_templates")
+            os.makedirs(cache_dir, exist_ok=True)
+            target_path = os.path.join(cache_dir, clean_filename)
+            try:
+                with open(target_path, "wb") as f:
+                    f.write(base64.b64decode(base64_data))
+            except Exception as e:
+                process_schedule.logger.error(f"Failed to write dropped template {filename}: {e}")
+                return {"status": "error", "message": str(e)}
+
+        if target_path and os.path.exists(target_path):
+            return self.inspect_custom_template(target_path)
+        return {"status": "error", "message": "Target template file could not be resolved"}
+
+    def inspect_custom_template(self, file_path):
+        """Runs the deterministic heuristic inspector on the provided .docx template."""
+        try:
+            from modules.parsers.template_inspector import TemplateInspector
+            inspector = TemplateInspector()
+            recipe = inspector.inspect_docx(file_path)
+            return {
+                "status": "success",
+                "file_path": file_path,
+                "recipe": recipe
+            }
+        except Exception as e:
+            process_schedule.logger.error(f"Failed to inspect custom template {file_path}: {e}")
+            return {"status": "error", "message": str(e)}
+
+    def save_custom_template(self, file_path, title, suffix, recipe):
+        """Saves a custom template and registers its recipe in ParserConfigManager."""
+        try:
+            from modules.common.config_manager import config_manager
+            res = config_manager.save_custom_template(file_path, title, suffix, recipe)
+            return res
+        except Exception as e:
+            process_schedule.logger.error(f"Failed to save custom template: {e}")
+            return {"status": "error", "message": str(e)}
+
+    def get_custom_templates(self):
+        """Retrieves list of active custom templates."""
+        try:
+            from modules.common.config_manager import config_manager
+            return config_manager.get_custom_templates()
+        except Exception as e:
+            process_schedule.logger.error(f"Failed to get custom templates: {e}")
+            return []
+
+    def toggle_custom_template(self, template_id, enabled):
+        """Toggles a custom template's enabled state."""
+        try:
+            from modules.common.config_manager import config_manager
+            return config_manager.toggle_custom_template(template_id, enabled)
+        except Exception as e:
+            process_schedule.logger.error(f"Failed to toggle custom template: {e}")
+            return {"status": "error", "message": str(e)}
+
+    def delete_custom_template(self, template_id):
+        """Deletes a custom template and its file."""
+        try:
+            from modules.common.config_manager import config_manager
+            return config_manager.delete_custom_template(template_id)
+        except Exception as e:
+            process_schedule.logger.error(f"Failed to delete custom template: {e}")
+            return {"status": "error", "message": str(e)}
 
     def browse_output(self):
         result = self._window.create_file_dialog(
@@ -202,21 +398,25 @@ class ScriptAPI:
 
     def open_output_folder(self, folder_path=None):
         target = folder_path or self.output_dir
-        if target and os.path.exists(target):
-            try:
-                os.startfile(target)
-                return {"status": "success"}
-            except Exception as e:
-                return {"status": "error", "message": str(e)}
+        if target:
+            norm_target = os.path.normpath(target)
+            if os.path.exists(norm_target):
+                try:
+                    os.startfile(norm_target)
+                    return {"status": "success"}
+                except Exception as e:
+                    return {"status": "error", "message": str(e)}
         return {"status": "error", "message": "Directory does not exist"}
 
     def open_file(self, file_path):
-        if file_path and os.path.exists(file_path):
-            try:
-                os.startfile(file_path)
-                return {"status": "success"}
-            except Exception as e:
-                return {"status": "error", "message": str(e)}
+        if file_path:
+            norm_path = os.path.normpath(file_path)
+            if os.path.exists(norm_path):
+                try:
+                    os.startfile(norm_path)
+                    return {"status": "success"}
+                except Exception as e:
+                    return {"status": "error", "message": str(e)}
         return {"status": "error", "message": "File not found"}
 
     def get_recent_logs(self, lines=120):
@@ -233,7 +433,7 @@ class ScriptAPI:
 
     def open_log_folder(self):
         app_data = os.getenv('APPDATA') or os.path.expanduser("~")
-        log_dir = os.path.join(app_data, "CVSU_Generators", "logs")
+        log_dir = os.path.normpath(os.path.join(app_data, "CVSU_Generators", "logs"))
         if os.path.exists(log_dir):
             try:
                 os.startfile(log_dir)
@@ -414,10 +614,27 @@ def setup_window_drag_and_drop(window, api):
 
         sched_zone = window.dom.get_element('#scheduleDropzone')
         rosters_zone = window.dom.get_element('#rostersDropzone')
+        template_zone = window.dom.get_element('#templateDropzone')
         doc = window.dom.document
 
         def on_drag_ignore(e):
             pass
+
+        def on_template_drop(e):
+            try:
+                files = e.get('dataTransfer', {}).get('files', [])
+                if not files:
+                    return
+                for f in files:
+                    full_path = f.get('pywebviewFullPath')
+                    if full_path and os.path.exists(full_path):
+                        ext = os.path.splitext(full_path)[1].lower()
+                        if ext == '.docx':
+                            res = api.inspect_custom_template(full_path)
+                            window.evaluate_js(f"if (window.renderCustomTemplateInspection) window.renderCustomTemplateInspection({json.dumps(res)});")
+                            break
+            except Exception as err:
+                process_schedule.logger.error(f"Error handling template drop: {err}")
 
         def on_schedule_drop(e):
             try:
@@ -506,6 +723,11 @@ def setup_window_drag_and_drop(window, api):
             rosters_zone.events.dragover += DOMEventHandler(on_drag_ignore, True, True, debounce=200)
             rosters_zone.events.drop += DOMEventHandler(on_rosters_drop, True, True)
 
+        if template_zone:
+            template_zone.events.dragenter += DOMEventHandler(on_drag_ignore, True, True)
+            template_zone.events.dragover += DOMEventHandler(on_drag_ignore, True, True, debounce=200)
+            template_zone.events.drop += DOMEventHandler(on_template_drop, True, True)
+
         if doc:
             doc.events.dragover += DOMEventHandler(on_drag_ignore, True, True, debounce=500)
             doc.events.drop += DOMEventHandler(on_doc_drop, True, True)
@@ -523,12 +745,17 @@ if __name__ == '__main__':
         title='CvSU Gen (Beta)',
         url=html_template,
         js_api=api,
-        width=920,
-        height=720,
-        min_size=(840, 640),
+        width=1120,
+        height=780,
+        min_size=(880, 640),
         text_select=True
     )
     api._window = window
+
+    def on_window_closing():
+        api.cancel_generation()
+
+    window.events.closing += on_window_closing
     
     webview.start(setup_window_drag_and_drop, (window, api))
 

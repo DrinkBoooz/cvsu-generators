@@ -7,6 +7,7 @@ import datetime
 from modules.common.logger import logger
 from modules.common.excel_utils import safe_temp_copy, parse_excel_time, get_long_path
 from modules.parsers.ceit_directory import SUBJECT_PREFIXES
+from modules.common.config_manager import config_manager
 
 def get_day_name(col_idx: int) -> str:
     days = {3: "Mon", 4: "Tue", 5: "Wed", 6: "Thu", 7: "Fri", 8: "Sat"}
@@ -112,11 +113,12 @@ def parse_schedule(schedule_path: str) -> list:
         if not grid:
             continue
             
-        instructor = "DAN JOSEPH A. ORTEGA"
-        semester = "FIRST SEMESTER, AY 2026 - 2027"
-        college = "COLLEGE OF ENGINEERING AND INFORMATION TECHNOLOGY"
-        start_row = 18
-        end_row = 46
+        sched_defaults = config_manager.get_schedule_defaults()
+        instructor = sched_defaults.get("default_instructor", "DAN JOSEPH A. ORTEGA")
+        semester = sched_defaults.get("default_semester", "FIRST SEMESTER, AY 2026 - 2027")
+        college = sched_defaults.get("default_college", "COLLEGE OF ENGINEERING AND INFORMATION TECHNOLOGY")
+        start_row = sched_defaults.get("start_row", 18)
+        end_row = sched_defaults.get("end_row", 46)
         
         for r in range(len(grid)):
             for c in range(len(grid[r])):
@@ -170,6 +172,7 @@ def find_blocks_for_section(grid, section, start_row, end_row):
         row_is_pm[r_idx] = seen_noon
 
     blocks = []
+    subject_prefixes = config_manager.get_subject_prefixes()
     for c in range(3, 9):
         for r in range(start_row, end_row + 1):
             if c < len(grid[r]):
@@ -178,14 +181,14 @@ def find_blocks_for_section(grid, section, start_row, end_row):
                     subject_row = r
                     for i in range(r, start_row - 1, -1):
                         val = grid[i][c].strip()
-                        if val.startswith(SUBJECT_PREFIXES):
+                        if val.startswith(subject_prefixes):
                             subject_row = i
                             break
                     
                     room_row = r
                     for i in range(r, end_row + 1):
                         val = grid[i][c].strip()
-                        if i > r and val.startswith(SUBJECT_PREFIXES):
+                        if i > r and val.startswith(subject_prefixes):
                             break
                         if val:
                             room_row = i
@@ -294,6 +297,7 @@ def _find_class_details_by_schedule_code(parsed_schedules, schedule_code):
     if not parsed_schedules or not schedule_code:
         return None
     code_str = str(schedule_code).strip()
+    subject_prefixes = config_manager.get_subject_prefixes()
     for sched in parsed_schedules:
         grid = sched["grid"]
         start_row = sched["start_row"]
@@ -305,7 +309,7 @@ def _find_class_details_by_schedule_code(parsed_schedules, schedule_code):
                     subj_row = r
                     for i in range(r, start_row - 1, -1):
                         v = grid[i][c].strip()
-                        if v.startswith(SUBJECT_PREFIXES):
+                        if v.startswith(subject_prefixes):
                             subj_row = i
                             break
                     subject_name = grid[subj_row][c].strip()
@@ -331,6 +335,7 @@ def _find_candidate_classes_from_hints(parsed_schedules, hints):
     hint_sec = (hints.get("course_sec") or "").replace(" ", "").upper()
     hint_prefix = (hints.get("subject_prefix") or "").upper()
     hint_code = (hints.get("subject_code") or "").replace(" ", "").upper()
+    subject_prefixes = config_manager.get_subject_prefixes()
 
     for sched in parsed_schedules:
         grid = sched["grid"]
@@ -349,7 +354,7 @@ def _find_candidate_classes_from_hints(parsed_schedules, hints):
                 subj_row = r
                 for i in range(r, start_row - 1, -1):
                     v = grid[i][c].strip()
-                    if v.startswith(SUBJECT_PREFIXES):
+                    if v.startswith(subject_prefixes):
                         subj_row = i
                         break
                 subject_name = grid[subj_row][c].strip()

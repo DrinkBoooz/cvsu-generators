@@ -400,8 +400,9 @@ class GeneratorFactory:
         "grade_finals":   "Final-Grade-Discussion_LATEST.docx",
     }
 
-    def __init__(self, templates_dir: str):
+    def __init__(self, templates_dir: str, config_manager=None):
         self._dir = templates_dir
+        self._config_manager = config_manager
 
     def _path(self, key: str) -> str:
         p = os.path.join(self._dir, self.TEMPLATE_FILES[key])
@@ -416,10 +417,10 @@ class GeneratorFactory:
             )
         return p
 
-    def get_all(self) -> list:
+    def get_all(self, include_custom: bool = True) -> list:
         """Return list of (generator_factory, output_suffix) tuples.
         The factory is a callable that returns the instantiated generator."""
-        return [
+        generators = [
             (lambda: SyllabusGenerator(self._path("syllabus")),
              "SYLLABUS_ACCEPTANCE"),
             (lambda: ExamReturnsGenerator(self._path("exam_midterm"), "MIDTERM"),
@@ -435,6 +436,28 @@ class GeneratorFactory:
             (lambda: GradeDiscussionGenerator(self._path("grade_finals"),  "Finals"),
              "GRADE_DISCUSSION_FINALS"),
         ]
+
+        if include_custom:
+            try:
+                from modules.common.config_manager import config_manager as default_cm
+                cm = self._config_manager or default_cm
+                from modules.generators.generic_doc_gen import ConfigurableDocumentGenerator
+
+                custom_templates = cm.get_custom_templates()
+                for ct in custom_templates:
+                    if ct.get("enabled", True):
+                        t_path = ct.get("file_path")
+                        recipe = ct.get("recipe") or {}
+                        suffix = ct.get("suffix") or "CUSTOM_FORM"
+                        if t_path and os.path.exists(t_path):
+                            def _make_custom_gen(p=t_path, r=recipe):
+                                return ConfigurableDocumentGenerator(p, r)
+
+                            generators.append((_make_custom_gen, suffix))
+            except Exception as e:
+                logger.error(f"Failed to load custom templates in GeneratorFactory: {e}")
+
+        return generators
 
 
 # ══ CLI ═══════════════════════════════════════════════════════════════════════

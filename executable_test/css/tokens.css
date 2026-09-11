@@ -1,0 +1,135 @@
+/* ═══════════════════════════════════════════════════════════════════════
+         CvSU Gen Design System — 100% Offline, Zero CDN Dependencies
+         Theme: CvSU Emerald & Obsidian Glassmorphism
+         ═══════════════════════════════════════════════════════════════════════ */
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      :root {
+        color-scheme: light;
+        --bg-base: #f8fafc;
+        --surface-card: rgba(255, 255, 255, 0.82);
+        --surface-subtle: rgba(0, 0, 0, 0.025);
+        --surface-elevated: #ffffff;
+        --border-subtle: rgba(226, 232, 240, 0.85);
+        --border-focus: #059669;
+        --header-bg: rgba(248, 250, 252, 0.82);
+        --header-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.04);
+        --text-primary: #0f172a;
+        --text-secondary: #475569;
+        --text-muted: #94a3b8;
+        --accent-emerald: #059669;
+        --accent-emerald-hover: #10b981;
+        --accent-emerald-glow: rgba(5, 150, 105, 0.18);
+        --accent-amber: #d97706;
+        --accent-blue: #2563eb;
+        --accent-rose: #dc2626;
+        --radius-xs: 6px;
+        --radius-sm: 8px;
+        --radius-md: 12px;
+        --radius-lg: 16px;
+        --radius-xl: 22px;
+        --radius-pill: 999px;
+        --shadow-card:
+          0 10px 30px -5px rgba(0, 0, 0, 0.04),
+          0 2px 6px -2px rgba(0, 0, 0, 0.02);
+      }
+
+      [data-bs-theme="dark"] {
+        color-scheme: dark;
+        --bg-base: #0b0f17;
+        --surface-card: rgba(17, 24, 39, 0.72);
+        --surface-subtle: rgba(255, 255, 255, 0.035);
+        --surface-elevated: #141c2e;
+        --border-subtle: rgba(255, 255, 255, 0.08);
+        --border-focus: #10b981;
+        --header-bg: rgba(11, 15, 23, 0.82);
+        --header-shadow: 0 4px 24px -2px rgba(0, 0, 0, 0.4);
+        --text-primary: #f9fafb;
+        --text-secondary: #9ca3af;
+        --text-muted: #6b7280;
+        --accent-emerald: #10b981;
+        --accent-emerald-hover: #34d399;
+        --accent-emerald-glow: rgba(16, 185, 129, 0.25);
+        --accent-amber: #f59e0b;
+        --accent-blue: #3b82f6;
+        --accent-rose: #ef4444;
+        --shadow-card:
+          0 16px 40px -10px rgba(0, 0, 0, 0.45),
+          inset 0 1px 0 rgba(255, 255, 255, 0.06);
+      }
+
+
+
+/* ── Apple HIG Design System Core Tokens ────────────────────────────── */
+:root {
+  --hig-font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+  --hig-font-title-1: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+  --hig-font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  --hig-font-caption: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  --hig-font-footnote: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+
+  --hig-bg-canvas: var(--bg-base);
+  --hig-bg-surface: var(--surface-card);
+  --hig-color-primary: var(--accent-emerald);
+  --hig-color-success: #10b981;
+  --hig-color-warning: #f59e0b;
+  --hig-color-destructive: #ef4444;
+
+  --hig-space-sm: 8px;
+  --hig-space-md: 16px;
+  --hig-space-lg: 24px;
+
+  --hig-ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  --hig-press-scale: 0.98;
+  --hig-focus-ring: 0 0 0 3px rgba(16, 185, 129, 0.35);
+}
+
+      /* ── Theme Transition Performance & Apple HIG View Transitions Engine ─── */
+      .theme-transitioning,
+      .theme-transitioning *,
+      .theme-transitioning *::before,
+      .theme-transitioning *::after {
+        transition: none !important;
+      }
+
+      ::view-transition-old(root),
+      ::view-transition-new(root) {
+        animation: none;
+        mix-blend-mode: normal !important;
+      }
+
+      ::view-transition-old(root) {
+        z-index: 1;
+      }
+
+      ::view-transition-new(root) {
+        z-index: 2;
+        animation: 0.65s cubic-bezier(0.25, 1, 0.5, 1) both appleThemeIrisReveal;
+      }
+
+      @keyframes appleThemeIrisReveal {
+        from {
+          clip-path: circle(0px at var(--vt-x, 90vw) var(--vt-y, 30px));
+        }
+        to {
+          clip-path: circle(
+            var(--vt-radius, 2000px) at var(--vt-x, 90vw) var(--vt-y, 30px)
+          );
+        }
+      }
+
+      .theme-icon-container {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+      }
+      .theme-icon-container.spin-morph {
+        transform: rotate(45deg) scale(0.85);
+      }

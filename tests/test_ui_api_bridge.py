@@ -303,17 +303,17 @@ def test_dynamic_total_steps_telemetry(tmp_path):
         progress_callback=on_progress
     )
 
-    assert len(results["generated"]["ceit"]) == 7
+    assert len(results["generated"]["ceit"]) == 8
     assert len(results["generated"]["attendance"]) == 6
     assert len(results["generated"]["grades"]) == 1
-    assert len(progress_events) == 14
+    assert len(progress_events) == 15
 
     for ev in progress_events:
         assert ev["step"] <= ev["total_steps"]
-        assert ev["total_steps"] == 14
+        assert ev["total_steps"] == 15
 
-    assert progress_events[-1]["step"] == 14
-    assert progress_events[-1]["total_steps"] == 14
+    assert progress_events[-1]["step"] == 15
+    assert progress_events[-1]["total_steps"] == 15
 
 def test_cancel_generation_and_by_class_artifacts(tmp_path):
     import threading
@@ -379,4 +379,33 @@ def test_generation_by_class_payload_structure_and_ui_compatibility(tmp_path):
     assert 'typeof item === "object"' in ui_html
     assert 'item.path || item.name' in ui_html
     assert 'data-path=' in ui_html
+
+def test_script_api_parser_config_endpoints():
+    api = ScriptAPI()
+    cfg = api.get_parser_config()
+    assert isinstance(cfg, dict)
+    assert "ceit_prefix_map" in cfg
+    assert "COSC" in cfg["ceit_prefix_map"]
+    assert "DCIT 21" in cfg["known_lab_subjects"]
+
+    # Test saving custom config
+    cfg["ceit_prefix_map"]["TESTP"] = {
+        "name": "Test Program",
+        "dept": "Department of Testing",
+        "dept_code": "DOT",
+        "icon": "🧪",
+        "badge": "🧪 DOT"
+    }
+    res = api.save_parser_config(cfg)
+    assert res["status"] == "success"
+
+    cfg_updated = api.get_parser_config()
+    assert "TESTP" in cfg_updated["ceit_prefix_map"]
+
+    # Test reset
+    reset_res = api.reset_parser_config()
+    assert reset_res["status"] == "success"
+    cfg_reset = api.get_parser_config()
+    assert "TESTP" not in cfg_reset["ceit_prefix_map"]
+
 

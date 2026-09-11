@@ -1,0 +1,72 @@
+body {
+        background-color: var(--bg-base);
+        color: var(--text-primary);
+        font-family:
+          -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+          "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        min-height: 100vh;
+        padding-bottom: 70px;
+        user-select: none;
+      }
+
+      /* Allow text selection on specific data display elements */
+      .selectable,
+      code,
+      pre,
+      input,
+      textarea {
+        user-select: text !important;
+      }
+
+      /* Institutional Emerald text selection highlight */
+      ::selection {
+        background: var(--accent-emerald);
+        color: #ffffff;
+      }
+
+      /* Apple HIG Focus Ring Accessibility */
+      :focus-visible {
+        outline: 2px solid var(--accent-emerald);
+        outline-offset: 2px;
+      }
+      button:focus-visible,
+      a:focus-visible,
+      input:focus-visible,
+      select:focus-visible {
+        outline: 2px solid var(--accent-emerald);
+        outline-offset: 2px;
+      }
+
+      /* Unified input placeholder contrast */
+      input::placeholder,
+      textarea::placeholder {
+        color: var(--text-muted);
+        opacity: 0.8;
+      }
+
+      /* Modern themed scrollbars for WebView2 & Chromium */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: var(--border-subtle);
+        border-radius: 999px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: var(--text-muted);
+      }
+      * {
+        scrollbar-width: thin;
+        scrollbar-color: var(--border-subtle) transparent;
+      }
+
+      .app-container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 20px 28px 120px 28px;
+      }

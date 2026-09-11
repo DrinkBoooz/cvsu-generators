@@ -9,6 +9,7 @@ from .ceit_gen import (
     GeneratorFactory,
     TemplateError,
 )
+from .generic_doc_gen import ConfigurableDocumentGenerator
 
 __all__ = [
     "GradeGenerator",
@@ -21,4 +22,5 @@ __all__ = [
     "GradeDiscussionGenerator",
     "GeneratorFactory",
     "TemplateError",
+    "ConfigurableDocumentGenerator",
 ]

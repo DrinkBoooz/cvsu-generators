@@ -5,6 +5,7 @@ import zipfile
 from xml.etree import ElementTree as ET
 from modules.common.excel_utils import safe_get_column_letter
 from modules.parsers.ceit_directory import CEIT_PREFIX_MAP, get_prefix_metadata, parse_filename_hints
+from modules.common.config_manager import config_manager
 
 # Pre-compiled regular expressions for speed and memory efficiency
 RE_ALPHANUM_ONLY = re.compile(r'[^a-z0-9]')
@@ -51,12 +52,8 @@ def _is_id_header(header: str, custom_tokens: list = None) -> bool:
     clean_h = RE_ALPHANUM_ONLY.sub('', h)
     if not clean_h:
         return False
-    id_tokens = [
-        "studentnumber", "studentno", "studentnum", "studentid",
-        "idnumber", "idno", "studno", "studnumber", "studnum",
-        "student#", "stud#", "id#", "id", "studid", "student_no", "student_id",
-        "lrn", "studentkey", "matricula", "registrationno"
-    ]
+    cfg_keywords = config_manager.get_roster_keywords()
+    id_tokens = list(cfg_keywords.get("id_tokens", []))
     if custom_tokens:
         id_tokens.extend([RE_ALPHANUM_ONLY.sub('', str(t).lower()) for t in custom_tokens if t])
     if clean_h in id_tokens:
@@ -77,10 +74,8 @@ def _is_name_header(header: str, custom_tokens: list = None) -> bool:
     clean_h = RE_ALPHANUM_ONLY.sub('', h)
     if not clean_h:
         return False
-    name_tokens = [
-        "name", "studentname", "fullname", "studentsname", "names",
-        "student", "lastname", "studentfullname", "completename", "pangalan"
-    ]
+    cfg_keywords = config_manager.get_roster_keywords()
+    name_tokens = list(cfg_keywords.get("name_tokens", []))
     if custom_tokens:
         name_tokens.extend([RE_ALPHANUM_ONLY.sub('', str(t).lower()) for t in custom_tokens if t])
     if clean_h in name_tokens:

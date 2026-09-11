@@ -1,141 +1,31 @@
 import os
 import re
+from modules.common.config_manager import config_manager
 
-# Official College of Engineering and Information Technology (CEIT) Subject Prefix & Department Directory
-CEIT_PREFIX_MAP = {
-    "AGEN": {
-        "name": "Agricultural and Biosystems Engineering",
-        "dept": "Department of Agricultural and Food Engineering",
-        "dept_code": "DAFE",
-        "icon": "🌱",
-        "badge": "🌱 DAFE"
-    },
-    "ABEN": {
-        "name": "Agricultural and Biosystems Engineering",
-        "dept": "Department of Agricultural and Food Engineering",
-        "dept_code": "DAFE",
-        "icon": "🌱",
-        "badge": "🌱 DAFE"
-    },
-    "ARCH": {
-        "name": "Architecture",
-        "dept": "Department of Civil Engineering",
-        "dept_code": "DCE",
-        "icon": "📐",
-        "badge": "📐 Architecture"
-    },
-    "CENG": {
-        "name": "Civil Engineering",
-        "dept": "Department of Civil Engineering",
-        "dept_code": "DCE",
-        "icon": "🏛️",
-        "badge": "🏛️ Civil Eng"
-    },
-    "CIVL": {
-        "name": "Civil Engineering",
-        "dept": "Department of Civil Engineering",
-        "dept_code": "DCE",
-        "icon": "🏛️",
-        "badge": "🏛️ Civil Eng"
-    },
-    "COSC": {
-        "name": "Computer Science",
-        "dept": "Department of Information Technology",
-        "dept_code": "DIT",
-        "icon": "🖥️",
-        "badge": "🖥️ Computer Science"
-    },
-    "CPEN": {
-        "name": "Computer Engineering",
-        "dept": "Department of Computer and Electronics Engineering",
-        "dept_code": "DCEE",
-        "icon": "⚡",
-        "badge": "⚡ Computer Eng"
-    },
-    "DCEE": {
-        "name": "Computer Engineering",
-        "dept": "Department of Computer and Electronics Engineering",
-        "dept_code": "DCEE",
-        "icon": "⚡",
-        "badge": "⚡ Computer Eng"
-    },
-    "DCIT": {
-        "name": "DIT Core / Common IT",
-        "dept": "Department of Information Technology",
-        "dept_code": "DIT",
-        "icon": "💻",
-        "badge": "💻 DIT Core"
-    },
-    "ECEN": {
-        "name": "Electronics Engineering",
-        "dept": "Department of Computer and Electronics Engineering",
-        "dept_code": "DCEE",
-        "icon": "📡",
-        "badge": "📡 Electronics Eng"
-    },
-    "EENG": {
-        "name": "Electrical Engineering",
-        "dept": "Department of Computer and Electronics Engineering",
-        "dept_code": "DCEE",
-        "icon": "🔌",
-        "badge": "🔌 Electrical Eng"
-    },
-    "IENG": {
-        "name": "Industrial Engineering",
-        "dept": "Department of Industrial Engineering and Technology",
-        "dept_code": "DIET",
-        "icon": "🏭",
-        "badge": "🏭 Industrial Eng"
-    },
-    "INDT": {
-        "name": "Industrial Technology",
-        "dept": "Department of Industrial Engineering and Technology",
-        "dept_code": "DIET",
-        "icon": "🔧",
-        "badge": "🔧 Industrial Tech"
-    },
-    "SMT": {
-        "name": "Industrial Technology",
-        "dept": "Department of Industrial Engineering and Technology",
-        "dept_code": "DIET",
-        "icon": "🔧",
-        "badge": "🔧 Industrial Tech"
-    },
-    "ITEC": {
-        "name": "Information Technology",
-        "dept": "Department of Information Technology",
-        "dept_code": "DIT",
-        "icon": "🌐",
-        "badge": "🌐 Info Tech"
-    }
-}
+# Official Subject Prefix & Department Directory (Backed by ParserConfigManager)
+CEIT_PREFIX_MAP = config_manager.get_ceit_prefix_map()
+BASE_SUBJECT_PREFIXES = tuple(config_manager.get_config().get("base_subject_prefixes", []))
+SUBJECT_PREFIXES = config_manager.get_subject_prefixes()
+KNOWN_LAB_SUBJECT_CODES = config_manager.get_known_lab_subjects()
+NORMALIZED_LAB_SUBJECT_CODES = config_manager.get_normalized_lab_subjects()
 
-BASE_SUBJECT_PREFIXES = (
-    "CVSU", "DCIT", "COSC", "ITEC", "INSY", "GNED", "MATH", "STAT",
-    "FITT", "NSTP", "PHYS", "PHED", "ECON", "BAMG", "ENGR", "BSCE",
-    "COEN", "ELET", "MECH", "AENG", "CHEM", "BIOL", "FILI", "HIST",
-    "COMM", "SOCS", "HUMA", "AGRI", "CRIM", "BMGT"
-)
-SUBJECT_PREFIXES = tuple(sorted(set(list(BASE_SUBJECT_PREFIXES) + list(CEIT_PREFIX_MAP.keys()))))
+def _sync_globals(new_cfg=None):
+    """Synchronize module-level constants when configuration is updated."""
+    global CEIT_PREFIX_MAP, BASE_SUBJECT_PREFIXES, SUBJECT_PREFIXES
+    global KNOWN_LAB_SUBJECT_CODES, NORMALIZED_LAB_SUBJECT_CODES
+    CEIT_PREFIX_MAP = config_manager.get_ceit_prefix_map()
+    BASE_SUBJECT_PREFIXES = tuple(config_manager.get_config().get("base_subject_prefixes", []))
+    SUBJECT_PREFIXES = config_manager.get_subject_prefixes()
+    KNOWN_LAB_SUBJECT_CODES = config_manager.get_known_lab_subjects()
+    NORMALIZED_LAB_SUBJECT_CODES = config_manager.get_normalized_lab_subjects()
+
+config_manager.register_listener(_sync_globals)
+
 
 def get_prefix_metadata(text: str) -> dict:
-    """Extract recognized CEIT subject prefix from text/filename and return department metadata."""
-    if not text:
-        return None
-    cleaned = str(text).upper()
-    for prefix, meta in CEIT_PREFIX_MAP.items():
-        if re.search(r'(?:^|[^A-Z])' + re.escape(prefix) + r'(?=$|[^A-Z])', cleaned):
-            return {
-                "prefix": prefix,
-                "name": meta["name"],
-                "dept": meta["dept"],
-                "dept_code": meta["dept_code"],
-                "department_name": meta["dept"],
-                "department_code": meta["dept_code"],
-                "icon": meta["icon"],
-                "badge": meta["badge"]
-            }
-    return None
+    """Extract recognized subject prefix from text/filename and return department metadata."""
+    return config_manager.get_prefix_metadata(text)
+
 
 def parse_filename_hints(filename: str) -> dict:
     """
@@ -167,20 +57,9 @@ def parse_filename_hints(filename: str) -> dict:
     sec_m = re.search(r'\b(?:BS)?([A-Za-z]{2,4})\s*(\d)-(\d+)\b', cleaned, re.IGNORECASE)
     if sec_m:
         prog = sec_m.group(1).upper()
-        if prog == "CS":
-            prog = "BSCS"
-        elif prog == "IT":
-            prog = "BSIT"
-        elif prog in ("CPE", "CPEN"):
-            prog = "BSCPE"
-        elif prog in ("CE", "CIVL", "CENG"):
-            prog = "BSCE"
-        elif prog in ("EE", "EENG"):
-            prog = "BSEE"
-        elif prog in ("ECE", "ECEN"):
-            prog = "BSECE"
-        elif prog in ("ABE", "ABEN", "AGEN"):
-            prog = "BSABE"
+        aliases = config_manager.get_program_aliases()
+        if prog in aliases:
+            prog = aliases[prog]
         elif not prog.startswith("BS") and len(prog) <= 3:
             prog = f"BS{prog}"
         course_sec = f"{prog} {sec_m.group(2)}-{sec_m.group(3)}"
@@ -237,23 +116,7 @@ def parse_filename_hints(filename: str) -> dict:
         "ceit_metadata": ceit_meta
     }
 
-# Known subjects containing laboratory components in the CvSU CEIT curriculum
-KNOWN_LAB_SUBJECT_CODES = {
-    "DCIT 21", "DCIT 22", "DCIT 23", "DCIT 24", "DCIT 25", "DCIT 26",
-    "DCIT21", "DCIT22", "DCIT23", "DCIT24", "DCIT25", "DCIT26",
-    "COSC 111", "COSC 111A", "COSC 55", "COSC 60", "COSC 65", "COSC 70", "COSC 75", "COSC 80", "COSC 85", "COSC 101",
-    "COSC111", "COSC111A", "COSC55", "COSC60", "COSC65", "COSC70", "COSC75", "COSC80", "COSC85", "COSC101",
-    "ITEC 50", "ITEC 55", "ITEC 60", "ITEC 65", "ITEC 70", "ITEC 75", "ITEC 80", "ITEC 85", "ITEC 90",
-    "ITEC50", "ITEC55", "ITEC60", "ITEC65", "ITEC70", "ITEC75", "ITEC80", "ITEC85", "ITEC90",
-}
-
-NORMALIZED_LAB_SUBJECT_CODES = {re.sub(r'[^A-Za-z0-9]', '', c).upper() for c in KNOWN_LAB_SUBJECT_CODES}
 
 def is_known_lab_subject(subject_str: str) -> bool:
     """Returns True if the given subject name or code contains a laboratory component."""
-    if not subject_str:
-        return False
-    prefix = re.split(r'[-–—―−]', str(subject_str))[0].upper()
-    prefix = re.sub(r'\(.*?\)', '', prefix).strip()
-    norm = re.sub(r'[^A-Za-z0-9]', '', prefix)
-    return norm in NORMALIZED_LAB_SUBJECT_CODES or prefix in KNOWN_LAB_SUBJECT_CODES
+    return config_manager.is_lab_subject(subject_str)

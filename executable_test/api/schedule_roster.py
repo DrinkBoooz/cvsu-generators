@@ -1,0 +1,183 @@
+import os
+import tempfile
+import base64
+import webview
+import process_schedule
+import roster_parser
+from .base import sanitize_filename
+
+class ScheduleRosterMixin:
+    """Mixin handling instructor schedule and student roster operations."""
+
+    def clear_schedule(self):
+        with self._lock:
+            self.schedule_path = ""
+        validation = process_schedule.validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs) if self.rosters else []
+        return {"status": "success", "path": "", "metadata": None, "validation": validation}
+
+    def browse_schedule(self):
+        file_types = ('Excel files (*.xls;*.xlsx;*.xlsm)', 'All files (*.*)')
+        result = self._window.create_file_dialog(
+            webview.OPEN_DIALOG,
+            allow_multiple=False,
+            file_types=file_types
+        )
+        if result and len(result) > 0:
+            with self._lock:
+                self.schedule_path = result[0]
+            metadata = process_schedule.inspect_schedule_file(self.schedule_path)
+            validation = process_schedule.validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs) if self.rosters else []
+            return {
+                "cancelled": False,
+                "path": self.schedule_path,
+                "metadata": metadata,
+                "validation": validation
+            }
+        return {"cancelled": True, "path": self.schedule_path}
+
+    def inspect_schedule(self, path=None):
+        target = path or self.schedule_path
+        if not target:
+            return None
+        return process_schedule.inspect_schedule_file(target)
+
+    def handle_dropped_schedule(self, filename, base64_data=None, original_path=None):
+        target_path = None
+        if original_path and os.path.exists(original_path):
+            target_path = original_path
+        elif base64_data and filename:
+            clean_filename = sanitize_filename(filename)
+            cache_dir = os.path.join(tempfile.gettempdir(), "cvsu_cache", "schedules")
+            os.makedirs(cache_dir, exist_ok=True)
+            target_path = os.path.join(cache_dir, clean_filename)
+            try:
+                with open(target_path, "wb") as f:
+                    f.write(base64.b64decode(base64_data))
+            except Exception as e:
+                process_schedule.logger.error(f"Failed to write dropped schedule {filename}: {e}")
+                return {"path": "", "metadata": None, "validation": []}
+
+        if target_path and os.path.exists(target_path):
+            with self._lock:
+                self.schedule_path = target_path
+            metadata = process_schedule.inspect_schedule_file(self.schedule_path)
+            validation = process_schedule.validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs) if self.rosters else []
+            return {
+                "cancelled": False,
+                "path": self.schedule_path,
+                "metadata": metadata,
+                "validation": validation
+            }
+        return {"cancelled": False, "path": "", "metadata": None, "validation": []}
+
+    def browse_rosters(self, roster_configs=None):
+        if roster_configs is not None:
+            self.roster_configs = roster_configs
+        file_types = ('Student Lists (*.csv;*.xlsx;*.xls)', 'All files (*.*)')
+        result = self._window.create_file_dialog(
+            webview.OPEN_DIALOG,
+            allow_multiple=True,
+            file_types=file_types
+        )
+        if result:
+            # Merge while avoiding duplicate file paths
+            existing = set(self.rosters)
+            for r in result:
+                if r not in existing:
+                    self.rosters.append(r)
+            validation = process_schedule.validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs)
+            return {
+                "cancelled": False,
+                "count": len(self.rosters),
+                "rosters": self.rosters,
+                "validation": validation
+            }
+        return {
+            "cancelled": True,
+            "count": len(self.rosters),
+            "rosters": self.rosters,
+            "validation": process_schedule.validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs) if self.rosters else []
+        }
+
+    def handle_dropped_rosters(self, files_payload, roster_configs=None):
+        if roster_configs is not None:
+            self.roster_configs = roster_configs
+        cache_dir = os.path.join(tempfile.gettempdir(), "cvsu_cache", "rosters")
+        os.makedirs(cache_dir, exist_ok=True)
+
+        new_paths = []
+        for item in files_payload:
+            original_path = item.get("path")
+            base64_data = item.get("data")
+            filename = sanitize_filename(item.get("filename", ""))
+
+            if original_path and os.path.exists(original_path):
+                new_paths.append(original_path)
+            elif base64_data and filename:
+                target_path = os.path.join(cache_dir, filename)
+                try:
+                    with open(target_path, "wb") as f:
+                        f.write(base64.b64decode(base64_data))
+                    new_paths.append(target_path)
+                except Exception as e:
+                    process_schedule.logger.error(f"Failed to write dropped roster {filename}: {e}")
+
+        existing = set(self.rosters)
+        for p in new_paths:
+            if p not in existing:
+                self.rosters.append(p)
+                existing.add(p)
+
+        validation = process_schedule.validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs)
+        return {
+            "count": len(self.rosters),
+            "rosters": self.rosters,
+            "validation": validation
+        }
+
+    def remove_roster(self, path_or_index, roster_configs=None):
+        if roster_configs is not None:
+            self.roster_configs = roster_configs
+        if isinstance(path_or_index, int) and 0 <= path_or_index < len(self.rosters):
+            self.rosters.pop(path_or_index)
+        elif path_or_index in self.rosters:
+            self.rosters.remove(path_or_index)
+        return {
+            "count": len(self.rosters),
+            "rosters": self.rosters,
+            "validation": process_schedule.validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs) if self.rosters else []
+        }
+
+    def clear_rosters(self):
+        self.rosters = []
+        return {"count": 0, "rosters": [], "validation": []}
+
+    def validate_rosters(self, roster_configs=None):
+        if roster_configs is not None:
+            self.roster_configs = roster_configs
+        if not self.rosters:
+            return []
+        return process_schedule.validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs)
+
+    def inspect_roster(self, path_or_filename, overrides=None):
+        target_path = None
+        for r in self.rosters:
+            if r == path_or_filename or os.path.basename(r) == path_or_filename:
+                target_path = r
+                break
+        if not target_path and os.path.exists(path_or_filename):
+            target_path = path_or_filename
+        if not target_path:
+            return {"status": "error", "message": f"File not found: {path_or_filename}"}
+        return roster_parser.inspect_roster(target_path, overrides=overrides)
+
+    def detect_classes(self, roster_configs=None):
+        if roster_configs is not None:
+            self.roster_configs = roster_configs
+        if not self.schedule_path or not self.rosters:
+            return []
+        try:
+            return process_schedule.detect_classes(self.schedule_path, self.rosters, roster_configs=self.roster_configs)
+        except Exception as e:
+            process_schedule.logger.error(f"Error in detect_classes: {e}")
+            return []
