@@ -2,9 +2,12 @@ import os
 import sys
 import json
 import re
+import shutil
 import tempfile
+from datetime import datetime
 from copy import deepcopy
 from modules.common.logger import logger
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Built-in University Presets (Factory Defaults)
@@ -156,11 +159,11 @@ DEFAULT_ROSTER_KEYWORDS = {
         "studentnumber", "studentno", "studentnum", "studentid",
         "idnumber", "idno", "studno", "studnumber", "studnum",
         "student#", "stud#", "id#", "id", "studid", "student_no", "student_id",
-        "lrn", "studentkey", "matricula", "registrationno"
+        "lrn", "studentkey", "matricula", "registrationno", "Student Number"
     ],
     "name_tokens": [
         "name", "studentname", "fullname", "studentsname", "names",
-        "student", "lastname", "studentfullname", "completename", "pangalan"
+        "student", "lastname", "studentfullname", "completename", "pangalan", "Student Name"
     ]
 }
 
@@ -194,14 +197,19 @@ class ParserConfigManager:
     def __init__(self, config_dir: str = None):
         if config_dir:
             self.config_dir = config_dir
+            self.base_dir = os.path.dirname(config_dir)
         else:
             app_data = os.getenv('APPDATA') or os.path.expanduser("~")
-            self.config_dir = os.path.join(app_data, "CVSU_Generators", "config")
+            self.base_dir = os.path.join(app_data, "CVSU_Generators")
+            self.config_dir = os.path.join(self.base_dir, "config")
 
+        self.custom_templates_dir = os.path.join(self.base_dir, "custom_templates")
+        self.custom_templates_index = os.path.join(self.custom_templates_dir, "templates.json")
         self.config_file = os.path.join(self.config_dir, "parser_settings.json")
         self._cached_config = None
         self._listeners = []
         self.load_config()
+
 
     def register_listener(self, callback):
         """Register a callback function to be called when configuration changes."""
@@ -468,6 +476,128 @@ class ParserConfigManager:
         cfg = self.get_config()
         return cfg.get("schedule_config", DEFAULT_SCHEDULE_CONFIG)
 
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Custom Templates & Deterministic Heuristic Recipes
+    # ═══════════════════════════════════════════════════════════════════════════
+
+    def get_custom_templates_dir(self) -> str:
+        os.makedirs(self.custom_templates_dir, exist_ok=True)
+        return self.custom_templates_dir
+
+    def get_custom_templates(self) -> list:
+        """Returns list of registered custom templates whose files exist."""
+        if not os.path.exists(self.custom_templates_index):
+            return []
+        try:
+            with open(self.custom_templates_index, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, list):
+                valid = []
+                for item in data:
+                    file_path = os.path.join(self.custom_templates_dir, item.get("filename", ""))
+                    if os.path.exists(file_path):
+                        item_copy = dict(item)
+                        item_copy["file_path"] = file_path
+                        valid.append(item_copy)
+                return valid
+        except Exception as e:
+            logger.error(f"Error reading custom templates index {self.custom_templates_index}: {e}")
+        return []
+
+    def save_custom_template(
+        self, source_path: str, title: str, suffix: str, recipe: dict, enabled: bool = True
+    ) -> dict:
+        """Saves a template file and its recipe into the custom templates store."""
+        try:
+            os.makedirs(self.custom_templates_dir, exist_ok=True)
+            suffix_clean = re.sub(r"[^A-Za-z0-9_]", "", suffix.upper().strip()).strip("_") or "CUSTOM_FORM"
+            template_id = suffix_clean.lower()
+            dest_filename = f"{template_id}.docx"
+            dest_path = os.path.join(self.custom_templates_dir, dest_filename)
+
+            # Copy template file
+            shutil.copy2(source_path, dest_path)
+
+            templates = self.get_custom_templates()
+            # Remove any existing entry with the same id
+            templates = [t for t in templates if t.get("id") != template_id]
+
+            entry = {
+                "id": template_id,
+                "title": title.strip() or suffix_clean.replace("_", " ").title(),
+                "suffix": suffix_clean,
+                "filename": dest_filename,
+                "file_path": dest_path,
+                "enabled": enabled,
+                "recipe": recipe,
+                "created_at": datetime.now().isoformat(),
+            }
+            templates.append(entry)
+
+            # Write atomically
+            with tempfile.NamedTemporaryFile("w", dir=self.custom_templates_dir, delete=False, encoding="utf-8") as tf:
+                json.dump(templates, tf, indent=2)
+                temp_name = tf.name
+            os.replace(temp_name, self.custom_templates_index)
+
+            logger.info(f"Saved custom template: {title} ({suffix_clean})")
+            return {"status": "success", "template": entry}
+        except Exception as e:
+            logger.error(f"Failed to save custom template: {e}")
+            return {"status": "error", "message": str(e)}
+
+    def toggle_custom_template(self, template_id: str, enabled: bool) -> dict:
+        """Toggles a custom template on or off."""
+        try:
+            templates = self.get_custom_templates()
+            found = False
+            for t in templates:
+                if t.get("id") == template_id:
+                    t["enabled"] = enabled
+                    found = True
+                    break
+            if not found:
+                return {"status": "error", "message": f"Template {template_id} not found"}
+
+            with tempfile.NamedTemporaryFile("w", dir=self.custom_templates_dir, delete=False, encoding="utf-8") as tf:
+                json.dump(templates, tf, indent=2)
+                temp_name = tf.name
+            os.replace(temp_name, self.custom_templates_index)
+
+            return {"status": "success", "id": template_id, "enabled": enabled}
+        except Exception as e:
+            logger.error(f"Failed to toggle custom template {template_id}: {e}")
+            return {"status": "error", "message": str(e)}
+
+    def delete_custom_template(self, template_id: str) -> dict:
+        """Deletes a custom template and its file."""
+        try:
+            templates = self.get_custom_templates()
+            target = next((t for t in templates if t.get("id") == template_id), None)
+            if not target:
+                return {"status": "error", "message": f"Template {template_id} not found"}
+
+            file_path = os.path.join(self.custom_templates_dir, target.get("filename", ""))
+            if os.path.exists(file_path):
+                try:
+                    os.remove(file_path)
+                except Exception as e:
+                    logger.warning(f"Could not remove custom template file {file_path}: {e}")
+
+            templates = [t for t in templates if t.get("id") != template_id]
+            with tempfile.NamedTemporaryFile("w", dir=self.custom_templates_dir, delete=False, encoding="utf-8") as tf:
+                json.dump(templates, tf, indent=2)
+                temp_name = tf.name
+            os.replace(temp_name, self.custom_templates_index)
+
+            logger.info(f"Deleted custom template: {template_id}")
+            return {"status": "success", "deleted_id": template_id}
+        except Exception as e:
+            logger.error(f"Failed to delete custom template {template_id}: {e}")
+            return {"status": "error", "message": str(e)}
+
 
 # Global singleton instance
 config_manager = ParserConfigManager()
+ConfigManager = ParserConfigManager
+

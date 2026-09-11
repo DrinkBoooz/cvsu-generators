@@ -5,6 +5,7 @@ from .schedule_parser import (
     inspect_schedule_file, _find_class_details_by_schedule_code,
     _find_candidate_classes_from_hints, get_day_name, get_subject_code
 )
+from .template_inspector import TemplateInspector
 
 __all__ = [
     "CEIT_PREFIX_MAP",
@@ -23,4 +24,5 @@ __all__ = [
     "_find_candidate_classes_from_hints",
     "get_day_name",
     "get_subject_code",
+    "TemplateInspector",
 ]

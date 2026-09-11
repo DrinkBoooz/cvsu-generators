@@ -92,7 +92,37 @@ def test_playwright_parser_settings_modal_flow():
         instr_input = page.locator("#cfgDefaultInstructor")
         assert "ORTEGA" in instr_input.input_value()
 
-        # 8. Close Modal
+        # 8. Check Custom Forms Tab
+        page.click("#cfgTabCustomTemplates")
+        custom_pane = page.locator("#cfgPaneCustomTemplates")
+        assert custom_pane.is_visible(), "Custom forms pane must be visible"
+        assert page.locator("#templateDropzone").is_visible(), "Template dropzone must be visible"
+        assert page.locator("#customTemplatesList").is_visible(), "Custom templates list must be visible"
+
+        # Verify inspection card render flow
+        page.evaluate("""() => {
+            renderCustomTemplateInspection({
+                status: 'success',
+                file_path: 'C:/test/sample.docx',
+                recipe: {
+                    title: 'Student Consultation Form',
+                    suffix: 'CONSULTATION_FORM',
+                    confidence: 100,
+                    header_bindings: [{field: 'instructor'}, {field: 'course_section'}],
+                    roster_table: {table_index: 1, total_cols: 3, name_col: 0, id_col: 1}
+                }
+            });
+        }""")
+        result_card = page.locator("#customTemplateResultCard")
+        assert result_card.is_visible(), "Result card must become visible after inspection"
+        assert page.locator("#customFormTitle").input_value() == "Student Consultation Form"
+        assert page.locator("#customFormSuffix").input_value() == "CONSULTATION_FORM"
+
+        # Click Discard
+        page.click("text=Discard")
+        assert result_card.is_hidden(), "Result card must be hidden after discard"
+
+        # 9. Close Modal
         page.click("#btnCloseSettingsModal")
         page.wait_for_timeout(200)
         assert modal.is_hidden(), "Modal must be hidden after clicking close"
