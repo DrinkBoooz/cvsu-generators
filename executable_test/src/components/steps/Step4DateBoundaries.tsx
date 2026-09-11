@@ -1,11 +1,11 @@
 import React from 'react';
-import { CalendarRange, Info } from 'lucide-react';
 
 interface Step4DateBoundariesProps {
   startDate: string;
   endDate: string;
   onStartDateChange: (val: string) => void;
   onEndDateChange: (val: string) => void;
+  semesterAy?: string;
 }
 
 export const Step4DateBoundaries: React.FC<Step4DateBoundariesProps> = ({
@@ -13,53 +13,91 @@ export const Step4DateBoundaries: React.FC<Step4DateBoundariesProps> = ({
   endDate,
   onStartDateChange,
   onEndDateChange,
+  semesterAy,
 }) => {
+  const currentYear = new Date().getFullYear();
+
+  const setPreset = (sem: '1st' | '2nd') => {
+    if (sem === '1st') {
+      onStartDateChange(`${currentYear}-08-15`);
+      onEndDateChange(`${currentYear}-12-20`);
+    } else {
+      onStartDateChange(`${currentYear + 1}-01-15`);
+      onEndDateChange(`${currentYear + 1}-05-30`);
+    }
+  };
+
+  const clearPresets = () => {
+    onStartDateChange('');
+    onEndDateChange('');
+  };
+
   return (
-    <section className="glass-card p-6 mb-6 animate-fade-in" id="cardStep4">
-      <div className="flex items-center space-x-3 mb-4">
-        <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold text-sm">
-          4
+    <section className="glass-card" id="cardStep4">
+      <div className="step-header">
+        <div className="step-number">4</div>
+        <div className="step-header-text">
+          <div className="step-title">(Optional) Set Semester Date Boundaries</div>
+          <div className="step-sub">Standard calendar (Aug–Dec / Jan–May) or custom range</div>
         </div>
-        <div>
-          <h2 className="text-base font-bold text-[var(--text-primary)]">
-            Semester Date Boundaries (Optional)
-          </h2>
-          <p className="text-xs text-[var(--text-muted)]">
-            Restrict attendance sheet meeting columns to specific dates
-          </p>
-        </div>
+        <div className="step-desc">Attendance Calendar</div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">
-            Start Date
-          </label>
-          <input
-            type="date"
-            value={startDate}
-            onChange={(e) => onStartDateChange(e.target.value)}
-            className="w-full px-3.5 py-2 rounded-xl bg-[var(--surface-elevated)] border border-[var(--border-subtle)] text-xs text-[var(--text-primary)] focus:outline-none focus:border-emerald-500 transition-colors"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">
-            End Date
-          </label>
-          <input
-            type="date"
-            value={endDate}
-            onChange={(e) => onEndDateChange(e.target.value)}
-            className="w-full px-3.5 py-2 rounded-xl bg-[var(--surface-elevated)] border border-[var(--border-subtle)] text-xs text-[var(--text-primary)] focus:outline-none focus:border-emerald-500 transition-colors"
-          />
-        </div>
-      </div>
+      <p className="step-instructions">
+        If you want attendance sheets to cover only specific dates of the semester, select a{' '}
+        <strong>Start Date</strong> and <strong>End Date</strong>.<br />
+        <em>
+          If left blank, the app will generate sheets for the standard semester calendar (August–December for 1st Semester; January–May for 2nd Semester).
+        </em>
+      </p>
 
-      <div className="mt-3 flex items-start space-x-2 text-[11px] text-[var(--text-muted)] p-2.5 rounded-lg bg-[var(--surface-subtle)]">
-        <Info className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-        <span>
-          Leave empty to generate for standard university academic calendar (August–December for 1st Semester; January–May for 2nd Semester).
-        </span>
+      <div className="date-boundary-box">
+        <div className="date-inputs-row">
+          <div className="date-input-group">
+            <span>Start:</span>
+            <input
+              type="date"
+              id="startDate"
+              className="date-input"
+              value={startDate}
+              onChange={(e) => onStartDateChange(e.target.value)}
+            />
+          </div>
+          <div className="date-input-group">
+            <span>End:</span>
+            <input
+              type="date"
+              id="endDate"
+              className="date-input"
+              value={endDate}
+              onChange={(e) => onEndDateChange(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="preset-chips segmented-control">
+          <button
+            type="button"
+            className="chip-preset segmented-btn"
+            onClick={() => setPreset('1st')}
+          >
+            1st Sem (Aug-Dec)
+          </button>
+          <button
+            type="button"
+            className="chip-preset segmented-btn"
+            onClick={() => setPreset('2nd')}
+          >
+            2nd Sem (Jan-May)
+          </button>
+          <button
+            type="button"
+            className="chip-preset segmented-btn"
+            onClick={clearPresets}
+          >
+            Reset Dates
+          </button>
+        </div>
       </div>
     </section>
   );

@@ -18,11 +18,19 @@ if ROOT_DIR not in sys.path:
 
 from executable.main import ScriptAPI, setup_window_drag_and_drop
 
+def get_resource_path(relative_path):
+    """Get absolute path to resource, works for dev and for PyInstaller"""
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base_path, relative_path)
+
 def main():
     api = ScriptAPI()
 
     dev_mode = '--dev' in sys.argv
-    dist_html = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dist', 'index.html')
+    dist_html = get_resource_path(os.path.join('dist', 'index.html'))
 
     if dev_mode:
         target_url = 'http://localhost:5173'

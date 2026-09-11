@@ -1,0 +1,38 @@
+# UTF-8
+#
+# Windows PE Version Information for CvSU Gen (Beta)
+# Managed in accordance with AGENTS.md rules
+#
+VSVersionInfo(
+  ffi=FixedFileInfo(
+    filevers=(2, 0, 0, 0),
+    prodvers=(2, 0, 0, 0),
+    mask=0x3f,
+    flags=0x0,
+    OS=0x40004,
+    fileType=0x1,
+    subtype=0x0,
+    date=(0, 0)
+  ),
+  kids=[
+    StringFileInfo(
+      [
+        StringTable(
+          '040904B0',
+          [
+            StringStruct('CompanyName', 'Dan Joseph Ortega'),
+            StringStruct('FileDescription', 'CvSU Grade & Attendance Sheet Generator'),
+            StringStruct('FileVersion', '2.0.0.0'),
+            StringStruct('InternalName', 'CvSU Gen'),
+            StringStruct('LegalCopyright', 'Copyright © 2026 Dan Joseph Ortega. All rights reserved.'),
+            StringStruct('OriginalFilename', 'CvSU Gen (Beta).exe'),
+            StringStruct('ProductName', 'CvSU Document Generator'),
+            StringStruct('ProductVersion', '2.0.0.0'),
+            StringStruct('Comments', 'Academic document automation utility for Cavite State University faculty. Contact: danjoseph.ortega@cvsu.edu.ph')
+          ]
+        )
+      ]
+    ),
+    VarFileInfo([VarStruct('Translation', [1033, 1200])])
+  ]
+)

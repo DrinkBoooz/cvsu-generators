@@ -7,6 +7,7 @@ import { Step3ClassReview } from './components/steps/Step3ClassReview';
 import { Step4DateBoundaries } from './components/steps/Step4DateBoundaries';
 import { Step5OutputFolder } from './components/steps/Step5OutputFolder';
 import { Step6Execution } from './components/steps/Step6Execution';
+import { BottomActionBar } from './components/BottomActionBar';
 import { RosterMappingModal } from './components/modals/RosterMappingModal';
 import { SettingsModal } from './components/modals/SettingsModal';
 import { HelpDrawer } from './components/HelpDrawer';
@@ -322,7 +323,7 @@ export const App: React.FC = () => {
   const canGenerate = Boolean(schedulePath && rosters.length > 0 && outputDir && !isGenerating);
 
   return (
-    <div className="min-h-screen flex flex-col bg-[var(--bg-app)] text-[var(--text-primary)]">
+    <div className="min-h-screen flex flex-col bg-[var(--bg-base)] text-[var(--text-primary)]">
       {/* Top Navigation */}
       <Header
         isDark={isDark}
@@ -331,48 +332,63 @@ export const App: React.FC = () => {
         onOpenHelp={() => setIsHelpOpen(true)}
       />
 
-      {/* Main Workflow Container */}
-      <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-4">
-        <Stepper currentStep={stepperActive} />
+      {/* Stepper Readiness Tracker Bar */}
+      <Stepper
+        hasSchedule={Boolean(schedulePath)}
+        rosterCount={rosters.length}
+        classCount={validations.length}
+        hasOutput={Boolean(outputDir)}
+        isGenerating={isGenerating}
+      />
 
-        {/* Step 1: Schedule Ingestion */}
-        <Step1Schedule
-          schedulePath={schedulePath}
-          metadata={scheduleMetadata}
-          onBrowse={handleBrowseSchedule}
-          onDropFile={handleDropSchedule}
-          onClear={handleClearSchedule}
-        />
+      {/* Main Studio 2-Column Dashboard Grid */}
+      <div className="app-container">
+        <div className="dashboard-grid">
+          {/* LEFT COLUMN: Data Ingestion (Schedule & Rosters) */}
+          <div className="dashboard-col col-ingestion">
+            <Step1Schedule
+              schedulePath={schedulePath}
+              metadata={scheduleMetadata}
+              onBrowse={handleBrowseSchedule}
+              onDropFile={handleDropSchedule}
+              onClear={handleClearSchedule}
+            />
 
-        {/* Step 2: Student Rosters */}
-        <Step2Rosters
-          rosters={rosters}
-          onBrowse={handleBrowseRosters}
-          onDropFiles={handleDropRosters}
-          onRemoveRoster={handleRemoveRoster}
-          onClearAll={handleClearAllRosters}
-        />
+            <Step2Rosters
+              rosters={rosters}
+              onBrowse={handleBrowseRosters}
+              onDropFiles={handleDropRosters}
+              onRemoveRoster={handleRemoveRoster}
+              onClearAll={handleClearAllRosters}
+            />
+          </div>
 
-        {/* Step 3: Class Review & Subject Type Selection */}
-        <Step3ClassReview
-          validations={validations}
-          classConfigs={classConfigs}
-          onToggleLab={handleToggleLab}
-          onOpenMappingModal={() => setIsMappingOpen(true)}
-        />
+          {/* RIGHT COLUMN: Control Deck (Packages, Classes, Dates, Output) */}
+          <div className="dashboard-col col-controls">
+            <Step3ClassReview
+              validations={validations}
+              classConfigs={classConfigs}
+              onToggleLab={handleToggleLab}
+              onOpenMappingModal={() => setIsMappingOpen(true)}
+            />
 
-        {/* Step 4: Semester Date Boundaries */}
-        <Step4DateBoundaries
-          startDate={startDate}
-          endDate={endDate}
-          onStartDateChange={setStartDate}
-          onEndDateChange={setEndDate}
-        />
+            <Step4DateBoundaries
+              startDate={startDate}
+              endDate={endDate}
+              onStartDateChange={setStartDate}
+              onEndDateChange={setEndDate}
+              semesterAy={scheduleMetadata?.semester_ay}
+            />
 
-        {/* Step 5: Target Output Destination */}
-        <Step5OutputFolder outputDir={outputDir} onBrowse={handleBrowseOutputDir} />
+            <Step5OutputFolder
+              outputPath={outputDir}
+              onBrowse={handleBrowseOutputDir}
+              onOpenFolder={() => pywebviewService.openOutputFolder()}
+            />
+          </div>
+        </div>
 
-        {/* Step 6: Execution & Progress Telemetry */}
+        {/* STEP 6: Initialize Workflow & Telemetry Progress */}
         <Step6Execution
           isGenerating={isGenerating}
           progressPercent={progressPercent}
@@ -384,7 +400,20 @@ export const App: React.FC = () => {
           onStart={handleStartGeneration}
           onCancel={handleCancelGeneration}
         />
-      </main>
+      </div>
+
+      {/* Floating Bottom Action Capsule Dock */}
+      <BottomActionBar
+        hasSchedule={Boolean(schedulePath)}
+        rosterCount={rosters.length}
+        hasOutput={Boolean(outputDir)}
+        classCount={validations.length}
+        isGenerating={isGenerating}
+        progressPercent={progressPercent}
+        progressMessage={progressStatus}
+        onGenerate={handleStartGeneration}
+        onCancel={handleCancelGeneration}
+      />
 
       {/* Modals & Overlays */}
       <RosterMappingModal

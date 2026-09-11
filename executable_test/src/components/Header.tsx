@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sun, Moon, Settings, HelpCircle, FileText } from 'lucide-react';
+import { Sun, Moon, Settings, HelpCircle, FileText, Activity } from 'lucide-react';
 
 interface HeaderProps {
   isDark: boolean;
@@ -15,61 +15,78 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenHelp,
 }) => {
   return (
-    <header className="sticky top-0 z-30 backdrop-blur-xl border-b border-[var(--border-subtle)] bg-[var(--surface-card)] transition-colors duration-200">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-        {/* Brand Left */}
-        <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-emerald-400 flex items-center justify-center text-white shadow-md shadow-emerald-500/20">
-            <FileText className="w-5 h-5" />
+    <div className="top-nav-bar">
+      <header className="top-header">
+        <div className="brand-lockup">
+          <div className="brand-icon">
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="16" y1="13" x2="8" y2="13" />
+              <line x1="16" y1="17" x2="8" y2="17" />
+              <polyline points="10 9 9 9 8 9" />
+            </svg>
           </div>
           <div>
-            <div className="flex items-center space-x-2">
-              <h1 className="text-lg font-bold tracking-tight text-[var(--text-primary)]">
-                CvSU Document Generator
-              </h1>
-              <span className="badge-version text-[11px] font-semibold tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                v2.0 Beta
-              </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span className="brand-title">CvSU Gen</span>
+              <span className="badge-version">v2.0 Beta</span>
             </div>
-            <p className="text-xs text-[var(--text-muted)] font-medium">
-              Cavite State University · Academic Forms Engine
-            </p>
+            <div className="brand-subtitle">
+              Cavite State University Document Automation
+            </div>
           </div>
         </div>
 
-        {/* Action Controls Right */}
-        <div className="flex items-center space-x-2">
-          {/* Help Drawer Trigger */}
+        <div className="header-actions">
           <button
-            onClick={onOpenHelp}
-            className="p-2 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] transition-colors"
-            title="Help & Guidelines"
-            id="btnHelpDrawer"
-          >
-            <HelpCircle className="w-5 h-5" />
-          </button>
-
-          {/* Theme Toggle */}
-          <button
+            className="nav-btn"
+            id="btnToggleTheme"
             onClick={onToggleTheme}
-            className="p-2 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] transition-colors"
             title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
-            id="btnThemeToggle"
+            aria-label="Toggle Dark/Light Mode"
           >
-            {isDark ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5" />}
+            <span id="themeIcon" className="theme-icon-container">
+              {isDark ? (
+                <Sun className="w-[15px] h-[15px] text-amber-400" />
+              ) : (
+                <Moon className="w-[15px] h-[15px]" />
+              )}
+            </span>
+            <span id="themeLabel">{isDark ? "Light" : "Dark"}</span>
           </button>
 
-          {/* Settings Modal Trigger */}
           <button
+            className="nav-btn"
+            id="btnOpenSettings"
             onClick={onOpenSettings}
-            className="p-2 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] transition-colors"
-            title="Curriculum & Parser Settings (Ctrl+,)"
-            id="btnSettings"
+            title="Curriculum & Parser Settings"
+            aria-label="Open Curriculum and Parser Configuration"
           >
-            <Settings className="w-5 h-5" />
+            <Settings className="w-[15px] h-[15px]" />
+            Settings
+          </button>
+
+          <button
+            className="nav-btn"
+            id="btnOpenHelp"
+            onClick={onOpenHelp}
+            title="View User Guide & Rules"
+          >
+            <HelpCircle className="w-[15px] h-[15px]" />
+            Guides
           </button>
         </div>
-      </div>
-    </header>
+      </header>
+    </div>
   );
 };

@@ -1,48 +1,71 @@
 import React from 'react';
-import { Folder, FolderOpen, CheckCircle } from 'lucide-react';
+import { Folder, FolderOpen } from 'lucide-react';
 
 interface Step5OutputFolderProps {
-  outputDir: string;
+  outputPath: string;
   onBrowse: () => void;
+  onOpenFolder?: () => void;
 }
 
-export const Step5OutputFolder: React.FC<Step5OutputFolderProps> = ({ outputDir, onBrowse }) => {
+export const Step5OutputFolder: React.FC<Step5OutputFolderProps> = ({
+  outputPath,
+  onBrowse,
+  onOpenFolder,
+}) => {
   return (
-    <section className="glass-card p-6 mb-6 animate-fade-in" id="cardStep5">
-      <div className="flex items-center space-x-3 mb-4">
-        <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold text-sm">
-          5
+    <section className="glass-card" id="cardStep5">
+      <div className="step-header">
+        <div className="step-number">5</div>
+        <div className="step-header-text">
+          <div className="step-title">Choose Target Output Folder</div>
+          <div className="step-sub">Destination directory for compiled document packages</div>
         </div>
-        <div>
-          <h2 className="text-base font-bold text-[var(--text-primary)]">
-            Target Destination Folder
-          </h2>
-          <p className="text-xs text-[var(--text-muted)]">
-            Designate where categorized student forms and grade sheets will be saved
-          </p>
-        </div>
+        <div className="step-desc">Destination Directory</div>
       </div>
 
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-3">
-        <div className="flex-1 flex items-center space-x-3 px-3.5 py-2.5 rounded-xl bg-[var(--surface-elevated)] border border-[var(--border-subtle)] overflow-hidden">
-          <Folder className="w-4 h-4 text-emerald-500 shrink-0" />
-          <span
-            className="text-xs font-mono text-[var(--text-primary)] truncate"
-            title={outputDir || 'No destination selected'}
-          >
-            {outputDir || 'Please select an output folder...'}
-          </span>
-        </div>
+      <p className="step-instructions">
+        Click <strong>"Browse Path"</strong> and select any destination folder on your computer where the files should be saved.
+      </p>
 
-        <button
-          onClick={onBrowse}
-          className="flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl bg-[var(--surface-subtle)] border border-[var(--border-subtle)] hover:border-emerald-500/50 text-xs font-semibold text-[var(--text-primary)] transition-colors shrink-0"
-          id="btnBrowseOutput"
-        >
-          <FolderOpen className="w-4 h-4 text-emerald-500" />
-          <span>Browse Path</span>
+      <div className="input-with-action" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+        <input
+          type="text"
+          id="outputDisplay"
+          className="text-input selectable"
+          style={{ flex: 1 }}
+          placeholder="Select destination folder for generated files..."
+          value={outputPath}
+          readOnly
+        />
+        <button className="btn-browse" type="button" onClick={onBrowse}>
+          Browse Path
         </button>
+        {outputPath && onOpenFolder && (
+          <button
+            className="nav-btn"
+            id="btnOpenOutput"
+            type="button"
+            onClick={onOpenFolder}
+            title="Open Target Folder"
+          >
+            Open Folder
+          </button>
+        )}
       </div>
+
+      {outputPath && (
+        <div
+          id="outputPathStatus"
+          style={{
+            fontSize: '12px',
+            marginTop: '6px',
+            fontWeight: 600,
+            color: 'var(--accent-emerald)',
+          }}
+        >
+          ✓ Ready to generate files in: {outputPath}
+        </div>
+      )}
     </section>
   );
 };

@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { Users, UploadCloud, FileText, X, Trash2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { FileText, Trash2, X } from 'lucide-react';
 
 interface Step2RostersProps {
   rosters: string[];
@@ -17,7 +17,7 @@ export const Step2Rosters: React.FC<Step2RostersProps> = ({
   onClearAll,
 }) => {
   const [isDragOver, setIsDragOver] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [stripExtraCols, setStripExtraCols] = useState(true);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -38,102 +38,146 @@ export const Step2Rosters: React.FC<Step2RostersProps> = ({
   };
 
   return (
-    <section className="glass-card p-6 mb-6 animate-fade-in" id="cardStep2">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold text-sm">
-            2
-          </div>
-          <div>
-            <h2 className="text-base font-bold text-[var(--text-primary)]">
-              Student Class Rosters
-            </h2>
-            <p className="text-xs text-[var(--text-muted)]">
-              Select or drop class student lists from registrar.cvsu.edu.ph
-            </p>
+    <section className="glass-card" id="cardStep2">
+      <div className="step-header">
+        <div className="step-number">2</div>
+        <div className="step-header-text">
+          <div className="step-title">Select Student Rosters (.xlsx, .xls, or .csv)</div>
+          <div className="step-sub">
+            Class student rosters from{' '}
+            <a
+              href="https://registrar.cvsu.edu.ph/"
+              target="_blank"
+              rel="noreferrer"
+              className="text-link"
+              style={{ color: 'var(--accent-emerald)' }}
+            >
+              registrar.cvsu.edu.ph
+            </a>
           </div>
         </div>
-
-        {rosters.length > 0 && (
-          <div className="flex items-center space-x-2">
-            <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full">
-              {rosters.length} Roster{rosters.length > 1 ? 's' : ''} Loaded
-            </span>
-            <button
-              onClick={onClearAll}
-              className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-red-500 hover:bg-red-500/10 transition-colors"
-              title="Clear All Rosters"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          </div>
-        )}
+        <div className="step-desc">Class Lists</div>
       </div>
 
-      {/* Multi-file Dropzone */}
+      {/* Auto-Strip Extra Columns Toggle */}
+      <div className="setting-toggle-row" style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
+        <label className="toggle-switch">
+          <input
+            type="checkbox"
+            id="toggleStripExtraCols"
+            checked={stripExtraCols}
+            onChange={(e) => setStripExtraCols(e.target.checked)}
+          />
+          <span className="toggle-slider" />
+        </label>
+        <div className="toggle-label-text">
+          <strong>Auto-strip extra portal columns</strong>
+          <div className="toggle-sub" style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+            Detects and drops unneeded columns exported by the portal
+          </div>
+        </div>
+      </div>
+
+      {/* Rosters Dropzone */}
       <div
+        id="rosterDropzone"
+        className={`dropzone ${isDragOver ? 'drag-active' : ''}`}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         onClick={onBrowse}
-        className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all duration-200 ${
-          isDragOver
-            ? 'border-emerald-500 bg-emerald-500/5 scale-[1.01]'
-            : 'border-[var(--border-subtle)] hover:border-emerald-500/50 hover:bg-[var(--surface-subtle)]'
-        }`}
       >
-        <div className="w-10 h-10 mx-auto mb-2 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-          <UploadCloud className="w-5 h-5" />
+        <svg
+          className="dropzone-icon"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+          <line x1="12" y1="11" x2="12" y2="17" />
+          <line x1="9" y1="14" x2="15" y2="14" />
+        </svg>
+
+        <div className="dropzone-title">Student Roster Spreadsheets</div>
+        <div id="rosterPrompt" className="dropzone-hint">
+          {rosters.length > 0
+            ? `${rosters.length} roster file${rosters.length !== 1 ? 's' : ''} loaded`
+            : 'Click "Browse Roster Files" or drop enrollment sheets'}
         </div>
-        <p className="text-sm font-semibold text-[var(--text-primary)]">
-          Drop multiple student lists here, or{' '}
-          <span className="text-emerald-600 dark:text-emerald-400 underline">Browse Data</span>
-        </p>
-        <p className="text-xs text-[var(--text-muted)] mt-1">
-          Supports .xlsx, .xls, and .csv lists. Multiple selection enabled.
-        </p>
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          accept=".xlsx,.xls,.csv"
-          className="hidden"
-          onChange={(e) => e.target.files && onDropFiles(e.target.files)}
-        />
+
+        <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
+          <button
+            className="btn-browse"
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onBrowse();
+            }}
+          >
+            Browse Roster Files
+          </button>
+
+          {rosters.length > 0 && (
+            <button
+              className="nav-btn"
+              id="btnClearRosters"
+              type="button"
+              style={{ padding: '4px 10px', fontSize: '11px' }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onClearAll();
+              }}
+            >
+              Clear Rosters
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Roster Chips List */}
+      {/* Roster Pre-flight List */}
       {rosters.length > 0 && (
-        <div className="mt-4 pt-4 border-t border-[var(--border-subtle)]">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)] block mb-2">
-            Selected Class Rosters
-          </span>
-          <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto p-1">
-            {rosters.map((rosterPath, idx) => {
-              const name = rosterPath.split(/[\/\\]/).pop() || rosterPath;
-              return (
-                <div
-                  key={idx}
-                  className="flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-[var(--surface-elevated)] border border-[var(--border-subtle)] text-xs font-medium text-[var(--text-primary)] group hover:border-emerald-500/40 transition-colors"
-                >
-                  <FileText className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                  <span className="truncate max-w-[220px]" title={rosterPath}>
-                    {name}
-                  </span>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onRemoveRoster(idx);
-                    }}
-                    className="p-0.5 rounded text-[var(--text-muted)] hover:text-red-500 transition-colors"
-                    title="Remove file"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
+        <div id="rosterListBox" className="roster-list-box" style={{ marginTop: '14px' }}>
+          {rosters.map((rosterPath, idx) => {
+            const name = rosterPath.split(/[/\\]/).pop() || rosterPath;
+            return (
+              <div key={idx} className="roster-row">
+                <div className="roster-row-main">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                    <FileText className="w-4 h-4 text-emerald-500 shrink-0" />
+                    <span className="roster-name selectable truncate" title={rosterPath}>
+                      {name}
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                    <button
+                      type="button"
+                      className="btn-remove-roster"
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: 'var(--text-muted)',
+                        cursor: 'pointer',
+                        padding: '2px 4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRemoveRoster(idx);
+                      }}
+                      title="Remove roster"
+                    >
+                      <X className="w-3.5 h-3.5 hover:text-red-500" />
+                    </button>
+                  </div>
                 </div>
-              );
-            })}
-          </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </section>

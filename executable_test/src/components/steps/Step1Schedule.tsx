@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { Calendar, UploadCloud, FileSpreadsheet, CheckCircle, X } from 'lucide-react';
+import React, { useState } from 'react';
+import { Calendar, FileSpreadsheet, ChevronDown, Check } from 'lucide-react';
 import { ScheduleMetadata } from '../../types/api';
 
 interface Step1ScheduleProps {
@@ -18,7 +18,6 @@ export const Step1Schedule: React.FC<Step1ScheduleProps> = ({
   onClear,
 }) => {
   const [isDragOver, setIsDragOver] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -38,115 +37,155 @@ export const Step1Schedule: React.FC<Step1ScheduleProps> = ({
     }
   };
 
-  const fileName = schedulePath ? schedulePath.split(/[\/\\]/).pop() : '';
+  const fileName = schedulePath ? schedulePath.split(/[/\\]/).pop() : '';
+  const fileExt = fileName ? (fileName.split('.').pop() || 'XLS').toUpperCase() : 'XLS';
+
+  // Compute initials
+  const initials = metadata?.instructor
+    ? metadata.instructor
+        .split(' ')
+        .filter(Boolean)
+        .map(w => w[0])
+        .slice(0, 2)
+        .join('')
+        .toUpperCase()
+    : 'DO';
 
   return (
-    <section className="glass-card p-6 mb-6 animate-fade-in" id="cardStep1">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold text-sm">
-            1
-          </div>
-          <div>
-            <h2 className="text-base font-bold text-[var(--text-primary)]">
-              Instructor Master Schedule
-            </h2>
-            <p className="text-xs text-[var(--text-muted)]">
-              Ingest your raw timetable spreadsheet (.xls or .xlsx)
-            </p>
-          </div>
+    <section className="glass-card" id="cardStep1">
+      <div className="step-header">
+        <div className="step-number">1</div>
+        <div className="step-header-text">
+          <div className="step-title">Select Instructor Schedule (.xls or .xlsx)</div>
+          <div className="step-sub">Official master schedule spreadsheet from the faculty portal</div>
+        </div>
+        <div className="step-desc">Master Schedule</div>
+      </div>
+
+      {/* Schedule Dropzone */}
+      <div
+        id="scheduleDropzone"
+        className={`dropzone ${isDragOver ? 'drag-active' : ''}`}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        onClick={onBrowse}
+      >
+        <svg
+          className="dropzone-icon"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+          <line x1="16" y1="2" x2="16" y2="6" />
+          <line x1="8" y1="2" x2="8" y2="6" />
+          <line x1="3" y1="10" x2="21" y2="10" />
+        </svg>
+
+        <div className="dropzone-title">
+          Instructor Schedule Spreadsheet
+          {schedulePath && (
+            <span id="scheduleFormatBadge" className="badge-version" style={{ marginLeft: '6px' }}>
+              .{fileExt}
+            </span>
+          )}
+        </div>
+
+        <div id="schedulePrompt" className="dropzone-hint">
+          {schedulePath ? fileName : 'Click "Browse File" or drop master schedule (.xls / .xlsx)'}
+        </div>
+
+        <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
+          <button
+            className="btn-browse"
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onBrowse();
+            }}
+          >
+            Browse File
+          </button>
+
+          {schedulePath && (
+            <button
+              className="nav-btn"
+              id="btnResetSchedule"
+              type="button"
+              style={{ padding: '4px 10px', fontSize: '11px' }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onClear();
+              }}
+            >
+              Reset File
+            </button>
+          )}
         </div>
 
         {schedulePath && (
-          <button
-            onClick={onClear}
-            className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-red-500 hover:bg-red-500/10 transition-colors"
-            title="Clear Schedule"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div id="scheduleFilename" className="dropzone-status selectable" style={{ marginTop: '8px' }}>
+            {schedulePath}
+          </div>
         )}
       </div>
 
-      {/* Dropzone / Loaded State */}
-      {!schedulePath ? (
-        <div
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          onClick={onBrowse}
-          className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all duration-200 ${
-            isDragOver
-              ? 'border-emerald-500 bg-emerald-500/5 scale-[1.01]'
-              : 'border-[var(--border-subtle)] hover:border-emerald-500/50 hover:bg-[var(--surface-subtle)]'
-          }`}
-        >
-          <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-            <UploadCloud className="w-6 h-6" />
-          </div>
-          <p className="text-sm font-semibold text-[var(--text-primary)]">
-            Drop master schedule here, or{' '}
-            <span className="text-emerald-600 dark:text-emerald-400 underline">Browse File</span>
+      {/* Progressive Disclosure Details */}
+      <details className="step-disclosure" id="disclosureStep1" style={{ marginTop: '12px' }}>
+        <summary className="disclosure-summary">
+          <svg
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="16" x2="12" y2="12" />
+            <line x1="12" y1="8" x2="12.01" y2="8" />
+          </svg>
+          <span>Schedule Instructions &amp; Async Filtering Notes</span>
+          <ChevronDown className="chevron-icon" width="12" height="12" />
+        </summary>
+        <div className="disclosure-content">
+          <p className="step-instructions">
+            Download your official schedule spreadsheet from the faculty portal. Click <strong>"Browse File"</strong> below to select your master schedule. The generator automatically extracts your instructor name, college header, semester, academic year, class times, days, and rooms.<br />
+            <em>Note: Schedule blocks labeled as Async or Asynch are automatically filtered out so only in-person sessions receive attendance columns.</em>
           </p>
-          <p className="text-xs text-[var(--text-muted)] mt-1">
-            Supports official CvSU portal format (.xls, .xlsx)
-          </p>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".xls,.xlsx"
-            className="hidden"
-            onChange={(e) => e.target.files?.[0] && onDropFile(e.target.files[0])}
-          />
         </div>
-      ) : (
-        <div className="space-y-4">
-          {/* File Selected Badge */}
-          <div className="flex items-center justify-between p-3.5 rounded-xl bg-[var(--surface-subtle)] border border-[var(--border-subtle)]">
-            <div className="flex items-center space-x-3 overflow-hidden">
-              <FileSpreadsheet className="w-5 h-5 text-emerald-500 shrink-0" />
-              <div className="truncate">
-                <p className="text-sm font-semibold text-[var(--text-primary)] truncate">
-                  {fileName}
-                </p>
-                <p className="text-[11px] text-[var(--text-muted)] truncate">{schedulePath}</p>
+      </details>
+
+      {/* Instructor Profile Instant Banner */}
+      {metadata && (
+        <div id="instructorBanner" className="instructor-banner" style={{ marginTop: '16px' }}>
+          <div className="instructor-info">
+            <div id="instructorInitials" className="instructor-avatar">
+              {initials}
+            </div>
+            <div>
+              <div id="instructorName" className="instructor-name selectable">
+                {metadata.instructor || 'Faculty Instructor'}
+              </div>
+              <div id="instructorCollege" className="instructor-meta selectable">
+                College of Engineering and Information Technology
               </div>
             </div>
-            <span className="shrink-0 flex items-center space-x-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full">
-              <CheckCircle className="w-3.5 h-3.5" />
-              <span>Loaded</span>
+          </div>
+          <div className="instructor-pills">
+            <span id="instructorSemPill" className="meta-pill">
+              {metadata.semester_ay || '1st Semester AY 2026-2027'}
+            </span>
+            <span id="instructorSlotsPill" className="meta-pill">
+              {metadata.classes?.length || 0} Class Blocks
             </span>
           </div>
-
-          {/* Extracted Metadata Grid */}
-          {metadata && (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="p-3 rounded-xl bg-[var(--surface-elevated)] border border-[var(--border-subtle)]">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] block">
-                  Instructor
-                </span>
-                <span className="text-xs font-semibold text-[var(--text-primary)] truncate block mt-0.5">
-                  {metadata.instructor || 'Unknown'}
-                </span>
-              </div>
-              <div className="p-3 rounded-xl bg-[var(--surface-elevated)] border border-[var(--border-subtle)]">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] block">
-                  Semester & AY
-                </span>
-                <span className="text-xs font-semibold text-[var(--text-primary)] truncate block mt-0.5">
-                  {metadata.semester_ay || 'Unknown'}
-                </span>
-              </div>
-              <div className="p-3 rounded-xl bg-[var(--surface-elevated)] border border-[var(--border-subtle)]">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] block">
-                  Detected Classes
-                </span>
-                <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 truncate block mt-0.5">
-                  {metadata.classes?.length || 0} Assigned Sections
-                </span>
-              </div>
-            </div>
-          )}
         </div>
       )}
     </section>

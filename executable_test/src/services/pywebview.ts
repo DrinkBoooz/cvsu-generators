@@ -165,6 +165,14 @@ export const pywebviewService = {
     return { path: mockOutputDir };
   },
 
+  async openOutputFolder() {
+    if (isDesktop() && (window.pywebview!.api as any).open_output_folder) {
+      return (window.pywebview!.api as any).open_output_folder();
+    }
+    console.log('[Mock] Opening output folder:', mockOutputDir);
+    return { status: 'success' };
+  },
+
   async validateRosters(rosterConfigs?: RosterConfigMap) {
     if (isDesktop()) {
       return window.pywebview!.api.validate_rosters(rosterConfigs);
