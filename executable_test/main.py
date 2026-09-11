@@ -1,59 +1,50 @@
-#!/usr/bin/env python3
 """
-executable_test/main.py
-
-PyWebView desktop launcher for the React + TypeScript frontend in executable_test/.
-Can load either the production compiled build (dist/index.html) or the Vite development
-server (http://localhost:5173 when passing --dev).
+CvSU Document Automation Suite — Desktop Executable Entrypoint.
+Initializes the pywebview desktop container with the modular ScriptAPI and native OLE Drag-and-Drop.
 """
 
 import os
 import sys
+
+# Ensure repository root and package directory are on sys.path
+CURR_DIR = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.dirname(CURR_DIR)
+
+for p in (CURR_DIR, REPO_ROOT):
+    if p not in sys.path:
+        sys.path.insert(0, p)
+
 import webview
 
-# Add project root to sys.path
-ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if ROOT_DIR not in sys.path:
-    sys.path.insert(0, ROOT_DIR)
+try:
+    from .api import ScriptAPI, get_resource_path
+    from .native import setup_window_drag_and_drop
+except (ImportError, ValueError):
+    from api import ScriptAPI, get_resource_path
+    from native import setup_window_drag_and_drop
 
-from executable.main import ScriptAPI, setup_window_drag_and_drop
-
-def get_resource_path(relative_path):
-    """Get absolute path to resource, works for dev and for PyInstaller"""
-    try:
-        base_path = sys._MEIPASS
-    except Exception:
-        base_path = os.path.dirname(os.path.abspath(__file__))
-    return os.path.join(base_path, relative_path)
-
-def main():
+def create_app():
+    """Initializes ScriptAPI and creates the pywebview main application window."""
     api = ScriptAPI()
-
-    dev_mode = '--dev' in sys.argv
-    dist_html = get_resource_path(os.path.join('dist', 'index.html'))
-
-    if dev_mode:
-        target_url = 'http://localhost:5173'
-        print(f"Launching executable_test in DEV mode ({target_url})...")
-    else:
-        if not os.path.exists(dist_html):
-            print(f"Error: {dist_html} not found. Please run 'npm run build' inside executable_test first.")
-            sys.exit(1)
-        target_url = dist_html
-        print(f"Launching executable_test in PRODUCTION mode ({target_url})...")
+    html_template = get_resource_path('ui.html')
 
     window = webview.create_window(
-        title='CvSU Gen (React + TypeScript Beta)',
-        url=target_url,
+        title='CvSU Gen (Beta)',
+        url=html_template,
         js_api=api,
         width=1120,
         height=780,
         min_size=(880, 640),
-        text_select=True,
+        text_select=True
     )
     api._window = window
 
-    webview.start(setup_window_drag_and_drop, (window, api))
+    def on_window_closing():
+        api.cancel_generation()
+
+    window.events.closing += on_window_closing
+    return window, api
 
 if __name__ == '__main__':
-    main()
+    app_window, app_api = create_app()
+    webview.start(setup_window_drag_and_drop, (app_window, app_api))

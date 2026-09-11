@@ -1,13 +1,13 @@
 import os
 import inspect
 import pytest
-from executable.main import ScriptAPI
+from executable_test.api import ScriptAPI
 
 WORKSPACE_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TEST_EXEC_DIR = os.path.join(WORKSPACE_ROOT, "executable_test")
 
 def test_script_api_signatures_match_pywebview_calls():
-    """Ensure Python ScriptAPI methods match TypeScript pywebviewService calls without argument mismatch."""
+    """Ensure Python ScriptAPI methods match pywebview client calls without argument mismatch."""
     api = ScriptAPI()
 
     # browse_schedule takes 0 arguments (besides self)
@@ -34,34 +34,36 @@ def test_script_api_signatures_match_pywebview_calls():
         assert p in sig_gen.parameters
 
 def test_dropzone_dom_element_ids_parity():
-    """Verify React components define the exact IDs expected by main.py's native OLE bridge."""
-    step1_file = os.path.join(TEST_EXEC_DIR, "src", "components", "steps", "Step1Schedule.tsx")
-    step2_file = os.path.join(TEST_EXEC_DIR, "src", "components", "steps", "Step2Rosters.tsx")
+    """Verify ui.html defines the exact IDs expected by main.py's native OLE bridge."""
+    ui_html_file = os.path.join(TEST_EXEC_DIR, "ui.html")
+    assert os.path.exists(ui_html_file), "executable_test/ui.html must exist"
 
-    with open(step1_file, "r", encoding="utf-8") as f:
-        step1_code = f.read()
-    assert 'id="scheduleDropzone"' in step1_code, "Step 1 must have id='scheduleDropzone'"
+    with open(ui_html_file, "r", encoding="utf-8") as f:
+        ui_code = f.read()
 
-    with open(step2_file, "r", encoding="utf-8") as f:
-        step2_code = f.read()
-    assert 'id="rostersDropzone"' in step2_code, "Step 2 must have id='rostersDropzone' matching python dom query"
+    assert 'id="scheduleDropzone"' in ui_code, "ui.html must have id='scheduleDropzone'"
+    assert 'id="rostersDropzone"' in ui_code, "ui.html must have id='rostersDropzone'"
+    assert 'id="templateDropzone"' in ui_code, "ui.html must have id='templateDropzone'"
 
-def test_app_tsx_registers_global_window_callbacks():
-    """Verify App.tsx registers onScheduleLoaded, onRostersLoaded, and telemetry callbacks."""
-    app_tsx = os.path.join(TEST_EXEC_DIR, "src", "App.tsx")
-    with open(app_tsx, "r", encoding="utf-8") as f:
-        app_code = f.read()
+def test_js_bridge_registers_global_window_callbacks():
+    """Verify bridge.js registers onScheduleLoaded, onRostersLoaded, and telemetry callbacks."""
+    bridge_js = os.path.join(TEST_EXEC_DIR, "js", "bridge.js")
+    assert os.path.exists(bridge_js), "executable_test/js/bridge.js must exist"
 
-    assert "window.onScheduleLoaded" in app_code, "Must register window.onScheduleLoaded"
-    assert "window.onRostersLoaded" in app_code, "Must register window.onRostersLoaded"
-    assert "window.onGenerationProgress" in app_code, "Must register window.onGenerationProgress"
-    assert "window.onGenerationComplete" in app_code, "Must register window.onGenerationComplete"
-    assert "window.onGenerationError" in app_code, "Must register window.onGenerationError"
+    with open(bridge_js, "r", encoding="utf-8") as f:
+        js_code = f.read()
+
+    assert "window.onScheduleLoaded" in js_code, "Must register window.onScheduleLoaded"
+    assert "window.onRostersLoaded" in js_code, "Must register window.onRostersLoaded"
+    assert "window.onGenerationProgress" in js_code, "Must register window.onGenerationProgress"
+    assert "window.onGenerationComplete" in js_code, "Must register window.onGenerationComplete"
+    assert "window.onGenerationError" in js_code, "Must register window.onGenerationError"
+    assert "window.renderCustomTemplateInspection" in js_code, "Must register window.renderCustomTemplateInspection"
 
 def test_apple_hig_design_system_tokens_coverage():
-    """Verify tokens.css defines all required Apple HIG scales and semantic roles."""
-    tokens_file = os.path.join(TEST_EXEC_DIR, "src", "design-system", "tokens.css")
-    assert os.path.exists(tokens_file), "design-system/tokens.css must exist"
+    """Verify css/tokens.css defines all required Apple HIG scales and semantic roles."""
+    tokens_file = os.path.join(TEST_EXEC_DIR, "css", "tokens.css")
+    assert os.path.exists(tokens_file), "executable_test/css/tokens.css must exist"
 
     with open(tokens_file, "r", encoding="utf-8") as f:
         tokens_css = f.read()
