@@ -22,15 +22,19 @@ if exist dist_bin rmdir /S /Q dist_bin
 
 echo.
 echo Step 4: Initiating PyInstaller Compilation Sandbox...
-python -m PyInstaller --noconfirm --clean --workpath "%TEMP%\cvsu_test_build" --distpath "dist_bin" "CvSU Gen (Beta).spec"
+python -m PyInstaller --noconfirm --clean --workpath "%TEMP%\cvsu_test_build" --distpath "%TEMP%\cvsu_test_dist" "CvSU Gen (Beta).spec"
 
 echo.
-echo Step 5: Initiating Digital Code Signing (Authenticode)...
+echo Step 5: Copying compiled executable to dist...
+copy /Y "%TEMP%\cvsu_test_dist\CvSU Gen (Beta).exe" "dist\CvSU Gen (Beta).exe"
+
+echo.
+echo Step 6: Initiating Digital Code Signing (Authenticode)...
 if exist sign_exe.ps1 (
     powershell -ExecutionPolicy Bypass -File "sign_exe.ps1"
 )
 
 echo ========================================================
-echo Done! Check the /dist_bin folder for CvSU Gen (Beta).exe
+echo Done! Check the /dist folder for CvSU Gen (Beta).exe
 echo ========================================================
 if "%1" neq "--nopause" pause
