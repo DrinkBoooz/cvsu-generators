@@ -250,6 +250,13 @@
       .glass-card:hover {
         border-color: rgba(16, 185, 129, 0.22);
       }
+      .glass-card.card-spotlight {
+        border-color: var(--accent-emerald) !important;
+        box-shadow:
+          var(--shadow-card),
+          0 0 0 2px var(--accent-emerald-glow),
+          0 8px 24px rgba(16, 185, 129, 0.16) !important;
+      }
 
       /* ── Modern Studio 2-Column Dashboard Grid ─────────────────────────── */
       .dashboard-grid {
@@ -1335,9 +1342,16 @@
         color: var(--text-primary);
       }
       .step-chip.active-step {
-        border-color: var(--accent-emerald);
+        border-color: var(--border-strong);
         background: var(--surface-card);
         color: var(--text-primary);
+        box-shadow:
+          0 0 0 1px var(--border-strong),
+          0 2px 8px rgba(0, 0, 0, 0.22);
+      }
+      .step-chip.ready.active-step {
+        border-color: var(--accent-emerald);
+        background: rgba(16, 185, 129, 0.12);
         box-shadow:
           0 0 0 1.5px var(--accent-emerald),
           0 2px 8px var(--accent-emerald-glow);
@@ -1355,8 +1369,12 @@
         font-weight: 700;
         transition: background-color 0.2s ease, color 0.2s ease;
       }
-      .step-chip.ready .chip-num,
       .step-chip.active-step .chip-num {
+        background: var(--surface-hover);
+        color: var(--text-primary);
+      }
+      .step-chip.ready .chip-num,
+      .step-chip.ready.active-step .chip-num {
         background: var(--accent-emerald);
         color: white;
       }
@@ -4702,11 +4720,50 @@
       }
 
       // ── Stepper Readiness Tracker ─────────────────────────────────────────
+      const STEP_CARD_IDS = [
+        "cardStep1",
+        "cardStep2",
+        "cardStep3",
+        "cardStep4",
+        "cardStep5",
+        "cardStep6",
+      ];
+      const STEP_CHIP_IDS = [
+        "chipStep1",
+        "chipStep2",
+        "chipStep3",
+        "chipStep4",
+        "chipStep5",
+        "chipStep6",
+      ];
+
+      function setActiveStepChip(stepIndex) {
+        STEP_CHIP_IDS.forEach((cid, cIdx) => {
+          const chip = document.getElementById(cid);
+          if (chip) chip.classList.toggle("active-step", cIdx === stepIndex);
+        });
+      }
+
       function scrollToStep(cardId) {
         const el = document.getElementById(cardId);
-        if (el) {
-          el.scrollIntoView({ behavior: "smooth", block: "start" });
+        if (!el) return;
+
+        const idx = STEP_CARD_IDS.indexOf(cardId);
+        if (idx !== -1) {
+          setActiveStepChip(idx);
+          window._scrollSpyLockedUntil = Date.now() + 650;
         }
+
+        // Spotlight highlight on target card
+        document
+          .querySelectorAll(".glass-card.card-spotlight")
+          .forEach((c) => {
+            c.classList.remove("card-spotlight");
+          });
+        el.classList.add("card-spotlight");
+        setTimeout(() => el.classList.remove("card-spotlight"), 1400);
+
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
       }
 
       // ── Scroll-Aware Floating Bottom Action Bar ───────────────────────────
@@ -4906,51 +4963,93 @@
       }
 
       function initStepperScrollSpy() {
-        const stepIds = [
-          "cardStep1",
-          "cardStep2",
-          "cardStep3",
-          "cardStep4",
-          "cardStep5",
-          "cardStep6",
-        ];
-        const chipIds = [
-          "chipStep1",
-          "chipStep2",
-          "chipStep3",
-          "chipStep4",
-          "chipStep5",
-          "chipStep6",
-        ];
+        let isTicking = false;
 
-        if ("IntersectionObserver" in window) {
-          const observer = new IntersectionObserver(
-            (entries) => {
-              entries.forEach((entry) => {
-                if (entry.isIntersecting) {
-                  const idx = stepIds.indexOf(entry.target.id);
-                  if (idx !== -1) {
-                    chipIds.forEach((cid, cIdx) => {
-                      const chip = document.getElementById(cid);
-                      if (chip)
-                        chip.classList.toggle("active-step", cIdx === idx);
-                    });
-                  }
-                }
+        const computeActiveStep = () => {
+          if (
+            window._scrollSpyLockedUntil &&
+            Date.now() < window._scrollSpyLockedUntil
+          ) {
+            return;
+          }
+
+          const scrollY = window.scrollY || window.pageYOffset || 0;
+          const windowHeight = window.innerHeight || 800;
+          const docHeight =
+            document.documentElement.scrollHeight || document.body.scrollHeight;
+
+          // If at the very top of the page, Step 1 is the primary step
+          if (scrollY < 60) {
+            setActiveStepChip(0);
+            return;
+          }
+
+          // If near the very bottom of the page, Step 6 (Execution Deck) is active
+          if (scrollY + windowHeight >= docHeight - 80) {
+            setActiveStepChip(5);
+            return;
+          }
+
+          // 2-Column Dashboard Focal Line: 120px from top (immediately below 95px sticky header)
+          const focalY = 120;
+          let bestIdx = -1;
+          let minDistance = Infinity;
+
+          for (let i = 0; i < STEP_CARD_IDS.length; i++) {
+            const card = document.getElementById(STEP_CARD_IDS[i]);
+            if (!card) continue;
+            const rect = card.getBoundingClientRect();
+
+            // Completely off-screen
+            if (rect.bottom <= 90 || rect.top >= windowHeight - 40) continue;
+
+            let dist = Infinity;
+            if (rect.top >= 80) {
+              // Card top is below header: measure distance from reading focal line
+              dist = Math.abs(rect.top - focalY);
+            } else if (rect.bottom > focalY) {
+              // Card spans across the focal line: prioritize active reading card
+              dist = (focalY - rect.top) * 1.3;
+            }
+
+            if (dist < minDistance) {
+              minDistance = dist;
+              bestIdx = i;
+            }
+          }
+
+          if (bestIdx !== -1) {
+            setActiveStepChip(bestIdx);
+          }
+        };
+
+        window.addEventListener(
+          "scroll",
+          () => {
+            if (!isTicking) {
+              window.requestAnimationFrame(() => {
+                computeActiveStep();
+                isTicking = false;
               });
-            },
-            {
-              root: null,
-              threshold: 0.2,
-              rootMargin: "-95px 0px -40% 0px",
-            },
-          );
+              isTicking = true;
+            }
+          },
+          { passive: true }
+        );
 
-          stepIds.forEach((id) => {
-            const el = document.getElementById(id);
-            if (el) observer.observe(el);
-          });
-        }
+        // Track delegated clicks on cards to immediately activate the clicked step
+        document.addEventListener("click", (e) => {
+          const card = e.target.closest(".glass-card");
+          if (card && card.id && card.id.startsWith("cardStep")) {
+            const idx = STEP_CARD_IDS.indexOf(card.id);
+            if (idx !== -1) {
+              setActiveStepChip(idx);
+            }
+          }
+        });
+
+        // Initial computation
+        computeActiveStep();
       }
 
       // ── Callbacks Invoked from Python (Bridge / Native DnD) ────────────────
