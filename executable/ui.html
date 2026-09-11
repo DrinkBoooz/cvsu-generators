@@ -1157,6 +1157,7 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
+        flex-shrink: 0;
       }
       .drawer-title {
         font-size: 18px;
@@ -1285,7 +1286,7 @@
       .stepper-bar {
         border-top: 1px solid var(--border-subtle);
         background: var(--header-bg);
-        padding: 6px 28px;
+        padding: 2px 28px;
       }
       .stepper-track {
         max-width: 1400px;
@@ -1294,7 +1295,9 @@
         align-items: center;
         justify-content: space-between;
         gap: 6px;
+        padding: 8px 6px;
         overflow-x: auto;
+        overflow-y: hidden;
         scrollbar-width: none;
         -webkit-overflow-scrolling: touch;
       }
@@ -1308,19 +1311,23 @@
         background: var(--surface-subtle);
         border: 1px solid var(--border-subtle);
         border-radius: var(--radius-pill);
-        padding: 4px 11px;
+        padding: 5px 12px;
         font-size: 11.5px;
         font-weight: 600;
         color: var(--text-secondary);
         cursor: pointer;
         transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
         white-space: nowrap;
+        outline: none;
       }
       .step-chip:hover {
         background: var(--surface-card);
         color: var(--text-primary);
         border-color: var(--accent-emerald);
         transform: translateY(-1px);
+      }
+      .step-chip:active {
+        transform: translateY(0);
       }
       .step-chip.ready {
         border-color: rgba(16, 185, 129, 0.4);
@@ -1331,7 +1338,9 @@
         border-color: var(--accent-emerald);
         background: var(--surface-card);
         color: var(--text-primary);
-        box-shadow: 0 0 0 2px var(--accent-emerald-glow);
+        box-shadow:
+          0 0 0 1.5px var(--accent-emerald),
+          0 2px 8px var(--accent-emerald-glow);
       }
       .chip-num {
         width: 17px;
@@ -1868,26 +1877,36 @@
         display: flex;
         gap: 6px;
         border-bottom: 1px solid var(--border-subtle);
-        padding: 8px 20px 0;
+        padding: 8px 16px;
         background: var(--surface-subtle);
         overflow-x: auto;
+        overflow-y: hidden !important;
+        flex-shrink: 0;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+      }
+      .drawer-tabs::-webkit-scrollbar {
+        display: none;
       }
       .drawer-tab {
         position: relative;
         background: transparent;
-        border: none;
-        border-radius: 8px 8px 0 0;
-        padding: 8px 12px 10px;
+        border: 1px solid transparent;
+        border-radius: var(--radius-sm);
+        padding: 7px 12px 9px;
         font-size: 12px;
         font-weight: 600;
+        line-height: 1.3;
         color: var(--text-secondary);
         cursor: pointer;
         white-space: nowrap;
-        transition:
-          color 0.15s ease,
-          background-color 0.15s ease;
+        transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
         flex: 1;
         text-align: center;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        outline: none;
       }
       .drawer-tab:hover {
         background: var(--surface-card);
@@ -1896,21 +1915,24 @@
       .drawer-tab.active {
         background: var(--surface-card);
         color: var(--text-primary);
+        border-color: var(--border-subtle);
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
       }
       .drawer-tab.active::after {
         content: "";
         position: absolute;
-        bottom: 0;
-        left: 8px;
-        right: 8px;
+        bottom: 2px;
+        left: 10px;
+        right: 10px;
         height: 2px;
         background: var(--accent-emerald);
-        border-radius: 2px 2px 0 0;
+        border-radius: 2px;
         box-shadow: 0 0 6px var(--accent-emerald-glow);
       }
       .drawer-search-box {
         padding: 10px 20px;
         border-bottom: 1px solid var(--border-subtle);
+        flex-shrink: 0;
       }
       .drawer-search-input {
         width: 100%;
@@ -6951,6 +6973,10 @@
           if (tabBtn) tabBtn.classList.toggle("active", t === tabName);
           if (content) content.classList.toggle("d-none", t !== tabName);
         });
+        const tabsContainer = document.querySelector(".drawer-tabs");
+        if (tabsContainer) {
+          tabsContainer.scrollTop = 0;
+        }
       }
 
       function filterHelpContent(query) {
