@@ -2405,7 +2405,7 @@
         white-space: nowrap;
       }
 
-      /* ── Theme Transition Performance & View Transitions Engine ─────────── */
+      /* ── Theme Transition Performance & Apple HIG View Transitions Engine ─── */
       .theme-transitioning,
       .theme-transitioning *,
       .theme-transitioning *::before,
@@ -2413,10 +2413,43 @@
         transition: none !important;
       }
 
+      ::view-transition-group(root) {
+        animation-duration: 0.34s;
+        animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+      }
+
       ::view-transition-old(root),
       ::view-transition-new(root) {
-        animation-duration: 0.22s;
-        animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+        mix-blend-mode: normal !important;
+      }
+
+      ::view-transition-old(root) {
+        animation: none;
+        z-index: 1;
+      }
+
+      ::view-transition-new(root) {
+        animation: 0.34s cubic-bezier(0.32, 0.72, 0, 1) both appleThemeCrossFade;
+        z-index: 2;
+      }
+
+      @keyframes appleThemeCrossFade {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+
+      .theme-icon-container {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+      }
+      .theme-icon-container.spin-morph {
+        transform: rotate(45deg) scale(0.85);
       }
 
       @media (prefers-reduced-motion: reduce) {
@@ -2424,6 +2457,9 @@
         ::view-transition-old(*),
         ::view-transition-new(*) {
           animation: none !important;
+        }
+        .theme-icon-container {
+          transition: none !important;
         }
       }
     </style>
@@ -2475,7 +2511,7 @@
           >
             <span
               id="themeIcon"
-              style="display: inline-flex; align-items: center"
+              class="theme-icon-container"
             >
               <svg
                 width="15"
@@ -5145,6 +5181,12 @@
         const currentTheme = doc.getAttribute("data-bs-theme") || "dark";
         const newTheme = currentTheme === "dark" ? "light" : "dark";
 
+        const iconSpan = document.getElementById("themeIcon");
+        if (iconSpan) {
+          iconSpan.classList.add("spin-morph");
+          setTimeout(() => iconSpan.classList.remove("spin-morph"), 280);
+        }
+
         const applyTheme = () => {
           doc.classList.add("theme-transitioning");
           doc.setAttribute("data-bs-theme", newTheme);
@@ -5152,11 +5194,8 @@
           try {
             localStorage.setItem("cvsu_gen_theme", newTheme);
           } catch (e) {}
-          // Force layout flush and remove suppression on next animation frame
+          // Force layout flush so new styles are registered in snapshot
           void doc.offsetHeight;
-          requestAnimationFrame(() => {
-            doc.classList.remove("theme-transitioning");
-          });
         };
 
         const prefersReducedMotion =
@@ -5164,11 +5203,17 @@
           window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
         if (document.startViewTransition && !prefersReducedMotion) {
-          document.startViewTransition(() => {
+          const transition = document.startViewTransition(() => {
             applyTheme();
+          });
+          transition.finished.finally(() => {
+            doc.classList.remove("theme-transitioning");
           });
         } else {
           applyTheme();
+          requestAnimationFrame(() => {
+            doc.classList.remove("theme-transitioning");
+          });
         }
       }
 
