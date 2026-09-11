@@ -43,7 +43,7 @@ def test_ui_html_matches_readme_instructions():
     assert "Columns A &amp; B" in ui_content or "Columns A & B" in ui_content
 
     # Verify current application version badge
-    assert "v1.7 Beta" in ui_content
+    assert "v1.8 Beta" in ui_content
 
     # Verify official roster naming format from README.md
     assert "{Course/Sec} List of Students for {ScheduleCode}-{Subject}.xlsx" in ui_content
@@ -73,11 +73,13 @@ def test_ui_html_new_ux_components():
     with open(UI_HTML_PATH, "r", encoding="utf-8") as f:
         ui_content = f.read()
 
-    # Verify Stepper Bar and Step Chips
+    # Verify Stepper Bar, Step Chips, and Connectors
     assert 'id="workflowStepper"' in ui_content
     for i in range(1, 7):
         assert f'id="chipStep{i}"' in ui_content
         assert f'id="statusStep{i}"' in ui_content
+    for c in ["connector1to2", "connector2to3", "connector3to4", "connector4to5", "connector5to6"]:
+        assert f'id="{c}"' in ui_content
 
     # Verify Toast Engine Container
     assert 'id="toastContainer"' in ui_content

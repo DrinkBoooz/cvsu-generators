@@ -141,6 +141,11 @@ _(e.g., `[CvSU Gen (Beta) - Schedule Parsing Error]`)_
 
 ## 🏷️ Version History
 
+- **v1.8 Beta**:
+  - **Apple HIG Spatial Rhythm & Responsive Layout Refinement**: Eliminated layout compression and horizontal overflow dead-zones across small screens and Windows Snap Assist views with fluid `minmax(0, 1fr)` columns and a standardized 8pt spacing grid.
+  - **Illuminated Stepper Connectors & Active Indicators**: Introduced dynamic gradient-illuminated stepper progress lines connecting workflow steps, real-time scroll-spy step tracking, and macOS-style segmented indicator lines on the slide drawer navigation tabs.
+  - **Adaptive Bottom Sheet**: Re-engineered floating bottom action bar into an anchored bottom sheet on viewports `< 768px` to prevent pill wrapping distortions.
+  - **Robustness & Interaction Polish**: Hardened roster matching attributes against quotes and special characters, added global Escape key dismissal for drawers and modals, confirmation safeguard for roster clearing, and resilient local storage handlers.
 - **v1.7 Beta**:
   - **Apple HIG UI Cleanup & Spacious Redesign**: Eliminated visual density and cramped layout by adopting macOS Human Interface Guidelines—progressive disclosure accordions (`<details class="step-disclosure">`) for technical formatting rules, spacious layout rhythm, and SF Pro system typography.
   - **Apple-Style Segmented Controls & Feature Tiles**: Re-architected package toggles into modern tactile feature tiles with glowing active borders, replaced legacy chip filters with frictionless Apple-style sliding capsule segmented controls (`.segmented-control`), and refined the floating bottom dock into a sleek floating macOS capsule island.

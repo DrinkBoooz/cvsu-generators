@@ -75,8 +75,8 @@
         background-color: var(--bg-base);
         color: var(--text-primary);
         font-family:
-          -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", Roboto,
-          "Helvetica Neue", Arial, sans-serif;
+          -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+          "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
         -webkit-font-smoothing: antialiased;
         min-height: 100vh;
         padding-bottom: 70px;
@@ -216,7 +216,11 @@
         display: flex;
         align-items: center;
         gap: 6px;
-        transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
+        transition:
+          color 0.15s ease,
+          border-color 0.15s ease,
+          background-color 0.15s ease,
+          transform 0.15s ease;
       }
       .nav-btn:hover {
         color: var(--text-primary);
@@ -235,8 +239,9 @@
         border: 1px solid var(--border-subtle);
         border-radius: var(--radius-lg);
         box-shadow: var(--shadow-card);
-        padding: 20px 22px;
+        padding: 24px 26px;
         margin-bottom: 0;
+        scroll-margin-top: 110px;
         transition:
           border-color 0.2s ease,
           box-shadow 0.2s ease,
@@ -249,12 +254,12 @@
       /* ── Modern Studio 2-Column Dashboard Grid ─────────────────────────── */
       .dashboard-grid {
         display: grid;
-        grid-template-columns: minmax(420px, 1fr) minmax(460px, 1.18fr);
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.18fr);
         gap: 22px;
         align-items: start;
         margin-bottom: 22px;
       }
-      @media (max-width: 940px) {
+      @media (max-width: 1024px) {
         .dashboard-grid {
           grid-template-columns: 1fr;
           gap: 18px;
@@ -263,7 +268,7 @@
       .dashboard-col {
         display: flex;
         flex-direction: column;
-        gap: 20px;
+        gap: 24px;
       }
       .execution-card {
         margin-top: 4px;
@@ -273,7 +278,7 @@
         display: flex;
         align-items: flex-start;
         gap: 12px;
-        margin-bottom: 16px;
+        margin-bottom: 22px;
       }
       .step-header-text {
         flex: 1;
@@ -327,7 +332,9 @@
         border-radius: var(--radius-md);
         background: var(--surface-subtle);
         overflow: hidden;
-        transition: border-color 0.2s ease, background 0.2s ease;
+        transition:
+          border-color 0.2s ease,
+          background 0.2s ease;
       }
       .step-disclosure[open] {
         background: var(--surface-card);
@@ -344,7 +351,9 @@
         color: var(--text-secondary);
         cursor: pointer;
         user-select: none;
-        transition: color 0.15s ease, background 0.15s ease;
+        transition:
+          color 0.15s ease,
+          background 0.15s ease;
       }
       .disclosure-summary::-webkit-details-marker {
         display: none;
@@ -425,7 +434,10 @@
         padding: 22px 18px;
         text-align: center;
         cursor: pointer;
-        transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
+        transition:
+          border-color 0.2s ease,
+          background-color 0.2s ease,
+          transform 0.2s ease;
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -543,13 +555,16 @@
         display: flex;
         flex-direction: column;
         align-items: stretch;
-        padding: 8px 12px;
+        padding: 12px 16px;
         border-radius: var(--radius-sm);
-        margin-bottom: 6px;
+        margin-bottom: 8px;
         background: var(--surface-card);
         border: 1px solid var(--border-subtle);
         font-size: 13px;
-        gap: 6px;
+        gap: 8px;
+        transition:
+          border-color 0.15s ease,
+          background-color 0.15s ease;
       }
       .roster-row:last-child {
         margin-bottom: 0;
@@ -560,6 +575,26 @@
         justify-content: space-between;
         gap: 10px;
         width: 100%;
+      }
+      .roster-row-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-left: auto;
+        flex-shrink: 0;
+      }
+      @media (max-width: 680px) {
+        .roster-row-main {
+          flex-direction: column;
+          align-items: stretch;
+          gap: 8px;
+        }
+        .roster-row-actions {
+          margin-left: 0;
+          width: 100%;
+          justify-content: flex-end;
+          flex-wrap: wrap;
+        }
       }
       .roster-title {
         font-weight: 600;
@@ -604,7 +639,7 @@
       /* ── Document Engine Feature Tiles (Apple HIG) ─────────────────────── */
       .engine-selector {
         display: grid;
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
         gap: 12px;
         margin-bottom: 16px;
       }
@@ -677,6 +712,15 @@
         justify-content: space-between;
         gap: 12px;
         transition: border-color 0.2s ease;
+      }
+      @media (max-width: 640px) {
+        .class-card {
+          flex-wrap: wrap;
+        }
+        .type-dropdown {
+          width: 100%;
+          min-width: 0;
+        }
       }
       .class-card:hover {
         border-color: var(--border-focus);
@@ -767,7 +811,10 @@
         font-weight: 500;
         width: 100%;
         outline: none;
-        transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+        transition:
+          border-color 0.15s ease,
+          background-color 0.15s ease,
+          box-shadow 0.15s ease;
       }
       .text-input:focus {
         border-color: var(--border-focus);
@@ -783,7 +830,11 @@
         font-size: 14px;
         cursor: pointer;
         white-space: nowrap;
-        transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
+        transition:
+          color 0.15s ease,
+          border-color 0.15s ease,
+          background-color 0.15s ease,
+          transform 0.15s ease;
       }
       .btn-browse:hover {
         background: var(--surface-card);
@@ -824,7 +875,9 @@
         font-size: 13px;
         outline: none;
         color-scheme: light;
-        transition: border-color 0.2s ease, background 0.2s ease;
+        transition:
+          border-color 0.2s ease,
+          background 0.2s ease;
       }
       .date-input:focus {
         border-color: var(--border-focus);
@@ -835,7 +888,10 @@
         opacity: 0.75;
         border-radius: 4px;
         padding: 2px;
-        transition: opacity 0.2s ease, transform 0.15s ease, filter 0.2s ease;
+        transition:
+          opacity 0.2s ease,
+          transform 0.15s ease,
+          filter 0.2s ease;
       }
       .date-input::-webkit-calendar-picker-indicator:hover {
         opacity: 1;
@@ -849,7 +905,8 @@
         filter: none;
         opacity: 0.9;
       }
-      [data-bs-theme="dark"] .date-input::-webkit-calendar-picker-indicator:hover {
+      [data-bs-theme="dark"]
+        .date-input::-webkit-calendar-picker-indicator:hover {
         filter: brightness(1.25);
         opacity: 1;
       }
@@ -913,7 +970,10 @@
         justify-content: center;
         gap: 10px;
         box-shadow: 0 8px 24px var(--accent-emerald-glow);
-        transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, opacity 0.2s ease;
+        transition:
+          transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+          box-shadow 0.2s ease,
+          opacity 0.2s ease;
       }
       .btn-primary-action:hover:not(:disabled) {
         transform: translateY(-2px);
@@ -1025,7 +1085,10 @@
         align-items: center;
         gap: 8px;
         box-shadow: 0 4px 12px var(--accent-emerald-glow);
-        transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+        transition:
+          transform 0.15s ease,
+          box-shadow 0.15s ease,
+          background-color 0.15s ease;
       }
       .btn-open-folder:hover {
         transform: translateY(-1px);
@@ -1232,6 +1295,11 @@
         justify-content: space-between;
         gap: 6px;
         overflow-x: auto;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+      }
+      .stepper-track::-webkit-scrollbar {
+        display: none;
       }
       .step-chip {
         display: flex;
@@ -1259,6 +1327,12 @@
         background: rgba(16, 185, 129, 0.09);
         color: var(--text-primary);
       }
+      .step-chip.active-step {
+        border-color: var(--accent-emerald);
+        background: var(--surface-card);
+        color: var(--text-primary);
+        box-shadow: 0 0 0 2px var(--accent-emerald-glow);
+      }
       .chip-num {
         width: 17px;
         height: 17px;
@@ -1270,8 +1344,10 @@
         justify-content: center;
         font-size: 9.5px;
         font-weight: 700;
+        transition: background-color 0.2s ease, color 0.2s ease;
       }
-      .step-chip.ready .chip-num {
+      .step-chip.ready .chip-num,
+      .step-chip.active-step .chip-num {
         background: var(--accent-emerald);
         color: white;
       }
@@ -1283,11 +1359,20 @@
       }
       .stepper-connector {
         flex: 1;
-        height: 1.5px;
+        height: 2px;
         background: var(--border-subtle);
         min-width: 6px;
         max-width: 28px;
         border-radius: 2px;
+        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      .stepper-connector.ready {
+        background: linear-gradient(
+          90deg,
+          var(--accent-emerald),
+          var(--accent-emerald-hover)
+        );
+        box-shadow: 0 0 6px var(--accent-emerald-glow);
       }
 
       /* ── Floating Action Deck (Apple Capsule Island) ─────────────────────── */
@@ -1303,7 +1388,10 @@
         transform: translateY(0);
         opacity: 1;
         visibility: visible;
-        transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.35s;
+        transition:
+          transform 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+          opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+          visibility 0.35s;
       }
       .bottom-action-bar.dock-hidden {
         transform: translateY(140%);
@@ -1320,7 +1408,9 @@
         -webkit-backdrop-filter: blur(28px) saturate(200%);
         border: 1px solid var(--border-subtle);
         border-radius: var(--radius-pill);
-        box-shadow: 0 12px 36px -4px rgba(0, 0, 0, 0.18), 0 4px 12px rgba(0, 0, 0, 0.06);
+        box-shadow:
+          0 12px 36px -4px rgba(0, 0, 0, 0.18),
+          0 4px 12px rgba(0, 0, 0, 0.06);
         padding: 9px 18px 9px 22px;
         display: flex;
         align-items: center;
@@ -1328,7 +1418,9 @@
         gap: 16px;
       }
       [data-bs-theme="dark"] .bottom-action-content {
-        box-shadow: 0 16px 44px -4px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+        box-shadow:
+          0 16px 44px -4px rgba(0, 0, 0, 0.65),
+          inset 0 1px 0 rgba(255, 255, 255, 0.08);
       }
       .action-status-block {
         display: flex;
@@ -1353,7 +1445,10 @@
         border: 1px solid var(--border-subtle);
         background: var(--surface-card);
         color: var(--text-secondary);
-        transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+        transition:
+          border-color 0.15s ease,
+          background-color 0.15s ease,
+          color 0.15s ease;
       }
       .summary-pill.ready {
         border-color: rgba(16, 185, 129, 0.45);
@@ -1369,7 +1464,9 @@
         height: 7px;
         border-radius: 50%;
         background: var(--text-muted);
-        transition: background-color 0.15s ease, box-shadow 0.15s ease;
+        transition:
+          background-color 0.15s ease,
+          box-shadow 0.15s ease;
       }
       .action-bar-hint {
         font-size: 12px;
@@ -1394,10 +1491,17 @@
         gap: 8px;
         cursor: pointer;
         box-shadow: 0 4px 14px var(--accent-emerald-glow);
-        transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.15s ease, opacity 0.15s ease;
+        transition:
+          transform 0.15s cubic-bezier(0.16, 1, 0.3, 1),
+          box-shadow 0.15s ease,
+          opacity 0.15s ease;
       }
       .btn-dock-action:hover:not(:disabled) {
-        background: linear-gradient(135deg, var(--accent-emerald-hover), var(--accent-emerald));
+        background: linear-gradient(
+          135deg,
+          var(--accent-emerald-hover),
+          var(--accent-emerald)
+        );
         transform: translateY(-2px);
         box-shadow: 0 6px 20px rgba(16, 185, 129, 0.35);
       }
@@ -1413,9 +1517,44 @@
         animation: pulse-emerald 2s infinite;
       }
       @keyframes pulse-emerald {
-        0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5); }
-        70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
-        100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        0% {
+          box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5);
+        }
+        70% {
+          box-shadow: 0 0 0 10px rgba(16, 185, 129, 0);
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+        }
+      }
+      @media (max-width: 768px) {
+        .bottom-action-bar {
+          bottom: 0;
+          padding: 0;
+        }
+        .bottom-action-content {
+          border-radius: 16px 16px 0 0;
+          max-width: 100%;
+          padding: 12px 18px 14px;
+          flex-direction: column;
+          align-items: stretch;
+          gap: 12px;
+        }
+        .action-status-block {
+          justify-content: space-between;
+          width: 100%;
+        }
+        .action-pills-row {
+          width: 100%;
+          justify-content: flex-start;
+        }
+        .action-bar-controls {
+          width: 100%;
+        }
+        .btn-dock-action {
+          width: 100%;
+          justify-content: center;
+        }
       }
 
       /* ── Non-Blocking Toast Notifications ───────────────────────────────── */
@@ -1578,7 +1717,10 @@
         font-weight: 600;
         color: var(--text-secondary);
         cursor: pointer;
-        transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+        transition:
+          color 0.15s ease,
+          border-color 0.15s ease,
+          background-color 0.15s ease;
       }
       .filter-pill:hover,
       .filter-pill.active {
@@ -1634,7 +1776,11 @@
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        transition: color 0.15s ease, background-color 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
+        transition:
+          color 0.15s ease,
+          background-color 0.15s ease,
+          transform 0.15s ease,
+          border-color 0.15s ease;
         margin-top: 12px;
       }
       .btn-cancel-gen:hover {
@@ -1682,12 +1828,16 @@
         align-items: center;
         justify-content: space-between;
         gap: 10px;
-        padding: 4px 0;
+        padding: 8px 10px;
         font-size: 12.5px;
-        border-bottom: 1px dashed var(--border-subtle);
+        border-radius: var(--radius-sm);
+        transition: background-color 0.15s ease;
       }
-      .artifact-file-row:last-child {
-        border-bottom: none;
+      .artifact-file-row:hover {
+        background: var(--surface-subtle);
+      }
+      .artifact-file-row:not(:last-child) {
+        margin-bottom: 2px;
       }
       .btn-launch-file {
         background: var(--surface-card);
@@ -1701,7 +1851,10 @@
         display: inline-flex;
         align-items: center;
         gap: 4px;
-        transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+        transition:
+          border-color 0.15s ease,
+          background-color 0.15s ease,
+          color 0.15s ease;
         flex-shrink: 0;
       }
       .btn-launch-file:hover {
@@ -1715,26 +1868,45 @@
         display: flex;
         gap: 6px;
         border-bottom: 1px solid var(--border-subtle);
-        padding: 8px 20px;
+        padding: 8px 20px 0;
         background: var(--surface-subtle);
         overflow-x: auto;
       }
       .drawer-tab {
+        position: relative;
         background: transparent;
         border: none;
-        border-radius: 8px;
-        padding: 6px 12px;
+        border-radius: 8px 8px 0 0;
+        padding: 8px 12px 10px;
         font-size: 12px;
         font-weight: 600;
         color: var(--text-secondary);
         cursor: pointer;
         white-space: nowrap;
-        transition: color 0.15s ease, background-color 0.15s ease;
+        transition:
+          color 0.15s ease,
+          background-color 0.15s ease;
+        flex: 1;
+        text-align: center;
       }
-      .drawer-tab.active,
       .drawer-tab:hover {
         background: var(--surface-card);
         color: var(--text-primary);
+      }
+      .drawer-tab.active {
+        background: var(--surface-card);
+        color: var(--text-primary);
+      }
+      .drawer-tab.active::after {
+        content: "";
+        position: absolute;
+        bottom: 0;
+        left: 8px;
+        right: 8px;
+        height: 2px;
+        background: var(--accent-emerald);
+        border-radius: 2px 2px 0 0;
+        box-shadow: 0 0 6px var(--accent-emerald-glow);
       }
       .drawer-search-box {
         padding: 10px 20px;
@@ -1807,7 +1979,10 @@
         display: inline-flex;
         align-items: center;
         gap: 4px;
-        transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+        transition:
+          color 0.15s ease,
+          border-color 0.15s ease,
+          background-color 0.15s ease;
         flex-shrink: 0;
       }
       .btn-map-columns:hover {
@@ -1858,8 +2033,14 @@
         animation: modalPop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
       }
       @keyframes modalPop {
-        from { transform: scale(0.95); opacity: 0; }
-        to { transform: scale(1); opacity: 1; }
+        from {
+          transform: scale(0.95);
+          opacity: 0;
+        }
+        to {
+          transform: scale(1);
+          opacity: 1;
+        }
       }
       .modal-header-custom {
         padding: 16px 20px;
@@ -1936,9 +2117,11 @@
         width: 100%;
         border-collapse: collapse;
         font-size: 11.5px;
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       }
-      .spreadsheet-grid th, .spreadsheet-grid td {
+      .spreadsheet-grid th,
+      .spreadsheet-grid td {
         border: 1px solid var(--border-subtle);
         padding: 6px 10px;
         white-space: nowrap;
@@ -1954,12 +2137,14 @@
         font-weight: 700;
         border-left: 3px solid var(--accent-amber);
       }
-      .spreadsheet-grid td.col-name-selected, .spreadsheet-grid th.col-name-selected {
+      .spreadsheet-grid td.col-name-selected,
+      .spreadsheet-grid th.col-name-selected {
         background: rgba(16, 185, 129, 0.15);
         border-left: 2px solid var(--accent-emerald);
         border-right: 2px solid var(--accent-emerald);
       }
-      .spreadsheet-grid td.col-id-selected, .spreadsheet-grid th.col-id-selected {
+      .spreadsheet-grid td.col-id-selected,
+      .spreadsheet-grid th.col-id-selected {
         background: rgba(59, 130, 246, 0.15);
         border-left: 2px solid var(--accent-blue);
         border-right: 2px solid var(--accent-blue);
@@ -2005,7 +2190,9 @@
         font-weight: 700;
         cursor: pointer;
         box-shadow: 0 2px 8px var(--accent-emerald-glow);
-        transition: transform 0.15s ease, box-shadow 0.15s ease;
+        transition:
+          transform 0.15s ease,
+          box-shadow 0.15s ease;
       }
       .btn-primary-compact:hover {
         transform: translateY(-1px);
@@ -2061,7 +2248,8 @@
         white-space: nowrap;
       }
       .naming-rec-code {
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
         color: var(--accent-emerald);
         white-space: nowrap;
         user-select: text !important;
@@ -2078,7 +2266,9 @@
         display: inline-flex;
         align-items: center;
         gap: 4px;
-        transition: color 0.15s ease, border-color 0.15s ease;
+        transition:
+          color 0.15s ease,
+          border-color 0.15s ease;
       }
       .btn-copy-recommended:hover {
         border-color: var(--accent-emerald);
@@ -2127,7 +2317,9 @@
         background: var(--surface-elevated);
         color: var(--text-primary);
         outline: none;
-        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        transition:
+          border-color 0.2s ease,
+          box-shadow 0.2s ease;
       }
       .form-control-custom:focus {
         border-color: var(--accent-emerald);
@@ -2152,7 +2344,9 @@
         padding: 2px 6px;
         font-size: 10.5px;
         cursor: pointer;
-        transition: color 0.15s ease, border-color 0.15s ease;
+        transition:
+          color 0.15s ease,
+          border-color 0.15s ease;
         white-space: nowrap;
       }
       .btn-copy-rec-sm:hover {
@@ -2168,7 +2362,10 @@
         font-size: 11px;
         font-weight: 700;
         cursor: pointer;
-        transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+        transition:
+          color 0.15s ease,
+          border-color 0.15s ease,
+          background-color 0.15s ease;
         white-space: nowrap;
       }
       .btn-use-match:hover {
@@ -2238,7 +2435,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 8px">
               <span class="brand-title">CvSU Gen</span>
-              <span class="badge-version">v1.7 Beta</span>
+              <span class="badge-version">v1.8 Beta</span>
             </div>
             <div class="brand-subtitle">
               Cavite State University Document Automation
@@ -2254,7 +2451,10 @@
             title="Switch to Light Mode"
             aria-label="Toggle Dark/Light Mode"
           >
-            <span id="themeIcon" style="display: inline-flex; align-items: center">
+            <span
+              id="themeIcon"
+              style="display: inline-flex; align-items: center"
+            >
               <svg
                 width="15"
                 height="15"
@@ -2340,7 +2540,7 @@
             <span class="chip-txt">Schedule</span>
             <span class="chip-status" id="statusStep1">⚪</span>
           </button>
-          <div class="stepper-connector"></div>
+          <div class="stepper-connector" id="connector1to2"></div>
           <button
             class="step-chip"
             id="chipStep2"
@@ -2351,7 +2551,7 @@
             <span class="chip-txt">Rosters</span>
             <span class="chip-status" id="statusStep2">⚪</span>
           </button>
-          <div class="stepper-connector"></div>
+          <div class="stepper-connector" id="connector2to3"></div>
           <button
             class="step-chip"
             id="chipStep3"
@@ -2362,7 +2562,7 @@
             <span class="chip-txt">Packages</span>
             <span class="chip-status" id="statusStep3">⚪</span>
           </button>
-          <div class="stepper-connector"></div>
+          <div class="stepper-connector" id="connector3to4"></div>
           <button
             class="step-chip"
             id="chipStep4"
@@ -2373,7 +2573,7 @@
             <span class="chip-txt">Dates</span>
             <span class="chip-status" id="statusStep4">⚪</span>
           </button>
-          <div class="stepper-connector"></div>
+          <div class="stepper-connector" id="connector4to5"></div>
           <button
             class="step-chip"
             id="chipStep5"
@@ -2384,7 +2584,7 @@
             <span class="chip-txt">Output</span>
             <span class="chip-status" id="statusStep5">⚪</span>
           </button>
-          <div class="stepper-connector"></div>
+          <div class="stepper-connector" id="connector5to6"></div>
           <button
             class="step-chip"
             id="chipStep6"
@@ -2412,14 +2612,22 @@
             <div class="step-header">
               <div class="step-number">1</div>
               <div class="step-header-text">
-                <div class="step-title">Select Instructor Schedule (.xls or .xlsx)</div>
-                <div class="step-sub">Official master schedule spreadsheet from the faculty portal</div>
+                <div class="step-title">
+                  Select Instructor Schedule (.xls or .xlsx)
+                </div>
+                <div class="step-sub">
+                  Official master schedule spreadsheet from the faculty portal
+                </div>
               </div>
               <div class="step-desc">Master Schedule</div>
             </div>
 
             <!-- Schedule Dropzone with Browse File button -->
-            <div id="scheduleDropzone" class="dropzone" onclick="loadSchedule()">
+            <div
+              id="scheduleDropzone"
+              class="dropzone"
+              onclick="loadSchedule()"
+            >
               <svg
                 class="dropzone-icon"
                 viewBox="0 0 24 24"
@@ -2479,15 +2687,45 @@
             <!-- Progressive Disclosure Details: Schedule Notes -->
             <details class="step-disclosure" id="disclosureStep1">
               <summary class="disclosure-summary">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                <svg
+                  width="13"
+                  height="13"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="16" x2="12" y2="12"></line>
+                  <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                </svg>
                 <span>Schedule Instructions &amp; Async Filtering Notes</span>
-                <svg class="chevron-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                <svg
+                  class="chevron-icon"
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                >
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
               </summary>
               <div class="disclosure-content">
                 <p class="step-instructions">
-                  Download your official schedule spreadsheet from the faculty portal.
-                  Click <strong>"Browse File"</strong> below to select your master schedule. The generator automatically extracts your instructor name, college header, semester, academic year, class times, days, and rooms.<br />
-                  <em>Note: Schedule blocks labeled as Async or Asynch are automatically filtered out so only in-person sessions receive attendance columns.</em>
+                  Download your official schedule spreadsheet from the faculty
+                  portal. Click <strong>"Browse File"</strong> below to select
+                  your master schedule. The generator automatically extracts
+                  your instructor name, college header, semester, academic year,
+                  class times, days, and rooms.<br />
+                  <em
+                    >Note: Schedule blocks labeled as Async or Asynch are
+                    automatically filtered out so only in-person sessions
+                    receive attendance columns.</em
+                  >
                 </p>
               </div>
             </details>
@@ -2504,7 +2742,10 @@
                   <div id="instructorName" class="instructor-name selectable">
                     Instructor Name
                   </div>
-                  <div id="instructorCollege" class="instructor-meta selectable">
+                  <div
+                    id="instructorCollege"
+                    class="instructor-meta selectable"
+                  >
                     College of Engineering and Information Technology
                   </div>
                 </div>
@@ -2518,110 +2759,94 @@
             </div>
           </section>
 
-      <!-- ── STEP 2: Select Student Rosters ───────────────────────────── -->
-      <section class="glass-card" id="cardStep2">
-        <div class="step-header">
-          <div class="step-number">2</div>
-          <div class="step-header-text">
-            <div class="step-title">
-              Select Student Rosters (.xlsx, .xls, or .csv)
+          <!-- ── STEP 2: Select Student Rosters ───────────────────────────── -->
+          <section class="glass-card" id="cardStep2">
+            <div class="step-header">
+              <div class="step-number">2</div>
+              <div class="step-header-text">
+                <div class="step-title">
+                  Select Student Rosters (.xlsx, .xls, or .csv)
+                </div>
+                <div class="step-sub">
+                  Class student rosters from
+                  <a
+                    href="https://registrar.cvsu.edu.ph/"
+                    target="_blank"
+                    class="text-link"
+                    >registrar.cvsu.edu.ph</a
+                  >
+                </div>
+              </div>
+              <div class="step-desc">Class Lists</div>
             </div>
-            <div class="step-sub">
-              Class student rosters from <a href="https://registrar.cvsu.edu.ph/" target="_blank" class="text-link">registrar.cvsu.edu.ph</a>
+
+            <!-- Auto-Strip Extra Columns Toggle -->
+            <div class="auto-strip-box">
+              <label class="toggle-switch">
+                <input
+                  type="checkbox"
+                  id="autoStripCheck"
+                  checked
+                  onchange="renderRosterStatus()"
+                />
+                <span class="toggle-slider"></span>
+              </label>
+              <div>
+                <div class="toggle-label">
+                  Auto-Strip Extra Columns (Recommended)
+                </div>
+                <div class="toggle-sub">
+                  Automatically isolates Name &amp; Student number, safely
+                  ignoring extra portal columns.
+                </div>
+              </div>
             </div>
-          </div>
-          <div class="step-desc">Class Lists</div>
-        </div>
 
-        <!-- Auto-Strip Extra Columns Toggle -->
-        <div class="auto-strip-box">
-          <label class="toggle-switch">
-            <input
-              type="checkbox"
-              id="autoStripCheck"
-              checked
-              onchange="renderRosterStatus()"
-            />
-            <span class="toggle-slider"></span>
-          </label>
-          <div>
-            <div class="toggle-label">
-              Auto-Strip Extra Columns (Recommended)
-            </div>
-            <div class="toggle-sub">
-              Automatically isolates Name &amp; Student number, safely ignoring
-              extra portal columns.
-            </div>
-          </div>
-        </div>
-
-        <!-- Rosters Dropzone with Browse Data button -->
-        <div id="rostersDropzone" class="dropzone" onclick="loadRosters()">
-          <svg
-            class="dropzone-icon"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-            <circle cx="9" cy="7" r="4"></circle>
-            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-          </svg>
-          <div class="dropzone-title">Class Rosters Files</div>
-          <div id="rostersPrompt" class="dropzone-hint">
-            Click "Browse Data" or drop student lists (.xlsx / .xls / .csv) —
-            hold Ctrl/Shift for multi-select
-          </div>
-          <button
-            class="btn-browse"
-            type="button"
-            style="margin-top: 6px"
-            onclick="
-              event.stopPropagation();
-              loadRosters();
-            "
-          >
-            Browse Data
-          </button>
-          <div id="rostersFilename" class="dropzone-status d-none"></div>
-        </div>
-
-        <!-- Progressive Disclosure Details: Roster Column Guidelines & Official Naming -->
-        <details class="step-disclosure" id="disclosureStep2">
-          <summary class="disclosure-summary">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-            <span>Roster Column Guidelines &amp; Official Naming Rules</span>
-            <svg class="chevron-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
-          </summary>
-          <div class="disclosure-content">
-            <p class="step-instructions">
-              Download class student rosters directly from
-              <a
-                href="https://registrar.cvsu.edu.ph/"
-                target="_blank"
-                class="text-link"
-                >registrar.cvsu.edu.ph</a
-              >. Click <strong>"Browse Data"</strong> below. You can select
-              <strong>multiple files at once</strong> by holding <kbd>Ctrl</kbd> or
-              <kbd>Shift</kbd> to load all your class rosters together.
-            </p>
-
-            <!-- Roster Column Info Box -->
-            <div class="alert-info">
-              <div
-                style="color: var(--accent-blue); flex-shrink: 0; margin-top: 2px"
+            <!-- Rosters Dropzone with Browse Data button -->
+            <div id="rostersDropzone" class="dropzone" onclick="loadRosters()">
+              <svg
+                class="dropzone-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
               >
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                <circle cx="9" cy="7" r="4"></circle>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+              </svg>
+              <div class="dropzone-title">Class Rosters Files</div>
+              <div id="rostersPrompt" class="dropzone-hint">
+                Click "Browse Data" or drop student lists (.xlsx / .xls / .csv)
+                — hold Ctrl/Shift for multi-select
+              </div>
+              <button
+                class="btn-browse"
+                type="button"
+                style="margin-top: 6px"
+                onclick="
+                  event.stopPropagation();
+                  loadRosters();
+                "
+              >
+                Browse Data
+              </button>
+              <div id="rostersFilename" class="dropzone-status d-none"></div>
+            </div>
+
+            <!-- Progressive Disclosure Details: Roster Column Guidelines & Official Naming -->
+            <details class="step-disclosure" id="disclosureStep2">
+              <summary class="disclosure-summary">
                 <svg
-                  width="18"
-                  height="18"
+                  width="13"
+                  height="13"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
-                  stroke-width="2"
+                  stroke-width="2.5"
                   stroke-linecap="round"
                   stroke-linejoin="round"
                 >
@@ -2629,395 +2854,509 @@
                   <line x1="12" y1="16" x2="12" y2="12"></line>
                   <line x1="12" y1="8" x2="12.01" y2="8"></line>
                 </svg>
-              </div>
-              <div>
-                <strong>Roster Columns:</strong> Columns A &amp; B must contain the
-                student <code>Name</code> and <code>Student number</code>. Extra
-                portal columns (Email, Course, Section, Status, Remarks) are
-                automatically cleaned and ignored.
-              </div>
-            </div>
+                <span
+                  >Roster Column Guidelines &amp; Official Naming Rules</span
+                >
+                <svg
+                  class="chevron-icon"
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                >
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </summary>
+              <div class="disclosure-content">
+                <p class="step-instructions">
+                  Download class student rosters directly from
+                  <a
+                    href="https://registrar.cvsu.edu.ph/"
+                    target="_blank"
+                    class="text-link"
+                    >registrar.cvsu.edu.ph</a
+                  >. Click <strong>"Browse Data"</strong> below. You can select
+                  <strong>multiple files at once</strong> by holding
+                  <kbd>Ctrl</kbd> or <kbd>Shift</kbd> to load all your class
+                  rosters together.
+                </p>
 
+                <!-- Roster Column Info Box -->
+                <div class="alert-info">
+                  <div
+                    style="
+                      color: var(--accent-blue);
+                      flex-shrink: 0;
+                      margin-top: 2px;
+                    "
+                  >
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <line x1="12" y1="16" x2="12" y2="12"></line>
+                      <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                    </svg>
+                  </div>
+                  <div>
+                    <strong>Roster Columns:</strong> Columns A &amp; B must
+                    contain the student <code>Name</code> and
+                    <code>Student number</code>. Extra portal columns (Email,
+                    Course, Section, Status, Remarks) are automatically cleaned
+                    and ignored.
+                  </div>
+                </div>
+
+                <div
+                  style="
+                    font-size: 12.5px;
+                    color: var(--text-secondary);
+                    margin-bottom: 8px;
+                  "
+                >
+                  <strong>Crucial:</strong> Keep the official file naming
+                  format:
+                  <div class="code-block" style="margin: 6px 0">
+                    {Course/Sec} List of Students for
+                    {ScheduleCode}-{Subject}.xlsx
+                  </div>
+                  <span style="font-size: 12px"
+                    >Example:
+                    <code
+                      >BSCS1-4 List of Students for 202612040-DCIT 21A -
+                      INTRODUCTION TO COMPUTING.xlsx</code
+                    ></span
+                  >
+                </div>
+              </div>
+            </details>
+
+            <!-- Roster Pre-flight List -->
             <div
-              style="
-                font-size: 12.5px;
-                color: var(--text-secondary);
-                margin-bottom: 8px;
-              "
+              id="rosterListBox"
+              class="roster-list-box d-none"
+              style="margin-top: 14px"
             >
-              <strong>Crucial:</strong> Keep the official file naming format:
-              <div class="code-block" style="margin: 6px 0">
-                {Course/Sec} List of Students for {ScheduleCode}-{Subject}.xlsx
-              </div>
-              <span style="font-size: 12px"
-                >Example:
-                <code
-                  >BSCS1-4 List of Students for 202612040-DCIT 21A - INTRODUCTION TO
-                  COMPUTING.xlsx</code
-                ></span
-              >
-            </div>
-          </div>
-        </details>
-
-        <!-- Roster Pre-flight List -->
-        <div
-          id="rosterListBox"
-          class="roster-list-box d-none"
-          style="margin-top: 14px"
-        >
-          <div
-            style="
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-              margin-bottom: 8px;
-            "
-          >
-            <div style="display: flex; align-items: center; gap: 8px">
-              <span
-                style="
-                  font-size: 12px;
-                  font-weight: 700;
-                  text-transform: uppercase;
-                  color: var(--text-secondary);
-                "
-              >
-                Loaded Roster Files (<span id="rosterCountBadge">0</span>)
-              </span>
-              <span id="rosterTotalStudentsBadge" class="badge-version d-none"
-                >0 Students</span
-              >
-            </div>
-            <div style="display: flex; gap: 6px">
-              <input
-                type="text"
-                id="rosterSearchInput"
-                placeholder="Filter rosters..."
-                style="
-                  font-size: 11px;
-                  padding: 2px 8px;
-                  border-radius: 8px;
-                  border: 1px solid var(--border-subtle);
-                  background: var(--surface-card);
-                  color: var(--text-primary);
-                "
-                oninput="filterRostersList(this.value)"
-              />
-              <button
-                class="nav-btn"
-                id="btnClearAllRosters"
-                style="padding: 2px 8px; font-size: 11px"
-                onclick="clearAllRosters()"
-              >
-                Clear All
-              </button>
-            </div>
-          </div>
-          <div id="rosterRowsContainer"></div>
-        </div>
-      </section>
-    </div>
-
-    <!-- ── RIGHT COLUMN: Control Deck (Packages, Classes, Dates, Output) ── -->
-    <div class="dashboard-col col-controls">
-      <!-- ── STEP 3: Confirm Detected Classes & Subject Types ──────────── -->
-      <section class="glass-card" id="cardStep3">
-        <div class="step-header">
-          <div class="step-number">3</div>
-          <div class="step-header-text">
-            <div class="step-title">
-              Confirm Detected Classes &amp; Subject Types
-            </div>
-            <div class="step-sub">
-              Select packages to compile &amp; confirm grading templates
-            </div>
-          </div>
-          <div class="step-desc">Templates &amp; Packages</div>
-        </div>
-
-        <!-- Document Engine Toggles (Apple Feature Tiles) -->
-        <label class="form-label" style="margin-bottom: 8px">Document Packages to Compile</label>
-        <div class="engine-selector">
-          <div
-            class="engine-chip active"
-            id="chipAttendance"
-            onclick="toggleEngine('attendance')"
-          >
-            <input
-              type="checkbox"
-              id="checkAttendance"
-              class="engine-checkbox"
-              checked
-            />
-            <div class="engine-chip-content">
-              <div class="engine-chip-title">Attendance Sheets</div>
-              <div class="engine-chip-desc">Monthly logs (.docx)</div>
-            </div>
-          </div>
-          <div
-            class="engine-chip active"
-            id="chipCeit"
-            onclick="toggleEngine('ceit')"
-          >
-            <input
-              type="checkbox"
-              id="checkCeit"
-              class="engine-checkbox"
-              checked
-            />
-            <div class="engine-chip-content">
-              <div class="engine-chip-title">CEIT Dept Forms</div>
-              <div class="engine-chip-desc">7 Forms (.docx)</div>
-            </div>
-          </div>
-          <div
-            class="engine-chip active"
-            id="chipGrades"
-            onclick="toggleEngine('grades')"
-          >
-            <input
-              type="checkbox"
-              id="checkGrades"
-              class="engine-checkbox"
-              checked
-            />
-            <div class="engine-chip-content">
-              <div class="engine-chip-title">Official Grade Sheets</div>
-              <div class="engine-chip-desc">Lecture / Lab (.xlsx)</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Progressive Disclosure Details: Template Specifications -->
-        <details class="step-disclosure" id="disclosureStep3">
-          <summary class="disclosure-summary">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-            <span>Grading Template Specifications &amp; Detection Rules</span>
-            <svg class="chevron-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
-          </summary>
-          <div class="disclosure-content">
-            <p class="step-instructions" style="margin-bottom: 6px;">
-              Once your schedule and rosters are loaded, the panel below displays
-              all detected classes paired with official CvSU grading templates:
-            </p>
-            <div class="template-spec-box">
-              <ul
-                style="
-                  padding-left: 18px;
-                  font-size: 12px;
-                  color: var(--text-secondary);
-                  line-height: 1.5;
-                "
-              >
-                <li>
-                  <strong>Lecture and Lab:</strong> Uses
-                  <code>GRADING_LECTURE_LAB_TEMPLATE.xlsx</code> (includes Lecture,
-                  Laboratory, Consolidated, and Grading Sheet tabs).
-                </li>
-                <li>
-                  <strong>Lecture only:</strong> Uses
-                  <code>GRADING_LECTURE_TEMPLATE.xlsx</code> (includes Lecture and
-                  Grading Sheet tabs).
-                </li>
-              </ul>
               <div
                 style="
-                  font-size: 11.5px;
-                  color: var(--text-muted);
-                  margin-top: 6px;
-                  font-style: italic;
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: center;
+                  margin-bottom: 8px;
                 "
               >
-                The system automatically detects labs from your schedule hours, but
-                you can change this anytime using the dropdown menu.
+                <div style="display: flex; align-items: center; gap: 8px">
+                  <span
+                    style="
+                      font-size: 12px;
+                      font-weight: 700;
+                      text-transform: uppercase;
+                      color: var(--text-secondary);
+                    "
+                  >
+                    Loaded Roster Files (<span id="rosterCountBadge">0</span>)
+                  </span>
+                  <span
+                    id="rosterTotalStudentsBadge"
+                    class="badge-version d-none"
+                    >0 Students</span
+                  >
+                </div>
+                <div style="display: flex; gap: 6px">
+                  <input
+                    type="text"
+                    id="rosterSearchInput"
+                    placeholder="Filter rosters..."
+                    style="
+                      font-size: 11px;
+                      padding: 2px 8px;
+                      border-radius: 8px;
+                      border: 1px solid var(--border-subtle);
+                      background: var(--surface-card);
+                      color: var(--text-primary);
+                    "
+                    oninput="filterRostersList(this.value)"
+                  />
+                  <button
+                    class="nav-btn"
+                    id="btnClearAllRosters"
+                    style="padding: 2px 8px; font-size: 11px"
+                    onclick="clearAllRosters()"
+                  >
+                    Clear All
+                  </button>
+                </div>
+              </div>
+              <div id="rosterRowsContainer"></div>
+            </div>
+          </section>
+        </div>
+
+        <!-- ── RIGHT COLUMN: Control Deck (Packages, Classes, Dates, Output) ── -->
+        <div class="dashboard-col col-controls">
+          <!-- ── STEP 3: Confirm Detected Classes & Subject Types ──────────── -->
+          <section class="glass-card" id="cardStep3">
+            <div class="step-header">
+              <div class="step-number">3</div>
+              <div class="step-header-text">
+                <div class="step-title">
+                  Confirm Detected Classes &amp; Subject Types
+                </div>
+                <div class="step-sub">
+                  Select packages to compile &amp; confirm grading templates
+                </div>
+              </div>
+              <div class="step-desc">Templates &amp; Packages</div>
+            </div>
+
+            <!-- Document Engine Toggles (Apple Feature Tiles) -->
+            <label class="form-label" style="margin-bottom: 8px"
+              >Document Packages to Compile</label
+            >
+            <div class="engine-selector">
+              <div
+                class="engine-chip active"
+                id="chipAttendance"
+                onclick="toggleEngine('attendance')"
+              >
+                <input
+                  type="checkbox"
+                  id="checkAttendance"
+                  class="engine-checkbox"
+                  checked
+                />
+                <div class="engine-chip-content">
+                  <div class="engine-chip-title">Attendance Sheets</div>
+                  <div class="engine-chip-desc">Monthly logs (.docx)</div>
+                </div>
+              </div>
+              <div
+                class="engine-chip active"
+                id="chipCeit"
+                onclick="toggleEngine('ceit')"
+              >
+                <input
+                  type="checkbox"
+                  id="checkCeit"
+                  class="engine-checkbox"
+                  checked
+                />
+                <div class="engine-chip-content">
+                  <div class="engine-chip-title">CEIT Dept Forms</div>
+                  <div class="engine-chip-desc">7 Forms (.docx)</div>
+                </div>
+              </div>
+              <div
+                class="engine-chip active"
+                id="chipGrades"
+                onclick="toggleEngine('grades')"
+              >
+                <input
+                  type="checkbox"
+                  id="checkGrades"
+                  class="engine-checkbox"
+                  checked
+                />
+                <div class="engine-chip-content">
+                  <div class="engine-chip-title">Official Grade Sheets</div>
+                  <div class="engine-chip-desc">Lecture / Lab (.xlsx)</div>
+                </div>
               </div>
             </div>
-          </div>
-        </details>
 
-        <!-- Live File Estimate Badge -->
-        <div id="fileEstimateBadge" class="estimate-badge d-none">
-          Estimated Output: 0 files
-        </div>
+            <!-- Progressive Disclosure Details: Template Specifications -->
+            <details class="step-disclosure" id="disclosureStep3">
+              <summary class="disclosure-summary">
+                <svg
+                  width="13"
+                  height="13"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="16" x2="12" y2="12"></line>
+                  <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                </svg>
+                <span
+                  >Grading Template Specifications &amp; Detection Rules</span
+                >
+                <svg
+                  class="chevron-icon"
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                >
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </summary>
+              <div class="disclosure-content">
+                <p class="step-instructions" style="margin-bottom: 6px">
+                  Once your schedule and rosters are loaded, the panel below
+                  displays all detected classes paired with official CvSU
+                  grading templates:
+                </p>
+                <div class="template-spec-box">
+                  <ul
+                    style="
+                      padding-left: 18px;
+                      font-size: 12px;
+                      color: var(--text-secondary);
+                      line-height: 1.5;
+                    "
+                  >
+                    <li>
+                      <strong>Lecture and Lab:</strong> Uses
+                      <code>GRADING_LECTURE_LAB_TEMPLATE.xlsx</code> (includes
+                      Lecture, Laboratory, Consolidated, and Grading Sheet
+                      tabs).
+                    </li>
+                    <li>
+                      <strong>Lecture only:</strong> Uses
+                      <code>GRADING_LECTURE_TEMPLATE.xlsx</code> (includes
+                      Lecture and Grading Sheet tabs).
+                    </li>
+                  </ul>
+                  <div
+                    style="
+                      font-size: 11.5px;
+                      color: var(--text-muted);
+                      margin-top: 6px;
+                      font-style: italic;
+                    "
+                  >
+                    The system automatically detects labs from your schedule
+                    hours, but you can change this anytime using the dropdown
+                    menu.
+                  </div>
+                </div>
+              </div>
+            </details>
 
-        <!-- Detected Classes Matrix -->
-        <div id="classesSection" class="d-none">
-          <div
-            style="
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-              margin-bottom: 8px;
-              flex-wrap: wrap;
-              gap: 8px;
-            "
-          >
-            <div style="display: flex; align-items: center; gap: 8px">
-              <input
-                type="checkbox"
-                id="selectAllClasses"
-                class="class-select-check"
-                checked
-                onchange="toggleSelectAllClasses(this.checked)"
-              />
-              <label
-                for="selectAllClasses"
-                class="form-label"
-                style="margin-bottom: 0; cursor: pointer"
+            <!-- Live File Estimate Badge -->
+            <div id="fileEstimateBadge" class="estimate-badge d-none">
+              Estimated Output: 0 files
+            </div>
+
+            <!-- Detected Classes Matrix -->
+            <div id="classesSection" class="d-none">
+              <div
+                style="
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: center;
+                  margin-bottom: 8px;
+                  flex-wrap: wrap;
+                  gap: 8px;
+                "
               >
-                Detected Classes &amp; Template Selection (<span
-                  id="classesCountDisplay"
-                  >0</span
-                >)
-              </label>
+                <div style="display: flex; align-items: center; gap: 8px">
+                  <input
+                    type="checkbox"
+                    id="selectAllClasses"
+                    class="class-select-check"
+                    checked
+                    onchange="toggleSelectAllClasses(this.checked)"
+                  />
+                  <label
+                    for="selectAllClasses"
+                    class="form-label"
+                    style="margin-bottom: 0; cursor: pointer"
+                  >
+                    Detected Classes &amp; Template Selection (<span
+                      id="classesCountDisplay"
+                      >0</span
+                    >)
+                  </label>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px">
+                  <span class="badge-version" id="classesReadyBadge"
+                    >0 Ready</span
+                  >
+                </div>
+              </div>
+
+              <!-- Quick Filters (Apple Segmented Control) -->
+              <div class="filter-chip-group segmented-control">
+                <button
+                  class="segmented-btn filter-pill active"
+                  id="filterAllClasses"
+                  type="button"
+                  onclick="filterClassCards('all')"
+                >
+                  All
+                </button>
+                <button
+                  class="segmented-btn filter-pill"
+                  id="filterLabClasses"
+                  type="button"
+                  onclick="filterClassCards('lab')"
+                >
+                  Lecture &amp; Lab Only
+                </button>
+                <button
+                  class="segmented-btn filter-pill"
+                  id="filterLecClasses"
+                  type="button"
+                  onclick="filterClassCards('lec')"
+                >
+                  Lecture Only
+                </button>
+              </div>
+
+              <div
+                id="classesListContainer"
+                class="classes-container"
+                style="margin-top: 10px"
+              ></div>
             </div>
-            <div style="display: flex; align-items: center; gap: 8px">
-              <span class="badge-version" id="classesReadyBadge">0 Ready</span>
+          </section>
+
+          <!-- ── STEP 4: (Optional) Set Semester Date Boundaries ───────────── -->
+          <section class="glass-card" id="cardStep4">
+            <div class="step-header">
+              <div class="step-number">4</div>
+              <div class="step-header-text">
+                <div class="step-title">
+                  (Optional) Set Semester Date Boundaries
+                </div>
+                <div class="step-sub">
+                  Standard calendar (Aug–Dec / Jan–May) or custom range
+                </div>
+              </div>
+              <div class="step-desc">Attendance Calendar</div>
             </div>
-          </div>
 
-          <!-- Quick Filters (Apple Segmented Control) -->
-          <div class="filter-chip-group segmented-control">
-            <button
-              class="segmented-btn filter-pill active"
-              id="filterAllClasses"
-              type="button"
-              onclick="filterClassCards('all')"
-            >
-              All
-            </button>
-            <button
-              class="segmented-btn filter-pill"
-              id="filterLabClasses"
-              type="button"
-              onclick="filterClassCards('lab')"
-            >
-              Lecture &amp; Lab Only
-            </button>
-            <button
-              class="segmented-btn filter-pill"
-              id="filterLecClasses"
-              type="button"
-              onclick="filterClassCards('lec')"
-            >
-              Lecture Only
-            </button>
-          </div>
+            <p class="step-instructions">
+              If you want attendance sheets to cover only specific dates of the
+              semester, select a <strong>Start Date</strong> and
+              <strong>End Date</strong>.<br />
+              <em
+                >If left blank, the app will generate sheets for the standard
+                semester calendar (August–December for 1st Semester; January–May
+                for 2nd Semester).</em
+              >
+            </p>
 
-          <div id="classesListContainer" class="classes-container" style="margin-top: 10px;"></div>
-        </div>
-      </section>
+            <div class="date-boundary-box">
+              <div class="date-inputs-row">
+                <div class="date-input-group">
+                  <span>Start:</span>
+                  <input
+                    type="date"
+                    id="startDate"
+                    class="date-input"
+                    onchange="saveDates()"
+                  />
+                </div>
+                <div class="date-input-group">
+                  <span>End:</span>
+                  <input
+                    type="date"
+                    id="endDate"
+                    class="date-input"
+                    onchange="saveDates()"
+                  />
+                </div>
+              </div>
+              <div class="preset-chips segmented-control">
+                <button
+                  type="button"
+                  class="chip-preset segmented-btn"
+                  onclick="setSemesterPreset('1st')"
+                >
+                  1st Sem (Aug-Dec)
+                </button>
+                <button
+                  type="button"
+                  class="chip-preset segmented-btn"
+                  onclick="setSemesterPreset('2nd')"
+                >
+                  2nd Sem (Jan-May)
+                </button>
+                <button
+                  type="button"
+                  class="chip-preset segmented-btn"
+                  onclick="clearDatePresets()"
+                >
+                  Reset Dates
+                </button>
+              </div>
+            </div>
 
-      <!-- ── STEP 4: (Optional) Set Semester Date Boundaries ───────────── -->
-      <section class="glass-card" id="cardStep4">
-        <div class="step-header">
-          <div class="step-number">4</div>
-          <div class="step-header-text">
-            <div class="step-title">(Optional) Set Semester Date Boundaries</div>
-            <div class="step-sub">Standard calendar (Aug–Dec / Jan–May) or custom range</div>
-          </div>
-          <div class="step-desc">Attendance Calendar</div>
-        </div>
+            <!-- Dynamic Month Preview Chips -->
+            <div
+              id="includedMonthsContainer"
+              class="month-chips-container"
+            ></div>
+          </section>
 
-        <p class="step-instructions">
-          If you want attendance sheets to cover only specific dates of the
-          semester, select a <strong>Start Date</strong> and
-          <strong>End Date</strong>.<br />
-          <em
-            >If left blank, the app will generate sheets for the standard
-            semester calendar (August–December for 1st Semester; January–May for
-            2nd Semester).</em
-          >
-        </p>
+          <!-- ── STEP 5: Choose Target Output Folder ───────────────────────── -->
+          <section class="glass-card" id="cardStep5">
+            <div class="step-header">
+              <div class="step-number">5</div>
+              <div class="step-header-text">
+                <div class="step-title">Choose Target Output Folder</div>
+                <div class="step-sub">
+                  Destination directory for compiled document packages
+                </div>
+              </div>
+              <div class="step-desc">Destination Directory</div>
+            </div>
 
-        <div class="date-boundary-box">
-          <div class="date-inputs-row">
-            <div class="date-input-group">
-              <span>Start:</span>
+            <p class="step-instructions">
+              Click <strong>"Browse Path"</strong> and select any destination
+              folder on your computer where the files should be saved.
+            </p>
+
+            <div class="input-with-action">
               <input
-                type="date"
-                id="startDate"
-                class="date-input"
-                onchange="saveDates()"
+                type="text"
+                id="outputDisplay"
+                class="text-input selectable"
+                placeholder="Select destination folder for generated files..."
+                readonly
               />
+              <button class="btn-browse" type="button" onclick="loadOutput()">
+                Browse Path
+              </button>
+              <button
+                class="nav-btn"
+                id="btnOpenOutput"
+                type="button"
+                onclick="openOutputFolder()"
+                title="Open Target Folder"
+              >
+                Open Folder
+              </button>
             </div>
-            <div class="date-input-group">
-              <span>End:</span>
-              <input
-                type="date"
-                id="endDate"
-                class="date-input"
-                onchange="saveDates()"
-              />
-            </div>
-          </div>
-          <div class="preset-chips segmented-control">
-            <button type="button" class="chip-preset segmented-btn" onclick="setSemesterPreset('1st')"
-              >1st Sem (Aug-Dec)</button
-            >
-            <button type="button" class="chip-preset segmented-btn" onclick="setSemesterPreset('2nd')"
-              >2nd Sem (Jan-May)</button
-            >
-            <button type="button" class="chip-preset segmented-btn" onclick="clearDatePresets()"
-              >Reset Dates</button
-            >
-          </div>
+            <div
+              id="outputPathStatus"
+              style="
+                font-size: 12px;
+                margin-top: 6px;
+                font-weight: 600;
+                color: var(--text-muted);
+              "
+            ></div>
+          </section>
         </div>
-
-        <!-- Dynamic Month Preview Chips -->
-        <div id="includedMonthsContainer" class="month-chips-container"></div>
-      </section>
-
-      <!-- ── STEP 5: Choose Target Output Folder ───────────────────────── -->
-      <section class="glass-card" id="cardStep5">
-        <div class="step-header">
-          <div class="step-number">5</div>
-          <div class="step-header-text">
-            <div class="step-title">Choose Target Output Folder</div>
-            <div class="step-sub">Destination directory for compiled document packages</div>
-          </div>
-          <div class="step-desc">Destination Directory</div>
-        </div>
-
-        <p class="step-instructions">
-          Click <strong>"Browse Path"</strong> and select any destination folder
-          on your computer where the files should be saved.
-        </p>
-
-        <div class="input-with-action">
-          <input
-            type="text"
-            id="outputDisplay"
-            class="text-input selectable"
-            placeholder="Select destination folder for generated files..."
-            readonly
-          />
-          <button class="btn-browse" type="button" onclick="loadOutput()">
-            Browse Path
-          </button>
-          <button
-            class="nav-btn"
-            id="btnOpenOutput"
-            type="button"
-            onclick="openOutputFolder()"
-            title="Open Target Folder"
-          >
-            Open Folder
-          </button>
-        </div>
-        <div
-          id="outputPathStatus"
-          style="
-            font-size: 12px;
-            margin-top: 6px;
-            font-weight: 600;
-            color: var(--text-muted);
-          "
-        ></div>
-      </section>
-    </div>
-  </div>
+      </div>
 
       <!-- ── STEP 6: Initialize Workflow ───────────────────────────────── -->
       <section class="glass-card execution-card" id="cardStep6">
@@ -3025,7 +3364,9 @@
           <div class="step-number">6</div>
           <div class="step-header-text">
             <div class="step-title">Initialize Workflow</div>
-            <div class="step-sub">Automated document compilation &amp; verification</div>
+            <div class="step-sub">
+              Automated document compilation &amp; verification
+            </div>
           </div>
           <div class="step-desc">Automated Generation</div>
         </div>
@@ -3165,15 +3506,37 @@
       <div class="bottom-action-content">
         <div class="action-status-block">
           <div class="action-pills-row">
-            <span class="summary-pill" id="actionPillSchedule"><span class="pill-dot"></span> Schedule</span>
-            <span class="summary-pill" id="actionPillRosters"><span class="pill-dot"></span> 0 Rosters</span>
-            <span class="summary-pill" id="actionPillOutput"><span class="pill-dot"></span> Output Ready</span>
+            <span class="summary-pill" id="actionPillSchedule"
+              ><span class="pill-dot"></span> Schedule</span
+            >
+            <span class="summary-pill" id="actionPillRosters"
+              ><span class="pill-dot"></span> 0 Rosters</span
+            >
+            <span class="summary-pill" id="actionPillOutput"
+              ><span class="pill-dot"></span> Output Ready</span
+            >
           </div>
-          <div class="action-bar-hint" id="actionBarHint">Drop or browse your master schedule (.xls / .xlsx) to begin</div>
+          <div class="action-bar-hint" id="actionBarHint">
+            Drop or browse your master schedule (.xls / .xlsx) to begin
+          </div>
         </div>
         <div class="action-bar-controls">
-          <button id="btnDockProcess" class="btn-dock-action" type="button" onclick="triggerWorkflowFromDock()">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <button
+            id="btnDockProcess"
+            class="btn-dock-action"
+            type="button"
+            onclick="triggerWorkflowFromDock()"
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
               <polygon points="5 3 19 12 5 21 5 3"></polygon>
             </svg>
             <span id="btnDockProcessLabel">Initialize Workflow</span>
@@ -3192,7 +3555,11 @@
     <aside id="helpDrawer" class="drawer-panel">
       <div class="drawer-header">
         <span class="drawer-title">Documentation &amp; User Guide</span>
-        <button id="btnCloseHelp" class="drawer-close" onclick="closeAllDrawers()">
+        <button
+          id="btnCloseHelp"
+          class="drawer-close"
+          onclick="closeAllDrawers()"
+        >
           &times;
         </button>
       </div>
@@ -3430,23 +3797,72 @@
               >
             </p>
 
-            <div class="alert-info" style="margin-top: 12px; background: rgba(245, 158, 11, 0.08); border-color: rgba(245, 158, 11, 0.3);">
-              <div style="color: var(--accent-amber); flex-shrink: 0; margin-top: 2px;">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <div
+              class="alert-info"
+              style="
+                margin-top: 12px;
+                background: rgba(245, 158, 11, 0.08);
+                border-color: rgba(245, 158, 11, 0.3);
+              "
+            >
+              <div
+                style="
+                  color: var(--accent-amber);
+                  flex-shrink: 0;
+                  margin-top: 2px;
+                "
+              >
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
                   <circle cx="12" cy="12" r="10"></circle>
                   <line x1="12" y1="16" x2="12" y2="12"></line>
                   <line x1="12" y1="8" x2="12.01" y2="8"></line>
                 </svg>
               </div>
-              <div style="font-size: 12.5px;">
-                <strong>Incomplete Filename Fallback (e.g. <code>CS1-4 DCIT21.xlsx</code>):</strong><br />
-                If your roster filename is missing the official schedule code or subject title, CvSU Gen automatically:
-                <ul style="padding-left: 18px; margin-top: 4px; margin-bottom: 6px;">
-                  <li>Detects partial section tokens (<code>CS1-4</code> &rarr; <code>BSCS 1-4</code>) and subject codes (<code>DCIT 21</code>).</li>
-                  <li>Cross-references your schedule timetable and offers 1-click matching (<code>⚡ Match</code>).</li>
-                  <li>Provides manual input fields in the <strong>⚙️ Map</strong> modal for Course &amp; Section, Schedule Code, and Subject Title.</li>
+              <div style="font-size: 12.5px">
+                <strong
+                  >Incomplete Filename Fallback (e.g.
+                  <code>CS1-4 DCIT21.xlsx</code>):</strong
+                ><br />
+                If your roster filename is missing the official schedule code or
+                subject title, CvSU Gen automatically:
+                <ul
+                  style="
+                    padding-left: 18px;
+                    margin-top: 4px;
+                    margin-bottom: 6px;
+                  "
+                >
+                  <li>
+                    Detects partial section tokens (<code>CS1-4</code> &rarr;
+                    <code>BSCS 1-4</code>) and subject codes (<code
+                      >DCIT 21</code
+                    >).
+                  </li>
+                  <li>
+                    Cross-references your schedule timetable and offers 1-click
+                    matching (<code>⚡ Match</code>).
+                  </li>
+                  <li>
+                    Provides manual input fields in the
+                    <strong>⚙️ Map</strong> modal for Course &amp; Section,
+                    Schedule Code, and Subject Title.
+                  </li>
                 </ul>
-                <strong style="color: var(--accent-amber);">Recommendation:</strong> Even with manual overrides, we strongly recommend renaming your roster file to the official format shown above. Doing so ensures instant zero-click generation on all future runs!
+                <strong style="color: var(--accent-amber)"
+                  >Recommendation:</strong
+                >
+                Even with manual overrides, we strongly recommend renaming your
+                roster file to the official format shown above. Doing so ensures
+                instant zero-click generation on all future runs!
               </div>
             </div>
           </div>
@@ -3454,13 +3870,40 @@
           <!-- CEIT Subject Prefixes & Departments Directory -->
           <div class="drawer-section" style="margin-top: 20px">
             <h4>🏛️ CEIT Academic Departments &amp; Subject Prefixes</h4>
-            <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 10px">
-              The application natively recognizes and tags all official subject prefixes across the College of Engineering and Information Technology (CEIT):
+            <p
+              style="
+                font-size: 13px;
+                color: var(--text-secondary);
+                margin-bottom: 10px;
+              "
+            >
+              The application natively recognizes and tags all official subject
+              prefixes across the College of Engineering and Information
+              Technology (CEIT):
             </p>
-            <div style="overflow-x: auto; border: 1px solid var(--border-subtle); border-radius: var(--radius-md)">
-              <table id="ceitPrefixTable" style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: left">
+            <div
+              style="
+                overflow-x: auto;
+                border: 1px solid var(--border-subtle);
+                border-radius: var(--radius-md);
+              "
+            >
+              <table
+                id="ceitPrefixTable"
+                style="
+                  width: 100%;
+                  border-collapse: collapse;
+                  font-size: 12px;
+                  text-align: left;
+                "
+              >
                 <thead>
-                  <tr style="background: var(--surface-subtle); border-bottom: 1px solid var(--border-subtle)">
+                  <tr
+                    style="
+                      background: var(--surface-subtle);
+                      border-bottom: 1px solid var(--border-subtle);
+                    "
+                  >
                     <th style="padding: 8px 10px">Prefix</th>
                     <th style="padding: 8px 10px">Program / Discipline</th>
                     <th style="padding: 8px 10px">Department</th>
@@ -3468,16 +3911,122 @@
                   </tr>
                 </thead>
                 <tbody>
-                  <tr style="border-bottom: 1px solid var(--border-subtle)"><td style="padding: 6px 10px"><code>AGEN</code> / <code>ABEN</code></td><td style="padding: 6px 10px">Agricultural and Biosystems Engineering</td><td style="padding: 6px 10px">Dept. of Agricultural and Food Engineering</td><td style="padding: 6px 10px"><span class="badge-ceit-pill">🌱 DAFE</span></td></tr>
-                  <tr style="border-bottom: 1px solid var(--border-subtle)"><td style="padding: 6px 10px"><code>ARCH</code></td><td style="padding: 6px 10px">Architecture</td><td style="padding: 6px 10px">Dept. of Civil Engineering</td><td style="padding: 6px 10px"><span class="badge-ceit-pill">📐 DCE</span></td></tr>
-                  <tr style="border-bottom: 1px solid var(--border-subtle)"><td style="padding: 6px 10px"><code>CENG</code> / <code>CIVL</code></td><td style="padding: 6px 10px">Civil Engineering</td><td style="padding: 6px 10px">Dept. of Civil Engineering</td><td style="padding: 6px 10px"><span class="badge-ceit-pill">🏛️ DCE</span></td></tr>
-                  <tr style="border-bottom: 1px solid var(--border-subtle)"><td style="padding: 6px 10px"><code>COSC</code></td><td style="padding: 6px 10px">Computer Science</td><td style="padding: 6px 10px">Dept. of Information Technology</td><td style="padding: 6px 10px"><span class="badge-ceit-pill">🖥️ DIT</span></td></tr>
-                  <tr style="border-bottom: 1px solid var(--border-subtle)"><td style="padding: 6px 10px"><code>CPEN</code> / <code>DCEE</code></td><td style="padding: 6px 10px">Computer Engineering</td><td style="padding: 6px 10px">Dept. of Computer and Electronics Engineering</td><td style="padding: 6px 10px"><span class="badge-ceit-pill">⚡ DCEE</span></td></tr>
-                  <tr style="border-bottom: 1px solid var(--border-subtle)"><td style="padding: 6px 10px"><code>DCIT</code></td><td style="padding: 6px 10px">Common IT / DIT Core Subjects</td><td style="padding: 6px 10px">Dept. of Information Technology</td><td style="padding: 6px 10px"><span class="badge-ceit-pill">💻 DIT</span></td></tr>
-                  <tr style="border-bottom: 1px solid var(--border-subtle)"><td style="padding: 6px 10px"><code>ECEN</code> / <code>EENG</code></td><td style="padding: 6px 10px">Electronics / Electrical Engineering</td><td style="padding: 6px 10px">Dept. of Computer and Electronics Engineering</td><td style="padding: 6px 10px"><span class="badge-ceit-pill">📡 DCEE</span></td></tr>
-                  <tr style="border-bottom: 1px solid var(--border-subtle)"><td style="padding: 6px 10px"><code>IENG</code></td><td style="padding: 6px 10px">Industrial Engineering</td><td style="padding: 6px 10px">Dept. of Industrial Engineering and Technology</td><td style="padding: 6px 10px"><span class="badge-ceit-pill">🏭 DIET</span></td></tr>
-                  <tr style="border-bottom: 1px solid var(--border-subtle)"><td style="padding: 6px 10px"><code>INDT</code> / <code>SMT</code></td><td style="padding: 6px 10px">Industrial Technology</td><td style="padding: 6px 10px">Dept. of Industrial Engineering and Technology</td><td style="padding: 6px 10px"><span class="badge-ceit-pill">🔧 DIET</span></td></tr>
-                  <tr><td style="padding: 6px 10px"><code>ITEC</code></td><td style="padding: 6px 10px">Information Technology</td><td style="padding: 6px 10px">Dept. of Information Technology</td><td style="padding: 6px 10px"><span class="badge-ceit-pill">🌐 DIT</span></td></tr>
+                  <tr style="border-bottom: 1px solid var(--border-subtle)">
+                    <td style="padding: 6px 10px">
+                      <code>AGEN</code> / <code>ABEN</code>
+                    </td>
+                    <td style="padding: 6px 10px">
+                      Agricultural and Biosystems Engineering
+                    </td>
+                    <td style="padding: 6px 10px">
+                      Dept. of Agricultural and Food Engineering
+                    </td>
+                    <td style="padding: 6px 10px">
+                      <span class="badge-ceit-pill">🌱 DAFE</span>
+                    </td>
+                  </tr>
+                  <tr style="border-bottom: 1px solid var(--border-subtle)">
+                    <td style="padding: 6px 10px"><code>ARCH</code></td>
+                    <td style="padding: 6px 10px">Architecture</td>
+                    <td style="padding: 6px 10px">
+                      Dept. of Civil Engineering
+                    </td>
+                    <td style="padding: 6px 10px">
+                      <span class="badge-ceit-pill">📐 DCE</span>
+                    </td>
+                  </tr>
+                  <tr style="border-bottom: 1px solid var(--border-subtle)">
+                    <td style="padding: 6px 10px">
+                      <code>CENG</code> / <code>CIVL</code>
+                    </td>
+                    <td style="padding: 6px 10px">Civil Engineering</td>
+                    <td style="padding: 6px 10px">
+                      Dept. of Civil Engineering
+                    </td>
+                    <td style="padding: 6px 10px">
+                      <span class="badge-ceit-pill">🏛️ DCE</span>
+                    </td>
+                  </tr>
+                  <tr style="border-bottom: 1px solid var(--border-subtle)">
+                    <td style="padding: 6px 10px"><code>COSC</code></td>
+                    <td style="padding: 6px 10px">Computer Science</td>
+                    <td style="padding: 6px 10px">
+                      Dept. of Information Technology
+                    </td>
+                    <td style="padding: 6px 10px">
+                      <span class="badge-ceit-pill">🖥️ DIT</span>
+                    </td>
+                  </tr>
+                  <tr style="border-bottom: 1px solid var(--border-subtle)">
+                    <td style="padding: 6px 10px">
+                      <code>CPEN</code> / <code>DCEE</code>
+                    </td>
+                    <td style="padding: 6px 10px">Computer Engineering</td>
+                    <td style="padding: 6px 10px">
+                      Dept. of Computer and Electronics Engineering
+                    </td>
+                    <td style="padding: 6px 10px">
+                      <span class="badge-ceit-pill">⚡ DCEE</span>
+                    </td>
+                  </tr>
+                  <tr style="border-bottom: 1px solid var(--border-subtle)">
+                    <td style="padding: 6px 10px"><code>DCIT</code></td>
+                    <td style="padding: 6px 10px">
+                      Common IT / DIT Core Subjects
+                    </td>
+                    <td style="padding: 6px 10px">
+                      Dept. of Information Technology
+                    </td>
+                    <td style="padding: 6px 10px">
+                      <span class="badge-ceit-pill">💻 DIT</span>
+                    </td>
+                  </tr>
+                  <tr style="border-bottom: 1px solid var(--border-subtle)">
+                    <td style="padding: 6px 10px">
+                      <code>ECEN</code> / <code>EENG</code>
+                    </td>
+                    <td style="padding: 6px 10px">
+                      Electronics / Electrical Engineering
+                    </td>
+                    <td style="padding: 6px 10px">
+                      Dept. of Computer and Electronics Engineering
+                    </td>
+                    <td style="padding: 6px 10px">
+                      <span class="badge-ceit-pill">📡 DCEE</span>
+                    </td>
+                  </tr>
+                  <tr style="border-bottom: 1px solid var(--border-subtle)">
+                    <td style="padding: 6px 10px"><code>IENG</code></td>
+                    <td style="padding: 6px 10px">Industrial Engineering</td>
+                    <td style="padding: 6px 10px">
+                      Dept. of Industrial Engineering and Technology
+                    </td>
+                    <td style="padding: 6px 10px">
+                      <span class="badge-ceit-pill">🏭 DIET</span>
+                    </td>
+                  </tr>
+                  <tr style="border-bottom: 1px solid var(--border-subtle)">
+                    <td style="padding: 6px 10px">
+                      <code>INDT</code> / <code>SMT</code>
+                    </td>
+                    <td style="padding: 6px 10px">Industrial Technology</td>
+                    <td style="padding: 6px 10px">
+                      Dept. of Industrial Engineering and Technology
+                    </td>
+                    <td style="padding: 6px 10px">
+                      <span class="badge-ceit-pill">🔧 DIET</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 6px 10px"><code>ITEC</code></td>
+                    <td style="padding: 6px 10px">Information Technology</td>
+                    <td style="padding: 6px 10px">
+                      Dept. of Information Technology
+                    </td>
+                    <td style="padding: 6px 10px">
+                      <span class="badge-ceit-pill">🌐 DIT</span>
+                    </td>
+                  </tr>
                 </tbody>
               </table>
             </div>
@@ -3745,11 +4294,15 @@
               <h3 class="modal-title-custom" id="mapModalFilename">
                 Roster Mapping
               </h3>
-              <span id="mapModalCeitBadge" class="badge-ceit-pill d-none"></span>
+              <span
+                id="mapModalCeitBadge"
+                class="badge-ceit-pill d-none"
+              ></span>
               <span id="mapModalFormatBadge" class="badge-version">CSV</span>
             </div>
             <div class="modal-subtitle-custom" id="mapModalSubtitle">
-              Inspect spreadsheet rows, override column indices, and preview output.
+              Inspect spreadsheet rows, override column indices, and preview
+              output.
             </div>
           </div>
           <button
@@ -3765,11 +4318,17 @@
 
         <div class="modal-body-custom">
           <!-- Official Naming Recommendation Alert Card -->
-          <div id="mapNamingRecommendationBanner" class="naming-recommendation-card">
+          <div
+            id="mapNamingRecommendationBanner"
+            class="naming-recommendation-card"
+          >
             <div class="naming-rec-header">
-              <div style="display: flex; align-items: center; gap: 6px;">
-                <span style="font-size: 14px;">💡</span>
-                <span>Recommended Best Practice: Rename File to Official Format</span>
+              <div style="display: flex; align-items: center; gap: 6px">
+                <span style="font-size: 14px">💡</span>
+                <span
+                  >Recommended Best Practice: Rename File to Official
+                  Format</span
+                >
               </div>
               <button
                 type="button"
@@ -3782,22 +4341,33 @@
               </button>
             </div>
             <p class="naming-rec-desc">
-              CvSU Gen supports custom overrides and manual identification below, but <strong>renaming your roster file</strong> to the official registrar convention guarantees 100% zero-click automation on future runs.
+              CvSU Gen supports custom overrides and manual identification
+              below, but <strong>renaming your roster file</strong> to the
+              official registrar convention guarantees 100% zero-click
+              automation on future runs.
             </p>
             <div class="naming-rec-code-box">
               <span class="naming-rec-tag">Recommended:</span>
-              <code id="mapModalRecommendedFilename" class="naming-rec-code selectable">CourseSec List of Students for ScheduleCode-Subject.xlsx</code>
+              <code
+                id="mapModalRecommendedFilename"
+                class="naming-rec-code selectable"
+                >CourseSec List of Students for ScheduleCode-Subject.xlsx</code
+              >
             </div>
           </div>
 
           <!-- Class Identification & Timetable Link Section -->
           <div class="mapping-section-header">
             <span>Class Identification &amp; Timetable Association</span>
-            <span class="badge-subtle-hint">Manual Fallback for Incomplete Filenames</span>
+            <span class="badge-subtle-hint"
+              >Manual Fallback for Incomplete Filenames</span
+            >
           </div>
           <div class="mapping-metadata-grid">
             <div class="mapping-field">
-              <label class="mapping-label">Link to Schedule Timetable Class</label>
+              <label class="mapping-label"
+                >Link to Schedule Timetable Class</label
+              >
               <select
                 id="mapSelectClassLink"
                 class="form-select-custom"
@@ -3826,7 +4396,7 @@
                 oninput="onManualMetadataChanged()"
               />
             </div>
-            <div class="mapping-field" style="grid-column: 1 / -1;">
+            <div class="mapping-field" style="grid-column: 1 / -1">
               <label class="mapping-label">Subject Title / Course Name</label>
               <input
                 type="text"
@@ -3839,7 +4409,7 @@
           </div>
 
           <!-- Spreadsheet Column & Header Mapping Section -->
-          <div class="mapping-section-header" style="margin-top: 14px;">
+          <div class="mapping-section-header" style="margin-top: 14px">
             <span>Spreadsheet Column &amp; Header Mapping</span>
           </div>
           <div class="mapping-toolbar-grid">
@@ -4006,7 +4576,9 @@
         detectedClasses: [],
         rosterConfigs: (() => {
           try {
-            return JSON.parse(localStorage.getItem("cvsu_roster_mappings") || "{}");
+            return JSON.parse(
+              localStorage.getItem("cvsu_roster_mappings") || "{}",
+            );
           } catch (e) {
             return {};
           }
@@ -4021,7 +4593,10 @@
 
       function saveRosterConfigs() {
         try {
-          localStorage.setItem("cvsu_roster_mappings", JSON.stringify(state.rosterConfigs || {}));
+          localStorage.setItem(
+            "cvsu_roster_mappings",
+            JSON.stringify(state.rosterConfigs || {}),
+          );
         } catch (e) {
           console.error("Failed to save roster configs to localStorage:", e);
         }
@@ -4105,7 +4680,8 @@
           const rect = step6.getBoundingClientRect();
           // If Step 6 is currently visible within or near the viewport,
           // hide the floating action bar to prevent duplicate "Initialize Workflow" buttons.
-          const isStep6Visible = rect.top < (window.innerHeight - 40) && rect.bottom > 60;
+          const isStep6Visible =
+            rect.top < window.innerHeight - 40 && rect.bottom > 60;
           if (isStep6Visible) {
             dock.classList.add("dock-hidden");
           } else {
@@ -4132,7 +4708,7 @@
               root: null,
               threshold: 0.05,
               rootMargin: "0px 0px -40px 0px",
-            }
+            },
           );
           observer.observe(step6);
         }
@@ -4156,7 +4732,10 @@
         startGeneration();
       }
 
-      function setGenerationRunningState(isRunning, labelText = "Initialize Workflow") {
+      function setGenerationRunningState(
+        isRunning,
+        labelText = "Initialize Workflow",
+      ) {
         window._isGenerationRunning = !!isRunning;
         const btn = document.getElementById("processBtn");
         const btnLabel = document.getElementById("processBtnLabel");
@@ -4165,12 +4744,18 @@
         const dockLabel = document.getElementById("btnDockProcessLabel");
 
         if (btn) btn.disabled = isRunning;
-        if (btnLabel) btnLabel.innerText = isRunning ? (labelText || "Compiling Documents...") : "Initialize Workflow";
+        if (btnLabel)
+          btnLabel.innerText = isRunning
+            ? labelText || "Compiling Documents..."
+            : "Initialize Workflow";
         if (dockBtn) {
           dockBtn.disabled = isRunning;
           dockBtn.classList.toggle("ready-pulse", !isRunning);
         }
-        if (dockLabel) dockLabel.innerText = isRunning ? (labelText || "Compiling Documents...") : "Initialize Workflow";
+        if (dockLabel)
+          dockLabel.innerText = isRunning
+            ? labelText || "Compiling Documents..."
+            : "Initialize Workflow";
 
         if (dock && isRunning) {
           dock.classList.add("dock-hidden");
@@ -4216,6 +4801,17 @@
         setChip("chipStep5", "statusStep5", s5Ready);
         setChip("chipStep6", "statusStep6", s6Ready, "🚀");
 
+        // Stepper Navigation Lines (Dynamic Connectors)
+        const setConnector = (connId, isReady) => {
+          const conn = document.getElementById(connId);
+          if (conn) conn.classList.toggle("ready", isReady);
+        };
+        setConnector("connector1to2", s1Ready);
+        setConnector("connector2to3", s1Ready && s2Ready);
+        setConnector("connector3to4", s1Ready && s2Ready && s3Ready);
+        setConnector("connector4to5", s1Ready && s2Ready && s3Ready);
+        setConnector("connector5to6", s6Ready);
+
         // Synchronize Floating Bottom Action Deck
         const pillSched = document.getElementById("actionPillSchedule");
         const pillRost = document.getElementById("actionPillRosters");
@@ -4226,7 +4822,9 @@
         if (pillSched) {
           pillSched.classList.toggle("ready", s1Ready);
           const schedLabel = s1Ready
-            ? (state.scheduleMeta?.instructor ? state.scheduleMeta.instructor.split(" ")[0] : "Schedule Ready")
+            ? state.scheduleMeta?.instructor
+              ? state.scheduleMeta.instructor.split(" ")[0]
+              : "Schedule Ready"
             : "Schedule";
           pillSched.innerHTML = `<span class="pill-dot"></span> ${schedLabel}`;
         }
@@ -4242,11 +4840,15 @@
         if (barHint) {
           if (s6Ready) {
             const totalStuds = state.rosterReports
-              ? state.rosterReports.reduce((acc, r) => acc + (r.student_count || 0), 0)
+              ? state.rosterReports.reduce(
+                  (acc, r) => acc + (r.student_count || 0),
+                  0,
+                )
               : 0;
             barHint.innerText = `Ready to compile: 1 Schedule · ${state.rosters.length} Rosters (${totalStuds} Students)`;
           } else if (!s1Ready) {
-            barHint.innerText = "Select or drop master schedule (.xls / .xlsx) to begin";
+            barHint.innerText =
+              "Select or drop master schedule (.xls / .xlsx) to begin";
           } else if (!s2Ready) {
             barHint.innerText = "Add class student rosters (.xlsx / .csv)";
           } else if (!s5Ready) {
@@ -4257,6 +4859,54 @@
         }
         if (dockBtn) {
           dockBtn.classList.toggle("ready-pulse", s6Ready);
+        }
+      }
+
+      function initStepperScrollSpy() {
+        const stepIds = [
+          "cardStep1",
+          "cardStep2",
+          "cardStep3",
+          "cardStep4",
+          "cardStep5",
+          "cardStep6",
+        ];
+        const chipIds = [
+          "chipStep1",
+          "chipStep2",
+          "chipStep3",
+          "chipStep4",
+          "chipStep5",
+          "chipStep6",
+        ];
+
+        if ("IntersectionObserver" in window) {
+          const observer = new IntersectionObserver(
+            (entries) => {
+              entries.forEach((entry) => {
+                if (entry.isIntersecting) {
+                  const idx = stepIds.indexOf(entry.target.id);
+                  if (idx !== -1) {
+                    chipIds.forEach((cid, cIdx) => {
+                      const chip = document.getElementById(cid);
+                      if (chip)
+                        chip.classList.toggle("active-step", cIdx === idx);
+                    });
+                  }
+                }
+              });
+            },
+            {
+              root: null,
+              threshold: 0.2,
+              rootMargin: "-95px 0px -40% 0px",
+            },
+          );
+
+          stepIds.forEach((id) => {
+            const el = document.getElementById(id);
+            if (el) observer.observe(el);
+          });
         }
       }
 
@@ -4401,8 +5051,10 @@
                 data: null,
               }));
             if (payloads.length > 0) {
-              const res =
-                await window.pywebview.api.handle_dropped_rosters(payloads, state.rosterConfigs);
+              const res = await window.pywebview.api.handle_dropped_rosters(
+                payloads,
+                state.rosterConfigs,
+              );
               window.onRostersLoaded(res);
             }
           },
@@ -4424,6 +5076,22 @@
         updateStepperStatus();
         updateFileEstimate();
         initScrollAwareDock();
+        initStepperScrollSpy();
+
+        // Global Escape dismissal for modal & slide-over drawers
+        document.addEventListener("keydown", (e) => {
+          if (e.key === "Escape") {
+            const modal = document.getElementById("modalRosterMappingBackdrop");
+            if (modal && !modal.classList.contains("d-none")) {
+              closeColumnMappingModal();
+              return;
+            }
+            const activeDrawer = document.querySelector(".drawer-panel.active");
+            if (activeDrawer) {
+              closeAllDrawers();
+            }
+          }
+        });
       });
 
       // ── Theme Management ──────────────────────────────────────────────────
@@ -4638,7 +5306,9 @@
       // ── Step 1: Rosters Ingestion ─────────────────────────────────────────
       async function loadRosters() {
         if (!window.pywebview || !window.pywebview.api) return;
-        const res = await window.pywebview.api.browse_rosters(state.rosterConfigs);
+        const res = await window.pywebview.api.browse_rosters(
+          state.rosterConfigs,
+        );
         if (res) {
           state.rosters = res.rosters || [];
           state.rosterReports = res.validation || [];
@@ -4656,7 +5326,10 @@
 
       async function removeRoster(idx) {
         if (!window.pywebview || !window.pywebview.api) return;
-        const res = await window.pywebview.api.remove_roster(idx, state.rosterConfigs);
+        const res = await window.pywebview.api.remove_roster(
+          idx,
+          state.rosterConfigs,
+        );
         if (res) {
           state.rosters = res.rosters || [];
           state.rosterReports = res.validation || [];
@@ -4669,6 +5342,15 @@
 
       async function clearAllRosters() {
         if (!window.pywebview || !window.pywebview.api) return;
+        if (state.rosters && state.rosters.length > 0) {
+          if (
+            !confirm(
+              `Are you sure you want to remove all ${state.rosters.length} imported rosters?`,
+            )
+          ) {
+            return;
+          }
+        }
         const res = await window.pywebview.api.clear_rosters();
         state.rosters = [];
         state.rosterReports = [];
@@ -4749,29 +5431,57 @@
             }
 
             // Custom config badge
-            const config = (state.rosterConfigs && state.rosterConfigs[rep.filename]) || null;
+            const config =
+              (state.rosterConfigs && state.rosterConfigs[rep.filename]) ||
+              null;
             let customConfigBadgeHtml = "";
-            if (config && (config.header_row !== undefined || config.name_column !== undefined || config.id_column !== undefined || config.linked_schedule_code || config.course_sec || config.schedule_code || config.subject_name)) {
+            if (
+              config &&
+              (config.header_row !== undefined ||
+                config.name_column !== undefined ||
+                config.id_column !== undefined ||
+                config.linked_schedule_code ||
+                config.course_sec ||
+                config.schedule_code ||
+                config.subject_name)
+            ) {
               customConfigBadgeHtml = `<span class="badge-custom-mapping" title="Custom class details and column mapping configured">⚙️ Configured</span>`;
             }
 
             // Quick timetable match button (if incomplete filename and match found)
             let matchBtnHtml = "";
-            if (rep.issue === "incomplete_filename" && rep.suggested_matches && rep.suggested_matches.length > 0) {
+            if (
+              rep.issue === "incomplete_filename" &&
+              rep.suggested_matches &&
+              rep.suggested_matches.length > 0
+            ) {
               const topMatch = rep.suggested_matches[0];
               matchBtnHtml = `
-                <button type="button" class="btn-use-match" onclick="applySuggestedMatch(decodeURIComponent('${encodeURIComponent(rep.filename)}'), '${escapeHTML(topMatch.schedule_code)}', '${escapeHTML(topMatch.course_sec)}', '${escapeHTML(topMatch.subject_name)}')" title="Auto-link with top timetable match: ${escapeHTML(topMatch.course_sec)} (${escapeHTML(topMatch.schedule_code)})">⚡ Match: ${escapeHTML(topMatch.course_sec)}</button>
+                <button type="button" class="btn-use-match" onclick="applySuggestedMatch(decodeURIComponent('${encodeURIComponent(rep.filename)}'), decodeURIComponent('${encodeURIComponent(topMatch.schedule_code)}'), decodeURIComponent('${encodeURIComponent(topMatch.course_sec)}'), decodeURIComponent('${encodeURIComponent(topMatch.subject_name)}'))" title="Auto-link with top timetable match: ${escapeHTML(topMatch.course_sec)} (${escapeHTML(topMatch.schedule_code)})">⚡ Match: ${escapeHTML(topMatch.course_sec)}</button>
               `;
             }
 
             // Class linking select (shown if invalid filename, incomplete, unmatched, or if already linked)
             let linkSelectHtml = "";
-            const isUnmatchedOrLinked = rep.status === "error" || rep.can_link || rep.issue === "invalid_filename" || rep.issue === "incomplete_filename" || (config && config.linked_schedule_code);
-            if (isUnmatchedOrLinked && state.detectedClasses && state.detectedClasses.length > 0) {
-              const activeLinkedCode = (config && config.linked_schedule_code) || rep.linked_schedule_code || "";
+            const isUnmatchedOrLinked =
+              rep.status === "error" ||
+              rep.can_link ||
+              rep.issue === "invalid_filename" ||
+              rep.issue === "incomplete_filename" ||
+              (config && config.linked_schedule_code);
+            if (
+              isUnmatchedOrLinked &&
+              state.detectedClasses &&
+              state.detectedClasses.length > 0
+            ) {
+              const activeLinkedCode =
+                (config && config.linked_schedule_code) ||
+                rep.linked_schedule_code ||
+                "";
               let optionsHtml = `<option value="">🔗 Link to Class...</option>`;
               state.detectedClasses.forEach((cls) => {
-                const isSelected = activeLinkedCode === cls.schedule_code ? "selected" : "";
+                const isSelected =
+                  activeLinkedCode === cls.schedule_code ? "selected" : "";
                 optionsHtml += `<option value="${escapeHTML(cls.schedule_code)}" ${isSelected}>${escapeHTML(cls.schedule_code)} - ${escapeHTML(cls.course_sec)} (${escapeHTML(cls.subject_name)})</option>`;
               });
               linkSelectHtml = `
@@ -4784,7 +5494,9 @@
             // Official naming recommendation notice under the row
             let recNoticeHtml = "";
             if (rep.issue === "incomplete_filename") {
-              const recFilename = rep.recommended_filename || "{CourseSec} List of Students for {ScheduleCode}-{Subject}.xlsx";
+              const recFilename =
+                rep.recommended_filename ||
+                "{CourseSec} List of Students for {ScheduleCode}-{Subject}.xlsx";
               recNoticeHtml = `
                 <div class="roster-item-recommendation">
                   <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
@@ -4808,7 +5520,7 @@
                   ${ceitBadgeHtml}
                   ${customConfigBadgeHtml}
                 </div>
-                <div style="display: flex; align-items: center; gap: 8px; margin-left: auto;">
+                <div class="roster-row-actions">
                   ${matchBtnHtml}
                   ${linkSelectHtml}
                   ${statusBadge}
@@ -4828,6 +5540,11 @@
             } else {
               totBadge.classList.add("d-none");
             }
+          }
+
+          const searchInput = document.getElementById("rosterSearchInput");
+          if (searchInput && searchInput.value) {
+            filterRostersList(searchInput.value);
           }
         } else {
           promptDisplay.classList.remove("d-none");
@@ -4850,16 +5567,26 @@
         }
         saveRosterConfigs();
         if (window.pywebview && window.pywebview.api) {
-          const reports = await window.pywebview.api.validate_rosters(state.rosterConfigs);
+          const reports = await window.pywebview.api.validate_rosters(
+            state.rosterConfigs,
+          );
           state.rosterReports = reports || [];
           renderRosterStatus();
           await refreshClassDetection();
           updateStepperStatus();
           updateFileEstimate();
           if (scheduleCode) {
-            showToast("Class Linked", `Linked ${filename} to schedule ${scheduleCode}`, "success");
+            showToast(
+              "Class Linked",
+              `Linked ${filename} to schedule ${scheduleCode}`,
+              "success",
+            );
           } else {
-            showToast("Link Cleared", `Cleared manual class link for ${filename}`, "info");
+            showToast(
+              "Link Cleared",
+              `Cleared manual class link for ${filename}`,
+              "info",
+            );
           }
         }
       }
@@ -4867,11 +5594,14 @@
       function copyToClipboard(text, message = "Copied to clipboard!") {
         if (!text) return;
         if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(text).then(() => {
-            showToast("Copied", message, "info", 2200);
-          }).catch(() => {
-            fallbackCopyText(text, message);
-          });
+          navigator.clipboard
+            .writeText(text)
+            .then(() => {
+              showToast("Copied", message, "info", 2200);
+            })
+            .catch(() => {
+              fallbackCopyText(text, message);
+            });
         } else {
           fallbackCopyText(text, message);
         }
@@ -4901,21 +5631,33 @@
         }
       }
 
-      async function applySuggestedMatch(filename, scheduleCode, courseSec, subjectName) {
+      async function applySuggestedMatch(
+        filename,
+        scheduleCode,
+        courseSec,
+        subjectName,
+      ) {
         state.rosterConfigs[filename] = state.rosterConfigs[filename] || {};
         state.rosterConfigs[filename].linked_schedule_code = scheduleCode;
         state.rosterConfigs[filename].schedule_code = scheduleCode;
         if (courseSec) state.rosterConfigs[filename].course_sec = courseSec;
-        if (subjectName) state.rosterConfigs[filename].subject_name = subjectName;
+        if (subjectName)
+          state.rosterConfigs[filename].subject_name = subjectName;
         saveRosterConfigs();
         if (window.pywebview && window.pywebview.api) {
-          const reports = await window.pywebview.api.validate_rosters(state.rosterConfigs);
+          const reports = await window.pywebview.api.validate_rosters(
+            state.rosterConfigs,
+          );
           state.rosterReports = reports || [];
           renderRosterStatus();
           await refreshClassDetection();
           updateStepperStatus();
           updateFileEstimate();
-          showToast("Match Applied", `Linked ${filename} to ${courseSec} (${scheduleCode})`, "success");
+          showToast(
+            "Match Applied",
+            `Linked ${filename} to ${courseSec} (${scheduleCode})`,
+            "success",
+          );
         }
       }
 
@@ -4936,7 +5678,9 @@
       async function refreshClassDetection() {
         if (!window.pywebview || !window.pywebview.api) return;
         try {
-          const classes = await window.pywebview.api.detect_classes(state.rosterConfigs);
+          const classes = await window.pywebview.api.detect_classes(
+            state.rosterConfigs,
+          );
           state.detectedClasses = classes || [];
           renderClassesSection();
         } catch (e) {
@@ -5015,12 +5759,20 @@
         if (!modal) return;
 
         document.getElementById("mapModalFilename").innerText = filename;
-        const config = (state.rosterConfigs && state.rosterConfigs[filename]) || {};
+        const config =
+          (state.rosterConfigs && state.rosterConfigs[filename]) || {};
 
         try {
-          const res = await window.pywebview.api.inspect_roster(filename, config);
+          const res = await window.pywebview.api.inspect_roster(
+            filename,
+            config,
+          );
           if (!res || res.status === "error") {
-            showToast("Inspection Error", res?.message || "Could not read roster file", "error");
+            showToast(
+              "Inspection Error",
+              res?.message || "Could not read roster file",
+              "error",
+            );
             return;
           }
           currentInspectionData = res;
@@ -5028,9 +5780,15 @@
           // Badges
           const ceitBadge = document.getElementById("mapModalCeitBadge");
           if (res.ceit_metadata) {
-            const dCode = res.ceit_metadata.department_code || res.ceit_metadata.dept_code || "";
-            ceitBadge.innerText = dCode ? `${res.ceit_metadata.prefix} · ${dCode}` : res.ceit_metadata.prefix;
-            ceitBadge.title = res.ceit_metadata.department_name || res.ceit_metadata.dept || "";
+            const dCode =
+              res.ceit_metadata.department_code ||
+              res.ceit_metadata.dept_code ||
+              "";
+            ceitBadge.innerText = dCode
+              ? `${res.ceit_metadata.prefix} · ${dCode}`
+              : res.ceit_metadata.prefix;
+            ceitBadge.title =
+              res.ceit_metadata.department_name || res.ceit_metadata.dept || "";
             ceitBadge.classList.remove("d-none");
           } else {
             ceitBadge.classList.add("d-none");
@@ -5048,16 +5806,27 @@
           const inCode = document.getElementById("mapInputScheduleCode");
           const inSubj = document.getElementById("mapInputSubjectName");
           if (inSec) inSec.value = config.course_sec || hints.course_sec || "";
-          if (inCode) inCode.value = config.schedule_code || config.linked_schedule_code || hints.schedule_code || "";
-          if (inSubj) inSubj.value = config.subject_name || hints.subject_name || "";
+          if (inCode)
+            inCode.value =
+              config.schedule_code ||
+              config.linked_schedule_code ||
+              hints.schedule_code ||
+              "";
+          if (inSubj)
+            inSubj.value = config.subject_name || hints.subject_name || "";
 
           // Populate Class Link Select
           const selClass = document.getElementById("mapSelectClassLink");
           selClass.innerHTML = `<option value="">-- Manual / Auto-Detect by Filename --</option>`;
-          const activeLinkedCode = config.linked_schedule_code || config.schedule_code || res.linked_schedule_code || "";
+          const activeLinkedCode =
+            config.linked_schedule_code ||
+            config.schedule_code ||
+            res.linked_schedule_code ||
+            "";
           if (state.detectedClasses && state.detectedClasses.length > 0) {
             state.detectedClasses.forEach((cls) => {
-              const isSel = activeLinkedCode === cls.schedule_code ? "selected" : "";
+              const isSel =
+                activeLinkedCode === cls.schedule_code ? "selected" : "";
               selClass.innerHTML += `<option value="${escapeHTML(cls.schedule_code)}" ${isSel}>${escapeHTML(cls.schedule_code)} - ${escapeHTML(cls.course_sec)} (${escapeHTML(cls.subject_name)})</option>`;
             });
           }
@@ -5069,9 +5838,18 @@
           const selHeader = document.getElementById("mapSelectHeaderRow");
           selHeader.innerHTML = "";
           const previewRows = res.raw_rows || res.raw_preview || [];
-          const detectedHeader = res.detected_header_row !== undefined ? res.detected_header_row : (res.auto_header_row !== undefined ? res.auto_header_row : 0);
+          const detectedHeader =
+            res.detected_header_row !== undefined
+              ? res.detected_header_row
+              : res.auto_header_row !== undefined
+                ? res.auto_header_row
+                : 0;
           previewRows.forEach((r, idx) => {
-            const rowArr = Array.isArray(r) ? r : (r.cells ? Object.values(r.cells) : Object.values(r));
+            const rowArr = Array.isArray(r)
+              ? r
+              : r.cells
+                ? Object.values(r.cells)
+                : Object.values(r);
             const previewText = rowArr.slice(0, 4).filter(Boolean).join(" | ");
             const isSel = idx === detectedHeader ? "selected" : "";
             selHeader.innerHTML += `<option value="${idx}" ${isSel}>Row ${idx + 1}: ${escapeHTML(previewText.slice(0, 45))}${previewText.length > 45 ? "..." : ""}</option>`;
@@ -5089,8 +5867,22 @@
             return { index: i, col_ref: c, name: `Col ${c}` };
           });
 
-          const detectedName = res.detected_name_column !== undefined ? res.detected_name_column : (res.auto_name_col !== undefined ? (typeof res.auto_name_col === "number" ? res.auto_name_col : 0) : 0);
-          const detectedId = res.detected_id_column !== undefined ? res.detected_id_column : (res.auto_id_col !== undefined ? (typeof res.auto_id_col === "number" ? res.auto_id_col : 1) : 1);
+          const detectedName =
+            res.detected_name_column !== undefined
+              ? res.detected_name_column
+              : res.auto_name_col !== undefined
+                ? typeof res.auto_name_col === "number"
+                  ? res.auto_name_col
+                  : 0
+                : 0;
+          const detectedId =
+            res.detected_id_column !== undefined
+              ? res.detected_id_column
+              : res.auto_id_col !== undefined
+                ? typeof res.auto_id_col === "number"
+                  ? res.auto_id_col
+                  : 1
+                : 1;
 
           availableCols.forEach((col) => {
             const isNameSel = col.index === detectedName ? "selected" : "";
@@ -5100,19 +5892,33 @@
           });
 
           // Render Raw Grid and Parsed Students
-          renderSpreadsheetGrid(previewRows, availableCols, detectedHeader, detectedName, detectedId);
+          renderSpreadsheetGrid(
+            previewRows,
+            availableCols,
+            detectedHeader,
+            detectedName,
+            detectedId,
+          );
           const parsedList = res.parsed_students || res.parsed_preview || [];
           renderParsedPreview(parsedList, res.student_count || 0);
 
           modal.classList.remove("d-none");
         } catch (err) {
           console.error("Failed to open column mapping modal:", err);
-          showToast("Inspection Error", "Failed to inspect roster: " + err, "error");
+          showToast(
+            "Inspection Error",
+            "Failed to inspect roster: " + err,
+            "error",
+          );
         }
       }
 
       function closeColumnMappingModal(event) {
-        if (event && event.target && event.target.id !== "modalRosterMappingBackdrop") {
+        if (
+          event &&
+          event.target &&
+          event.target.id !== "modalRosterMappingBackdrop"
+        ) {
           return;
         }
         const modal = document.getElementById("modalRosterMappingBackdrop");
@@ -5124,11 +5930,19 @@
       function onClassLinkSelectChanged() {
         const code = document.getElementById("mapSelectClassLink")?.value;
         if (code && state.detectedClasses) {
-          const matched = state.detectedClasses.find(c => c.schedule_code === code);
+          const matched = state.detectedClasses.find(
+            (c) => c.schedule_code === code,
+          );
           if (matched) {
-            if (matched.course_sec) document.getElementById("mapInputCourseSec").value = matched.course_sec;
-            if (matched.schedule_code) document.getElementById("mapInputScheduleCode").value = matched.schedule_code;
-            if (matched.subject_name) document.getElementById("mapInputSubjectName").value = matched.subject_name;
+            if (matched.course_sec)
+              document.getElementById("mapInputCourseSec").value =
+                matched.course_sec;
+            if (matched.schedule_code)
+              document.getElementById("mapInputScheduleCode").value =
+                matched.schedule_code;
+            if (matched.subject_name)
+              document.getElementById("mapInputSubjectName").value =
+                matched.subject_name;
           }
         }
         updateModalRecommendedFilename();
@@ -5152,16 +5966,27 @@
           recEl.innerText = `${cSec} List of Students for ${sCode}-${sName}.xlsx`;
         } else if (explicitFallback) {
           recEl.innerText = explicitFallback;
-        } else if (currentInspectionData && currentInspectionData.filename_hints && currentInspectionData.filename_hints.recommended_filename) {
-          recEl.innerText = currentInspectionData.filename_hints.recommended_filename;
+        } else if (
+          currentInspectionData &&
+          currentInspectionData.filename_hints &&
+          currentInspectionData.filename_hints.recommended_filename
+        ) {
+          recEl.innerText =
+            currentInspectionData.filename_hints.recommended_filename;
         } else {
           recEl.innerText = `${cSec || "CourseSec"} List of Students for ${sCode || "ScheduleCode"}-${sName || "Subject"}.xlsx`;
         }
       }
 
       async function onMappingConfigChanged() {
-        if (!currentMappingFilename || !window.pywebview || !window.pywebview.api) return;
-        const headerRowVal = document.getElementById("mapSelectHeaderRow").value;
+        if (
+          !currentMappingFilename ||
+          !window.pywebview ||
+          !window.pywebview.api
+        )
+          return;
+        const headerRowVal =
+          document.getElementById("mapSelectHeaderRow").value;
         const nameColVal = document.getElementById("mapSelectNameCol").value;
         const idColVal = document.getElementById("mapSelectIdCol").value;
         const linkedCode = document.getElementById("mapSelectClassLink").value;
@@ -5178,7 +6003,10 @@
         };
 
         try {
-          const res = await window.pywebview.api.inspect_roster(currentMappingFilename, overrides);
+          const res = await window.pywebview.api.inspect_roster(
+            currentMappingFilename,
+            overrides,
+          );
           if (res && res.status !== "error") {
             currentInspectionData = res;
             const previewRows = res.raw_rows || res.raw_preview || [];
@@ -5187,7 +6015,13 @@
               if (typeof c === "object" && c !== null) return c;
               return { index: i, col_ref: c, name: `Col ${c}` };
             });
-            renderSpreadsheetGrid(previewRows, availableCols, overrides.header_row, overrides.name_column, overrides.id_column);
+            renderSpreadsheetGrid(
+              previewRows,
+              availableCols,
+              overrides.header_row,
+              overrides.name_column,
+              overrides.id_column,
+            );
             const parsedList = res.parsed_students || res.parsed_preview || [];
             renderParsedPreview(parsedList, res.student_count || 0);
           }
@@ -5196,8 +6030,16 @@
         }
       }
 
-      function renderSpreadsheetGrid(previewRows, availableCols, activeHeader, activeName, activeId) {
-        const container = document.getElementById("mapSpreadsheetTableContainer");
+      function renderSpreadsheetGrid(
+        previewRows,
+        availableCols,
+        activeHeader,
+        activeName,
+        activeId,
+      ) {
+        const container = document.getElementById(
+          "mapSpreadsheetTableContainer",
+        );
         if (!container) return;
         if (!previewRows || previewRows.length === 0) {
           container.innerHTML = `<div style="padding: 16px; text-align: center; color: var(--text-muted);">No raw rows available to display.</div>`;
@@ -5206,7 +6048,11 @@
 
         let maxCols = 0;
         previewRows.forEach((r) => {
-          const rowArr = Array.isArray(r) ? r : (r.cells ? Object.values(r.cells) : Object.values(r));
+          const rowArr = Array.isArray(r)
+            ? r
+            : r.cells
+              ? Object.values(r.cells)
+              : Object.values(r);
           if (rowArr.length > maxCols) maxCols = rowArr.length;
         });
         if (availableCols && availableCols.length > maxCols) {
@@ -5232,13 +6078,20 @@
         previewRows.forEach((row, rIdx) => {
           const isHeaderRow = rIdx === activeHeader;
           const rowClass = isHeaderRow ? "row-header-highlight" : "";
-          const rowArr = Array.isArray(row) ? row : (row.cells ? Object.values(row.cells) : Object.values(row));
+          const rowArr = Array.isArray(row)
+            ? row
+            : row.cells
+              ? Object.values(row.cells)
+              : Object.values(row);
           tableHtml += `<tr class="${rowClass}"><td style="font-weight: 700; color: var(--text-muted);">${rIdx + 1}${isHeaderRow ? " [H]" : ""}</td>`;
           for (let c = 0; c < maxCols; c++) {
             let colClass = "";
             if (c === activeName) colClass = "col-name-highlight";
             else if (c === activeId) colClass = "col-id-highlight";
-            const val = rowArr[c] !== undefined && rowArr[c] !== null ? String(rowArr[c]) : "";
+            const val =
+              rowArr[c] !== undefined && rowArr[c] !== null
+                ? String(rowArr[c])
+                : "";
             tableHtml += `<td class="${colClass}" title="${escapeHTML(val)}">${escapeHTML(val)}</td>`;
           }
           tableHtml += `</tr>`;
@@ -5261,8 +6114,16 @@
 
         let itemsHtml = "";
         parsedStudents.slice(0, 15).forEach((s) => {
-          const sName = s.name !== undefined ? s.name : (Array.isArray(s) ? s[0] : "");
-          const sId = s.student_number !== undefined ? s.student_number : (s.id !== undefined ? s.id : (Array.isArray(s) ? s[1] : ""));
+          const sName =
+            s.name !== undefined ? s.name : Array.isArray(s) ? s[0] : "";
+          const sId =
+            s.student_number !== undefined
+              ? s.student_number
+              : s.id !== undefined
+                ? s.id
+                : Array.isArray(s)
+                  ? s[1]
+                  : "";
           itemsHtml += `
             <div class="parsed-student-item">
               <span class="parsed-student-name">${escapeHTML(sName)}</span>
@@ -5277,15 +6138,30 @@
       }
 
       async function applyRosterMapping() {
-        if (!currentMappingFilename || !window.pywebview || !window.pywebview.api) return;
-        const headerRowVal = document.getElementById("mapSelectHeaderRow").value;
+        if (
+          !currentMappingFilename ||
+          !window.pywebview ||
+          !window.pywebview.api
+        )
+          return;
+        const headerRowVal =
+          document.getElementById("mapSelectHeaderRow").value;
         const nameColVal = document.getElementById("mapSelectNameCol").value;
         const idColVal = document.getElementById("mapSelectIdCol").value;
-        const linkedCode = document.getElementById("mapSelectClassLink")?.value || "";
-        const courseSec = (document.getElementById("mapInputCourseSec")?.value || "").trim();
-        const scheduleCode = (document.getElementById("mapInputScheduleCode")?.value || "").trim();
-        const subjectName = (document.getElementById("mapInputSubjectName")?.value || "").trim();
-        const rememberSimilar = document.getElementById("mapCheckRememberSimilar")?.checked;
+        const linkedCode =
+          document.getElementById("mapSelectClassLink")?.value || "";
+        const courseSec = (
+          document.getElementById("mapInputCourseSec")?.value || ""
+        ).trim();
+        const scheduleCode = (
+          document.getElementById("mapInputScheduleCode")?.value || ""
+        ).trim();
+        const subjectName = (
+          document.getElementById("mapInputSubjectName")?.value || ""
+        ).trim();
+        const rememberSimilar = document.getElementById(
+          "mapCheckRememberSimilar",
+        )?.checked;
 
         const headerRow = parseInt(headerRowVal, 10);
         const nameCol = parseInt(nameColVal, 10);
@@ -5306,74 +6182,115 @@
 
         if (rememberSimilar) {
           try {
-            localStorage.setItem("cvsu_parsing_rules", JSON.stringify({
-              header_row: config.header_row,
-              name_column: config.name_column,
-              id_column: config.id_column,
-            }));
+            localStorage.setItem(
+              "cvsu_parsing_rules",
+              JSON.stringify({
+                header_row: config.header_row,
+                name_column: config.name_column,
+                id_column: config.id_column,
+              }),
+            );
           } catch (e) {}
         }
 
         try {
-          const reports = await window.pywebview.api.validate_rosters(state.rosterConfigs);
+          const reports = await window.pywebview.api.validate_rosters(
+            state.rosterConfigs,
+          );
           state.rosterReports = reports || [];
           renderRosterStatus();
           await refreshClassDetection();
           updateStepperStatus();
           updateFileEstimate();
-          showToast("Configuration Applied", `Saved class details and column mapping for ${currentMappingFilename}`, "success");
+          showToast(
+            "Configuration Applied",
+            `Saved class details and column mapping for ${currentMappingFilename}`,
+            "success",
+          );
         } catch (err) {
-          console.error("Failed to validate rosters after applying mapping:", err);
+          console.error(
+            "Failed to validate rosters after applying mapping:",
+            err,
+          );
         }
 
         closeColumnMappingModal();
       }
 
       async function resetToAutoMapping() {
-        if (!currentMappingFilename || !window.pywebview || !window.pywebview.api) return;
+        if (
+          !currentMappingFilename ||
+          !window.pywebview ||
+          !window.pywebview.api
+        )
+          return;
         delete state.rosterConfigs[currentMappingFilename];
         saveRosterConfigs();
 
         try {
-          const res = await window.pywebview.api.inspect_roster(currentMappingFilename, {});
+          const res = await window.pywebview.api.inspect_roster(
+            currentMappingFilename,
+            {},
+          );
           if (res && res.status !== "error") {
             currentInspectionData = res;
             if (res.detected_header_row !== undefined) {
-              document.getElementById("mapSelectHeaderRow").value = res.detected_header_row;
+              document.getElementById("mapSelectHeaderRow").value =
+                res.detected_header_row;
             }
             if (res.detected_name_column !== undefined) {
-              document.getElementById("mapSelectNameCol").value = res.detected_name_column;
+              document.getElementById("mapSelectNameCol").value =
+                res.detected_name_column;
             }
             if (res.detected_id_column !== undefined) {
-              document.getElementById("mapSelectIdCol").value = res.detected_id_column;
+              document.getElementById("mapSelectIdCol").value =
+                res.detected_id_column;
             }
             if (document.getElementById("mapSelectClassLink")) {
               document.getElementById("mapSelectClassLink").value = "";
             }
             const hints = res.filename_hints || {};
             if (document.getElementById("mapInputCourseSec")) {
-              document.getElementById("mapInputCourseSec").value = hints.course_sec || "";
+              document.getElementById("mapInputCourseSec").value =
+                hints.course_sec || "";
             }
             if (document.getElementById("mapInputScheduleCode")) {
-              document.getElementById("mapInputScheduleCode").value = hints.schedule_code || "";
+              document.getElementById("mapInputScheduleCode").value =
+                hints.schedule_code || "";
             }
             if (document.getElementById("mapInputSubjectName")) {
-              document.getElementById("mapInputSubjectName").value = hints.subject_name || "";
+              document.getElementById("mapInputSubjectName").value =
+                hints.subject_name || "";
             }
             updateModalRecommendedFilename(res.recommended_filename);
 
             const previewRows = res.raw_rows || [];
             const availableCols = res.available_columns || [];
-            renderSpreadsheetGrid(previewRows, availableCols, res.detected_header_row, res.detected_name_column, res.detected_id_column);
-            renderParsedPreview(res.parsed_students || [], res.student_count || 0);
+            renderSpreadsheetGrid(
+              previewRows,
+              availableCols,
+              res.detected_header_row,
+              res.detected_name_column,
+              res.detected_id_column,
+            );
+            renderParsedPreview(
+              res.parsed_students || [],
+              res.student_count || 0,
+            );
 
-            const reports = await window.pywebview.api.validate_rosters(state.rosterConfigs);
+            const reports = await window.pywebview.api.validate_rosters(
+              state.rosterConfigs,
+            );
             state.rosterReports = reports || [];
             renderRosterStatus();
             await refreshClassDetection();
             updateStepperStatus();
             updateFileEstimate();
-            showToast("Defaults Restored", `Reset ${currentMappingFilename} to automatic detection`, "info");
+            showToast(
+              "Defaults Restored",
+              `Reset ${currentMappingFilename} to automatic detection`,
+              "info",
+            );
           }
         } catch (err) {
           console.error("Failed to reset mapping:", err);
@@ -5473,12 +6390,19 @@
       }
 
       function saveClassTypeOverrides() {
-        const overrides = {};
-        document.querySelectorAll(".class-type-select").forEach((sel) => {
-          const cid = sel.getAttribute("data-class-id");
-          if (cid) overrides[cid] = sel.value;
-        });
-        localStorage.setItem("classTypeOverrides", JSON.stringify(overrides));
+        try {
+          const overrides = {};
+          document.querySelectorAll(".class-type-select").forEach((sel) => {
+            const cid = sel.getAttribute("data-class-id");
+            if (cid) overrides[cid] = sel.value;
+          });
+          localStorage.setItem("classTypeOverrides", JSON.stringify(overrides));
+        } catch (e) {
+          console.warn(
+            "Unable to save class type overrides to localStorage:",
+            e,
+          );
+        }
       }
 
       function applyClassTypeOverrides() {

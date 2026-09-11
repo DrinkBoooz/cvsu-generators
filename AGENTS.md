@@ -1,12 +1,15 @@
 # Project Rules
 
 ## Tests Location
+
 All test programs, test suites, test fixtures, and testing utilities must always be placed under the `tests/` directory:
+
 - Automated tests (`test_*.py`) belong in `tests/`.
 - Regression, edge cases, diff, and verification scripts belong in `tests/`.
 - Do not place test scripts in the root directory.
 
 ## Git Commit Formatting
+
 All git commit messages must strictly follow the format:
 `<commit_number>: <description based on chat changes>`
 
@@ -16,6 +19,7 @@ All git commit messages must strictly follow the format:
 - **Example**: `43: dynamically calculate progress bar total steps and update completion telemetry`
 
 ## Git Branching & Merging Rules
+
 - **Development on `dev`**: All active work, feature implementations, tests, and task commits belong strictly on the `dev` branch.
 - **Do NOT Auto-Merge to `main`**: Merging into `main` must **NEVER** happen automatically at the end of a task or chat. Merging to `main` requires an explicit user prompt or request.
 - **Merging into `main` (Only When Prompted by User)**:
@@ -32,6 +36,7 @@ All git commit messages must strictly follow the format:
     5. `git checkout dev`
 
 ## Version Numbering & Synchronization
+
 - **Single Source of Truth**: The active application version is displayed in `executable/ui.html` via the `<span class="badge-version">vX.Y Beta</span>` badge in the navigation header.
 - **When to Bump the Version**:
   - Whenever new features, UX workflows, generators, or significant fixes are implemented across a chat or milestone, the version number must be bumped (e.g. from `v1.1 Beta` -> `v1.2 Beta`).
@@ -43,23 +48,28 @@ All git commit messages must strictly follow the format:
   4. `executable/file_version_info.txt`: Synchronize `filevers`, `prodvers`, `FileVersion`, and `ProductVersion`.
 
 ## Executable Packaging, Copyright & Code Signing
+
 Whenever the application is exported, compiled, or packaged as a standalone Windows executable (`.exe`):
+
 - **Windows PE Version Information**: `executable/file_version_info.txt` must always be maintained with official copyright (`Copyright © 2026 Dan Joseph Ortega. All rights reserved.`), company/author name (`Dan Joseph Ortega`), product name (`CvSU Document Generator`), and version numbers synchronized with `ui.html`.
 - **PyInstaller Integration**: Both `executable/build.bat` and `executable/CvSU Gen (Beta).spec` must embed `file_version_info.txt` via `--version-file` / `version='file_version_info.txt'` so Windows Explorer (Properties -> Details), hover tooltips, and Task Manager display the author and copyright.
 - **Authenticode Code Signing**: Executable binaries compiled in `executable/dist/` should be digitally signed via `executable/sign_exe.ps1` (or automated post-build in `build.bat`) using `signtool.exe` and the author's Authenticode certificate (`Dan Joseph Ortega`). This ensures Windows SmartScreen and UAC prompts identify the verified author/publisher instead of "Unknown Publisher".
 - **Automated Tests**: Any changes to versioning or executable metadata must be validated by tests under `tests/` (including `tests/test_pe_version_info.py`).
 
 ## Adding New Templates & Generators Protocol
+
 Whenever a new document template is introduced to the application, the agent must follow this protocol to integrate, scaffold, and test it end-to-end.
 
 ### 1. The 3 Template Families in the Architecture
-| Family | Template Directory | Generator Engine | Output Folder | Output Naming Pattern |
-| :--- | :--- | :--- | :--- | :--- |
-| **Academic / CEIT Forms (.docx)** | `templates/` | `modules/generators/ceit_gen.py` (`DocumentGenerator`) | `<Output>/<Course_Sec>/CEIT_Forms/` | `<Course_Sec>_<SchedCode>_<SUFFIX>.docx` |
-| **Attendance Sheets (.docx)** | `attendance/` | `modules/generators/attendance_gen.py` | `<Output>/<Course_Sec>/Attendance/` | `<Course_Sec>_<SchedCode>_ATTENDANCE_<Day>_<Month>.docx` |
-| **Grading Spreadsheets (.xlsx)** | `templates/` | `modules/generators/grade_gen.py` | `<Output>/<Course_Sec>/` | `<Course_Sec>_<SchedCode>_GRADING_SHEET.xlsx` |
+
+| Family                            | Template Directory | Generator Engine                                       | Output Folder                       | Output Naming Pattern                                    |
+| :-------------------------------- | :----------------- | :----------------------------------------------------- | :---------------------------------- | :------------------------------------------------------- |
+| **Academic / CEIT Forms (.docx)** | `templates/`       | `modules/generators/ceit_gen.py` (`DocumentGenerator`) | `<Output>/<Course_Sec>/CEIT_Forms/` | `<Course_Sec>_<SchedCode>_<SUFFIX>.docx`                 |
+| **Attendance Sheets (.docx)**     | `attendance/`      | `modules/generators/attendance_gen.py`                 | `<Output>/<Course_Sec>/Attendance/` | `<Course_Sec>_<SchedCode>_ATTENDANCE_<Day>_<Month>.docx` |
+| **Grading Spreadsheets (.xlsx)**  | `templates/`       | `modules/generators/grade_gen.py`                      | `<Output>/<Course_Sec>/`            | `<Course_Sec>_<SchedCode>_GRADING_SHEET.xlsx`            |
 
 ### 2. Step-by-Step Checklist for Academic / CEIT Forms (.docx)
+
 When instructed to add or create a new form generator from a `.docx` template:
 
 1. **Place Template**: Place the template file in `templates/` (e.g. `templates/template_consultation.docx`).
@@ -106,6 +116,3 @@ When instructed to add or create a new form generator from a `.docx` template:
      - Template exists and loads via factory.
      - Generated `.docx` contains populated instructor, course, and student rows.
    - Run `pytest tests/ -k "not test_playwright"` to ensure 100% test pass rate.
-
-
-
