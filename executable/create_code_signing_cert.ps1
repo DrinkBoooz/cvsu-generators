@@ -8,11 +8,13 @@
 #>
 
 [CmdletBinding()]
-param()
+param(
+    [switch]$Force
+)
 
 $publisherName = "Dan Joseph Ortega"
 $organization  = "Cavite State University"
-$ou            = "CCAT Campus"
+$ou            = "CvSU Main - Indang Campus"
 $friendlyName  = "CvSU Document Generator - $publisherName"
 $cerFileName   = "DanJosephOrtega_CvSU.cer"
 $cerOutputPath = Join-Path $PSScriptRoot $cerFileName
@@ -21,16 +23,19 @@ Write-Host "========================================================" -Foregroun
 Write-Host " CvSU Code Signing Certificate Generator" -ForegroundColor Cyan
 Write-Host " Publisher: $publisherName" -ForegroundColor Cyan
 Write-Host " Organization: $organization" -ForegroundColor Cyan
+Write-Host " Unit (OU): $ou" -ForegroundColor Cyan
 Write-Host "========================================================" -ForegroundColor Cyan
 Write-Host ""
 
-# 1. Check if certificate already exists in Cert:\CurrentUser\My
-$existingCert = Get-ChildItem Cert:\CurrentUser\My -CodeSigningCert | Where-Object {
-    $_.Subject -match "CN=$publisherName"
-} | Select-Object -First 1
+# 1. Check if certificate already exists in Cert:\CurrentUser\My with matching CN and OU
+$existingCert = if (-not $Force) {
+    Get-ChildItem Cert:\CurrentUser\My -CodeSigningCert | Where-Object {
+        $_.Subject -match "CN=$publisherName" -and $_.Subject -match [regex]::Escape("OU=$ou")
+    } | Sort-Object NotAfter -Descending | Select-Object -First 1
+} else { $null }
 
 if ($existingCert) {
-    Write-Host "[INFO] An existing code signing certificate was found:" -ForegroundColor Green
+    Write-Host "[INFO] An existing code signing certificate matching OU was found:" -ForegroundColor Green
     Write-Host "       Subject:    $($existingCert.Subject)"
     Write-Host "       Thumbprint: $($existingCert.Thumbprint)"
     Write-Host "       Expires:    $($existingCert.NotAfter)"

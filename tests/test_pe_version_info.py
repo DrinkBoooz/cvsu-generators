@@ -94,6 +94,7 @@ def test_code_signing_scripts_exist():
     with open(CREATE_CERT_PATH, "r", encoding="utf-8") as f:
         cert_content = f.read()
     assert "Dan Joseph Ortega" in cert_content
+    assert "CvSU Main - Indang Campus" in cert_content
     assert "New-SelfSignedCertificate" in cert_content
 
     with open(SIGN_EXE_PATH, "r", encoding="utf-8") as f:
@@ -129,4 +130,5 @@ def test_dist_exe_properties_and_signature_if_built():
     assert "PRODUCT:CvSU Document Generator" in output
     assert "STATUS:Valid" in output or "STATUS:UnknownError" in output
     assert "Dan Joseph Ortega" in output
+    assert "CvSU Main - Indang Campus" in output
 

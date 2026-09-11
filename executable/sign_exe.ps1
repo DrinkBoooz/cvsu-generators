@@ -32,12 +32,16 @@ if (-not (Test-Path $TargetPath)) {
 # 2. Locate Code Signing Certificate
 $cert = Get-ChildItem Cert:\CurrentUser\My -CodeSigningCert | Where-Object {
     $_.Subject -match "CN=$SignerName"
-} | Select-Object -First 1
+} | Sort-Object @{
+    Expression = { if ($_.Subject -match "CvSU Main - Indang Campus") { 1 } else { 0 } }
+}, NotAfter -Descending | Select-Object -First 1
 
 if (-not $cert) {
     $cert = Get-ChildItem Cert:\LocalMachine\My -CodeSigningCert | Where-Object {
         $_.Subject -match "CN=$SignerName"
-    } | Select-Object -First 1
+    } | Sort-Object @{
+        Expression = { if ($_.Subject -match "CvSU Main - Indang Campus") { 1 } else { 0 } }
+    }, NotAfter -Descending | Select-Object -First 1
 }
 
 if (-not $cert) {
