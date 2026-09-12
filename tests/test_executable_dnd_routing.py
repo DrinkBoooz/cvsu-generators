@@ -56,24 +56,20 @@ class MockWindow:
         self.evaluate_js = MagicMock()
 
 @pytest.fixture
-def dnd_setup():
+def dnd_setup(monkeypatch):
     window = MockWindow()
     api = MagicMock()
     api.schedule_path = None
     
     import webview.dom
-    original_handler = getattr(webview.dom, 'DOMEventHandler', None)
     
     class FakeDOMEventHandler:
         def __init__(self, callback, *args, **kwargs):
             self.callback = callback
             
-    webview.dom.DOMEventHandler = FakeDOMEventHandler
+    monkeypatch.setattr(webview.dom, 'DOMEventHandler', FakeDOMEventHandler)
     
     setup_window_drag_and_drop(window, api)
-    
-    if original_handler:
-        webview.dom.DOMEventHandler = original_handler
         
     return window, api
 

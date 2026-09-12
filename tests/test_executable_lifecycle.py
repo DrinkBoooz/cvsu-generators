@@ -44,42 +44,53 @@ def test_lifecycle_concurrency_race():
     
     evaluate_calls = []
     def fake_evaluate(js_code):
-        evaluate_calls.append(js_code)
+        evaluate_calls.append((time.time(), js_code))
     
     api._window.evaluate_js = MagicMock(side_effect=fake_evaluate)
     
+    def on_window_closing():
+        api._is_window_closed = True
+        api.cancel_generation()
+        
+    closure_time = None
+    
     def fake_process_all(*args, progress_callback=None, cancel_event=None, **kwargs):
         for i in range(10):
-            if i == 5:
-                api._is_window_closed = True
-                cancel_event.set()
-                
             progress_callback({"step": i, "total": 10})
-            time.sleep(0.02)
-            
+            time.sleep(0.05)
+            if cancel_event and cancel_event.is_set():
+                break
+                
         return {
             "generated": {"ceit": [], "attendance": [], "grades": []},
             "skipped": {"ceit": [], "attendance": [], "grades": [], "rosters": []},
             "errors": {"ceit": [], "attendance": [], "grades": [], "rosters": []},
-            "cancelled": True
+            "cancelled": cancel_event.is_set() if cancel_event else False
         }
 
+    def trigger_closure():
+        nonlocal closure_time
+        time.sleep(0.15)
+        closure_time = time.time()
+        on_window_closing()
+
     with patch('executable_test.api.generation.process_all', side_effect=fake_process_all):
+        closure_thread = threading.Thread(target=trigger_closure)
+        closure_thread.start()
+        
         api.run_generation()
         
         timeout = time.time() + 2
         while api._is_processing and time.time() < timeout:
             time.sleep(0.01)
             
+        closure_thread.join(timeout=1.0)
+        
         assert not api._is_processing
+        assert closure_time is not None
         
-        assert len(evaluate_calls) == 5
-        
-        for call in evaluate_calls:
-            assert 'onGenerationComplete' not in call
-            assert 'onGenerationError' not in call
-            assert '"step": 5' not in call
-            assert '"step": 6' not in call
-            assert '"step": 7' not in call
-            assert '"step": 8' not in call
-            assert '"step": 9' not in call
+        # Verify that no evaluate_js calls happen after closure
+        for call_time, js_code in evaluate_calls:
+            assert call_time <= closure_time, f"evaluate_js called after window closed: {js_code}"
+            
+        assert len(evaluate_calls) > 0
