@@ -49,28 +49,22 @@
         const step6 = document.getElementById("cardStep6");
         if (!dock || !step6) return;
 
-        const checkVisibility = () => {
-          if (window._isGenerationRunning) {
-            dock.classList.add("dock-hidden");
-            return;
-          }
-          const rect = step6.getBoundingClientRect();
-          // Hide the floating dock as soon as Step 6 enters the viewport
-          // to prevent overlap and duplicate 'Initialize Workflow' buttons.
-          const isStep6Visible =
-            rect.top < window.innerHeight + 10 && rect.bottom > 0;
-          if (isStep6Visible) {
-            dock.classList.add("dock-hidden");
-          } else {
-            dock.classList.remove("dock-hidden");
-          }
-        };
-
-        window.addEventListener("scroll", checkVisibility, { passive: true });
-        window.addEventListener("resize", checkVisibility, { passive: true });
-
-        // Initial check after DOM render and layout calculations
-        setTimeout(checkVisibility, 150);
+        const observer = new IntersectionObserver(
+          (entries) => {
+            if (window._isGenerationRunning) {
+              dock.classList.add("dock-hidden");
+              return;
+            }
+            if (entries[0].isIntersecting) {
+              dock.classList.add("dock-hidden");
+            } else {
+              dock.classList.remove("dock-hidden");
+            }
+          },
+          { threshold: 0.05 } // Hide as soon as 5% of Step 6 is visible
+        );
+        
+        observer.observe(step6);
       }
 
       function triggerWorkflowFromDock() {
