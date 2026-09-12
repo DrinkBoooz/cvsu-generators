@@ -5,10 +5,9 @@
         z-index: 100;
         width: 100%;
         background: var(--header-bg);
-        backdrop-filter: blur(20px) saturate(180%);
-        -webkit-backdrop-filter: blur(20px) saturate(180%);
+        backdrop-filter: blur(40px) saturate(200%);
+        -webkit-backdrop-filter: blur(40px) saturate(200%);
         border-bottom: 1px solid var(--border-subtle);
-        box-shadow: var(--header-shadow);
       }
       .top-header {
         max-width: 1400px;
@@ -36,15 +35,15 @@
         gap: 12px;
       }
       .brand-icon {
-        width: 38px;
-        height: 38px;
+        width: 36px;
+        height: 36px;
         background: linear-gradient(135deg, var(--accent-emerald), #047857);
-        border-radius: 12px;
+        border-radius: 10px;
         display: flex;
         align-items: center;
         justify-content: center;
         color: white;
-        box-shadow: 0 4px 14px var(--accent-emerald-glow);
+        box-shadow: 0 2px 10px var(--accent-emerald-glow);
       }
       .brand-title {
         font-size: 20px;
@@ -60,10 +59,10 @@
       .badge-version {
         font-size: 11px;
         font-weight: 600;
-        background: var(--surface-subtle);
-        border: 1px solid var(--border-subtle);
-        padding: 2px 8px;
-        border-radius: 20px;
+        background: rgba(16, 185, 129, 0.1);
+        border: 1px solid rgba(16, 185, 129, 0.3);
+        padding: 3px 8px;
+        border-radius: var(--radius-pill);
         color: var(--accent-emerald);
       }
       .header-actions {
@@ -72,11 +71,11 @@
         gap: 8px;
       }
       .nav-btn {
-        background: var(--surface-card);
+        background: var(--surface-subtle);
         border: 1px solid var(--border-subtle);
         color: var(--text-secondary);
-        padding: 8px 14px;
-        border-radius: 12px;
+        padding: 6px 14px;
+        border-radius: var(--radius-pill);
         font-size: 13px;
         font-weight: 600;
         cursor: pointer;
@@ -84,18 +83,18 @@
         align-items: center;
         gap: 6px;
         transition:
-          color 0.15s ease,
-          border-color 0.15s ease,
-          background-color 0.15s ease,
-          transform 0.15s ease;
+          color 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+          border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+          background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+          transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
       }
       .nav-btn:hover {
+        background: var(--surface-card);
         color: var(--text-primary);
-        border-color: var(--border-focus);
-        transform: translateY(-1px);
+        transform: scale(0.98);
       }
       .nav-btn:active {
-        transform: scale(0.96);
+        transform: scale(0.95);
       }
 
       /* ── Glass Cards & Step Containers (Apple HIG) ─────────────────────── */

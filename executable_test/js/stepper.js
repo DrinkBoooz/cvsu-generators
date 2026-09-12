@@ -55,40 +55,16 @@
             return;
           }
           const rect = step6.getBoundingClientRect();
-          // If Step 6 is currently visible within or near the viewport,
-          // hide the floating action bar to prevent duplicate "Initialize Workflow" buttons.
+          // Hide the floating dock as soon as Step 6 enters the viewport
+          // to prevent overlap and duplicate 'Initialize Workflow' buttons.
           const isStep6Visible =
-            rect.top < window.innerHeight - 40 && rect.bottom > 60;
+            rect.top < window.innerHeight + 10 && rect.bottom > 0;
           if (isStep6Visible) {
             dock.classList.add("dock-hidden");
           } else {
             dock.classList.remove("dock-hidden");
           }
         };
-
-        if ("IntersectionObserver" in window) {
-          const observer = new IntersectionObserver(
-            (entries) => {
-              entries.forEach((entry) => {
-                if (window._isGenerationRunning) {
-                  dock.classList.add("dock-hidden");
-                  return;
-                }
-                if (entry.isIntersecting) {
-                  dock.classList.add("dock-hidden");
-                } else {
-                  dock.classList.remove("dock-hidden");
-                }
-              });
-            },
-            {
-              root: null,
-              threshold: 0.05,
-              rootMargin: "0px 0px -40px 0px",
-            },
-          );
-          observer.observe(step6);
-        }
 
         window.addEventListener("scroll", checkVisibility, { passive: true });
         window.addEventListener("resize", checkVisibility, { passive: true });
@@ -146,21 +122,26 @@
           ".item-class-check:checked",
         ).length;
         const hasEngines =
-          state.engines.attendance ||
-          state.engines.ceit ||
-          state.engines.grades;
-        const s3Ready =
-          hasEngines &&
-          (state.detectedClasses.length === 0 || selectedClasses > 0);
+          document.getElementById("checkAttendance")?.checked ||
+          document.getElementById("checkCeit")?.checked ||
+          document.getElementById("checkGrades")?.checked;
+        const s3Ready = !!hasEngines;
         const s4Ready = true;
         const s5Ready = !!state.outputDir;
-        const s6Ready = s1Ready && s2Ready && s3Ready && s5Ready;
+        const s6Ready =
+          s1Ready &&
+          s2Ready &&
+          s3Ready &&
+          s5Ready &&
+          (state.detectedClasses.length === 0 || selectedClasses > 0);
 
-        const setChip = (chipId, statusId, isReady, okIcon = "✅") => {
+        const setChip = (chipId, statusId, isReady, okIcon = "✓") => {
           const chip = document.getElementById(chipId);
           const st = document.getElementById(statusId);
           if (chip) chip.classList.toggle("ready", isReady);
-          if (st) st.innerText = isReady ? okIcon : "⚪";
+          if (st) {
+             st.innerHTML = isReady ? okIcon : '<span style="opacity: 0.3; font-size: 14px;">•</span>';
+          }
         };
 
         setChip("chipStep1", "statusStep1", s1Ready);
