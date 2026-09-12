@@ -1,8 +1,8 @@
 // ── Application Bootstrapping & Lifecycle ─────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   if (typeof initTheme === 'function') initTheme();
-  if (typeof setupScrollAwareActionBar === 'function') setupScrollAwareActionBar();
-  if (typeof updateStepper === 'function') updateStepper(1);
+  if (typeof initScrollAwareDock === 'function') initScrollAwareDock();
+  if (typeof updateStepperStatus === 'function') updateStepperStatus();
   if (typeof loadParserSettingsDefaults === 'function') loadParserSettingsDefaults();
 });
 
