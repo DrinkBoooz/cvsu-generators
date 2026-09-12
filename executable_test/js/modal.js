@@ -50,6 +50,7 @@
             btnConfirm.style.background = "var(--accent-emerald)";
             btnConfirm.style.borderColor = "var(--accent-emerald)";
             btnConfirm.style.boxShadow = "0 4px 14px var(--accent-emerald-glow)";
+
             if (iconWrapper) {
               iconWrapper.style.background = "var(--accent-emerald-glow)";
               iconWrapper.style.color = "var(--accent-emerald)";
@@ -57,10 +58,12 @@
           }
 
           backdrop.classList.remove("d-none");
+          document.body.style.overflow = "hidden";
           btnCancel.focus();
 
           const cleanup = (result) => {
             backdrop.classList.add("d-none");
+            document.body.style.overflow = "";
             btnConfirm.onclick = null;
             btnCancel.onclick = null;
             activeConfirmResolve = null;
