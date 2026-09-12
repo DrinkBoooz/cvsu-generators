@@ -1,6 +1,4 @@
 import os
-import tempfile
-import base64
 import webview
 from modules.common.logger import logger
 from .base import sanitize_filename
@@ -23,22 +21,11 @@ class TemplateMixin:
             return self.inspect_custom_template(target_path)
         return {"status": "cancelled"}
 
-    def handle_dropped_custom_template(self, filename, base64_data=None, original_path=None):
+    def handle_dropped_custom_template(self, filename, original_path=None):
         """Handles drag-and-drop of a .docx template."""
         target_path = None
         if original_path and os.path.exists(original_path):
             target_path = original_path
-        elif base64_data and filename:
-            clean_filename = sanitize_filename(filename)
-            cache_dir = os.path.join(tempfile.gettempdir(), "cvsu_cache", "custom_templates")
-            os.makedirs(cache_dir, exist_ok=True)
-            target_path = os.path.join(cache_dir, clean_filename)
-            try:
-                with open(target_path, "wb") as f:
-                    f.write(base64.b64decode(base64_data))
-            except Exception as e:
-                logger.error(f"Failed to write dropped template {filename}: {e}")
-                return {"status": "error", "message": str(e)}
 
         if target_path and os.path.exists(target_path):
             return self.inspect_custom_template(target_path)

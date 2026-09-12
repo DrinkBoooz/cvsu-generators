@@ -76,7 +76,7 @@
           false,
         );
 
-        function setupVisualZone(zone, onFiles) {
+        function setupVisualZone(zone) {
           if (!zone) return;
           let enterCount = 0;
 
@@ -117,90 +117,18 @@
 
           zone.addEventListener(
             "drop",
-            async (e) => {
+            (e) => {
               e.preventDefault();
               enterCount = 0;
               zone.classList.remove("dragover");
-
-              const files = e.dataTransfer ? e.dataTransfer.files : null;
-              if (files && files.length > 0 && onFiles) {
-                await onFiles(Array.from(files));
-              }
             },
             false,
           );
         }
 
-        setupVisualZone(
-          document.getElementById("scheduleDropzone"),
-          async (files) => {
-            if (!window.pywebview || !window.pywebview.api) return;
-            const file = files[0];
-            const path = file.pywebviewFullPath || file.path;
-            if (path) {
-              const res = await window.pywebview.api.handle_dropped_schedule(
-                file.name,
-                path,
-              );
-              window.onScheduleLoaded(res);
-            }
-          },
-        );
-
-        setupVisualZone(
-          document.getElementById("rostersDropzone"),
-          async (files) => {
-            if (!window.pywebview || !window.pywebview.api) return;
-            const payloads = files
-              .filter(
-                (f) =>
-                  !f.name.startsWith("~$") && (f.pywebviewFullPath || f.path),
-              )
-              .map((f) => ({
-                filename: f.name,
-                path: f.pywebviewFullPath || f.path,
-                data: null,
-              }));
-            if (payloads.length > 0) {
-              const res = await window.pywebview.api.handle_dropped_rosters(
-                payloads,
-                state.rosterConfigs,
-              );
-              window.onRostersLoaded(res);
-            }
-          },
-        );
-
-        setupVisualZone(
-          document.getElementById("templateDropzone"),
-          async (files) => {
-            if (!window.pywebview || !window.pywebview.api) return;
-            const file = files[0];
-            if (!file) return;
-            if (!file.name.toLowerCase().endsWith(".docx")) {
-              showToast(
-                "Invalid File",
-                "Please drop a Word .docx document template.",
-                "warning",
-              );
-              return;
-            }
-            const path = file.pywebviewFullPath || file.path;
-            let res = null;
-            if (path && window.pywebview.api.inspect_custom_template) {
-              res = await window.pywebview.api.inspect_custom_template(path);
-            }
-            if (res && res.status === "success") {
-              renderCustomTemplateInspection(res);
-            } else if (res) {
-              showToast(
-                "Inspection Error",
-                res.message || "Could not analyze template",
-                "error",
-              );
-            }
-          },
-        );
+        setupVisualZone(document.getElementById("scheduleDropzone"));
+        setupVisualZone(document.getElementById("rostersDropzone"));
+        setupVisualZone(document.getElementById("templateDropzone"));
       }
 
       document.addEventListener("DOMContentLoaded", () => {

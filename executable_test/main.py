@@ -44,6 +44,7 @@ def create_app():
     api._window = window
 
     def on_window_closing():
+        api._is_window_closed = True
         api.cancel_generation()
 
     def on_window_closed():

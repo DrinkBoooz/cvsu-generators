@@ -1,7 +1,4 @@
 import os
-import tempfile
-import base64
-import uuid
 import webview
 from modules.common.logger import logger
 from modules.parsers.schedule_parser import inspect_schedule_file
