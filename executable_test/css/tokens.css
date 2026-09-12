@@ -43,8 +43,7 @@
   --hig-font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
   --hig-font-text: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
 
-  /* Apple HIG Semantic Tokens (Added for Parity/Testing) */
-  --hig-font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
+  /* Apple HIG Semantic Tokens */
   --hig-font-title-1: 28px;
   --hig-font-body: 15px;
   --hig-font-caption: 12px;
@@ -67,7 +66,7 @@
   --hig-focus-ring: 0 0 0 4px rgba(5, 150, 105, 0.3);
 }
 
-      [data-bs-theme="dark"] {
+      [data-theme="dark"] {
         color-scheme: dark;
         --bg-base: #0b0f17;
         --surface-card: rgba(17, 24, 39, 0.72);

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-bs-theme="dark">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -259,6 +259,9 @@
               id="scheduleDropzone"
               class="dropzone"
               onclick="loadSchedule()"
+              tabindex="0"
+              role="button"
+              onkeydown="if(event.key==='Enter' || event.key===' ') { event.preventDefault(); this.click(); }"
             >
               <svg
                 class="dropzone-icon"
@@ -436,7 +439,7 @@
             </div>
 
             <!-- Rosters Dropzone with Browse Data button -->
-            <div id="rostersDropzone" class="dropzone" onclick="loadRosters()">
+            <div id="rostersDropzone" class="dropzone" onclick="loadRosters()" tabindex="0" role="button" onkeydown="if(event.key==='Enter' || event.key===' ') { event.preventDefault(); this.click(); }">
               <svg
                 class="dropzone-icon"
                 viewBox="0 0 24 24"

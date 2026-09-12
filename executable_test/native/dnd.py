@@ -1,6 +1,7 @@
 import os
 import json
-import process_schedule
+from modules.common.logger import logger
+from modules.parsers.schedule_parser import inspect_schedule_file
 
 def setup_window_drag_and_drop(window, api):
     """
@@ -29,7 +30,7 @@ def setup_window_drag_and_drop(window, api):
         if window.native:
             window.native.Invoke(WinForms.MethodInvoker(_enable_native_dnd))
     except Exception as e:
-        process_schedule.logger.debug(f"WinForms AllowDrop setup: {e}")
+        logger.debug(f"WinForms AllowDrop setup: {e}")
 
     # 2. Bind DOM Drag and Drop handlers to capture pywebviewFullPath
     try:
@@ -57,7 +58,7 @@ def setup_window_drag_and_drop(window, api):
                             window.evaluate_js(f"if (window.renderCustomTemplateInspection) window.renderCustomTemplateInspection({json.dumps(res)});")
                             break
             except Exception as err:
-                process_schedule.logger.error(f"Error handling template drop: {err}")
+                logger.error(f"Error handling template drop: {err}")
 
         def on_schedule_drop(e):
             try:
@@ -73,7 +74,7 @@ def setup_window_drag_and_drop(window, api):
                             window.evaluate_js(f"if (window.onScheduleLoaded) window.onScheduleLoaded({json.dumps(res)});")
                             break
             except Exception as err:
-                process_schedule.logger.error(f"Error handling schedule drop: {err}")
+                logger.error(f"Error handling schedule drop: {err}")
 
         def on_rosters_drop(e):
             try:
@@ -96,7 +97,7 @@ def setup_window_drag_and_drop(window, api):
                     res = api.handle_dropped_rosters(payloads)
                     window.evaluate_js(f"if (window.onRostersLoaded) window.onRostersLoaded({json.dumps(res)});")
             except Exception as err:
-                process_schedule.logger.error(f"Error handling rosters drop: {err}")
+                logger.error(f"Error handling rosters drop: {err}")
 
         def on_doc_drop(e):
             try:
@@ -115,7 +116,7 @@ def setup_window_drag_and_drop(window, api):
                     if base.startswith('~$'):
                         continue
                     if ext in ('.xls', '.xlsx', '.xlsm'):
-                        meta = process_schedule.inspect_schedule_file(full_path)
+                        meta = inspect_schedule_file(full_path)
                         if meta and meta.get('total_slots', 0) > 0 and (not api.schedule_path or 'List of Students' not in base):
                             excel_schedules.append((base, full_path))
                         else:
@@ -134,7 +135,7 @@ def setup_window_drag_and_drop(window, api):
                     res = api.handle_dropped_rosters(roster_items)
                     window.evaluate_js(f"if (window.onRostersLoaded) window.onRostersLoaded({json.dumps(res)});")
             except Exception as err:
-                process_schedule.logger.error(f"Error handling document drop: {err}")
+                logger.error(f"Error handling document drop: {err}")
 
         if sched_zone:
             sched_zone.events.dragenter += DOMEventHandler(on_drag_ignore, True, True)
@@ -156,4 +157,4 @@ def setup_window_drag_and_drop(window, api):
             doc.events.drop += DOMEventHandler(on_doc_drop, True, True)
 
     except Exception as e:
-        process_schedule.logger.error(f"Error binding pywebview DOM handlers: {e}")
+        logger.error(f"Error binding pywebview DOM handlers: {e}")

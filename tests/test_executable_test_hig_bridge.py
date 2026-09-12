@@ -18,10 +18,10 @@ def test_script_api_signatures_match_pywebview_calls():
     sig_out = inspect.signature(api.browse_output)
     assert len(sig_out.parameters) == 0, "browse_output must take 0 parameters"
 
-    # handle_dropped_schedule takes filename, base64_data=None, original_path=None
+    # handle_dropped_schedule takes filename, original_path=None
     sig_drop_sched = inspect.signature(api.handle_dropped_schedule)
     params = list(sig_drop_sched.parameters.keys())
-    assert params == ["filename", "base64_data", "original_path"]
+    assert params == ["filename", "original_path"]
 
     # detect_classes takes roster_configs=None
     sig_detect = inspect.signature(api.detect_classes)

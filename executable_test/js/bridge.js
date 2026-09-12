@@ -140,7 +140,6 @@
             if (path) {
               const res = await window.pywebview.api.handle_dropped_schedule(
                 file.name,
-                null,
                 path,
               );
               window.onScheduleLoaded(res);
@@ -190,26 +189,6 @@
             let res = null;
             if (path && window.pywebview.api.inspect_custom_template) {
               res = await window.pywebview.api.inspect_custom_template(path);
-            } else if (window.pywebview.api.handle_dropped_custom_template) {
-              const reader = new FileReader();
-              reader.onload = async () => {
-                const b64 = reader.result.split(",")[1];
-                res = await window.pywebview.api.handle_dropped_custom_template(
-                  file.name,
-                  b64,
-                );
-                if (res && res.status === "success") {
-                  renderCustomTemplateInspection(res);
-                } else {
-                  showToast(
-                    "Inspection Error",
-                    (res && res.message) || "Could not analyze template",
-                    "error",
-                  );
-                }
-              };
-              reader.readAsDataURL(file);
-              return;
             }
             if (res && res.status === "success") {
               renderCustomTemplateInspection(res);

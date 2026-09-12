@@ -25,7 +25,7 @@
       async function toggleTheme(event) {
         const doc = document.documentElement;
         doc.classList.add("theme-transitioning");
-        const currentTheme = doc.getAttribute("data-bs-theme") || "dark";
+        const currentTheme = doc.getAttribute("data-theme") || "dark";
         const newTheme = currentTheme === "dark" ? "light" : "dark";
 
         const btn = document.getElementById("btnToggleTheme");
@@ -37,7 +37,7 @@
 
         const applyTheme = () => {
           doc.classList.add("theme-transitioning");
-          doc.setAttribute("data-bs-theme", newTheme);
+          doc.setAttribute("data-theme", newTheme);
           updateThemeButtonState(newTheme);
           try {
             localStorage.setItem("cvsu_gen_theme", newTheme);
@@ -105,6 +105,6 @@
       function loadSavedTheme() {
         const saved = localStorage.getItem("cvsu_gen_theme");
         const theme = saved || "dark";
-        document.documentElement.setAttribute("data-bs-theme", theme);
+        document.documentElement.setAttribute("data-theme", theme);
         updateThemeButtonState(theme);
       }

@@ -2,7 +2,7 @@ import os
 import tempfile
 import base64
 import webview
-import process_schedule
+from modules.common.logger import logger
 from .base import sanitize_filename
 
 class TemplateMixin:
@@ -37,7 +37,7 @@ class TemplateMixin:
                 with open(target_path, "wb") as f:
                     f.write(base64.b64decode(base64_data))
             except Exception as e:
-                process_schedule.logger.error(f"Failed to write dropped template {filename}: {e}")
+                logger.error(f"Failed to write dropped template {filename}: {e}")
                 return {"status": "error", "message": str(e)}
 
         if target_path and os.path.exists(target_path):
@@ -56,7 +56,7 @@ class TemplateMixin:
                 "recipe": recipe
             }
         except Exception as e:
-            process_schedule.logger.error(f"Failed to inspect custom template {file_path}: {e}")
+            logger.error(f"Failed to inspect custom template {file_path}: {e}")
             return {"status": "error", "message": str(e)}
 
     def save_custom_template(self, file_path, title, suffix, recipe):
@@ -66,7 +66,7 @@ class TemplateMixin:
             res = config_manager.save_custom_template(file_path, title, suffix, recipe)
             return res
         except Exception as e:
-            process_schedule.logger.error(f"Failed to save custom template: {e}")
+            logger.error(f"Failed to save custom template: {e}")
             return {"status": "error", "message": str(e)}
 
     def get_custom_templates(self):
@@ -75,7 +75,7 @@ class TemplateMixin:
             from modules.common.config_manager import config_manager
             return config_manager.get_custom_templates()
         except Exception as e:
-            process_schedule.logger.error(f"Failed to get custom templates: {e}")
+            logger.error(f"Failed to get custom templates: {e}")
             return []
 
     def toggle_custom_template(self, template_id, enabled):
@@ -84,7 +84,7 @@ class TemplateMixin:
             from modules.common.config_manager import config_manager
             return config_manager.toggle_custom_template(template_id, enabled)
         except Exception as e:
-            process_schedule.logger.error(f"Failed to toggle custom template: {e}")
+            logger.error(f"Failed to toggle custom template: {e}")
             return {"status": "error", "message": str(e)}
 
     def delete_custom_template(self, template_id):
@@ -93,5 +93,5 @@ class TemplateMixin:
             from modules.common.config_manager import config_manager
             return config_manager.delete_custom_template(template_id)
         except Exception as e:
-            process_schedule.logger.error(f"Failed to delete custom template: {e}")
+            logger.error(f"Failed to delete custom template: {e}")
             return {"status": "error", "message": str(e)}

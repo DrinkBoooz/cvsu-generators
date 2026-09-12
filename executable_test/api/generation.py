@@ -1,6 +1,7 @@
 import threading
 import json
-import process_schedule
+from modules.common.logger import logger
+from modules.services.orchestrator import process_all
 
 class GenerationMixin:
     """Mixin handling background generation worker thread, cancellation, and real-time telemetry."""
@@ -9,7 +10,7 @@ class GenerationMixin:
         with self._lock:
             if self._is_processing and self._cancel_event:
                 self._cancel_event.set()
-                process_schedule.logger.info("User requested generation cancellation.")
+                logger.info("User requested generation cancellation.")
                 return {"status": "success", "message": "Cancellation requested."}
         return {"status": "error", "message": "No active generation to cancel."}
 
@@ -35,23 +36,25 @@ class GenerationMixin:
             return {"status": "error", "message": "Missing Output Directory. Operations cannot resolve without an endpoint."}
 
         try:
-            process_schedule.logger.info("Commencing Build Initialization with real-time telemetry...")
-            process_schedule.logger.info(f"Loaded Schedule: {self.schedule_path}")
-            process_schedule.logger.info(f"Loaded Rosters: {len(self.rosters)} file(s)")
-            process_schedule.logger.info(f"Target Output Directory: {self.output_dir}")
-            process_schedule.logger.info(f"Selected Engines: {engine_filter}")
+            logger.info("Commencing Build Initialization with real-time telemetry...")
+            logger.info(f"Loaded Schedule: {self.schedule_path}")
+            logger.info(f"Loaded Rosters: {len(self.rosters)} file(s)")
+            logger.info(f"Target Output Directory: {self.output_dir}")
+            logger.info(f"Selected Engines: {engine_filter}")
             self._cancel_event.clear()
 
             def _progress_hook(info):
+                if getattr(self, "_is_window_closed", False):
+                    return
                 try:
                     js_code = f"if (window.onGenerationProgress) window.onGenerationProgress({json.dumps(info)});"
                     self._window.evaluate_js(js_code)
                 except Exception as pe:
-                    process_schedule.logger.debug(f"Telemetry evaluate error: {pe}")
+                    logger.debug(f"Telemetry evaluate error: {pe}")
 
             def _thread_target():
                 try:
-                    results = process_schedule.process_all(
+                    results = process_all(
                         self.schedule_path,
                         self.rosters,
                         self.output_dir,
@@ -73,7 +76,7 @@ class GenerationMixin:
                     total_errors = len(err["attendance"]) + len(err["grades"]) + len(err["ceit"]) + len(err["rosters"])
 
                     if results.get("cancelled"):
-                        process_schedule.logger.info(
+                        logger.info(
                             f"Build cancelled by user. {total_generated} file(s) generated."
                         )
                         payload = {
@@ -88,7 +91,7 @@ class GenerationMixin:
                             "output_dir": self.output_dir
                         }
                     elif total_generated == 0:
-                        process_schedule.logger.warning(
+                        logger.warning(
                             f"Build completed: 0 files generated (Skipped: {total_skipped}, Errors: {total_errors})."
                         )
                         payload = {
@@ -98,7 +101,7 @@ class GenerationMixin:
                             "output_dir": self.output_dir
                         }
                     else:
-                        process_schedule.logger.info(
+                        logger.info(
                             f"Build completed successfully! {total_generated} file(s) generated (CEIT: {len(gen['ceit'])}, Attendance: {len(gen['attendance'])}, Grades: {len(gen['grades'])})."
                         )
                         payload = {
@@ -113,19 +116,21 @@ class GenerationMixin:
                             "output_dir": self.output_dir
                         }
                 except Exception as e:
-                    process_schedule.logger.error(f"Error Pipeline Breakdown: {e}", exc_info=True)
+                    logger.error(f"Error Pipeline Breakdown: {e}", exc_info=True)
                     payload = {"status": "error", "message": f"Fatal Generation Fault: {str(e)}", "details": None}
                 finally:
                     with self._lock:
                         self._is_processing = False
 
                 try:
-                    js_code = f"if (window.onGenerationComplete) window.onGenerationComplete({json.dumps(payload)});"
-                    self._window.evaluate_js(js_code)
+                    if not getattr(self, "_is_window_closed", False):
+                        js_code = f"if (window.onGenerationComplete) window.onGenerationComplete({json.dumps(payload)});"
+                        self._window.evaluate_js(js_code)
                 except Exception as e:
-                    process_schedule.logger.error(f"Failed to execute UI callback: {e}")
+                    logger.error(f"Failed to execute UI callback: {e}")
                     try:
-                        self._window.evaluate_js("if (window.onGenerationError) window.onGenerationError();")
+                        if not getattr(self, "_is_window_closed", False):
+                            self._window.evaluate_js("if (window.onGenerationError) window.onGenerationError();")
                     except Exception:
                         pass
 
@@ -135,5 +140,5 @@ class GenerationMixin:
         except Exception as e:
             with self._lock:
                 self._is_processing = False
-            process_schedule.logger.error(f"Error starting thread: {e}")
+            logger.error(f"Error starting thread: {e}")
             return {"status": "error", "message": f"Failed to start generation thread: {str(e)}"}

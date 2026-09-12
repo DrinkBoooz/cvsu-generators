@@ -132,8 +132,8 @@ Write-Host "Time Stamped:  $($sig.TimeStamperCertificate.Subject)"
 Write-Host ""
 if ($sig.Status -eq "Valid") {
     Write-Host "========================================================" -ForegroundColor Green
-    Write-Host " Executable successfully signed & verified!" -ForegroundColor Green
-    Write-Host " Windows SmartScreen & UAC will display: $SignerName" -ForegroundColor Green
+    Write-Host " Executable successfully cryptographically signed!" -ForegroundColor Green
+    Write-Host " Note: Trust by Windows SmartScreen requires reputation." -ForegroundColor Green
     Write-Host "========================================================" -ForegroundColor Green
 } else {
     Write-Host "========================================================" -ForegroundColor Yellow

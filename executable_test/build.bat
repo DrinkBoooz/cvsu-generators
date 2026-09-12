@@ -4,10 +4,14 @@ echo ========================================================
 echo Compiling CvSU Gen (Beta) into Standalone EXE
 echo ========================================================
 
-echo Installing Python Dependencies natively...
-python -m pip install pypiwin32
-python -m pip install pyinstaller
-python -m pip install pywebview lxml xlrd openpyxl
+echo Creating Virtual Environment...
+if not exist venv (
+    python -m venv venv
+)
+call venv\Scripts\activate.bat
+
+echo Installing Pinned Dependencies...
+python -m pip install -r requirements-build.txt
 
 echo Removing old builds...
 if exist build rmdir /S /Q build

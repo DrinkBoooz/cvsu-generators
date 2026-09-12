@@ -1,8 +1,11 @@
 import os
 import tempfile
 import base64
+import uuid
 import webview
-import process_schedule
+from modules.common.logger import logger
+from modules.parsers.schedule_parser import inspect_schedule_file
+from modules.services.validator import validate_rosters, detect_classes
 import roster_parser
 from .base import sanitize_filename
 
@@ -12,7 +15,7 @@ class ScheduleRosterMixin:
     def clear_schedule(self):
         with self._lock:
             self.schedule_path = ""
-        validation = process_schedule.validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs) if self.rosters else []
+        validation = validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs) if self.rosters else []
         return {"status": "success", "path": "", "metadata": None, "validation": validation}
 
     def browse_schedule(self):
@@ -25,8 +28,8 @@ class ScheduleRosterMixin:
         if result and len(result) > 0:
             with self._lock:
                 self.schedule_path = result[0]
-            metadata = process_schedule.inspect_schedule_file(self.schedule_path)
-            validation = process_schedule.validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs) if self.rosters else []
+            metadata = inspect_schedule_file(self.schedule_path)
+            validation = validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs) if self.rosters else []
             return {
                 "cancelled": False,
                 "path": self.schedule_path,
@@ -39,29 +42,18 @@ class ScheduleRosterMixin:
         target = path or self.schedule_path
         if not target:
             return None
-        return process_schedule.inspect_schedule_file(target)
+        return inspect_schedule_file(target)
 
-    def handle_dropped_schedule(self, filename, base64_data=None, original_path=None):
+    def handle_dropped_schedule(self, filename, original_path=None):
         target_path = None
         if original_path and os.path.exists(original_path):
             target_path = original_path
-        elif base64_data and filename:
-            clean_filename = sanitize_filename(filename)
-            cache_dir = os.path.join(tempfile.gettempdir(), "cvsu_cache", "schedules")
-            os.makedirs(cache_dir, exist_ok=True)
-            target_path = os.path.join(cache_dir, clean_filename)
-            try:
-                with open(target_path, "wb") as f:
-                    f.write(base64.b64decode(base64_data))
-            except Exception as e:
-                process_schedule.logger.error(f"Failed to write dropped schedule {filename}: {e}")
-                return {"path": "", "metadata": None, "validation": []}
 
         if target_path and os.path.exists(target_path):
             with self._lock:
                 self.schedule_path = target_path
-            metadata = process_schedule.inspect_schedule_file(self.schedule_path)
-            validation = process_schedule.validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs) if self.rosters else []
+            metadata = inspect_schedule_file(self.schedule_path)
+            validation = validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs) if self.rosters else []
             return {
                 "cancelled": False,
                 "path": self.schedule_path,
@@ -85,7 +77,7 @@ class ScheduleRosterMixin:
             for r in result:
                 if r not in existing:
                     self.rosters.append(r)
-            validation = process_schedule.validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs)
+            validation = validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs)
             return {
                 "cancelled": False,
                 "count": len(self.rosters),
@@ -96,31 +88,18 @@ class ScheduleRosterMixin:
             "cancelled": True,
             "count": len(self.rosters),
             "rosters": self.rosters,
-            "validation": process_schedule.validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs) if self.rosters else []
+            "validation": validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs) if self.rosters else []
         }
 
     def handle_dropped_rosters(self, files_payload, roster_configs=None):
         if roster_configs is not None:
             self.roster_configs = roster_configs
-        cache_dir = os.path.join(tempfile.gettempdir(), "cvsu_cache", "rosters")
-        os.makedirs(cache_dir, exist_ok=True)
 
         new_paths = []
         for item in files_payload:
             original_path = item.get("path")
-            base64_data = item.get("data")
-            filename = sanitize_filename(item.get("filename", ""))
-
             if original_path and os.path.exists(original_path):
                 new_paths.append(original_path)
-            elif base64_data and filename:
-                target_path = os.path.join(cache_dir, filename)
-                try:
-                    with open(target_path, "wb") as f:
-                        f.write(base64.b64decode(base64_data))
-                    new_paths.append(target_path)
-                except Exception as e:
-                    process_schedule.logger.error(f"Failed to write dropped roster {filename}: {e}")
 
         existing = set(self.rosters)
         for p in new_paths:
@@ -128,7 +107,7 @@ class ScheduleRosterMixin:
                 self.rosters.append(p)
                 existing.add(p)
 
-        validation = process_schedule.validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs)
+        validation = validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs)
         return {
             "count": len(self.rosters),
             "rosters": self.rosters,
@@ -145,7 +124,7 @@ class ScheduleRosterMixin:
         return {
             "count": len(self.rosters),
             "rosters": self.rosters,
-            "validation": process_schedule.validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs) if self.rosters else []
+            "validation": validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs) if self.rosters else []
         }
 
     def clear_rosters(self):
@@ -157,7 +136,7 @@ class ScheduleRosterMixin:
             self.roster_configs = roster_configs
         if not self.rosters:
             return []
-        return process_schedule.validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs)
+        return validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs)
 
     def inspect_roster(self, path_or_filename, overrides=None):
         target_path = None
@@ -177,7 +156,7 @@ class ScheduleRosterMixin:
         if not self.schedule_path or not self.rosters:
             return []
         try:
-            return process_schedule.detect_classes(self.schedule_path, self.rosters, roster_configs=self.roster_configs)
+            return detect_classes(self.schedule_path, self.rosters, roster_configs=self.roster_configs)
         except Exception as e:
-            process_schedule.logger.error(f"Error in detect_classes: {e}")
+            logger.error(f"Error in detect_classes: {e}")
             return []

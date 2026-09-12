@@ -129,7 +129,7 @@
         flex-direction: column;
         gap: 7px;
       }
-      [data-bs-theme="dark"] .apple-callout {
+      [data-theme="dark"] .apple-callout {
         background: rgba(245, 158, 11, 0.06);
         border-color: rgba(245, 158, 11, 0.18);
       }
@@ -391,7 +391,7 @@
         justify-content: center;
         gap: 14px;
       }
-      [data-bs-theme="dark"] .bottom-action-content {
+      [data-theme="dark"] .bottom-action-content {
         background: rgba(30, 30, 30, 0.45);
         border: 1px solid rgba(255, 255, 255, 0.08);
         box-shadow:

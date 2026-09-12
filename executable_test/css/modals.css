@@ -268,7 +268,7 @@
         padding: 12px 14px;
         margin-bottom: 14px;
       }
-      [data-bs-theme="dark"] .naming-recommendation-card {
+      [data-theme="dark"] .naming-recommendation-card {
         background: rgba(245, 158, 11, 0.06);
         border-color: rgba(245, 158, 11, 0.25);
       }
@@ -393,7 +393,7 @@
         background: rgba(245, 158, 11, 0.08);
         border: 1px dashed rgba(245, 158, 11, 0.3);
       }
-      [data-bs-theme="dark"] .roster-item-recommendation {
+      [data-theme="dark"] .roster-item-recommendation {
         background: rgba(245, 158, 11, 0.06);
         border-color: rgba(245, 158, 11, 0.25);
       }
@@ -545,7 +545,7 @@
         background: var(--accent-emerald);
         box-shadow: 0 2px 8px var(--accent-emerald-glow);
       }
-      [data-bs-theme="dark"] .settings-nav-tab.active {
+      [data-theme="dark"] .settings-nav-tab.active {
         color: #0b0f17;
         background: var(--accent-emerald);
       }
@@ -579,10 +579,10 @@
         z-index: 10;
         box-shadow: 0 1px 0 var(--border-subtle);
       }
-      [data-bs-theme="dark"] .settings-data-table th {
+      [data-theme="dark"] .settings-data-table th {
         background: #141c2e;
       }
-      [data-bs-theme="light"] .settings-data-table th {
+      [data-theme="light"] .settings-data-table th {
         background: #ffffff;
       }
       .settings-data-table td {

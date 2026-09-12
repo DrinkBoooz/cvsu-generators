@@ -31,5 +31,6 @@ class BaseAPI:
         self.rosters = []
         self.roster_configs = {}
         self._is_processing = False
+        self._is_window_closed = False
         self._cancel_event = threading.Event()
         self._lock = threading.Lock()
