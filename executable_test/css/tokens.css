@@ -22,7 +22,7 @@
         --header-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.04);
         --text-primary: #0f172a;
         --text-secondary: #475569;
-        --text-muted: #94a3b8;
+        --text-muted: #4b5563;
         --accent-emerald: #059669;
         --accent-emerald-hover: #10b981;
         --accent-emerald-glow: rgba(5, 150, 105, 0.18);
@@ -84,7 +84,7 @@
         --header-shadow: 0 4px 24px -2px rgba(0, 0, 0, 0.4);
         --text-primary: #f9fafb;
         --text-secondary: #9ca3af;
-        --text-muted: #6b7280;
+        --text-muted: #94a3b8;
         --accent-emerald: #10b981;
         --accent-emerald-hover: #34d399;
         --accent-emerald-glow: rgba(16, 185, 129, 0.25);

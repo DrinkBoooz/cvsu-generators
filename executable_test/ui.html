@@ -298,16 +298,7 @@
                 Click "Browse File" or drop master schedule (.xls / .xlsx)
               </div>
               <div style="display: flex; gap: 8px; margin-top: 6px">
-                <button
-                  class="btn-browse"
-                  type="button"
-                  onclick="
-                    event.stopPropagation();
-                    loadSchedule();
-                  "
-                >
-                  Browse File
-                </button>
+                <span class="btn-browse" aria-hidden="true">Browse File</span>
                 <button
                   class="nav-btn d-none"
                   id="btnResetSchedule"
@@ -431,6 +422,7 @@
                   type="checkbox"
                   id="autoStripCheck"
                   checked
+                  aria-label="Auto-Strip Extra Columns (Recommended)"
                   onchange="renderRosterStatus()"
                 />
                 <span class="toggle-slider"></span>
@@ -467,17 +459,13 @@
                 Click "Browse Data" or drop student lists (.xlsx / .xls / .csv)
                 — hold Ctrl/Shift for multi-select
               </div>
-              <button
+              <span
                 class="btn-browse"
-                type="button"
+                aria-hidden="true"
                 style="margin-top: 6px"
-                onclick="
-                  event.stopPropagation();
-                  loadRosters();
-                "
               >
                 Browse Data
-              </button>
+              </span>
               <div id="rostersFilename" class="dropzone-status d-none"></div>
             </div>
 
@@ -703,6 +691,7 @@
                   type="checkbox"
                   id="checkAttendance"
                   class="engine-checkbox"
+                  aria-label="Compile Attendance Sheets"
                   checked
                 />
                 <div class="engine-chip-content">
@@ -719,6 +708,7 @@
                   type="checkbox"
                   id="checkCeit"
                   class="engine-checkbox"
+                  aria-label="Compile CEIT Department Forms"
                   checked
                 />
                 <div class="engine-chip-content">
@@ -735,6 +725,7 @@
                   type="checkbox"
                   id="checkGrades"
                   class="engine-checkbox"
+                  aria-label="Compile Official Grade Sheets"
                   checked
                 />
                 <div class="engine-chip-content">
@@ -927,20 +918,22 @@
             <div class="date-boundary-box">
               <div class="date-inputs-row">
                 <div class="date-input-group">
-                  <span>Start:</span>
+                  <label for="startDate">Start:</label>
                   <input
                     type="date"
                     id="startDate"
                     class="date-input"
+                    aria-label="Semester start date boundary"
                     onchange="saveDates()"
                   />
                 </div>
                 <div class="date-input-group">
-                  <span>End:</span>
+                  <label for="endDate">End:</label>
                   <input
                     type="date"
                     id="endDate"
                     class="date-input"
+                    aria-label="Semester end date boundary"
                     onchange="saveDates()"
                   />
                 </div>
@@ -1280,7 +1273,7 @@
           oninput="filterHelpContent(this.value)"
         />
       </div>
-      <div class="drawer-body selectable">
+      <div class="drawer-body selectable" tabindex="0" role="region" aria-label="Documentation and user guide content">
         <!-- Tab 1: Overview -->
         <div id="helpContentOverview" class="help-tab-content">
           <!-- Overview -->
@@ -1923,7 +1916,7 @@
           &times;
         </button>
       </div>
-      <div class="drawer-body selectable">
+      <div class="drawer-body selectable" tabindex="0" role="region" aria-label="Application execution logs">
         <div
           style="
             display: flex;

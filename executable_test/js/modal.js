@@ -1,15 +1,28 @@
 // ── Accessible Focus Trap & Focus Return Manager ─────────────────────────
 const FocusTrapManager = {
-  activeContainer: null,
-  previousTrigger: null,
-  handleKeyDown: null,
+  stack: [],
+
+  // Preserves this.activeContainer and this.previousTrigger accessors for inspection
+  get activeContainer() {
+    return this.stack.length > 0 ? this.stack[this.stack.length - 1].container : null;
+  },
+
+  get previousTrigger() {
+    return this.stack.length > 0 ? this.stack[this.stack.length - 1].previousTrigger : null;
+  },
 
   trap(container, initialFocusEl, triggerEl) {
     if (!container) return;
-    this.release(); // release any existing trap cleanly first
 
-    this.activeContainer = container;
-    this.previousTrigger = triggerEl || document.activeElement;
+    // If an overlay is already active, pause its keydown listener while sub-overlay is open
+    if (this.stack.length > 0) {
+      const currentTop = this.stack[this.stack.length - 1];
+      if (currentTop.handleKeyDown) {
+        document.removeEventListener("keydown", currentTop.handleKeyDown);
+      }
+    }
+
+    const previousTrigger = triggerEl || document.activeElement;
 
     const getFocusables = () => {
       const selector =
@@ -33,7 +46,7 @@ const FocusTrapManager = {
       }
     });
 
-    this.handleKeyDown = (e) => {
+    const handleKeyDown = (e) => {
       if (e.key !== "Tab") return;
       const focusables = getFocusables();
       if (focusables.length === 0) {
@@ -56,26 +69,56 @@ const FocusTrapManager = {
       }
     };
 
-    document.addEventListener("keydown", this.handleKeyDown);
+    document.addEventListener("keydown", handleKeyDown);
+    this.stack.push({ container, previousTrigger, handleKeyDown });
   },
 
-  release() {
-    if (this.handleKeyDown) {
-      document.removeEventListener("keydown", this.handleKeyDown);
-      this.handleKeyDown = null;
-    }
-    const trigger = this.previousTrigger;
-    this.activeContainer = null;
-    this.previousTrigger = null;
+  release(container = null) {
+    if (this.stack.length === 0) return;
 
+    let popped = null;
+    if (container) {
+      const idx = this.stack.findIndex((item) => item.container === container);
+      if (idx !== -1) {
+        popped = this.stack.splice(idx, 1)[0];
+        if (popped.handleKeyDown) {
+          document.removeEventListener("keydown", popped.handleKeyDown);
+        }
+      }
+    }
+
+    if (!popped && this.stack.length > 0) {
+      popped = this.stack.pop();
+      if (popped.handleKeyDown) {
+        document.removeEventListener("keydown", popped.handleKeyDown);
+      }
+    }
+
+    if (!popped) return;
+
+    // Resume keydown listener on the remaining top of the stack if present
+    if (this.stack.length > 0) {
+      const top = this.stack[this.stack.length - 1];
+      if (top.handleKeyDown) {
+        document.addEventListener("keydown", top.handleKeyDown);
+      }
+    }
+
+    const trigger = popped.previousTrigger;
     if (trigger && typeof trigger.focus === "function") {
       requestAnimationFrame(() => {
         try {
           trigger.focus();
         } catch (err) {
-          // Trigger may have been re-rendered or unmounted
+          // Trigger may have been removed or unmounted
         }
       });
+    }
+  },
+
+  releaseAll() {
+    while (this.stack.length > 0) {
+      this.release();
     }
   },
 };

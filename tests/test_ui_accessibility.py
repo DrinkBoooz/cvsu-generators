@@ -183,8 +183,9 @@ def test_focus_trap_manager_and_focus_return():
     # FocusTrapManager declaration and key methods
     assert "const FocusTrapManager =" in js
     assert "trap(container" in js
-    assert "release()" in js
-    assert "this.previousTrigger" in js
+    assert "release(" in js
+    assert "previousTrigger" in js
+    assert "stack" in js
 
     # Modal integrations
     assert re.search(r"FocusTrapManager\.trap\(\s*backdrop", js), "Apple Confirm must trap focus"

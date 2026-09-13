@@ -131,6 +131,8 @@
         box-shadow: var(--a11y-focus-glow) !important;
       }
       .btn-browse {
+        display: inline-block;
+        user-select: none;
         background: var(--surface-subtle);
         border: 1px solid var(--border-subtle);
         color: var(--text-primary);

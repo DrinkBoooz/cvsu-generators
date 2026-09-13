@@ -227,9 +227,21 @@ def set_cell_text(tc, text: str, remove_num: bool = False, shrink_threshold: int
         t.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
 
 def load_docx(path: str):
-    """Loads a docx and returns (zin, root, body)."""
-    with open(path, "rb") as fh:
-        data = fh.read()
+    """Loads a docx and returns (zin, root, body) with transient lock retry for Windows/OneDrive."""
+    import time
+    last_err = None
+    data = None
+    for attempt in range(6):
+        try:
+            with open(path, "rb") as fh:
+                data = fh.read()
+            break
+        except (PermissionError, OSError) as err:
+            last_err = err
+            time.sleep(0.08 * (attempt + 1))
+    if data is None:
+        raise last_err
+
     zin = zipfile.ZipFile(io.BytesIO(data))
     safe_parser = etree.XMLParser(resolve_entities=False)
     root = etree.fromstring(zin.read("word/document.xml"), parser=safe_parser)
