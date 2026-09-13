@@ -1,9 +1,8 @@
 import os
 import io
-import time
 import zipfile
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from modules.common.docx_utils import load_docx
 
@@ -20,6 +19,15 @@ def test_load_docx_success_first_attempt():
     assert root is not None
     assert body is not None
     zin.close()
+
+
+def test_load_docx_raises_filenotfound_immediately():
+    """Verify that load_docx does not retry or delay when the file genuinely does not exist."""
+    with patch("time.sleep") as mock_sleep:
+        with pytest.raises(FileNotFoundError):
+            load_docx(os.path.join(WORKSPACE_DIR, "templates", "non_existent_template.docx"))
+
+        assert mock_sleep.call_count == 0, "FileNotFoundError must raise immediately without retry delay"
 
 
 def test_load_docx_retry_on_transient_permission_error():
@@ -51,7 +59,7 @@ def test_load_docx_retry_on_transient_permission_error():
 
 
 def test_load_docx_raises_after_max_retries_exhausted():
-    """Verify that load_docx raises the underlying exception if persistent locks exceed max attempts."""
+    """Verify that load_docx raises the underlying exception if persistent locks exceed max attempts (6 attempts, 5 sleeps)."""
     call_count = 0
 
     def persistent_failure(path, mode="rb", *args, **kwargs):
@@ -66,7 +74,7 @@ def test_load_docx_raises_after_max_retries_exhausted():
 
             assert "Permanent lock" in str(exc_info.value)
             assert call_count == 6, f"Expected 6 attempts before giving up, got {call_count}"
-            assert mock_sleep.call_count == 6, f"Expected 6 sleep backoffs, got {mock_sleep.call_count}"
+            assert mock_sleep.call_count == 5, f"Expected 5 sleep backoffs (no sleep after final attempt), got {mock_sleep.call_count}"
 
 
 def test_load_docx_backoff_durations():

@@ -236,9 +236,12 @@ def load_docx(path: str):
             with open(path, "rb") as fh:
                 data = fh.read()
             break
+        except FileNotFoundError:
+            raise
         except (PermissionError, OSError) as err:
             last_err = err
-            time.sleep(0.08 * (attempt + 1))
+            if attempt < 5:
+                time.sleep(0.08 * (attempt + 1))
     if data is None:
         raise last_err
 
