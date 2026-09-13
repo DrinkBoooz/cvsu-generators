@@ -84,6 +84,87 @@ When discrepancies or questions arise, agents must strictly observe this priorit
 
 > **Obsidian is the primary human-readable documentation and knowledge repository. It must reflect the behavior of the application, tests, and templates; it does not override implementation or test behavior.**
 
+### 1.1 Existing Obsidian Documentation as Context
+
+The Obsidian vault is a persistent, human-readable knowledge layer that agents should use to establish context before performing broad reconnaissance.
+
+For documentation, architecture, audit, maintenance, and implementation tasks:
+
+1. Read the relevant existing Obsidian notes first when they are likely to contain useful context.
+2. Use those notes to identify:
+   - relevant source files
+   - subsystem boundaries
+   - terminology
+   - documented workflows
+   - generator relationships
+   - template relationships
+   - configuration concepts
+   - known architectural decisions
+   - previously documented behavior
+3. Treat the vault as a **context and navigation layer**, not as the implementation source of truth.
+4. Verify important current-state claims against the higher-priority sources:
+   - application source
+   - automated tests
+   - actual templates
+5. Prefer **targeted verification** over rereading unchanged areas that are already accurately documented.
+6. Perform deeper source inspection when:
+   - documentation is missing
+   - documentation conflicts with implementation
+   - the relevant code has changed
+   - the task explicitly requires forensic evidence
+   - behavior cannot safely be established from documentation
+7. When documentation is stale, correct the documentation using the higher-priority source.
+8. Never preserve a documented claim merely because it already exists in Obsidian.
+
+The intended workflow is:
+
+```text
+Existing Obsidian context
+        ↓
+Identify relevant implementation areas
+        ↓
+Targeted source/test/template verification
+        ↓
+Resolve discrepancies
+        ↓
+Implement or document
+        ↓
+Update Obsidian knowledge
+```
+
+**Note on Large Audits:**
+For large architecture or documentation audits, agents should first build a documentation-context map from the existing vault:
+
+```text
+Vault note
+    ↓
+Documented subsystem
+    ↓
+Referenced source files
+    ↓
+Current implementation verification
+    ↓
+Only investigate gaps/differences deeply
+```
+
+Agents should distinguish between already documented and verified knowledge, documented but requiring current verification, undocumented behavior, and stale/contradictory documentation. This prevents a full repository reread when the vault already contains reliable architectural context.
+
+**Note on Vault Contents:**
+The vault should remain human-readable documentation. Do NOT instruct agents to copy entire Python files, JavaScript files, CSS files, huge test files, generated build output, raw logs, or arbitrary repository dumps into Obsidian merely to preserve context. Use links/references to source files where appropriate.
+
+**Note on Documentation Freshness:**
+The context-cache benefit depends on keeping the vault synchronized. When a behavior-changing implementation change occurs and the behavior is covered by the vault:
+
+```text
+Implementation changes
+        ↓
+Relevant documentation becomes potentially stale
+        ↓
+Agent updates affected note
+```
+
+Agents should avoid allowing the vault to become a misleading cache.
+
 ### 2. Never Fabricate Documentation
 
 **Documentation must be derived from the current implementation, templates, tests, and verified project behavior. Agents must not infer or invent undocumented generator behavior, template mappings, coordinates, filenames, or workflow requirements.**
@@ -98,11 +179,21 @@ Before writing or updating documentation:
 
 - **For Implementation Changes**:
   ```text
-  Inspect implementation → Inspect tests/templates → Implement → Run tests → Update Obsidian → Verify documentation against implementation
+  Read relevant Obsidian context
+  → Inspect affected implementation
+  → Inspect affected tests/templates
+  → Implement
+  → Run tests
+  → Update Obsidian
+  → Verify documentation
   ```
 - **For Documentation-Only Changes**:
   ```text
-  Inspect implementation → Update Obsidian → No code changes unless discrepancy discovered
+  Read relevant Obsidian context
+  → Inspect affected implementation
+  → Inspect affected tests/templates where necessary
+  → Update Obsidian
+  → Verify documentation against implementation
   ```
 
 ### 4. Documentation Synchronization Triggers
