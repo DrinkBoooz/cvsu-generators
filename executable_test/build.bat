@@ -1,13 +1,17 @@
 @echo off
 cd /d "%~dp0"
 echo ========================================================
-echo Compiling CvSU Gen (Beta) into Standalone EXE
+echo Compiling CvSU Gen into Standalone EXE
 echo ========================================================
 
-echo Installing Python Dependencies natively...
-python -m pip install pypiwin32
-python -m pip install pyinstaller
-python -m pip install pywebview lxml xlrd openpyxl
+echo Creating Virtual Environment...
+if not exist venv (
+    python -m venv venv
+)
+call venv\Scripts\activate.bat
+
+echo Installing Pinned Dependencies...
+python -m pip install -r requirements-build.txt
 
 echo Removing old builds...
 if exist build rmdir /S /Q build
@@ -16,7 +20,7 @@ if exist dist rmdir /S /Q dist
 echo Initiating Compilation Sandbox...
 rem --noconsole hides the cmd window
 rem --onefile makes it a single executable payload
-python -m PyInstaller --noconfirm --clean --workpath "%TEMP%\cvsu_build" --distpath "%TEMP%\cvsu_dist" --name "CvSU Gen (Beta)" --onefile --windowed --icon "app_icon.ico" ^
+python -m PyInstaller --noconfirm --clean --workpath "%TEMP%\cvsu_build" --distpath "%TEMP%\cvsu_dist" --name "CvSU Gen" --onefile --windowed --icon "app_icon.ico" ^
     --version-file "file_version_info.txt" ^
     --hidden-import pycparser.lextab --hidden-import pycparser.yacctab ^
     --collect-submodules modules ^
@@ -29,14 +33,14 @@ python -m PyInstaller --noconfirm --clean --workpath "%TEMP%\cvsu_build" --distp
     "main.py"
 
 if not exist dist mkdir dist
-copy /Y "%TEMP%\cvsu_dist\CvSU Gen (Beta).exe" "dist\CvSU Gen (Beta).exe"
+copy /Y "%TEMP%\cvsu_dist\CvSU Gen.exe" "dist\CvSU Gen.exe"
 
 echo.
 echo Initiating Digital Code Signing (Authenticode)...
 powershell -ExecutionPolicy Bypass -File "sign_exe.ps1"
 
 echo ========================================================
-echo Done! Check the /dist folder for CvSU Gen (Beta).exe
+echo Done! Check the /dist folder for CvSU Gen.exe
 echo ========================================================
 if "%1" neq "--nopause" pause
 

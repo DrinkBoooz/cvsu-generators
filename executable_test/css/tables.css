@@ -204,14 +204,14 @@
         transform: scale(1.08);
       }
       /* Dark mode calendar icon: color-scheme: dark natively renders crisp light icon without invert turning it black */
-      [data-bs-theme="dark"] .date-input {
+      [data-theme="dark"] .date-input {
         color-scheme: dark;
       }
-      [data-bs-theme="dark"] .date-input::-webkit-calendar-picker-indicator {
+      [data-theme="dark"] .date-input::-webkit-calendar-picker-indicator {
         filter: none;
         opacity: 0.9;
       }
-      [data-bs-theme="dark"]
+      [data-theme="dark"]
         .date-input::-webkit-calendar-picker-indicator:hover {
         filter: brightness(1.25);
         opacity: 1;

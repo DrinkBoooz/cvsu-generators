@@ -7,6 +7,7 @@
         const modal = document.getElementById("modalParserSettingsBackdrop");
         if (!modal) return;
         modal.classList.remove("d-none");
+        document.body.style.overflow = "hidden";
         switchConfigTab(activeConfigTab || "Prefixes");
 
         if (
@@ -81,7 +82,10 @@
           return;
         }
         const modal = document.getElementById("modalParserSettingsBackdrop");
-        if (modal) modal.classList.add("d-none");
+        if (modal) {
+          modal.classList.add("d-none");
+          document.body.style.overflow = "";
+        }
       }
 
       function switchConfigTab(tabName) {

@@ -7,12 +7,16 @@ import os
 import sys
 
 # Ensure repository root and package directory are on sys.path
-CURR_DIR = os.path.dirname(os.path.abspath(__file__))
-REPO_ROOT = os.path.dirname(CURR_DIR)
-
-for p in (CURR_DIR, REPO_ROOT):
-    if p not in sys.path:
-        sys.path.insert(0, p)
+if getattr(sys, 'frozen', False):
+    CURR_DIR = sys._MEIPASS
+    if CURR_DIR not in sys.path:
+        sys.path.insert(0, CURR_DIR)
+else:
+    CURR_DIR = os.path.dirname(os.path.abspath(__file__))
+    REPO_ROOT = os.path.dirname(CURR_DIR)
+    for p in (CURR_DIR, REPO_ROOT):
+        if p not in sys.path:
+            sys.path.insert(0, p)
 
 import webview
 
@@ -29,7 +33,7 @@ def create_app():
     html_template = get_resource_path('ui.html')
 
     window = webview.create_window(
-        title='CvSU Gen (Beta)',
+        title='CvSU Gen',
         url=html_template,
         js_api=api,
         width=1120,
@@ -40,9 +44,14 @@ def create_app():
     api._window = window
 
     def on_window_closing():
+        api._is_window_closed = True
         api.cancel_generation()
 
+    def on_window_closed():
+        api._is_window_closed = True
+
     window.events.closing += on_window_closing
+    window.events.closed += on_window_closed
     return window, api
 
 if __name__ == '__main__':

@@ -1,5 +1,6 @@
 import webview
-import process_schedule
+from modules.common.logger import logger
+from modules.services.validator import validate_rosters, detect_classes
 
 class ConfigMixin:
     """Mixin handling curriculum and parser configuration operations."""
@@ -19,14 +20,14 @@ class ConfigMixin:
         detected_classes = []
         if self.rosters:
             try:
-                validation = process_schedule.validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs)
+                validation = validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs)
             except Exception as e:
-                process_schedule.logger.error(f"Error re-validating rosters: {e}")
+                logger.error(f"Error re-validating rosters: {e}")
         if self.schedule_path and self.rosters:
             try:
-                detected_classes = process_schedule.detect_classes(self.schedule_path, self.rosters, roster_configs=self.roster_configs)
+                detected_classes = detect_classes(self.schedule_path, self.rosters, roster_configs=self.roster_configs)
             except Exception as e:
-                process_schedule.logger.error(f"Error re-detecting classes: {e}")
+                logger.error(f"Error re-detecting classes: {e}")
         res["validation"] = validation
         res["detected_classes"] = detected_classes
         return res
@@ -38,14 +39,14 @@ class ConfigMixin:
         detected_classes = []
         if self.rosters:
             try:
-                validation = process_schedule.validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs)
+                validation = validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs)
             except Exception as e:
-                process_schedule.logger.error(f"Error re-validating rosters: {e}")
+                logger.error(f"Error re-validating rosters: {e}")
         if self.schedule_path and self.rosters:
             try:
-                detected_classes = process_schedule.detect_classes(self.schedule_path, self.rosters, roster_configs=self.roster_configs)
+                detected_classes = detect_classes(self.schedule_path, self.rosters, roster_configs=self.roster_configs)
             except Exception as e:
-                process_schedule.logger.error(f"Error re-detecting classes: {e}")
+                logger.error(f"Error re-detecting classes: {e}")
         res["validation"] = validation
         res["detected_classes"] = detected_classes
         return res
@@ -80,14 +81,14 @@ class ConfigMixin:
             detected_classes = []
             if self.rosters:
                 try:
-                    validation = process_schedule.validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs)
+                    validation = validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs)
                 except Exception as e:
-                    process_schedule.logger.error(f"Error re-validating rosters: {e}")
+                    logger.error(f"Error re-validating rosters: {e}")
             if self.schedule_path and self.rosters:
                 try:
-                    detected_classes = process_schedule.detect_classes(self.schedule_path, self.rosters, roster_configs=self.roster_configs)
+                    detected_classes = detect_classes(self.schedule_path, self.rosters, roster_configs=self.roster_configs)
                 except Exception as e:
-                    process_schedule.logger.error(f"Error re-detecting classes: {e}")
+                    logger.error(f"Error re-detecting classes: {e}")
             res["validation"] = validation
             res["detected_classes"] = detected_classes
             return res

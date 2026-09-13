@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Signs the CvSU Gen (Beta).exe executable using signtool.exe and Authenticode certificate.
+    Signs the CvSU Gen.exe executable using signtool.exe and Authenticode certificate.
 .DESCRIPTION
     Locates signtool.exe from Windows 10/11 SDK, signs the target executable with
     SHA-256 digest algorithm, adds RFC-3161 timestamping, and verifies the signature.
@@ -14,7 +14,7 @@ param(
 
 if ([string]::IsNullOrWhiteSpace($TargetPath)) {
     $scriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Definition }
-    $TargetPath = Join-Path $scriptDir "dist\CvSU Gen (Beta).exe"
+    $TargetPath = Join-Path $scriptDir "dist\CvSU Gen.exe"
 }
 
 Write-Host "========================================================" -ForegroundColor Cyan
@@ -132,8 +132,8 @@ Write-Host "Time Stamped:  $($sig.TimeStamperCertificate.Subject)"
 Write-Host ""
 if ($sig.Status -eq "Valid") {
     Write-Host "========================================================" -ForegroundColor Green
-    Write-Host " Executable successfully signed & verified!" -ForegroundColor Green
-    Write-Host " Windows SmartScreen & UAC will display: $SignerName" -ForegroundColor Green
+    Write-Host " Executable successfully cryptographically signed!" -ForegroundColor Green
+    Write-Host " Note: Trust by Windows SmartScreen requires reputation." -ForegroundColor Green
     Write-Host "========================================================" -ForegroundColor Green
 } else {
     Write-Host "========================================================" -ForegroundColor Yellow
