@@ -51,6 +51,7 @@ All git commit messages must strictly follow the format:
 ## Obsidian Documentation Vault Protocol
 
 > [!IMPORTANT]
+>
 > ## Project and Documentation Relationship
 >
 > The project consists of two coordinated resources:
@@ -62,12 +63,14 @@ All git commit messages must strictly follow the format:
 >    - Contains application source code, tests, templates, executable build configuration, and project configuration.
 >
 > 2. **Companion Obsidian Documentation Vault**
->    - Location: `C:\Users\danjo\Desktop\cvsu-generator_documentation`
+>    - Location: `C:\Users\danjo\OneDrive\cvsu-generator_documentation`
+>    - Git repository: `DrinkBoooz/cvsu-generator_documentation`
+>    - Active development branch: `dev`
 >    - Contains the project's human-readable technical documentation, architecture knowledge, generator specifications, template documentation, user guides, and release documentation.
 >
 > The Obsidian vault is the project's **primary human-readable knowledge repository**. It documents the behavior and structure of the application but does not override the source code, tests, or actual templates.
 >
-> The vault is physically located outside the Git repository and must not be copied into or committed to the application repository unless explicitly requested.
+> The application repository (`C:\Users\danjo\OneDrive\CVSU GENERATORS`) and documentation vault (`C:\Users\danjo\OneDrive\cvsu-generator_documentation`) are sibling components of the same project workspace. The vault is physically located outside the application repository and must not be copied into or committed to `CVSU GENERATORS`. Both components are version-controlled and synchronized by development agents.
 
 ### 1. Source-of-Truth Hierarchy
 
@@ -86,6 +89,7 @@ When discrepancies or questions arise, agents must strictly observe this priorit
 **Documentation must be derived from the current implementation, templates, tests, and verified project behavior. Agents must not infer or invent undocumented generator behavior, template mappings, coordinates, filenames, or workflow requirements.**
 
 Before writing or updating documentation:
+
 - Inspect the active source code.
 - Inspect the physical template files using diagnostic scripts or parser tests.
 - Verify exact cell names, coordinates, function signatures, and naming conventions from the actual files.
@@ -104,6 +108,7 @@ Before writing or updating documentation:
 ### 4. Documentation Synchronization Triggers
 
 #### Changes Requiring Obsidian Updates:
+
 - Application architecture and subsystem restructuring
 - Generator engine logic, inputs, outputs, or new form registrations
 - Template file structure, coordinates, placeholders, or auto-scaling rules
@@ -115,6 +120,7 @@ Before writing or updating documentation:
 - Application version bumps and official release notes
 
 #### Changes NOT Requiring Obsidian Updates:
+
 - Typo corrections or code comment adjustments
 - Pure styling tweaks or formatting-only CSS changes
 - Internal code refactoring with identical externally observable behavior
@@ -123,7 +129,7 @@ Before writing or updating documentation:
 
 ### 5. Vault Structure & Taxonomy
 
-Documentation within `c:\Users\danjo\Desktop\cvsu-generator_documentation` must adhere to:
+Documentation within `c:\Users\danjo\OneDrive\cvsu-generator_documentation` must adhere to:
 
 - **`00 - Index/`**: Maps of Content (MOC), root indexes, and high-level navigation (`CvSU Document Generator MOC.md`).
 - **`01 - Architecture/`**: Core technical architecture, PyWebView API bridge, generator pipeline, orchestrator lifecycle, and UI architecture.
@@ -227,4 +233,3 @@ When instructed to add or create a new form generator from a `.docx` template:
      - Template exists and loads via factory.
      - Generated `.docx` contains populated instructor, course, and student rows.
    - Run `pytest tests/ -k "not test_playwright"` to ensure 100% test pass rate.
-

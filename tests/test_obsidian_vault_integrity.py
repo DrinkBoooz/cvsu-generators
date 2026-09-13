@@ -2,7 +2,13 @@ import os
 import re
 import pytest
 
-VAULT_DIR = r"c:\Users\danjo\Desktop\cvsu-generator_documentation"
+CANDIDATE_PATHS = [
+    os.environ.get("CVSU_VAULT_DIR"),
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "cvsu-generator_documentation")),
+    r"c:\Users\danjo\OneDrive\cvsu-generator_documentation",
+    r"c:\Users\danjo\Desktop\cvsu-generator_documentation",
+]
+VAULT_DIR = next((p for p in CANDIDATE_PATHS if p and os.path.isdir(p)), r"c:\Users\danjo\OneDrive\cvsu-generator_documentation")
 REQUIRED_DIRS = [
     "00 - Index",
     "01 - Architecture",
