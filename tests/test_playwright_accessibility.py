@@ -271,17 +271,17 @@ def test_playwright_axe_core_initial_scan():
         assert "error" not in scan_results, f"axe scan failed: {scan_results.get('error')}"
 
         violations = scan_results.get("violations", [])
-        # Filter for critical or serious violations
-        critical_or_serious = [
+        # Tight acceptance criteria: zero critical, serious, or moderate violations
+        actionable_violations = [
             v for v in violations
-            if v.get("impact") in ("critical", "serious")
+            if v.get("impact") in ("critical", "serious", "moderate")
         ]
 
-        if critical_or_serious:
+        if actionable_violations:
             summary = "\n".join(
                 f"- [{v['impact']}] {v['id']}: {v['help']} (targets: {[n.get('target') for n in v.get('nodes', [])[:2]]})"
-                for v in critical_or_serious
+                for v in actionable_violations
             )
-            pytest.fail(f"axe-core found {len(critical_or_serious)} critical/serious accessibility violations:\n{summary}")
+            pytest.fail(f"axe-core found {len(actionable_violations)} actionable accessibility violations:\n{summary}")
 
         browser.close()

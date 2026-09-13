@@ -26,7 +26,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='CvSU Gen (Beta)',
+    name='CvSU Gen',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
