@@ -48,6 +48,9 @@
       }
 
       async function startGeneration() {
+        if (window._isGenerationRunning) return;
+        window._isGenerationRunning = true;
+
         const btn = document.getElementById("processBtn");
         const btnLabel = document.getElementById("processBtnLabel");
         const progressContainer = document.getElementById("progressContainer");
@@ -62,6 +65,7 @@
 
         // Validate basic inputs using non-blocking toasts
         if (!state.schedulePath) {
+          window._isGenerationRunning = false;
           showToast(
             "Schedule Required",
             "Please select or drop your Instructor Schedule (.xls / .xlsx) before proceeding.",
@@ -71,6 +75,7 @@
           return;
         }
         if (!state.rosters || state.rosters.length === 0) {
+          window._isGenerationRunning = false;
           showToast(
             "Rosters Required",
             "Please select or drop at least one Student Roster file before proceeding.",
@@ -80,6 +85,7 @@
           return;
         }
         if (!state.outputDir) {
+          window._isGenerationRunning = false;
           showToast(
             "Output Folder Required",
             "Please select a Target Output Folder for saving documents.",
@@ -96,6 +102,7 @@
         });
 
         if (selectedClasses.length === 0) {
+          window._isGenerationRunning = false;
           showToast(
             "No Classes Selected",
             "Please select at least one class to generate.",
@@ -112,6 +119,7 @@
         if (state.engines.grades) enabledEngines.push("grades");
 
         if (enabledEngines.length === 0) {
+          window._isGenerationRunning = false;
           showToast(
             "No Packages Selected",
             "Please enable at least one document package (Attendance, CEIT Forms, or Grades).",

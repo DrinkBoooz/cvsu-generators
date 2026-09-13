@@ -1,6 +1,7 @@
 import os
+import re
 import pytest
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, expect
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 UI_HTML_PATH = os.path.join(WORKSPACE_DIR, "executable_test", "ui.html")
@@ -19,7 +20,7 @@ def test_playwright_roster_mapping_modal_and_ceit_help():
         # 2. Verify Help Drawer Tab switching & CEIT Directory
         page.click("#btnOpenHelp")
         help_drawer = page.locator("#helpDrawer")
-        assert help_drawer.is_visible(), "Help drawer should open"
+        expect(help_drawer).to_have_class(re.compile(r"\bactive\b"))
 
         # Switch to Naming tab
         page.click("#helpTabNaming")
