@@ -200,10 +200,18 @@
         const fill = document.getElementById("progressFill");
         const pctDisplay = document.getElementById("progressPercent");
         const taskDisplay = document.getElementById("progressTaskLabel");
+        const container = document.getElementById("progressContainer");
 
-        fill.style.width = `${info.percent}%`;
-        pctDisplay.innerText = `${info.percent}%`;
-        taskDisplay.innerText = `${info.current_class}: ${info.current_task} (${info.step}/${info.total_steps})`;
+        const pct = info.percent || 0;
+        const taskText = `${info.current_class}: ${info.current_task} (${info.step}/${info.total_steps})`;
+        fill.style.width = `${pct}%`;
+        pctDisplay.innerText = `${pct}%`;
+        taskDisplay.innerText = taskText;
+
+        if (container) {
+          container.setAttribute("aria-valuenow", String(pct));
+          container.setAttribute("aria-valuetext", `${pct}% - ${taskText}`);
+        }
       };
 
       // Completion callback called when background thread finishes
@@ -213,6 +221,7 @@
         const progressFill = document.getElementById("progressFill");
         const pctDisplay = document.getElementById("progressPercent");
         const taskDisplay = document.getElementById("progressTaskLabel");
+        const container = document.getElementById("progressContainer");
         const btnCancel = document.getElementById("btnCancelGeneration");
         const resultsCard = document.getElementById("resultsCard");
         const resultsIcon = document.getElementById("resultsIcon");
@@ -241,6 +250,10 @@
 
         progressFill.style.width = "100%";
         if (pctDisplay) pctDisplay.innerText = "100%";
+        if (container) {
+          container.setAttribute("aria-valuenow", "100");
+          container.setAttribute("aria-valuetext", "100% - Generation complete");
+        }
 
         resultsCard.classList.remove(
           "d-none",
@@ -253,6 +266,9 @@
           resultsIcon.innerHTML = `<circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line>`;
           resultsTitleText.innerText = "Generation Cancelled";
           resultsTitleText.style.color = "var(--accent-amber)";
+          if (window.announceA11y) {
+            window.announceA11y("Document compilation was cancelled.");
+          }
           resultsMessage.innerText =
             payload.message || "Generation was stopped by the user.";
           if (taskDisplay) taskDisplay.innerText = "Generation stopped by user";

@@ -141,6 +141,12 @@ _(e.g., `[CvSU Gen (Beta) - Schedule Parsing Error]`)_
 
 ## 🏷️ Version History
  
+- **Release v1.0.1**:
+  - **Comprehensive Accessibility & WCAG 2.1 AA Compliance Pass**: Complete keyboard-only navigation, explicit high-contrast focus rings (`:focus-visible`), and zero suppressed outlines across all controls.
+  - **Focus Trapping & Focus Restoration**: Implemented modal and slide-over drawer focus traps (`FocusTrapManager`) ensuring Tab stays bounded within open dialogs and restores focus to the triggering element upon dismissal.
+  - **Windows High-Contrast / Forced-Colors Mode**: Dedicated `@media (forced-colors: active)` styling enforcing high-contrast `Highlight` focus indicators, `ButtonBorder` boundaries, and dashed `CanvasText` dropzone borders.
+  - **Accessible Table & Progress Semantics**: Upgraded data preview grids and directories with explicit `scope="col"` and `scope="row"` headers, non-color status tags, and progress bar live updates.
+  - **ARIA Live Regions & Screen Reader Support**: Added polite live region announcers for toast notifications, step readiness changes, and document compilation milestones.
 - **Release v1.0.0**:
   - **Modularized UI & Script Architecture**: Completely decoupled monolith UI into cleanly structured CSS modules (`css/tokens.css`, `components.css`, `drawers.css`, etc.) and JavaScript controllers (`js/state.js`, `step1.js`, `settings.js`, etc.) with zero performance regression.
   - **Native Drag-and-Drop & Resilient File Bridge**: Integrated native OLE Win32 drag-and-drop alongside pywebview HTML5 dropzones with memory caching for drag operations.

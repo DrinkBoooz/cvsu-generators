@@ -57,10 +57,12 @@
         color: var(--text-primary);
         max-width: 170px;
         cursor: pointer;
-        outline: none;
       }
-      .roster-class-link-select:focus {
+      .roster-class-link-select:focus-visible {
         border-color: var(--accent-emerald);
+        outline: var(--a11y-focus-ring-width) solid var(--a11y-focus-ring-color) !important;
+        outline-offset: var(--a11y-focus-ring-offset) !important;
+        box-shadow: var(--a11y-focus-glow) !important;
       }
       .modal-backdrop-custom {
         position: fixed;
@@ -161,11 +163,13 @@
         border: 1px solid var(--border-subtle);
         background: var(--surface-elevated);
         color: var(--text-primary);
-        outline: none;
         cursor: pointer;
       }
-      .form-select-custom:focus {
+      .form-select-custom:focus-visible {
         border-color: var(--accent-emerald);
+        outline: var(--a11y-focus-ring-width) solid var(--a11y-focus-ring-color) !important;
+        outline-offset: var(--a11y-focus-ring-offset) !important;
+        box-shadow: var(--a11y-focus-glow) !important;
       }
       .spreadsheet-preview-container {
         border: 1px solid var(--border-subtle);
@@ -377,14 +381,15 @@
         border: 1px solid var(--border-subtle);
         background: var(--surface-elevated);
         color: var(--text-primary);
-        outline: none;
         transition:
           border-color 0.2s ease,
           box-shadow 0.2s ease;
       }
-      .form-control-custom:focus {
+      .form-control-custom:focus-visible {
         border-color: var(--accent-emerald);
-        box-shadow: 0 0 0 2px var(--accent-emerald-glow);
+        outline: var(--a11y-focus-ring-width) solid var(--a11y-focus-ring-color) !important;
+        outline-offset: var(--a11y-focus-ring-offset) !important;
+        box-shadow: var(--a11y-focus-glow) !important;
       }
       .roster-item-recommendation {
         margin-top: 4px;

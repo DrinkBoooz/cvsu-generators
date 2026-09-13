@@ -277,7 +277,12 @@
         cursor: pointer;
         transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
         white-space: nowrap;
-        outline: none;
+      }
+      .segmented-btn:focus-visible,
+      .filter-pill:focus-visible {
+        outline: var(--a11y-focus-ring-width) solid var(--a11y-focus-ring-color) !important;
+        outline-offset: var(--a11y-focus-ring-offset) !important;
+        box-shadow: var(--a11y-focus-glow) !important;
       }
       .segmented-btn:hover,
       .filter-pill:hover {

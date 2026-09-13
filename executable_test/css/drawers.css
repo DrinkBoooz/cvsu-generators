@@ -280,7 +280,11 @@
         transition:
           all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
         white-space: nowrap;
-        outline: none;
+      }
+      .step-chip:focus-visible {
+        outline: var(--a11y-focus-ring-width) solid var(--a11y-focus-ring-color) !important;
+        outline-offset: var(--a11y-focus-ring-offset) !important;
+        box-shadow: var(--a11y-focus-glow) !important;
       }
       .step-chip:hover {
         background: var(--surface-subtle);
@@ -881,6 +885,11 @@
         justify-content: center;
         outline: none;
       }
+      .drawer-tab:focus-visible {
+        outline: var(--a11y-focus-ring-width) solid var(--a11y-focus-ring-color) !important;
+        outline-offset: var(--a11y-focus-ring-offset) !important;
+        box-shadow: var(--a11y-focus-glow) !important;
+      }
       .drawer-tab:hover {
         background: var(--surface-card);
         color: var(--text-primary);
@@ -915,10 +924,12 @@
         padding: 6px 12px;
         font-size: 12px;
         color: var(--text-primary);
-        outline: none;
       }
-      .drawer-search-input:focus {
+      .drawer-search-input:focus-visible {
         border-color: var(--accent-emerald);
+        outline: var(--a11y-focus-ring-width) solid var(--a11y-focus-ring-color) !important;
+        outline-offset: var(--a11y-focus-ring-offset) !important;
+        box-shadow: var(--a11y-focus-glow) !important;
       }
 
       /* Helpers */

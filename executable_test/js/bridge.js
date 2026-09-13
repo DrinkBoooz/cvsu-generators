@@ -149,6 +149,18 @@
         initScrollAwareDock();
         initStepperScrollSpy();
 
+        // Accessible Live Announcer for Screen Readers (Narrator/NVDA)
+        window.announceA11y = function(message) {
+          if (!message) return;
+          const el = document.getElementById("a11yLiveAnnouncer");
+          if (el) {
+            el.textContent = "";
+            setTimeout(() => {
+              el.textContent = message;
+            }, 50);
+          }
+        };
+
         // Global Escape dismissal for modal & slide-over drawers
         document.addEventListener("keydown", (e) => {
           if (e.key === "Escape") {

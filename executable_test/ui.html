@@ -43,7 +43,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 8px">
               <span class="brand-title">CvSU Gen</span>
-              <span class="badge-version">Release v1.0.0</span>
+              <span class="badge-version">Release v1.0.1</span>
             </div>
             <div class="brand-subtitle">
               Cavite State University Document Automation
@@ -51,7 +51,7 @@
           </div>
         </div>
 
-        <div class="header-actions">
+        <nav aria-label="Quick Actions" class="header-actions">
           <button
             class="nav-btn"
             id="btnToggleTheme"
@@ -156,21 +156,22 @@
             </svg>
             Guides
           </button>
-        </div>
+        </nav>
       </header>
 
       <!-- Stepper Readiness Tracker Bar -->
-      <div class="stepper-bar" id="workflowStepper">
+      <nav aria-label="Workflow Steps" class="stepper-bar" id="workflowStepper">
         <div class="stepper-track">
           <button
             class="step-chip"
             id="chipStep1"
             type="button"
             onclick="scrollToStep('cardStep1')"
+            aria-label="Step 1: Schedule - Incomplete"
           >
             <span class="chip-num">1</span>
             <span class="chip-txt">Schedule</span>
-            <span class="chip-status" id="statusStep1">⚪</span>
+            <span class="chip-status" id="statusStep1" aria-hidden="true">⚪</span>
           </button>
           <div class="stepper-connector" id="connector1to2"></div>
           <button
@@ -178,10 +179,11 @@
             id="chipStep2"
             type="button"
             onclick="scrollToStep('cardStep2')"
+            aria-label="Step 2: Rosters - Incomplete"
           >
             <span class="chip-num">2</span>
             <span class="chip-txt">Rosters</span>
-            <span class="chip-status" id="statusStep2">⚪</span>
+            <span class="chip-status" id="statusStep2" aria-hidden="true">⚪</span>
           </button>
           <div class="stepper-connector" id="connector2to3"></div>
           <button
@@ -189,10 +191,11 @@
             id="chipStep3"
             type="button"
             onclick="scrollToStep('cardStep3')"
+            aria-label="Step 3: Packages - Incomplete"
           >
             <span class="chip-num">3</span>
             <span class="chip-txt">Packages</span>
-            <span class="chip-status" id="statusStep3">⚪</span>
+            <span class="chip-status" id="statusStep3" aria-hidden="true">⚪</span>
           </button>
           <div class="stepper-connector" id="connector3to4"></div>
           <button
@@ -200,10 +203,11 @@
             id="chipStep4"
             type="button"
             onclick="scrollToStep('cardStep4')"
+            aria-label="Step 4: Dates - Incomplete"
           >
             <span class="chip-num">4</span>
             <span class="chip-txt">Dates</span>
-            <span class="chip-status" id="statusStep4">⚪</span>
+            <span class="chip-status" id="statusStep4" aria-hidden="true">⚪</span>
           </button>
           <div class="stepper-connector" id="connector4to5"></div>
           <button
@@ -211,10 +215,11 @@
             id="chipStep5"
             type="button"
             onclick="scrollToStep('cardStep5')"
+            aria-label="Step 5: Output - Incomplete"
           >
             <span class="chip-num">5</span>
             <span class="chip-txt">Output</span>
-            <span class="chip-status" id="statusStep5">⚪</span>
+            <span class="chip-status" id="statusStep5" aria-hidden="true">⚪</span>
           </button>
           <div class="stepper-connector" id="connector5to6"></div>
           <button
@@ -222,19 +227,21 @@
             id="chipStep6"
             type="button"
             onclick="scrollToStep('cardStep6')"
+            aria-label="Step 6: Generate - Incomplete"
           >
             <span class="chip-num">6</span>
             <span class="chip-txt">Generate</span>
-            <span class="chip-status" id="statusStep6">⚪</span>
+            <span class="chip-status" id="statusStep6" aria-hidden="true">⚪</span>
           </button>
         </div>
-      </div>
+      </nav>
     </div>
 
-    <!-- Toast Notification Container -->
-    <div id="toastContainer" class="toast-container"></div>
+    <!-- Toast Notification Container & Screen Reader Announcer -->
+    <div id="toastContainer" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+    <div id="a11yLiveAnnouncer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
 
-    <div class="app-container">
+    <main id="mainContent" class="app-container" role="main">
       <!-- ── Modern Studio 2-Column Dashboard Grid ─────────────────────────── -->
       <div class="dashboard-grid">
         <!-- ── LEFT COLUMN: Data Ingestion (Schedule & Rosters) ──────────── -->
@@ -261,6 +268,7 @@
               onclick="loadSchedule()"
               tabindex="0"
               role="button"
+              aria-label="Upload instructor master schedule spreadsheet (.xls or .xlsx)"
               onkeydown="if(event.key==='Enter' || event.key===' ') { event.preventDefault(); this.click(); }"
             >
               <svg
@@ -439,7 +447,7 @@
             </div>
 
             <!-- Rosters Dropzone with Browse Data button -->
-            <div id="rostersDropzone" class="dropzone" onclick="loadRosters()" tabindex="0" role="button" onkeydown="if(event.key==='Enter' || event.key===' ') { event.preventDefault(); this.click(); }">
+            <div id="rostersDropzone" class="dropzone" onclick="loadRosters()" tabindex="0" role="button" aria-label="Upload student class rosters (.xlsx, .xls, or .csv)" onkeydown="if(event.key==='Enter' || event.key===' ') { event.preventDefault(); this.click(); }">
               <svg
                 class="dropzone-icon"
                 viewBox="0 0 24 24"
@@ -993,6 +1001,7 @@
                 id="outputDisplay"
                 class="text-input selectable"
                 placeholder="Select destination folder for generated files..."
+                aria-label="Target output directory path"
                 readonly
               />
               <button class="btn-browse" type="button" onclick="loadOutput()">
@@ -1061,7 +1070,7 @@
         </button>
 
         <!-- Progress Indicator -->
-        <div id="progressContainer" class="progress-container d-none">
+        <div id="progressContainer" class="progress-container d-none" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-valuetext="0% - Initializing engine...">
           <div class="progress-track">
             <div id="progressFill" class="progress-fill"></div>
           </div>
@@ -1207,7 +1216,7 @@
           </button>
         </div>
       </div>
-    </div>
+    </main>
 
     <!-- ── Drawers: Guides & Documentation ──────────────────────────────── -->
     <div
@@ -1562,6 +1571,7 @@
                   text-align: left;
                 "
               >
+                <caption class="sr-only">CEIT Academic Departments and Subject Prefixes Directory</caption>
                 <thead>
                   <tr
                     style="
@@ -1569,10 +1579,10 @@
                       border-bottom: 1px solid var(--border-subtle);
                     "
                   >
-                    <th style="padding: 8px 10px">Prefix</th>
-                    <th style="padding: 8px 10px">Program / Discipline</th>
-                    <th style="padding: 8px 10px">Department</th>
-                    <th style="padding: 8px 10px">Dept Badge</th>
+                    <th scope="col" style="padding: 8px 10px">Prefix</th>
+                    <th scope="col" style="padding: 8px 10px">Program / Discipline</th>
+                    <th scope="col" style="padding: 8px 10px">Department</th>
+                    <th scope="col" style="padding: 8px 10px">Dept Badge</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1909,7 +1919,7 @@
     <aside id="logsDrawer" class="drawer-panel" role="region" aria-label="Execution and diagnostic logs">
       <div class="drawer-header">
         <span class="drawer-title">Execution Diagnostics & Logs</span>
-        <button class="drawer-close" aria-label="Close logs drawer" onclick="closeAllDrawers()">
+        <button id="btnCloseLogs" class="drawer-close" aria-label="Close logs drawer" onclick="closeAllDrawers()">
           &times;
         </button>
       </div>
@@ -1953,6 +1963,7 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="mapModalFilename"
+      aria-describedby="mapModalSubtitle"
       onclick="closeColumnMappingModal(event)"
     >
       <div class="modal-dialog-custom" onclick="event.stopPropagation()">
@@ -2243,6 +2254,7 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="settingsModalTitle"
+      aria-describedby="settingsModalSubtitle"
       onclick="closeSettingsModal(event)"
     >
       <div
@@ -2258,7 +2270,7 @@
               </h3>
               <span class="badge-version">Live Overrides</span>
             </div>
-            <div class="modal-subtitle-custom">
+            <div class="modal-subtitle-custom" id="settingsModalSubtitle">
               Customize recognized subject prefixes, departments, lab courses,
               column tokens, and faculty defaults.
             </div>
@@ -2409,14 +2421,14 @@
             </div>
 
             <div class="settings-table-wrapper selectable">
-              <table class="settings-data-table">
+              <table class="settings-data-table" aria-label="Configured Subject Prefixes Table">
                 <thead>
                   <tr>
-                    <th>Prefix</th>
-                    <th>Department Code</th>
-                    <th>Department Name</th>
-                    <th>Badge Preview</th>
-                    <th style="text-align: right">Action</th>
+                    <th scope="col">Prefix</th>
+                    <th scope="col">Department Code</th>
+                    <th scope="col">Department Name</th>
+                    <th scope="col">Badge Preview</th>
+                    <th scope="col" style="text-align: right">Action</th>
                   </tr>
                 </thead>
                 <tbody id="cfgPrefixTableBody">
@@ -2530,12 +2542,12 @@
               class="settings-table-wrapper selectable"
               style="max-height: 240px"
             >
-              <table class="settings-data-table">
+              <table class="settings-data-table" aria-label="Configured Degree Aliases Table">
                 <thead>
                   <tr>
-                    <th>Abbreviation / Search Term</th>
-                    <th>Official Section Prefix</th>
-                    <th style="text-align: right">Action</th>
+                    <th scope="col">Abbreviation / Search Term</th>
+                    <th scope="col">Official Section Prefix</th>
+                    <th scope="col" style="text-align: right">Action</th>
                   </tr>
                 </thead>
                 <tbody id="cfgDegreesTableBody">
@@ -2737,6 +2749,10 @@
               class="dropzone"
               style="min-height: 110px; margin-bottom: 16px"
               onclick="browseCustomTemplateFile()"
+              tabindex="0"
+              role="button"
+              aria-label="Upload custom document template (.docx)"
+              onkeydown="if(event.key==='Enter' || event.key===' ') { event.preventDefault(); this.click(); }"
             >
               <svg
                 class="dropzone-icon"

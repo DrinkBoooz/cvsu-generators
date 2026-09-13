@@ -64,6 +64,12 @@
   --hig-ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
   --hig-press-scale: 0.98;
   --hig-focus-ring: 0 0 0 4px rgba(5, 150, 105, 0.3);
+
+  /* Accessibility High-Visibility Focus Tokens */
+  --a11y-focus-ring-color: var(--accent-emerald);
+  --a11y-focus-ring-offset: 2px;
+  --a11y-focus-ring-width: 2px;
+  --a11y-focus-glow: 0 0 0 4px var(--accent-emerald-glow);
 }
 
       [data-theme="dark"] {

@@ -6,9 +6,17 @@
       async function openSettingsModal() {
         const modal = document.getElementById("modalParserSettingsBackdrop");
         if (!modal) return;
+        const trigger = document.getElementById("btnOpenSettings") || document.activeElement;
         modal.classList.remove("d-none");
         document.body.style.overflow = "hidden";
         switchConfigTab(activeConfigTab || "Prefixes");
+        if (typeof FocusTrapManager !== "undefined") {
+          FocusTrapManager.trap(
+            modal,
+            document.getElementById("cfgSearchPrefix") || document.getElementById("cfgTabPrefixes"),
+            trigger
+          );
+        }
 
         if (
           window.pywebview &&
@@ -85,6 +93,9 @@
         if (modal) {
           modal.classList.add("d-none");
           document.body.style.overflow = "";
+          if (typeof FocusTrapManager !== "undefined") {
+            FocusTrapManager.release();
+          }
         }
       }
 

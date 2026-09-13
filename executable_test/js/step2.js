@@ -239,7 +239,15 @@
           const parsedList = res.parsed_students || res.parsed_preview || [];
           renderParsedPreview(parsedList, res.student_count || 0);
 
+          const previousFocus = document.activeElement;
           modal.classList.remove("d-none");
+          if (typeof FocusTrapManager !== "undefined") {
+            FocusTrapManager.trap(
+              modal,
+              document.getElementById("mapSelectHeaderRow") || document.getElementById("btnCloseMappingModal"),
+              previousFocus
+            );
+          }
         } catch (err) {
           console.error("Failed to open column mapping modal:", err);
           showToast(
@@ -254,12 +262,18 @@
         if (
           event &&
           event.target &&
-          event.target.id !== "modalRosterMappingBackdrop"
+          event.target.id !== "modalRosterMappingBackdrop" &&
+          event.target.id !== "btnCloseMappingModal"
         ) {
           return;
         }
         const modal = document.getElementById("modalRosterMappingBackdrop");
-        if (modal) modal.classList.add("d-none");
+        if (modal) {
+          modal.classList.add("d-none");
+          if (typeof FocusTrapManager !== "undefined") {
+            FocusTrapManager.release();
+          }
+        }
         currentMappingFilename = null;
         currentInspectionData = null;
       }
@@ -396,7 +410,7 @@
           maxCols = availableCols.length;
         }
 
-        let tableHtml = `<table class="spreadsheet-preview-table"><thead><tr><th style="width: 48px;">#</th>`;
+        let tableHtml = `<table class="spreadsheet-preview-table" aria-label="Raw Spreadsheet Preview Grid"><thead><tr><th scope="col" style="width: 48px;">#</th>`;
         for (let c = 0; c < maxCols; c++) {
           const colLetter = String.fromCharCode(65 + c);
           let colClass = "";
@@ -408,7 +422,7 @@
             colClass = "col-id-highlight";
             colTag = " (ID)";
           }
-          tableHtml += `<th class="${colClass}">Col ${colLetter}${colTag}</th>`;
+          tableHtml += `<th scope="col" class="${colClass}">Col ${colLetter}${colTag}</th>`;
         }
         tableHtml += `</tr></thead><tbody>`;
 
@@ -420,7 +434,7 @@
             : row.cells
               ? Object.values(row.cells)
               : Object.values(row);
-          tableHtml += `<tr class="${rowClass}"><td style="font-weight: 700; color: var(--text-muted);">${rIdx + 1}${isHeaderRow ? " [H]" : ""}</td>`;
+          tableHtml += `<tr class="${rowClass}"><th scope="row" style="font-weight: 700; color: var(--text-muted); text-align: left; padding: 4px 8px;">${rIdx + 1}${isHeaderRow ? " [H]" : ""}</th>`;
           for (let c = 0; c < maxCols; c++) {
             let colClass = "";
             if (c === activeName) colClass = "col-name-highlight";

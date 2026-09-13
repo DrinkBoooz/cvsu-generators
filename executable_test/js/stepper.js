@@ -129,12 +129,35 @@
           s5Ready &&
           (state.detectedClasses.length === 0 || selectedClasses > 0);
 
+        const stepNames = {
+          chipStep1: "Schedule",
+          chipStep2: "Rosters",
+          chipStep3: "Packages",
+          chipStep4: "Dates",
+          chipStep5: "Output",
+          chipStep6: "Generate",
+        };
+        const stepNumbers = {
+          chipStep1: 1,
+          chipStep2: 2,
+          chipStep3: 3,
+          chipStep4: 4,
+          chipStep5: 5,
+          chipStep6: 6,
+        };
         const setChip = (chipId, statusId, isReady, okIcon = "✓") => {
           const chip = document.getElementById(chipId);
           const st = document.getElementById(statusId);
-          if (chip) chip.classList.toggle("ready", isReady);
+          if (chip) {
+            chip.classList.toggle("ready", isReady);
+            const num = stepNumbers[chipId] || 1;
+            const name = stepNames[chipId] || "";
+            const statusText = isReady ? "Ready" : "Incomplete";
+            chip.setAttribute("aria-label", `Step ${num}: ${name} - ${statusText}`);
+          }
           if (st) {
-             st.innerHTML = isReady ? okIcon : '<span style="opacity: 0.3; font-size: 14px;">•</span>';
+            st.innerHTML = isReady ? okIcon : '<span style="opacity: 0.3; font-size: 14px;">•</span>';
+            st.setAttribute("aria-hidden", "true");
           }
         };
 

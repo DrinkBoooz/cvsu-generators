@@ -77,13 +77,15 @@
         padding: 8px 12px;
         font-size: 13px;
         font-weight: 600;
-        outline: none;
         cursor: pointer;
         transition: border-color 0.2s;
         min-width: 175px;
       }
-      .type-dropdown:focus {
+      .type-dropdown:focus-visible {
         border-color: var(--border-focus);
+        outline: var(--a11y-focus-ring-width) solid var(--a11y-focus-ring-color) !important;
+        outline-offset: var(--a11y-focus-ring-offset) !important;
+        box-shadow: var(--a11y-focus-glow) !important;
       }
       .type-dropdown option {
         background-color: var(--surface-elevated);
@@ -116,15 +118,17 @@
         font-size: 14px;
         font-weight: 500;
         width: 100%;
-        outline: none;
         transition:
           border-color 0.15s ease,
           background-color 0.15s ease,
           box-shadow 0.15s ease;
       }
-      .text-input:focus {
+      .text-input:focus-visible {
         border-color: var(--border-focus);
         background: var(--surface-elevated);
+        outline: var(--a11y-focus-ring-width) solid var(--a11y-focus-ring-color) !important;
+        outline-offset: var(--a11y-focus-ring-offset) !important;
+        box-shadow: var(--a11y-focus-glow) !important;
       }
       .btn-browse {
         background: var(--surface-subtle);
@@ -179,15 +183,17 @@
         padding: 8px 12px;
         color: var(--text-primary);
         font-size: 13px;
-        outline: none;
         color-scheme: light;
         transition:
           border-color 0.2s ease,
           background 0.2s ease;
       }
-      .date-input:focus {
+      .date-input:focus-visible {
         border-color: var(--border-focus);
         background: var(--surface-elevated);
+        outline: var(--a11y-focus-ring-width) solid var(--a11y-focus-ring-color) !important;
+        outline-offset: var(--a11y-focus-ring-offset) !important;
+        box-shadow: var(--a11y-focus-glow) !important;
       }
       .date-input::-webkit-calendar-picker-indicator {
         cursor: pointer;
