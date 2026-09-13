@@ -7,10 +7,10 @@ WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if WORKSPACE_DIR not in sys.path:
     sys.path.insert(0, WORKSPACE_DIR)
 
-from executable.main import ScriptAPI, setup_window_drag_and_drop
+from executable_test.main import ScriptAPI, setup_window_drag_and_drop
 
 def test_pywebview_setup_window_drag_and_drop():
-    html_path = os.path.join(WORKSPACE_DIR, "executable", "ui.html")
+    html_path = os.path.join(WORKSPACE_DIR, "executable_test", "ui.html")
     assert os.path.exists(html_path)
 
     api = ScriptAPI()

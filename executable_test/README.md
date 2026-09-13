@@ -18,12 +18,12 @@ A desktop application for Cavite State University (CvSU) faculty members to auto
 
 ## 🚀 How to Run
 
-1. Locate **`CvSU Gen (Beta).exe`**.
-2. Double-click **`CvSU Gen (Beta).exe`** to open the program.
+1. Locate **`CvSU Gen.exe`**.
+2. Double-click **`CvSU Gen.exe`** to open the program.
 
 > **Note on Windows Defender / SmartScreen & Publisher Identity:**
 > Because this is a custom institutional tool developed specifically for Cavite State University, Windows may display a prompt stating _"Windows protected your PC"_.
-> - **Verified Author & Copyright**: You can right-click **`CvSU Gen (Beta).exe`** &rarr; **Properties** &rarr; **Details** or **Digital Signatures** tab to verify the official copyright, company, and developer signature (**Dan Joseph Ortega**).
+> - **Verified Author & Copyright**: You can right-click **`CvSU Gen.exe`** &rarr; **Properties** &rarr; **Details** or **Digital Signatures** tab to verify the official copyright, company, and developer signature (**Dan Joseph Ortega**).
 > - **Standard Launch**: Simply click **"More info"** and then select **"Run anyway"**.
 > - **Permanent Trust (Optional)**: Run **`install_trusted_publisher.bat`** once to add the verified institutional publisher certificate to your computer, permanently enabling clean launches without SmartScreen warnings.
 
@@ -140,7 +140,11 @@ _(e.g., `[CvSU Gen (Beta) - Schedule Parsing Error]`)_
 ---
 
 ## 🏷️ Version History
-
+ 
+- **Release v1.0.0**:
+  - **Modularized UI & Script Architecture**: Completely decoupled monolith UI into cleanly structured CSS modules (`css/tokens.css`, `components.css`, `drawers.css`, etc.) and JavaScript controllers (`js/state.js`, `step1.js`, `settings.js`, etc.) with zero performance regression.
+  - **Native Drag-and-Drop & Resilient File Bridge**: Integrated native OLE Win32 drag-and-drop alongside pywebview HTML5 dropzones with memory caching for drag operations.
+  - **Official Production Release**: Transitioned from Beta to production Release v1.0.0 (`CvSU Gen.exe`).
 - **v1.8 Beta**:
   - **Apple HIG Spatial Rhythm & Responsive Layout Refinement**: Eliminated layout compression and horizontal overflow dead-zones across small screens and Windows Snap Assist views with fluid `minmax(0, 1fr)` columns and a standardized 8pt spacing grid.
   - **Illuminated Stepper Connectors & Active Indicators**: Introduced dynamic gradient-illuminated stepper progress lines connecting workflow steps, real-time scroll-spy step tracking, and macOS-style segmented indicator lines on the slide drawer navigation tabs.

@@ -37,23 +37,23 @@ All git commit messages must strictly follow the format:
 
 ## Version Numbering & Synchronization
 
-- **Single Source of Truth**: The active application version is displayed in `executable/ui.html` via the `<span class="badge-version">vX.Y Beta</span>` badge in the navigation header.
+- **Single Source of Truth**: The active application version is displayed in `executable_test/ui.html` via the `<span class="badge-version">Release vX.Y.Z</span>` badge in the navigation header.
 - **When to Bump the Version**:
-  - Whenever new features, UX workflows, generators, or significant fixes are implemented across a chat or milestone, the version number must be bumped (e.g. from `v1.1 Beta` -> `v1.2 Beta`).
+  - Whenever new features, UX workflows, generators, or significant fixes are implemented across a chat or milestone, the version number must be bumped (e.g. from `Release v1.0.0` -> `Release v1.0.1`).
   - Never leave the version number stale across releases or major feature updates.
 - **Synchronization Checklist**:
-  1. `executable/ui.html`: Update the header badge `<span class="badge-version">vX.Y Beta</span>`.
+  1. `executable_test/ui.html`: Update the header badge `<span class="badge-version">Release vX.Y.Z</span>`.
   2. `tests/test_ui_consistency.py`: Ensure test assertions verify the current version badge.
-  3. `executable/README.md`: If version numbers or changelog items are listed, keep them synchronized.
-  4. `executable/file_version_info.txt`: Synchronize `filevers`, `prodvers`, `FileVersion`, and `ProductVersion`.
+  3. `executable_test/README.md`: If version numbers or changelog items are listed, keep them synchronized.
+  4. `executable_test/file_version_info.txt`: Synchronize `filevers`, `prodvers`, `FileVersion`, and `ProductVersion`.
 
 ## Executable Packaging, Copyright & Code Signing
 
 Whenever the application is exported, compiled, or packaged as a standalone Windows executable (`.exe`):
 
-- **Windows PE Version Information**: `executable/file_version_info.txt` must always be maintained with official copyright (`Copyright © 2026 Dan Joseph Ortega. All rights reserved.`), company/author name (`Dan Joseph Ortega`), product name (`CvSU Document Generator`), and version numbers synchronized with `ui.html`.
-- **PyInstaller Integration**: Both `executable/build.bat` and `executable/CvSU Gen (Beta).spec` must embed `file_version_info.txt` via `--version-file` / `version='file_version_info.txt'` so Windows Explorer (Properties -> Details), hover tooltips, and Task Manager display the author and copyright.
-- **Authenticode Code Signing**: Executable binaries compiled in `executable/dist/` should be digitally signed via `executable/sign_exe.ps1` (or automated post-build in `build.bat`) using `signtool.exe` and the author's Authenticode certificate (`Dan Joseph Ortega`). This ensures Windows SmartScreen and UAC prompts identify the verified author/publisher instead of "Unknown Publisher".
+- **Windows PE Version Information**: `executable_test/file_version_info.txt` must always be maintained with official copyright (`Copyright © 2026 Dan Joseph Ortega. All rights reserved.`), company/author name (`Dan Joseph Ortega`), product name (`CvSU Document Generator`), and version numbers synchronized with `ui.html`.
+- **PyInstaller Integration**: Both `executable_test/build.bat` and `executable_test/CvSU Gen.spec` must embed `file_version_info.txt` via `--version-file` / `version='file_version_info.txt'` so Windows Explorer (Properties -> Details), hover tooltips, and Task Manager display the author and copyright.
+- **Authenticode Code Signing**: Executable binaries compiled in `executable_test/dist/` should be digitally signed via `executable_test/sign_exe.ps1` (or automated post-build in `build.bat`) using `signtool.exe` and the author's Authenticode certificate (`Dan Joseph Ortega`). This ensures Windows SmartScreen and UAC prompts identify the verified author/publisher instead of "Unknown Publisher".
 - **Automated Tests**: Any changes to versioning or executable metadata must be validated by tests under `tests/` (including `tests/test_pe_version_info.py`).
 
 ## Adding New Templates & Generators Protocol
@@ -104,9 +104,9 @@ When instructed to add or create a new form generator from a `.docx` template:
    - Import the new generator class and add it to `__all__`.
 6. **Orchestrator Telemetry & Packaging**:
    - `modules/services/orchestrator.py` automatically scales: `num_ceit_generators = len(factory.get_all())` calculates total progress steps dynamically.
-   - Both `executable/CvSU Gen (Beta).spec` and `executable/build.bat` bundle the entire `templates/` directory (`--add-data "..\templates;templates/"`), so the new file is automatically packaged into `.exe` builds.
+   - Both `executable_test/CvSU Gen.spec` and `executable_test/build.bat` bundle the entire `templates/` directory (`--add-data "..\templates;templates/"`), so the new file is automatically packaged into `.exe` builds.
 7. **Synchronize Documentation & README**:
-   - `executable/README.md`: If the total count of CEIT forms (e.g. "7 complete forms") or list of forms is described, update the count and bullet item.
+   - `executable_test/README.md`: If the total count of CEIT forms (e.g. "7 complete forms") or list of forms is described, update the count and bullet item.
    - `tests/test_ui_consistency.py`: Keep README assertions synchronized.
 8. **Automate & Validate Tests**:
    - Update `tests/test_modules_generation.py`:

@@ -8,7 +8,7 @@ if WORKSPACE_DIR not in sys.path:
     sys.path.insert(0, WORKSPACE_DIR)
 
 import process_schedule
-from executable.main import ScriptAPI
+from executable_test.main import ScriptAPI
 
 def test_dnd_schedule_detection():
     api = ScriptAPI()

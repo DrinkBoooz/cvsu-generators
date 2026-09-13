@@ -259,4 +259,3 @@
           console.error("Delete template error:", e);
         }
       }
-    </script>

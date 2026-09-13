@@ -21,11 +21,20 @@ else:
 import webview
 
 try:
-    from .api import ScriptAPI, get_resource_path
+    from .api import ScriptAPI, get_resource_path, sanitize_filename
     from .native import setup_window_drag_and_drop
 except (ImportError, ValueError):
-    from api import ScriptAPI, get_resource_path
+    from api import ScriptAPI, get_resource_path, sanitize_filename
     from native import setup_window_drag_and_drop
+
+__all__ = [
+    "ScriptAPI",
+    "get_resource_path",
+    "setup_window_drag_and_drop",
+    "sanitize_filename",
+    "create_app",
+    "main",
+]
 
 def create_app():
     """Initializes ScriptAPI and creates the pywebview main application window."""

@@ -3,7 +3,7 @@ import pytest
 from playwright.sync_api import sync_playwright
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-UI_HTML_PATH = os.path.join(WORKSPACE_DIR, "executable", "ui.html")
+UI_HTML_PATH = os.path.join(WORKSPACE_DIR, "executable_test", "ui.html")
 FILE_URL = f"file:///{UI_HTML_PATH.replace(os.sep, '/')}"
 
 def test_theme_transition_zero_runaway_events():
@@ -14,7 +14,7 @@ def test_theme_transition_zero_runaway_events():
         page.goto(FILE_URL)
 
         # Confirm initial state
-        initial_theme = page.evaluate("() => document.documentElement.getAttribute('data-bs-theme')")
+        initial_theme = page.evaluate("() => document.documentElement.getAttribute('data-theme') || document.documentElement.getAttribute('data-bs-theme')")
         assert initial_theme == "dark", f"Expected dark, got {initial_theme}"
 
         # Track transitionstart events during dark -> light toggle
@@ -33,9 +33,10 @@ def test_theme_transition_zero_runaway_events():
                 const btn = document.getElementById('btnToggleTheme');
                 btn.click();
 
-                // Wait for data-bs-theme to change and View Transition to complete
+                // Wait for theme to change and View Transition to complete
                 const checkInterval = setInterval(() => {
-                    if (document.documentElement.getAttribute('data-bs-theme') === 'light') {
+                    const cur = document.documentElement.getAttribute('data-theme') || document.documentElement.getAttribute('data-bs-theme');
+                    if (cur === 'light') {
                         clearInterval(checkInterval);
                         setTimeout(() => {
                             window.removeEventListener('transitionstart', onTransitionStart, true);
@@ -74,7 +75,8 @@ def test_theme_transition_zero_runaway_events():
                 btn.click();
 
                 const checkInterval = setInterval(() => {
-                    if (document.documentElement.getAttribute('data-bs-theme') === 'dark') {
+                    const theme = document.documentElement.getAttribute('data-theme') || document.documentElement.getAttribute('data-bs-theme');
+                    if (theme === 'dark') {
                         clearInterval(checkInterval);
                         setTimeout(() => {
                             window.removeEventListener('transitionstart', onTransitionStart, true);

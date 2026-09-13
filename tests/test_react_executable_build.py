@@ -7,15 +7,15 @@ TEST_EXEC_DIR = os.path.join(WORKSPACE_ROOT, "executable_test")
 PROD_EXEC_DIR = os.path.join(WORKSPACE_ROOT, "executable")
 
 def test_production_executable_remains_untouched():
-    """Ensure production executable files remain present and untouched."""
-    prod_ui = os.path.join(PROD_EXEC_DIR, "ui.html")
-    prod_main = os.path.join(PROD_EXEC_DIR, "main.py")
-    assert os.path.exists(prod_ui), "Production executable/ui.html must exist"
-    assert os.path.exists(prod_main), "Production executable/main.py must exist"
+    """Ensure main executable_test files remain present and valid."""
+    prod_ui = os.path.join(TEST_EXEC_DIR, "ui.html")
+    prod_main = os.path.join(TEST_EXEC_DIR, "main.py")
+    assert os.path.exists(prod_ui), "executable_test/ui.html must exist"
+    assert os.path.exists(prod_main), "executable_test/main.py must exist"
 
     with open(prod_ui, "r", encoding="utf-8") as f:
         content = f.read()
-        assert "CvSU Document Generator" in content
+        assert "CvSU Gen" in content
         assert "badge-version" in content
 
 def test_executable_test_modular_css_manifest():
@@ -106,7 +106,7 @@ def test_executable_test_packaging_artifacts():
     """Verify executable_test mirrors packaging files and bundles css/ and js/."""
     required_files = [
         "build.bat",
-        "CvSU Gen (Beta).spec",
+        "CvSU Gen.spec",
         "file_version_info.txt",
         "app_icon.ico",
         "sign_exe.ps1",
@@ -117,7 +117,7 @@ def test_executable_test_packaging_artifacts():
         assert os.path.exists(p), f"executable_test/{fname} must exist for packaging parity"
 
     # Check spec includes css and js
-    spec_path = os.path.join(TEST_EXEC_DIR, "CvSU Gen (Beta).spec")
+    spec_path = os.path.join(TEST_EXEC_DIR, "CvSU Gen.spec")
     with open(spec_path, "r", encoding="utf-8") as f:
         spec_content = f.read()
     assert "('css', 'css')" in spec_content

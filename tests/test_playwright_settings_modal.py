@@ -3,7 +3,7 @@ import pytest
 from playwright.sync_api import sync_playwright
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-UI_HTML_PATH = os.path.join(WORKSPACE_DIR, "executable", "ui.html")
+UI_HTML_PATH = os.path.join(WORKSPACE_DIR, "executable_test", "ui.html")
 FILE_URL = f"file:///{UI_HTML_PATH.replace(os.sep, '/')}"
 
 def test_playwright_parser_settings_modal_flow():

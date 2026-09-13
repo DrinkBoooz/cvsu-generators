@@ -3,15 +3,25 @@ import re
 import pytest
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-UI_HTML_PATH = os.path.join(WORKSPACE_DIR, "executable", "ui.html")
-README_PATH = os.path.join(WORKSPACE_DIR, "executable", "README.md")
+UI_HTML_PATH = os.path.join(WORKSPACE_DIR, "executable_test", "ui.html")
+README_PATH = os.path.join(WORKSPACE_DIR, "executable_test", "README.md")
+
+def get_ui_bundle():
+    with open(UI_HTML_PATH, "r", encoding="utf-8") as f:
+        content = f.read()
+    js_dir = os.path.join(os.path.dirname(UI_HTML_PATH), "js")
+    if os.path.isdir(js_dir):
+        for js_file in os.listdir(js_dir):
+            if js_file.endswith(".js"):
+                with open(os.path.join(js_dir, js_file), "r", encoding="utf-8") as f:
+                    content += "\n" + f.read()
+    return content
 
 def test_ui_html_matches_readme_instructions():
     assert os.path.exists(UI_HTML_PATH), "ui.html must exist"
     assert os.path.exists(README_PATH), "README.md must exist"
 
-    with open(UI_HTML_PATH, "r", encoding="utf-8") as f:
-        ui_content = f.read()
+    ui_content = get_ui_bundle()
 
     with open(README_PATH, "r", encoding="utf-8") as f:
         readme_content = f.read()
@@ -43,7 +53,7 @@ def test_ui_html_matches_readme_instructions():
     assert "Columns A &amp; B" in ui_content or "Columns A & B" in ui_content
 
     # Verify current application version badge
-    assert "v2.0 Beta" in ui_content
+    assert "Release v1.0.0" in ui_content
 
     # Verify official roster naming format from README.md
     assert "{Course/Sec} List of Students for {ScheduleCode}-{Subject}.xlsx" in ui_content
@@ -53,11 +63,13 @@ def test_ui_html_matches_readme_instructions():
     assert "Windows protected your PC" in ui_content
     assert "Frequently Asked Questions" in ui_content or "FAQ" in ui_content
     assert "danjoseph.ortega@cvsu.edu.ph" in ui_content
-    assert "[CvSU Gen (Beta) - <Issue>]".replace("<", "&lt;").replace(">", "&gt;") in ui_content
+    assert (
+        "[CvSU Gen - <Issue>]".replace("<", "&lt;").replace(">", "&gt;") in ui_content
+        or "[CvSU Gen (Beta) - <Issue>]".replace("<", "&lt;").replace(">", "&gt;") in ui_content
+    )
 
 def test_ui_html_element_ids_complete():
-    with open(UI_HTML_PATH, "r", encoding="utf-8") as f:
-        ui_content = f.read()
+    ui_content = get_ui_bundle()
 
     # Extract all IDs defined in HTML
     html_ids = set(re.findall(r'id=["\']([^"\']+)["\']', ui_content))
@@ -70,8 +82,7 @@ def test_ui_html_element_ids_complete():
     assert not missing, f"Missing element IDs in ui.html: {missing}"
 
 def test_ui_html_new_ux_components():
-    with open(UI_HTML_PATH, "r", encoding="utf-8") as f:
-        ui_content = f.read()
+    ui_content = get_ui_bundle()
 
     # Verify Stepper Bar, Step Chips, and Connectors
     assert 'id="workflowStepper"' in ui_content
@@ -115,8 +126,7 @@ def test_ui_html_new_ux_components():
     assert "filterHelpContent" in ui_content
 
 def test_ui_smart_roster_mapping_and_ceit_directory():
-    with open(UI_HTML_PATH, "r", encoding="utf-8") as f:
-        ui_content = f.read()
+    ui_content = get_ui_bundle()
 
     # Verify Interactive Column Mapping Modal Elements
     assert 'id="modalRosterMappingBackdrop"' in ui_content

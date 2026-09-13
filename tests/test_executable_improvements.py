@@ -6,10 +6,11 @@ WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if WORKSPACE_DIR not in sys.path:
     sys.path.insert(0, WORKSPACE_DIR)
 
-from executable.main import ScriptAPI, sanitize_filename
+from executable_test.main import ScriptAPI, sanitize_filename
 
-UI_HTML_PATH = os.path.join(WORKSPACE_DIR, "executable", "ui.html")
-MAIN_PY_PATH = os.path.join(WORKSPACE_DIR, "executable", "main.py")
+UI_HTML_PATH = os.path.join(WORKSPACE_DIR, "executable_test", "ui.html")
+MAIN_PY_PATH = os.path.join(WORKSPACE_DIR, "executable_test", "main.py")
+DND_PY_PATH = os.path.join(WORKSPACE_DIR, "executable_test", "native", "dnd.py")
 
 def test_sanitize_filename():
     assert sanitize_filename("../../secret.txt") == "secret.txt"
@@ -94,9 +95,19 @@ def test_ui_html_accessibility_and_roles():
     assert 'aria-label="Copy recommended roster filename"' in ui
     assert 'aria-label="Initialize document generation workflow"' in ui
 
-def test_ui_html_escape_key_dismisses_all_modals():
+def get_ui_bundle():
     with open(UI_HTML_PATH, "r", encoding="utf-8") as f:
-        ui = f.read()
+        content = f.read()
+    js_dir = os.path.join(os.path.dirname(UI_HTML_PATH), "js")
+    if os.path.isdir(js_dir):
+        for js_file in os.listdir(js_dir):
+            if js_file.endswith(".js"):
+                with open(os.path.join(js_dir, js_file), "r", encoding="utf-8") as f:
+                    content += "\n" + f.read()
+    return content
+
+def test_ui_html_escape_key_dismisses_all_modals():
+    ui = get_ui_bundle()
 
     assert 'modalParserSettingsBackdrop' in ui
     assert 'closeSettingsModal();' in ui
@@ -104,8 +115,7 @@ def test_ui_html_escape_key_dismisses_all_modals():
     assert 'closeColumnMappingModal();' in ui
 
 def test_ui_html_sync_and_error_handling():
-    with open(UI_HTML_PATH, "r", encoding="utf-8") as f:
-        ui = f.read()
+    ui = get_ui_bundle()
 
     # Verify clear_schedule call in resetSchedule
     assert "clear_schedule" in ui
@@ -121,20 +131,21 @@ def test_ui_html_sync_and_error_handling():
 def test_main_py_template_dropzone_and_window_closing():
     with open(MAIN_PY_PATH, "r", encoding="utf-8") as f:
         main_py = f.read()
+    with open(DND_PY_PATH, "r", encoding="utf-8") as f:
+        dnd_py = f.read()
 
-    # Verify template dropzone registration
-    assert "template_zone = window.dom.get_element('#templateDropzone')" in main_py
-    assert "on_template_drop" in main_py
-    assert "template_zone.events.drop +=" in main_py
+    # Verify template dropzone registration in dnd.py
+    assert "template_zone = window.dom.get_element('#templateDropzone')" in dnd_py
+    assert "on_template_drop" in dnd_py
+    assert "template_zone.events.drop +=" in dnd_py
 
-    # Verify closing event registration
+    # Verify closing event registration in main.py
     assert "window.events.closing +=" in main_py
 
 def test_apple_hig_confirm_modal_replaces_browser_confirm():
-    with open(UI_HTML_PATH, "r", encoding="utf-8") as f:
-        ui = f.read()
+    ui = get_ui_bundle()
 
-    # Zero window.confirm calls allowed in ui.html
+    # Zero window.confirm calls allowed in ui.html or js modules
     import re
     confirm_calls = re.findall(r'[^a-zA-Z0-9_]confirm\(', ui)
     assert len(confirm_calls) == 0, f"Found native browser confirm() calls: {confirm_calls}"

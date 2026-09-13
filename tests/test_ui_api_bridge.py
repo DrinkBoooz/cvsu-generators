@@ -8,7 +8,7 @@ if WORKSPACE_DIR not in sys.path:
     sys.path.insert(0, WORKSPACE_DIR)
 
 import process_schedule
-from executable.main import ScriptAPI
+from executable_test.main import ScriptAPI
 
 def test_inspect_schedule_file_valid():
     schedule_path = os.path.join(WORKSPACE_DIR, "ORTEGA_SCHEDULE.xls")
@@ -371,14 +371,14 @@ def test_generation_by_class_payload_structure_and_ui_compatibility(tmp_path):
                 assert "name" in item and isinstance(item["name"], str) and len(item["name"]) > 0
                 assert "path" in item and isinstance(item["path"], str) and len(item["path"]) > 0
 
-    # Verify ui.html contains defensive object-aware handling for item.path and item.name
-    ui_path = os.path.join(WORKSPACE_DIR, "executable", "ui.html")
-    with open(ui_path, "r", encoding="utf-8") as f:
-        ui_html = f.read()
+    # Verify step3.js contains defensive object-aware handling for item.path and item.name
+    step3_path = os.path.join(WORKSPACE_DIR, "executable_test", "js", "step3.js")
+    with open(step3_path, "r", encoding="utf-8") as f:
+        step3_js = f.read()
 
-    assert 'typeof item === "object"' in ui_html
-    assert 'item.path || item.name' in ui_html
-    assert 'data-path=' in ui_html
+    assert 'typeof item === "object"' in step3_js
+    assert 'item.path || item.name' in step3_js
+    assert 'data-path=' in step3_js
 
 def test_script_api_parser_config_endpoints():
     api = ScriptAPI()
