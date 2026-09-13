@@ -1,5 +1,12 @@
 # Project Rules
 
+## 0. Agent Governance & Rule Modification
+
+- **Controlled Artifact**: `AGENTS.md` defines the immutable operating rules for agents in this workspace.
+- **No Unauthorized Modifications**: Agents must NEVER modify `AGENTS.md`, `.agents/agents/`, `.agents/rules/`, `.agents/workflows/`, or any other agent-governance artifacts simply because they believe instructions could be improved.
+- **No Silent Updates**: Documentation audits, refactors, or implementation tasks must not silently alter agent governance.
+- **Reporting Issues**: If a task exposes a governance problem or contradiction, the agent must report it to the user rather than changing governance rules without explicit authorization.
+
 ## Tests Location
 
 All test programs, test suites, test fixtures, and testing utilities must always be placed under the `tests/` directory:
@@ -37,9 +44,10 @@ All git commit messages must strictly follow the format:
 
 ## Version Numbering & Synchronization
 
-- **Single Source of Truth**: The active application version is displayed in `executable_test/ui.html` via the `<span class="badge-version">Release vX.Y.Z</span>` badge in the navigation header.
+- **Single Source of Truth**: The active application version is displayed in `executable_test/ui.html` via the `<span class="badge-version">Release vX.Y.Z</span>` badge in the navigation header. This is the canonical application-version representation; all other locations are synchronized consumers.
+- **Development Changes**: Normal bug fixes, internal improvements, refactors, tests, documentation changes, and other development commits do **NOT** automatically require a version bump. Do not interpret every development commit as a release.
 - **When to Bump the Version**:
-  - Whenever new features, UX workflows, generators, or significant fixes are implemented across a chat or milestone, the version number must be bumped (e.g. from `Release v1.0.0` -> `Release v1.0.1`).
+  - A version bump is required ONLY when the project is intentionally producing a new application release, or when the user/task explicitly requests a version bump (e.g. from `Release v1.0.0` -> `Release v1.0.1`).
   - Never leave the version number stale across releases or major feature updates.
 - **Synchronization Checklist**:
   1. `executable_test/ui.html`: Update the header badge `<span class="badge-version">Release vX.Y.Z</span>`.
@@ -88,33 +96,30 @@ When discrepancies or questions arise, agents must strictly observe this priorit
 
 The Obsidian vault is a persistent, human-readable knowledge layer that agents should use to establish context before performing broad reconnaissance.
 
-For documentation, architecture, audit, maintenance, and implementation tasks:
+#### When to Read Obsidian First
+If the task touches a subsystem that is documented in Obsidian:
+```text
+Read relevant Obsidian note
+→ Identify relevant implementation areas
+→ Perform targeted verification
+```
+If no relevant note exists, proceed directly to source/tests/templates. For trivial isolated changes where documentation cannot materially affect the task, a broad Obsidian read is unnecessary.
 
-1. Read the relevant existing Obsidian notes first when they are likely to contain useful context.
-2. Use those notes to identify:
-   - relevant source files
-   - subsystem boundaries
-   - terminology
-   - documented workflows
-   - generator relationships
-   - template relationships
-   - configuration concepts
-   - known architectural decisions
-   - previously documented behavior
-3. Treat the vault as a **context and navigation layer**, not as the implementation source of truth.
-4. Verify important current-state claims against the higher-priority sources:
-   - application source
-   - automated tests
-   - actual templates
-5. Prefer **targeted verification** over rereading unchanged areas that are already accurately documented.
-6. Perform deeper source inspection when:
-   - documentation is missing
-   - documentation conflicts with implementation
-   - the relevant code has changed
-   - the task explicitly requires forensic evidence
-   - behavior cannot safely be established from documentation
-7. When documentation is stale, correct the documentation using the higher-priority source.
-8. Never preserve a documented claim merely because it already exists in Obsidian.
+#### Documentation Confidence
+Agents should mentally classify relevant documentation to determine how much source verification is necessary:
+1. **High confidence**: Recently maintained, referenced implementation appears unchanged, no known contradictions.
+2. **Medium confidence**: Documentation exists but current implementation may have changed.
+3. **Low confidence**: Stale note, changed referenced files, missing source references, known contradiction, or forensic/current-state accuracy is required.
+
+#### Documentation is NOT Executable Verification
+Obsidian documentation establishes context and navigation, but **cannot substitute for executable tests or source/template inspection** when current behavior needs verification and such evidence is reasonably available.
+
+#### Conflicting Obsidian Notes
+If two Obsidian notes conflict, do not choose one based on note age, title, or perceived authority. Instead:
+```text
+Verify the underlying: Source Code → Tests → Templates
+Then correct the affected documentation.
+```
 
 The intended workflow is:
 
@@ -198,6 +203,9 @@ Before writing or updating documentation:
 
 ### 4. Documentation Synchronization Triggers
 
+#### Explicit Architecture-Change Rule
+Internal implementation changes that alter architectural boundaries, subsystem responsibilities, public interfaces, data flow, lifecycle behavior, configuration schemas, generator relationships, or other documented architecture **require the relevant Obsidian documentation to be reviewed and updated**, even if end-user behavior appears unchanged.
+
 #### Changes Requiring Obsidian Updates:
 
 - Application architecture and subsystem restructuring
@@ -214,7 +222,7 @@ Before writing or updating documentation:
 
 - Typo corrections or code comment adjustments
 - Pure styling tweaks or formatting-only CSS changes
-- Internal code refactoring with identical externally observable behavior
+- Internal code refactoring, BUT ONLY IF BOTH are true: 1) externally observable behavior remains unchanged, AND 2) the documented architecture/structure does not materially change. (e.g. A refactor from a monolithic API bridge to modular ScriptAPI mixins preserves external behavior but requires documentation updates because the architecture changed.)
 - Test suite enhancements or refactoring that do not alter observable system contracts
 - Minor dependency maintenance without behavioral impact
 
@@ -255,7 +263,11 @@ Whenever the application is exported, compiled, or packaged as a standalone Wind
 
 - **Windows PE Version Information**: `executable_test/file_version_info.txt` must always be maintained with official copyright (`Copyright © 2026 Dan Joseph Ortega. All rights reserved.`), company/author name (`Dan Joseph Ortega`), product name (`CvSU Document Generator`), and version numbers synchronized with `ui.html`.
 - **PyInstaller Integration**: Both `executable_test/build.bat` and `executable_test/CvSU Gen.spec` must embed `file_version_info.txt` via `--version-file` / `version='file_version_info.txt'` so Windows Explorer (Properties -> Details), hover tooltips, and Task Manager display the author and copyright.
-- **Authenticode Code Signing**: Executable binaries compiled in `executable_test/dist/` should be digitally signed via `executable_test/sign_exe.ps1` (or automated post-build in `build.bat`) using `signtool.exe` and the author's Authenticode certificate (`Dan Joseph Ortega`). This ensures Windows SmartScreen and UAC prompts identify the verified author/publisher instead of "Unknown Publisher".
+- **Authenticode Code Signing**: If a valid project Authenticode certificate is configured and available, executable binaries compiled in `executable_test/dist/` should be digitally signed via `executable_test/sign_exe.ps1` (or automated post-build in `build.bat`) using `signtool.exe`.
+  - **Agents must not assume** that a certificate exists merely because the author's name is known.
+  - **Agents must not fabricate** certificate identity, certificate paths, thumbprints, or signing credentials.
+  - If signing is required but the certificate/tooling is unavailable, report the limitation rather than inventing a signing configuration.
+  - Note: Code signing establishes publisher/signature identity but does not guarantee that Windows SmartScreen will eliminate all warnings or establish immediate reputation.
 - **Automated Tests**: Any changes to versioning or executable metadata must be validated by tests under `tests/` (including `tests/test_pe_version_info.py`).
 
 ## Adding New Templates & Generators Protocol
@@ -284,24 +296,23 @@ When instructed to add or create a new form generator from a `.docx` template:
        for r_idx, r in enumerate(tbl.rows[:3]):
            print(f"  Row {r_idx}: {[c.text.strip() for c in r.cells]}")
    ```
-3. **Implement Generator Subclass in `modules/generators/ceit_gen.py`**:
-   - Subclass `DocumentGenerator(ABC)`.
-   - Implement `fill_header(self, body, info: ClassInfo) -> None`:
-     - Access header tables or paragraphs.
-     - Replace metadata placeholders (`info.instructor`, `info.course_section`, `info.schedule_code`, `info.subject`, `info.time_days_room`, `info.semester_ay`).
-     - Use helper functions from `modules.common.docx_utils`: `set_cell_text`, `replace_after_colon`, `replace_value_run`, and `shrink_threshold` font scaling.
-   - Implement `_fill_student_row(self, cells: list, idx: int, name: str, stnum: str) -> None`:
-     - Assign row cells (e.g. `cells[0]` for row number or name, `cells[1]` for student number, etc.).
-     - Apply `set_cell_text(cells[col], name, shrink_threshold=32, shrink_sz="18")` to protect against long student names wrapping awkwardly.
-4. **Register in `GeneratorFactory` (`modules/generators/ceit_gen.py`)**:
-   - Add template key to `GeneratorFactory.TEMPLATE_FILES`:
-     ```python
-     "new_key": "template_new_file.docx",
-     ```
-   - Add instantiation tuple to `GeneratorFactory.get_all()`:
-     ```python
-     (lambda: NewFormGenerator(self._path("new_key")), "NEW_FORM_SUFFIX"),
-     ```
+3. **Implement Generator Logic**:
+   - Inspect the current generator architecture and follow the established implementation pattern in the active generator engine.
+   - For example, if extending the CEIT forms pattern:
+     - Subclass `DocumentGenerator(ABC)`.
+     - Implement `fill_header(self, body, info: ClassInfo) -> None` (replace metadata placeholders, use helpers like `set_cell_text`, `replace_value_run`).
+     - Implement `_fill_student_row(self, cells: list, idx: int, name: str, stnum: str) -> None` (assign row cells, apply scaling logic).
+4. **Register in Factory or Configuration**:
+   - Inspect how generators are instantiated and register the new template accordingly.
+   - For example, in `GeneratorFactory` (`ceit_gen.py`):
+     - Add template key to `GeneratorFactory.TEMPLATE_FILES`:
+       ```python
+       "new_key": "template_new_file.docx",
+       ```
+     - Add instantiation tuple to `GeneratorFactory.get_all()`:
+       ```python
+       (lambda: NewFormGenerator(self._path("new_key")), "NEW_FORM_SUFFIX"),
+       ```
 5. **Export in `modules/generators/__init__.py`**:
    - Import the new generator class and add it to `__all__`.
 6. **Orchestrator Telemetry & Packaging**:
