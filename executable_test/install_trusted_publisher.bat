@@ -23,7 +23,7 @@ powershell -ExecutionPolicy Bypass -Command ^
     "    Import-Certificate -FilePath $certPath -CertStoreLocation 'Cert:\CurrentUser\Root' | Out-Null;" ^
     "    Import-Certificate -FilePath $certPath -CertStoreLocation 'Cert:\CurrentUser\TrustedPublisher' | Out-Null;" ^
     "    Write-Host '[SUCCESS] Dan Joseph Ortega has been added as a Verified Trusted Publisher on this computer!' -ForegroundColor Green;" ^
-    "    Write-Host 'You can now run CvSU Gen (Beta).exe without SmartScreen or Unknown Publisher warnings.' -ForegroundColor Green;" ^
+    "    Write-Host 'You can now run CvSU Gen.exe without SmartScreen or Unknown Publisher warnings.' -ForegroundColor Green;" ^
     "} catch {" ^
     "    Write-Host '[ERROR] Failed to import certificate: ' $_ -ForegroundColor Red;" ^
     "}"

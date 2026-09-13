@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Signs the CvSU Gen (Beta).exe executable using signtool.exe and Authenticode certificate.
+    Signs the CvSU Gen.exe executable using signtool.exe and Authenticode certificate.
 .DESCRIPTION
     Locates signtool.exe from Windows 10/11 SDK, signs the target executable with
     SHA-256 digest algorithm, adds RFC-3161 timestamping, and verifies the signature.
@@ -14,7 +14,7 @@ param(
 
 if ([string]::IsNullOrWhiteSpace($TargetPath)) {
     $scriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Definition }
-    $TargetPath = Join-Path $scriptDir "dist\CvSU Gen (Beta).exe"
+    $TargetPath = Join-Path $scriptDir "dist\CvSU Gen.exe"
 }
 
 Write-Host "========================================================" -ForegroundColor Cyan

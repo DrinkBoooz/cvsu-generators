@@ -33,7 +33,7 @@ def create_app():
     html_template = get_resource_path('ui.html')
 
     window = webview.create_window(
-        title='CvSU Gen (Beta)',
+        title='CvSU Gen',
         url=html_template,
         js_api=api,
         width=1120,
