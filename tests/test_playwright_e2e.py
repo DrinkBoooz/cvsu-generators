@@ -166,7 +166,12 @@ const rawMockApi = {
     save_custom_template: async (p, t, s, r) => window.__mockResponses.save_custom_template || { status: "success" },
     toggle_custom_template: async (id, e) => ({ status: "success" }),
     delete_custom_template: async (id) => ({ status: "success" }),
-    run_generation: async (to, do_, sc, ee, rc) => window.__mockResponses.run_generation,
+    run_generation: async (to, do_, sc, ee, rc) => {
+        if (window.__mockResponses.run_generation_reject) {
+            throw new Error(window.__mockResponses.run_generation_reject);
+        }
+        return window.__mockResponses.run_generation;
+    },
     cancel_generation: async () => window.__mockResponses.cancel_generation,
     get_parser_config: async () => ({ prefixes: {}, lab_courses: [] }),
     save_prefix_mapping: async (p, c, n) => ({ status: "success" }),
@@ -359,7 +364,7 @@ def test_playwright_e2e_happy_path_workflow(app_page):
     # Assert exact structured API arguments
     args = gen_calls[0]["args"]
     assert len(args) == 5
-    type_overrides, date_overrides, selected_classes, enabled_engines, _ = args
+    type_overrides, date_overrides, selected_classes, enabled_engines, roster_configs = args
     assert type_overrides == {"cls_1": "lecture_lab", "cls_2": "lecture_only"}
     assert date_overrides == {
         "startYear": 2026, "startMonth": 1, "startDay": 15,
@@ -367,6 +372,8 @@ def test_playwright_e2e_happy_path_workflow(app_page):
     }
     assert set(selected_classes) == {"cls_1", "cls_2"}
     assert set(enabled_engines) == {"attendance", "ceit", "grades"}
+    assert isinstance(roster_configs, dict), "Argument 5 (roster_configs) must be a dictionary"
+    assert roster_configs == {}, "Argument 5 (roster_configs) must be empty dict when no custom mappings configured"
 
     # Verify generation active UI state
     expect(page.locator("#processBtn")).to_be_disabled()
@@ -602,26 +609,66 @@ def test_playwright_failure_path_generation_cancellation(app_page):
 
 def test_playwright_failure_path_generation_failure(app_page):
     """
-    Scenario 8: Backend generation fault / runtime exception.
-    Asserts error presentation, error toast, and re-enabling processBtn for user recovery.
+    Scenario 8: Backend generation fault & bridge rejection recovery.
+    Asserts:
+      A. Promise rejection/throw from window.pywebview.api.run_generation() is caught,
+         error results card and toast are shown, and _isGenerationRunning is safely reset.
+      B. Subsequent generation retry succeeds and transmits custom roster_configs schema.
+      C. Background thread error payload via window.onGenerationComplete presents errors.
     """
     page = app_page
     complete_steps_1_to_5(page)
 
+    # Sub-case A: Bridge rejection (Promise throws/rejects an error)
+    page.evaluate("window.__mockResponses.run_generation_reject = 'PyWebView bridge connection severed'")
     page.click("#processBtn")
-    expect(page.locator("#progressContainer")).to_be_visible()
 
-    # Background thread encounters error and calls onGenerationComplete
+    # Assert error presentation from caught rejected promise
+    expect(page.locator("#resultsCard")).to_be_visible()
+    expect(page.locator("#resultsCard")).to_have_class(re.compile(r"\bresults-error\b"))
+    expect(page.locator("#resultsTitleText")).to_have_text("Generation Encountered Issues")
+    expect(page.locator("#resultsMessage")).to_contain_text("Generation failed: PyWebView bridge connection severed")
+    expect_toast(page, "Generation Encountered Issues", "error")
+
+    # Verify recovery: concurrency lock is cleared and button is re-enabled
+    assert page.evaluate("() => window._isGenerationRunning") is False
+    expect(page.locator("#processBtn")).to_be_enabled()
+    expect(page.locator("#processBtnLabel")).to_have_text("Initialize Workflow")
+
+    # Sub-case B: Retry subsequent generation with populated rosterConfigs (Argument 5 schema verification)
+    expected_custom_mappings = {
+        "COSC 101 List of Students for 1001-Computer Programming 1.xlsx": {
+            "linked_schedule_code": "1001",
+            "schedule_code": "1001",
+            "course_sec": "BSCS 1-1",
+            "subject_name": "Computer Programming 1"
+        }
+    }
+    page.evaluate(f"""() => {{
+        window.__mockResponses.run_generation_reject = null;
+        window.__mockResponses.run_generation = null;
+        state.rosterConfigs = {json.dumps(expected_custom_mappings)};
+    }}""")
+    page.click("#processBtn")
+
+    # Verify that run_generation was invoked again (not blocked) with exact populated rosterConfigs
+    gen_calls = get_api_calls(page, "run_generation")
+    assert len(gen_calls) == 2, "Retry must dispatch second run_generation call"
+    second_call_args = gen_calls[1]["args"]
+    assert len(second_call_args) == 5
+    _, _, _, _, retried_roster_configs = second_call_args
+    assert retried_roster_configs == expected_custom_mappings, "Argument 5 must match configured rosterConfigs schema"
+
+    # Sub-case C: Background thread returns explicit error payload via onGenerationComplete
     page.evaluate(f"window.onGenerationComplete({json.dumps(ERROR_GENERATION_PAYLOAD)})")
     expect(page.locator("#resultsCard")).to_be_visible()
     expect(page.locator("#resultsCard")).to_have_class(re.compile(r"\bresults-error\b"))
     expect(page.locator("#resultsTitleText")).to_have_text("Generation Encountered Issues")
     expect(page.locator("#resultsMessage")).to_have_text("Fatal Generation Fault: Permission denied")
-    expect_toast(page, "Generation Encountered Issues", "error")
 
-    # Recovery: process button is re-enabled to allow user retry
+    # Final recovery check: concurrency lock cleared
+    assert page.evaluate("() => window._isGenerationRunning") is False
     expect(page.locator("#processBtn")).to_be_enabled()
-    expect(page.locator("#processBtnLabel")).to_have_text("Initialize Workflow")
 
 
 def test_playwright_lifecycle_window_close_cleanup():

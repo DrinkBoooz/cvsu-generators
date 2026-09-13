@@ -187,19 +187,27 @@
           btnCancel.classList.remove("d-none");
         }
 
-        const payload = await window.pywebview.api.run_generation(
-          typeOverrides,
-          dateOverrides,
-          selectedClasses,
-          enabledEngines,
-          state.rosterConfigs,
-        );
+        try {
+          const payload = await window.pywebview.api.run_generation(
+            typeOverrides,
+            dateOverrides,
+            selectedClasses,
+            enabledEngines,
+            state.rosterConfigs,
+          );
 
-        if (
-          payload &&
-          (payload.status === "error" || payload.status === "cancelled")
-        ) {
-          onGenerationComplete(payload);
+          if (
+            payload &&
+            (payload.status === "error" || payload.status === "cancelled")
+          ) {
+            window.onGenerationComplete(payload);
+          }
+        } catch (error) {
+          console.error("Generation API failure:", error);
+          window.onGenerationComplete({
+            status: "error",
+            message: `Generation failed: ${error?.message || error}`,
+          });
         }
       }
 
