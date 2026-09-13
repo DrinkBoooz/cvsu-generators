@@ -146,41 +146,64 @@ window.__mockResponses = {
 };
 
 const rawMockApi = {
-    browse_schedule: async () => window.__mockResponses.browse_schedule,
-    inspect_schedule: async (p) => window.__mockResponses.inspect_schedule || null,
-    clear_schedule: async () => ({ status: "success", path: "", metadata: null, validation: [] }),
-    browse_rosters: async (cfg) => window.__mockResponses.browse_rosters,
-    handle_dropped_rosters: async (f, cfg) => window.__mockResponses.handle_dropped_rosters || window.__mockResponses.browse_rosters,
-    remove_roster: async (p, cfg) => window.__mockResponses.remove_roster || { count: 0, rosters: [], validation: [] },
-    clear_rosters: async () => ({ count: 0, rosters: [], validation: [] }),
-    inspect_roster: async (p, o) => window.__mockResponses.inspect_roster || { status: "ok", format: "excel", raw_rows: [], available_columns: [] },
-    detect_classes: async (cfg) => window.__mockResponses.detect_classes,
-    browse_output: async () => window.__mockResponses.browse_output,
-    open_output_folder: async (f) => ({ status: "success" }),
-    open_file: async (f) => ({ status: "success" }),
-    get_recent_logs: async (l) => "No log entries found.",
-    open_log_folder: async () => ({ status: "success" }),
-    get_custom_templates: async () => window.__mockResponses.get_custom_templates || [],
     browse_custom_template: async () => window.__mockResponses.browse_custom_template,
+    browse_output: async () => window.__mockResponses.browse_output,
+    browse_rosters: async (cfg) => window.__mockResponses.browse_rosters,
+    browse_schedule: async () => window.__mockResponses.browse_schedule,
+    cancel_generation: async () => window.__mockResponses.cancel_generation,
+    clear_rosters: async () => ({ count: 0, rosters: [], validation: [] }),
+    clear_schedule: async () => ({ status: "success", path: "", metadata: null, validation: [] }),
+    delete_custom_template: async (id, e) => ({ status: "success" }),
+    detect_classes: async (cfg) => window.__mockResponses.detect_classes,
+    export_parser_config: async () => ({ status: "success" }),
+    get_ceit_prefix_directory: async () => ({ prefixes: {}, departments: {} }),
+    get_custom_templates: async () => window.__mockResponses.get_custom_templates || [],
+    get_parser_config: async () => ({ prefixes: {}, lab_courses: [] }),
+    get_recent_logs: async (l) => "No log entries found.",
+    handle_dropped_custom_template: async (f) => ({ status: "success" }),
+    handle_dropped_rosters: async (f, cfg) => window.__mockResponses.handle_dropped_rosters || window.__mockResponses.browse_rosters,
+    handle_dropped_schedule: async (f) => window.__mockResponses.browse_schedule,
+    import_parser_config: async () => ({ status: "success" }),
     inspect_custom_template: async (p) => window.__mockResponses.inspect_custom_template || { status: "error", message: "Not implemented" },
-    save_custom_template: async (p, t, s, r) => window.__mockResponses.save_custom_template || { status: "success" },
-    toggle_custom_template: async (id, e) => ({ status: "success" }),
-    delete_custom_template: async (id) => ({ status: "success" }),
-    run_generation: async (to, do_, sc, ee, rc) => {
+    inspect_roster: async (p, o) => window.__mockResponses.inspect_roster || { status: "ok", format: "excel", raw_rows: [], available_columns: [] },
+    inspect_schedule: async (p) => window.__mockResponses.inspect_schedule || null,
+    open_file: async (f) => ({ status: "success" }),
+    open_log_folder: async () => ({ status: "success" }),
+    open_output_folder: async (f) => ({ status: "success" }),
+    remove_roster: async (p, cfg) => window.__mockResponses.remove_roster || { count: 0, rosters: [], validation: [] },
+    reset_parser_config: async () => ({ status: "success" }),
+    run_generation: async (...args) => {
+        if (window.__mockResponses.run_generation_sync_throw) {
+            throw new Error(window.__mockResponses.run_generation_sync_throw);
+        }
         if (window.__mockResponses.run_generation_reject) {
             throw new Error(window.__mockResponses.run_generation_reject);
         }
+        if (args.length !== 5) {
+            throw new TypeError(`run_generation expected 5 args, got ${args.length}`);
+        }
+        const [to, do_, sc, ee, rc] = args;
+        if (typeof to !== "object" || to === null || Array.isArray(to)) {
+            throw new TypeError("arg 0 (type_overrides) must be a non-null object");
+        }
+        if (do_ !== null && (typeof do_ !== "object" || Array.isArray(do_))) {
+            throw new TypeError("arg 1 (date_overrides) must be an object or null");
+        }
+        if (!Array.isArray(sc)) {
+            throw new TypeError("arg 2 (selected_classes) must be an Array");
+        }
+        if (!Array.isArray(ee)) {
+            throw new TypeError("arg 3 (enabled_engines) must be an Array");
+        }
+        if (typeof rc !== "object" || rc === null || Array.isArray(rc)) {
+            throw new TypeError("arg 4 (roster_configs) must be a non-null object");
+        }
         return window.__mockResponses.run_generation;
     },
-    cancel_generation: async () => window.__mockResponses.cancel_generation,
-    get_parser_config: async () => ({ prefixes: {}, lab_courses: [] }),
-    save_prefix_mapping: async (p, c, n) => ({ status: "success" }),
-    delete_prefix_mapping: async (p) => ({ status: "success" }),
-    save_lab_course: async (c) => ({ status: "success" }),
-    delete_lab_course: async (c) => ({ status: "success" }),
-    reset_parser_config: async () => ({ status: "success" }),
-    export_parser_config: async () => ({ status: "success" }),
-    import_parser_config: async () => ({ status: "success" })
+    save_custom_template: async (p, t, s, r) => window.__mockResponses.save_custom_template || { status: "success" },
+    save_parser_config: async (cfg) => ({ status: "success" }),
+    toggle_custom_template: async (id, e) => ({ status: "success" }),
+    validate_rosters: async (cfg) => []
 };
 
 const allowedProbes = new Set(["then", "toJSON"]);
@@ -228,6 +251,18 @@ def expect_step_ready(page, step_num: int, is_ready: bool = True):
         expect(chip).to_have_class(re.compile(r"\bready\b"))
     else:
         expect(chip).not_to_have_class(re.compile(r"\bready\b"))
+
+
+def validate_roster_configs_schema(configs: dict):
+    """Asserts that rosterConfigs adheres to the expected contract schema."""
+    assert isinstance(configs, dict), "rosterConfigs must be a dictionary"
+    allowed_keys = {"linked_schedule_code", "schedule_code", "course_sec", "subject_name"}
+    for filename, config in configs.items():
+        assert isinstance(filename, str), f"roster key {filename} must be a string"
+        assert isinstance(config, dict), f"roster config for {filename} must be a dict"
+        assert set(config.keys()).issubset(allowed_keys), (
+            f"Unexpected keys in roster config for {filename}: {set(config.keys()) - allowed_keys}"
+        )
 
 
 def expect_toast(page, title_text: str, toast_type: str = None):
@@ -353,6 +388,9 @@ def test_playwright_e2e_happy_path_workflow(app_page):
     expect(page.locator("#connector2to3")).to_have_class(re.compile(r"\bready\b"))
     expect(page.locator("#processBtn")).to_be_enabled()
 
+    # Timer invariant (IDLE): must be null
+    assert page.evaluate("() => window.elapsedTimerInterval === null")
+
     # 7. Step 6: Generate Execution & Double-Click Debounce
     # Rapid double click via DOM dispatch
     page.locator("#processBtn").dispatch_event("click")
@@ -361,7 +399,7 @@ def test_playwright_e2e_happy_path_workflow(app_page):
     gen_calls = get_api_calls(page, "run_generation")
     assert len(gen_calls) == 1, "Rapid double-click must debounce to exactly 1 run_generation call"
 
-    # Assert exact structured API arguments
+    # Assert exact structured API arguments and validate schema
     args = gen_calls[0]["args"]
     assert len(args) == 5
     type_overrides, date_overrides, selected_classes, enabled_engines, roster_configs = args
@@ -372,14 +410,17 @@ def test_playwright_e2e_happy_path_workflow(app_page):
     }
     assert set(selected_classes) == {"cls_1", "cls_2"}
     assert set(enabled_engines) == {"attendance", "ceit", "grades"}
-    assert isinstance(roster_configs, dict), "Argument 5 (roster_configs) must be a dictionary"
+    validate_roster_configs_schema(roster_configs)
     assert roster_configs == {}, "Argument 5 (roster_configs) must be empty dict when no custom mappings configured"
 
-    # Verify generation active UI state
+    # Verify generation active UI state and running timer invariant
     expect(page.locator("#processBtn")).to_be_disabled()
     expect(page.locator("#processBtnLabel")).to_have_text("Compiling Documents...")
     expect(page.locator("#progressContainer")).to_be_visible()
     expect(page.locator("#btnCancelGeneration")).to_be_visible()
+    assert page.evaluate("() => window.elapsedTimerInterval !== null"), "Timer interval must be active while running"
+    active_gen_id = page.evaluate("() => window._activeGenerationId")
+    assert active_gen_id is not None, "Generation token must be active"
 
     # Active Re-Entry Guard Assertion: triggering generate again while running must not call API
     page.evaluate("startGeneration()")
@@ -393,20 +434,25 @@ def test_playwright_e2e_happy_path_workflow(app_page):
         "step": 3,
         "total_steps": 6,
     }
-    page.evaluate(f"window.onGenerationProgress({json.dumps(telemetry_payload)})")
+    page.evaluate(f"window.onGenerationProgress({json.dumps(telemetry_payload)}, {active_gen_id})")
     expect(page.locator("#progressFill")).to_have_attribute("style", re.compile(r"width:\s*50%"))
     expect(page.locator("#progressPercent")).to_have_text("50%")
     expect(page.locator("#progressTaskLabel")).to_have_text("BSCS 1-1: Generating CEIT Forms (3/6)")
     expect(page.locator("#progressContainer")).to_have_attribute("aria-valuenow", "50")
 
     # 9. Completion & Subsequent Generation Readiness
-    page.evaluate(f"window.onGenerationComplete({json.dumps(SUCCESS_GENERATION_PAYLOAD)})")
+    page.evaluate(f"window.onGenerationComplete({json.dumps(SUCCESS_GENERATION_PAYLOAD)}, {active_gen_id})")
     expect(page.locator("#progressFill")).to_have_attribute("style", re.compile(r"width:\s*100%"))
     expect(page.locator("#resultsCard")).to_be_visible()
     expect(page.locator("#resultsCard")).to_have_class(re.compile(r"\bresults-success\b"))
     expect(page.locator("#resultsTitleText")).to_have_text("Document Generation Succeeded!")
     expect(page.locator("#resultsMetricsPills")).to_contain_text("3 Total Files")
     expect_toast(page, "Documents Ready", "success")
+
+    # Timer invariant (TERMINAL): must be cleaned up to null
+    assert page.evaluate("() => window.elapsedTimerInterval === null"), "Timer interval must be cleared on success"
+    assert page.evaluate("() => window._activeGenerationId === null"), "Generation token must be cleared to null"
+    assert page.evaluate("() => window._generationState === 'idle'"), "State must return to idle"
 
     # Ready for subsequent generation
     expect(page.locator("#btnCancelGeneration")).to_be_hidden()
@@ -588,6 +634,7 @@ def test_playwright_failure_path_generation_cancellation(app_page):
     # Start generation
     page.click("#processBtn")
     expect(page.locator("#btnCancelGeneration")).to_be_visible()
+    active_id = page.evaluate("() => window._activeGenerationId")
 
     # Click Cancel Generation
     page.click("#btnCancelGeneration")
@@ -599,75 +646,164 @@ def test_playwright_failure_path_generation_cancellation(app_page):
     assert len(cancel_calls) == 1
     assert cancel_calls[0]["args"] == []
 
-    # Python thread signals cancellation
-    page.evaluate(f"window.onGenerationComplete({json.dumps(CANCELLED_GENERATION_PAYLOAD)})")
+    # Python thread signals cancellation with matching token
+    page.evaluate(f"window.onGenerationComplete({json.dumps(CANCELLED_GENERATION_PAYLOAD)}, {active_id})")
     expect(page.locator("#resultsCard")).to_be_visible()
     expect(page.locator("#resultsCard")).to_have_class(re.compile(r"\bresults-error\b"))
     expect(page.locator("#resultsTitleText")).to_have_text("Generation Cancelled")
     expect(page.locator("#resultsMessage")).to_contain_text("Generation stopped by user")
 
+    # Invariant: timer must be null after cancellation
+    assert page.evaluate("() => window.elapsedTimerInterval === null")
+    assert page.evaluate("() => window._activeGenerationId === null")
+
 
 def test_playwright_failure_path_generation_failure(app_page):
     """
-    Scenario 8: Backend generation fault & bridge rejection recovery.
+    Scenario 8: Backend generation fault, synchronous throw, and bridge rejection recovery.
     Asserts:
-      A. Promise rejection/throw from window.pywebview.api.run_generation() is caught,
-         error results card and toast are shown, and _isGenerationRunning is safely reset.
-      B. Subsequent generation retry succeeds and transmits custom roster_configs schema.
-      C. Background thread error payload via window.onGenerationComplete presents errors.
+      A. Promise rejection from run_generation() is caught, error presented, timer cleared, and lock reset.
+      B. Immediate synchronous throw from run_generation() is caught and safely resets state and timer.
+      C. Subsequent retry with multiple roster configs validates argument schema and succeeds.
+      D. Background thread error payload via onGenerationComplete clears timer and displays issues.
     """
     page = app_page
     complete_steps_1_to_5(page)
 
-    # Sub-case A: Bridge rejection (Promise throws/rejects an error)
+    # Sub-case A: Bridge Promise rejection
     page.evaluate("window.__mockResponses.run_generation_reject = 'PyWebView bridge connection severed'")
     page.click("#processBtn")
 
-    # Assert error presentation from caught rejected promise
     expect(page.locator("#resultsCard")).to_be_visible()
     expect(page.locator("#resultsCard")).to_have_class(re.compile(r"\bresults-error\b"))
     expect(page.locator("#resultsTitleText")).to_have_text("Generation Encountered Issues")
     expect(page.locator("#resultsMessage")).to_contain_text("Generation failed: PyWebView bridge connection severed")
     expect_toast(page, "Generation Encountered Issues", "error")
 
-    # Verify recovery: concurrency lock is cleared and button is re-enabled
+    # Concurrency and timer cleanup assertions
     assert page.evaluate("() => window._isGenerationRunning") is False
+    assert page.evaluate("() => window.elapsedTimerInterval === null")
+    assert page.evaluate("() => window._activeGenerationId === null")
     expect(page.locator("#processBtn")).to_be_enabled()
-    expect(page.locator("#processBtnLabel")).to_have_text("Initialize Workflow")
 
-    # Sub-case B: Retry subsequent generation with populated rosterConfigs (Argument 5 schema verification)
-    expected_custom_mappings = {
+    # Sub-case B: Synchronous JavaScript throw
+    page.evaluate("""() => {
+        window.__mockResponses.run_generation_reject = null;
+        window.__mockResponses.run_generation_sync_throw = 'Immediate synchronous bridge throw';
+    }""")
+    page.click("#processBtn")
+
+    expect(page.locator("#resultsMessage")).to_contain_text("Generation failed: Immediate synchronous bridge throw")
+    assert page.evaluate("() => window._isGenerationRunning") is False
+    assert page.evaluate("() => window.elapsedTimerInterval === null")
+    assert page.evaluate("() => window._activeGenerationId === null")
+    expect(page.locator("#processBtn")).to_be_enabled()
+
+    # Sub-case C: Retry subsequent generation with MULTIPLE populated rosterConfigs
+    expected_multi_mappings = {
         "COSC 101 List of Students for 1001-Computer Programming 1.xlsx": {
             "linked_schedule_code": "1001",
             "schedule_code": "1001",
             "course_sec": "BSCS 1-1",
             "subject_name": "Computer Programming 1"
+        },
+        "ITEC 50 List of Students for 1002-Web Development.csv": {
+            "linked_schedule_code": "1002",
+            "schedule_code": "1002",
+            "course_sec": "BSIT 2-1",
+            "subject_name": "Web Development"
         }
     }
+    validate_roster_configs_schema(expected_multi_mappings)
+
     page.evaluate(f"""() => {{
+        window.__mockResponses.run_generation_sync_throw = null;
         window.__mockResponses.run_generation_reject = null;
         window.__mockResponses.run_generation = null;
-        state.rosterConfigs = {json.dumps(expected_custom_mappings)};
+        state.rosterConfigs = {json.dumps(expected_multi_mappings)};
     }}""")
     page.click("#processBtn")
 
-    # Verify that run_generation was invoked again (not blocked) with exact populated rosterConfigs
+    # Verify that run_generation was invoked again with exact multi-mapping schema
     gen_calls = get_api_calls(page, "run_generation")
-    assert len(gen_calls) == 2, "Retry must dispatch second run_generation call"
-    second_call_args = gen_calls[1]["args"]
-    assert len(second_call_args) == 5
-    _, _, _, _, retried_roster_configs = second_call_args
-    assert retried_roster_configs == expected_custom_mappings, "Argument 5 must match configured rosterConfigs schema"
+    assert len(gen_calls) == 3, "Retry must dispatch third run_generation call"
+    third_call_args = gen_calls[2]["args"]
+    assert len(third_call_args) == 5
+    _, _, _, _, retried_roster_configs = third_call_args
+    validate_roster_configs_schema(retried_roster_configs)
+    assert retried_roster_configs == expected_multi_mappings
+    active_token = page.evaluate("() => window._activeGenerationId")
+    assert active_token is not None
 
-    # Sub-case C: Background thread returns explicit error payload via onGenerationComplete
-    page.evaluate(f"window.onGenerationComplete({json.dumps(ERROR_GENERATION_PAYLOAD)})")
+    # Sub-case D: Background thread returns explicit error payload via onGenerationComplete
+    page.evaluate(f"window.onGenerationComplete({json.dumps(ERROR_GENERATION_PAYLOAD)}, {active_token})")
     expect(page.locator("#resultsCard")).to_be_visible()
     expect(page.locator("#resultsCard")).to_have_class(re.compile(r"\bresults-error\b"))
     expect(page.locator("#resultsTitleText")).to_have_text("Generation Encountered Issues")
     expect(page.locator("#resultsMessage")).to_have_text("Fatal Generation Fault: Permission denied")
 
-    # Final recovery check: concurrency lock cleared
+    # Final recovery check: concurrency lock cleared and timer null
     assert page.evaluate("() => window._isGenerationRunning") is False
+    assert page.evaluate("() => window.elapsedTimerInterval === null")
+    assert page.evaluate("() => window._activeGenerationId === null")
+    expect(page.locator("#processBtn")).to_be_enabled()
+
+
+def test_playwright_concurrency_stale_callback_and_duplicate_completion_immunity(app_page):
+    """
+    Scenario 10: Concurrency hardening: stale-callback rejection & duplicate-completion immunity.
+    Verifies that:
+      A. A late callback from a failed/previous Generation A arriving during Generation B is ignored.
+      B. Duplicate onGenerationComplete invocations while IDLE are safely ignored without corrupting state.
+    """
+    page = app_page
+    complete_steps_1_to_5(page)
+
+    # 1. Start Generation A
+    page.click("#processBtn")
+    gen_id_a = page.evaluate("() => window._activeGenerationId")
+    assert gen_id_a == 1
+
+    # Simulate failure on Generation A -> transitions to IDLE
+    page.evaluate(f"window.onGenerationComplete({json.dumps(ERROR_GENERATION_PAYLOAD)}, {gen_id_a})")
+    assert page.evaluate("() => window._activeGenerationId === null")
+    assert page.evaluate("() => window._generationState === 'idle'")
+
+    # 2. Start Generation B
+    page.click("#processBtn")
+    gen_id_b = page.evaluate("() => window._activeGenerationId")
+    assert gen_id_b == 2
+    assert page.evaluate("() => window._isGenerationRunning") is True
+    assert page.evaluate("() => window._generationState === 'running'")
+    expect(page.locator("#processBtn")).to_be_disabled()
+
+    # 3. Simulate late stale success callback from Generation A arriving during Generation B!
+    page.evaluate(f"window.onGenerationComplete({json.dumps(SUCCESS_GENERATION_PAYLOAD)}, {gen_id_a})")
+
+    # Assert that Generation B is NOT hijacked: still running, still token 2, timer still active
+    assert page.evaluate("() => window._isGenerationRunning") is True
+    assert page.evaluate("() => window._activeGenerationId") == 2
+    assert page.evaluate("() => window._generationState === 'running'")
+    assert page.evaluate("() => window.elapsedTimerInterval !== null")
+    expect(page.locator("#processBtn")).to_be_disabled()
+
+    # 4. Now let Generation B complete legitimately with matching token 2
+    page.evaluate(f"window.onGenerationComplete({json.dumps(SUCCESS_GENERATION_PAYLOAD)}, {gen_id_b})")
+    expect(page.locator("#resultsCard")).to_be_visible()
+    expect(page.locator("#resultsTitleText")).to_have_text("Document Generation Succeeded!")
+    assert page.evaluate("() => window._isGenerationRunning") is False
+    assert page.evaluate("() => window._activeGenerationId === null")
+    assert page.evaluate("() => window._generationState === 'idle'")
+    assert page.evaluate("() => window.elapsedTimerInterval === null")
+
+    # 5. Duplicate completion immunity: fire duplicate success or error while already IDLE
+    page.evaluate(f"window.onGenerationComplete({json.dumps(SUCCESS_GENERATION_PAYLOAD)}, {gen_id_b})")
+    page.evaluate(f"window.onGenerationComplete({json.dumps(ERROR_GENERATION_PAYLOAD)}, {gen_id_b})")
+
+    # Assert state remains safely IDLE and uncorrupted
+    assert page.evaluate("() => window._isGenerationRunning") is False
+    assert page.evaluate("() => window._activeGenerationId === null")
+    assert page.evaluate("() => window.elapsedTimerInterval === null")
     expect(page.locator("#processBtn")).to_be_enabled()
 
 

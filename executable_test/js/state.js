@@ -32,7 +32,7 @@ let state = {
         }
       }
 
-      let elapsedTimerInterval = null;
+      window.elapsedTimerInterval = null;
       let generationStartTime = null;
 
       function escapeHTML(str) {
