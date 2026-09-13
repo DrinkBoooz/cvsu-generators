@@ -2,13 +2,20 @@ import os
 import re
 import pytest
 
-CANDIDATE_PATHS = [
-    os.environ.get("CVSU_VAULT_DIR"),
-    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "cvsu-generator_documentation")),
-    r"c:\Users\danjo\OneDrive\cvsu-generator_documentation",
-    r"c:\Users\danjo\Desktop\cvsu-generator_documentation",
-]
-VAULT_DIR = next((p for p in CANDIDATE_PATHS if p and os.path.isdir(p)), r"c:\Users\danjo\OneDrive\cvsu-generator_documentation")
+def resolve_vault_dir() -> str:
+    override = os.environ.get("CVSU_VAULT_DIR")
+    if override:
+        return os.path.abspath(override)
+    return os.path.abspath(
+        os.path.join(
+            os.path.dirname(__file__),
+            "..",
+            "..",
+            "cvsu-generator_documentation",
+        )
+    )
+
+VAULT_DIR = resolve_vault_dir()
 REQUIRED_DIRS = [
     "00 - Index",
     "01 - Architecture",
@@ -35,15 +42,17 @@ def get_all_notes(vault_dir):
                 }
     return notes
 
-@pytest.mark.skipif(not os.path.isdir(VAULT_DIR), reason="Obsidian vault directory not found")
 def test_obsidian_vault_structure_exists():
     """Verify that the Obsidian documentation vault and all standard directories exist."""
-    assert os.path.isdir(VAULT_DIR), f"Vault path {VAULT_DIR} must exist"
+    assert os.path.isdir(VAULT_DIR), (
+        f"Obsidian documentation vault directory not found at: {VAULT_DIR}\n"
+        "Ensure cvsu-generator_documentation exists as a sibling directory to CVSU GENERATORS, "
+        "or set the CVSU_VAULT_DIR environment variable to override."
+    )
     for d in REQUIRED_DIRS:
         folder_path = os.path.join(VAULT_DIR, d)
-        assert os.path.isdir(folder_path), f"Required folder '{d}' must exist in vault"
+        assert os.path.isdir(folder_path), f"Required folder '{d}' must exist in vault ({VAULT_DIR})"
 
-@pytest.mark.skipif(not os.path.isdir(VAULT_DIR), reason="Obsidian vault directory not found")
 def test_obsidian_vault_frontmatter_integrity():
     """Verify that all markdown notes contain valid YAML frontmatter and required metadata keys."""
     notes = get_all_notes(VAULT_DIR)
@@ -71,7 +80,6 @@ def test_obsidian_vault_frontmatter_integrity():
             f"Note '{meta['rel_path']}' has unrecognized status: '{status}'"
         )
 
-@pytest.mark.skipif(not os.path.isdir(VAULT_DIR), reason="Obsidian vault directory not found")
 def test_obsidian_vault_wikilink_resolution():
     """Verify that every [[wikilink]] in the vault resolves to an actual note file with zero broken links."""
     notes = get_all_notes(VAULT_DIR)
@@ -100,7 +108,6 @@ def test_obsidian_vault_wikilink_resolution():
 
     assert not broken_links, f"Found {len(broken_links)} broken wikilink(s) in Obsidian vault: {broken_links}"
 
-@pytest.mark.skipif(not os.path.isdir(VAULT_DIR), reason="Obsidian vault directory not found")
 def test_obsidian_moc_exists_and_links_all_categories():
     """Verify that the primary Map of Content (MOC) exists and references key sections."""
     moc_path = os.path.join(VAULT_DIR, "00 - Index", "CvSU Document Generator MOC.md")
