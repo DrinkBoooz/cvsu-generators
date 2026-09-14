@@ -230,6 +230,7 @@ class RecipeValidator:
             reverse=True,
         )
 
+        used_targets = set()
         for c in sorted_candidates:
             field = c.get("field")
             if not field:
@@ -237,6 +238,11 @@ class RecipeValidator:
 
             # Skip if higher confidence candidate already bound this field
             if field in bindings:
+                continue
+
+            target = c.get("target")
+            target_key = (c.get("cell_type"), str(target))
+            if target_key in used_targets:
                 continue
 
             conf = float(c.get("confidence", 0.5))
@@ -250,6 +256,7 @@ class RecipeValidator:
 
             binding = HeaderCellBinding.from_dict(c)
             bindings[field] = binding
+            used_targets.add(target_key)
 
         return bindings
 

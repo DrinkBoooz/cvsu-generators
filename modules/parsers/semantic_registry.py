@@ -46,8 +46,8 @@ SEMANTIC_ALIASES: Dict[str, List[re.Pattern]] = {
         re.compile(r"\b(?:schedule\s*code|sched\.?\s*code)\b", re.IGNORECASE),
     ],
     FIELD_COURSE_SECTION: [
-        re.compile(r"^\s*(?:course\s*(?:and|&|/)?\s*(?:year|yr\.?)?\s*(?:and|&|/)?\s*sec(?:tion)?|class|section|degree\s*program)\s*:?\s*$", re.IGNORECASE),
-        re.compile(r"\b(?:course\s*(?:and|&|/)?\s*sec(?:tion)?|class)\b", re.IGNORECASE),
+        re.compile(r"^\s*(?:course\s*(?:and|&|/)?\s*(?:year|yr\.?)?\s*(?:and|&|/)?\s*sec(?:tion)?|degree\s*program(?:\s*(?:and|&|/)?\s*sec(?:tion)?)?|class|section)\s*:?\s*$", re.IGNORECASE),
+        re.compile(r"\b(?:course\s*(?:and|&|/)?\s*sec(?:tion)?|degree\s*program|section)\b", re.IGNORECASE),
     ],
     FIELD_SUBJECT_CODE: [
         re.compile(r"^\s*(?:subject\s*code|course\s*code|subj\.?\s*code)\s*:?\s*$", re.IGNORECASE),
@@ -56,7 +56,7 @@ SEMANTIC_ALIASES: Dict[str, List[re.Pattern]] = {
         re.compile(r"^\s*(?:subject\s*title|course\s*title|subj\.?\s*title|descriptive\s*title)\s*:?\s*$", re.IGNORECASE),
     ],
     FIELD_SUBJECT: [
-        re.compile(r"^\s*(?:subject|course|subject\s*(?:and|&|/)?\s*title)\s*:?\s*$", re.IGNORECASE),
+        re.compile(r"^\s*(?:subject|course|subject\s*(?:and|&|/)?\s*title|subject\s*descriptive\s*title)\s*:?\s*$", re.IGNORECASE),
         re.compile(r"\b(?:subject|descriptive\s*title)\b", re.IGNORECASE),
     ],
     FIELD_SEMESTER: [
@@ -70,8 +70,8 @@ SEMANTIC_ALIASES: Dict[str, List[re.Pattern]] = {
         re.compile(r"\b(?:semester\s*(?:and|&|/)?\s*(?:ay|a\.y\.|academic\s*year))\b", re.IGNORECASE),
     ],
     FIELD_INSTRUCTOR: [
-        re.compile(r"^\s*(?:instructor|instructor['’]?s?\s*name|faculty|teacher|professor)\s*:?\s*$", re.IGNORECASE),
-        re.compile(r"\b(?:instructor|faculty|professor)\b", re.IGNORECASE),
+        re.compile(r"^\s*(?:instructor|instructor['’]?s?\s*name|faculty|faculty\s*member|teacher|professor)\s*:?\s*$", re.IGNORECASE),
+        re.compile(r"\b(?:instructor|faculty\s*member|professor)\b", re.IGNORECASE),
     ],
     FIELD_UNITS: [
         re.compile(r"^\s*(?:units|credit\s*units|no\.?\s*of\s*units)\s*:?\s*$", re.IGNORECASE),
@@ -83,8 +83,8 @@ SEMANTIC_ALIASES: Dict[str, List[re.Pattern]] = {
         re.compile(r"^\s*(?:date|petsa)\s*:?\s*$", re.IGNORECASE),
     ],
     FIELD_TIME_DAYS_ROOM: [
-        re.compile(r"^\s*(?:time\s*(?:and|&|/)?\s*days?\s*(?:and|&|/)?\s*room(?:\s*no\.?)?|class\s*hours?|schedule)\s*:?\s*$", re.IGNORECASE),
-        re.compile(r"\b(?:time\s*(?:and|&|/)?\s*days?|schedule)\b", re.IGNORECASE),
+        re.compile(r"^\s*(?:time\s*(?:and|&|/)?\s*days?\s*(?:and|&|/)?\s*room(?:\s*no\.?)?|class\s*hours?|class\s*schedule)\s*:?\s*$", re.IGNORECASE),
+        re.compile(r"\b(?:time\s*(?:and|&|/)?\s*days?|class\s*schedule)\b", re.IGNORECASE),
     ],
 }
 
@@ -154,6 +154,13 @@ class SemanticRegistry:
         results: List[Tuple[str, float]] = []
 
         for field, patterns in SEMANTIC_ALIASES.items():
+            # Disambiguate: labels with "code" should not match time_days_room
+            if field == FIELD_TIME_DAYS_ROOM and re.search(r"\bcode\b", cleaned, re.IGNORECASE):
+                continue
+            # Labels with "schedule" or "sched" or "code" should not match course_section unless explicitly course
+            if field == FIELD_COURSE_SECTION and re.search(r"\b(?:sched|code)\b", cleaned, re.IGNORECASE) and not re.search(r"\b(?:course|section|program)\b", cleaned, re.IGNORECASE):
+                continue
+
             for idx, pattern in enumerate(patterns):
                 if pattern.search(cleaned):
                     # Exact pattern match has higher confidence than loose token match
