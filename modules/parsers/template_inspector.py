@@ -13,6 +13,9 @@ import re
 import hashlib
 from typing import Dict, Any, List, Optional, Tuple
 
+import openpyxl
+from openpyxl.utils import get_column_letter
+
 from modules.common.logger import logger
 from modules.common.docx_utils import load_docx, get_full_text, w
 from modules.models.recipe import (
@@ -20,6 +23,7 @@ from modules.models.recipe import (
     GeneratorProfile,
     PROFILE_REGISTRY,
     PROFILE_ACADEMIC_DOCX,
+    PROFILE_GRADE_SHEET_XLSX,
     RawTemplateRecipeCandidate,
     ValidatedTemplateRecipe,
 )
@@ -467,13 +471,242 @@ class XlsxTemplateInspector:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# XlsxTemplateInspector
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class XlsxTemplateInspector:
+    """
+    Analyzes Excel (.xlsx) grading sheet templates and emits candidate observations.
+    CRITICAL: inspect() returns RawTemplateRecipeCandidate ONLY.
+    XlsxTemplateInspector NEVER constructs or returns ValidatedTemplateRecipe.
+    RecipeValidator owns final validation and construction authority.
+    """
+
+    def inspect(
+        self,
+        template_path: str,
+        profile_id: str = "grade_sheet_xlsx",
+    ) -> RawTemplateRecipeCandidate:
+        if not os.path.exists(template_path):
+            raise FileNotFoundError(f"Template file not found: {template_path}")
+
+        with open(template_path, "rb") as f:
+            fingerprint = hashlib.sha256(f.read()).hexdigest()
+
+        wb = openpyxl.load_workbook(template_path, data_only=True)
+        sheet_names = wb.sheetnames
+        sheet_map = {s.lower().strip(): s for s in sheet_names}
+
+        if "lecture" not in sheet_map:
+            raise TemplateError(
+                f"Grade sheet template '{os.path.basename(template_path)}' is missing required 'Lecture' worksheet."
+            )
+
+        ws_lec = wb[sheet_map["lecture"]]
+        header_candidates: List[Dict[str, Any]] = []
+        signature_candidates: List[Dict[str, Any]] = []
+        roster_candidate: Optional[Dict[str, Any]] = None
+
+        # 1. Header Metadata Discovery in Lecture sheet (rows 1-6, cols 1-20)
+        lec_merges = list(ws_lec.merged_cells.ranges)
+
+        def find_target_for_label(row_idx: int, col_idx: int) -> str:
+            row_merges = [
+                m for m in lec_merges
+                if m.min_row == row_idx and m.min_col > col_idx
+            ]
+            if row_merges:
+                closest_merge = min(row_merges, key=lambda m: m.min_col)
+                return f"{get_column_letter(closest_merge.min_col)}{closest_merge.min_row}"
+            return f"{get_column_letter(col_idx + 1)}{row_idx}"
+
+        for r in range(1, 7):
+            for c in range(1, 20):
+                val = ws_lec.cell(r, c).value
+                if not val or not isinstance(val, str):
+                    continue
+                text = val.strip()
+                if not text:
+                    continue
+
+                matches = SemanticRegistry.match_metadata_candidate(text)
+                if matches:
+                    matched_field, conf = matches[0]
+                    target_coord = find_target_for_label(r, c)
+                    header_candidates.append({
+                        "cell_type": "xlsx_cell",
+                        "target": target_coord,
+                        "field": matched_field,
+                        "confidence": conf,
+                        "pattern": text,
+                        "label_cell": ws_lec.cell(r, c).coordinate,
+                        "is_signature_region": False,
+                    })
+
+        # 2. Institutional College Banner Discovery (Grading Sheet!A9)
+        if "grading sheet" in sheet_map:
+            ws_grd = wb[sheet_map["grading sheet"]]
+            for r in range(1, 15):
+                for c in range(1, 10):
+                    val = ws_grd.cell(r, c).value
+                    if val and isinstance(val, str) and "COLLEGE OF" in val.upper():
+                        header_candidates.append({
+                            "cell_type": "xlsx_cell",
+                            "target": f"{sheet_map['grading sheet']}!{ws_grd.cell(r, c).coordinate}",
+                            "field": "college",
+                            "confidence": 1.0,
+                            "pattern": val.strip(),
+                            "label_cell": None,
+                            "is_signature_region": False,
+                        })
+                        break
+
+        # 3. Roster Table Discovery in Lecture sheet
+        header_row = None
+        index_col = None
+        name_col = None
+        id_col = None
+
+        for r in range(6, 16):
+            for c in range(1, 10):
+                c_val = ws_lec.cell(r, c).value
+                if not c_val or not isinstance(c_val, str):
+                    continue
+                norm_c = c_val.strip().lower()
+                if norm_c in ("#", "no.", "no", "item"):
+                    index_col = c
+                    header_row = r
+                elif "student name" in norm_c or "name of student" in norm_c or "surname" in norm_c:
+                    name_col = c
+                elif "student number" in norm_c or "student no" in norm_c or "id number" in norm_c or "id no" in norm_c:
+                    id_col = c
+
+            if header_row is not None and name_col is not None and id_col is not None:
+                break
+
+        if header_row is not None and name_col is not None and id_col is not None:
+            first_data_row = None
+            capacity_limit = 0
+
+            check_col = index_col if index_col is not None else 1
+            for r in range(header_row + 1, header_row + 20):
+                v = ws_lec.cell(r, check_col).value
+                if v == 1 or str(v).strip() == "1":
+                    first_data_row = r
+                    break
+
+            if first_data_row is not None:
+                expected_num = 1
+                curr_r = first_data_row
+                while True:
+                    v = ws_lec.cell(curr_r, check_col).value
+                    if v == expected_num or str(v).strip() == str(expected_num):
+                        capacity_limit += 1
+                        expected_num += 1
+                        curr_r += 1
+                    else:
+                        break
+
+            if first_data_row is not None and capacity_limit > 0:
+                roster_candidate = {
+                    "table_index": 0,
+                    "first_data_row_index": first_data_row,
+                    "name_col": name_col,
+                    "id_col": id_col,
+                    "index_col": index_col,
+                    "capacity_limit": capacity_limit,
+                    "has_split_names": False,
+                }
+
+        # 4. Scope-Aware Signature Box Discovery (Structural geometry, Mutation M8 compliant)
+        def find_signature_target(ws, sheet_display_name: str, scope_name: str) -> Optional[Dict[str, Any]]:
+            label_rng = None
+            for rng in ws.merged_cells.ranges:
+                top_val = ws.cell(rng.min_row, rng.min_col).value
+                if top_val and isinstance(top_val, str) and "INSTRUCTOR" in top_val.upper():
+                    label_rng = rng
+                    break
+
+            if not label_rng:
+                for r in range(40, min(ws.max_row + 1, 100)):
+                    for c in range(1, min(ws.max_column + 1, 80)):
+                        v = ws.cell(r, c).value
+                        if v and isinstance(v, str) and "INSTRUCTOR" in v.upper():
+                            return {
+                                "role": "instructor" if scope_name == "lecture" else f"instructor:{scope_name}",
+                                "scope": scope_name,
+                                "target": f"{get_column_letter(c)}{r - 3}",
+                                "confidence": 0.85,
+                                "derivation_evidence": "proximity_above",
+                            }
+                return None
+
+            for rng in ws.merged_cells.ranges:
+                if rng.min_col == label_rng.min_col and rng.max_col == label_rng.max_col:
+                    if rng.max_row == label_rng.min_row - 1:
+                        target_cell = f"{get_column_letter(rng.min_col)}{rng.min_row}"
+                        return {
+                            "role": "instructor" if scope_name == "lecture" else f"instructor:{scope_name}",
+                            "scope": scope_name,
+                            "target": target_cell,
+                            "confidence": 1.0,
+                            "derivation_evidence": "structural_merged_box_above_label",
+                        }
+
+            fallback_cell = f"{get_column_letter(label_rng.min_col)}{label_rng.min_row - 3}"
+            return {
+                "role": "instructor" if scope_name == "lecture" else f"instructor:{scope_name}",
+                "scope": scope_name,
+                "target": fallback_cell,
+                "confidence": 0.90,
+                "derivation_evidence": "offset_above_label",
+            }
+
+        lec_sig = find_signature_target(ws_lec, sheet_map["lecture"], "lecture")
+        if lec_sig:
+            signature_candidates.append(lec_sig)
+            signature_candidates.append({
+                "role": ROLE_INSTRUCTOR_SIGNATURE,
+                "scope": "lecture",
+                "target": lec_sig["target"],
+                "confidence": lec_sig["confidence"],
+                "derivation_evidence": lec_sig["derivation_evidence"],
+            })
+
+        if "laboratory" in sheet_map:
+            lab_sig = find_signature_target(wb[sheet_map["laboratory"]], sheet_map["laboratory"], "laboratory")
+            if lab_sig:
+                signature_candidates.append(lab_sig)
+
+        if "consolidated" in sheet_map:
+            con_sig = find_signature_target(wb[sheet_map["consolidated"]], sheet_map["consolidated"], "consolidated")
+            if con_sig:
+                signature_candidates.append(con_sig)
+
+        return RawTemplateRecipeCandidate(
+            template_path=template_path,
+            profile_id=profile_id,
+            fingerprint=fingerprint,
+            roster_candidate=roster_candidate,
+            header_candidates=header_candidates,
+            signature_candidates=signature_candidates,
+            collisions=[],
+            metadata={
+                "sheet_names": sheet_names,
+                "has_lab": "laboratory" in sheet_map,
+                "has_consolidated": "consolidated" in sheet_map,
+            },
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Backward-Compatibility Facade: TemplateInspector
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class TemplateInspector:
     """
     Backward-compatibility facade matching the legacy TemplateInspector interface.
-    Internally delegates to DocxTemplateInspector -> RecipeValidator.
+    Internally delegates to DocxTemplateInspector / XlsxTemplateInspector -> RecipeValidator.
     """
 
     CANONICAL_ACADEMIC_TEMPLATES = {
@@ -488,10 +721,29 @@ class TemplateInspector:
 
     def __init__(self):
         self._docx_inspector = DocxTemplateInspector()
+        self._xlsx_inspector = XlsxTemplateInspector()
 
     def inspect(self, template_path: str) -> Dict[str, Any]:
         """Legacy inspect() method returning a dictionary representation."""
+        if template_path.lower().endswith((".xlsx", ".xls")):
+            return self.inspect_xlsx(template_path)
         return self.inspect_docx(template_path)
+
+    def inspect_xlsx(self, template_path: str, profile_id: str = "grade_sheet_xlsx") -> Dict[str, Any]:
+        candidate = self._xlsx_inspector.inspect(template_path, profile_id=profile_id)
+        profile = PROFILE_REGISTRY.get(profile_id, PROFILE_GRADE_SHEET_XLSX)
+        validated_recipe = RecipeValidator.validate(candidate, profile)
+        return validated_recipe.to_dict()
+
+    def inspect_xlsx_recipe(
+        self,
+        template_path: str,
+        profile_id: str = "grade_sheet_xlsx",
+    ) -> ValidatedTemplateRecipe:
+        """Public API returning an authoritative ValidatedTemplateRecipe for XLSX."""
+        candidate = self._xlsx_inspector.inspect(template_path, profile_id=profile_id)
+        profile = PROFILE_REGISTRY.get(profile_id, PROFILE_GRADE_SHEET_XLSX)
+        return RecipeValidator.validate(candidate, profile)
 
     def inspect_docx(self, template_path: str, profile_id: Optional[str] = None) -> Dict[str, Any]:
         """

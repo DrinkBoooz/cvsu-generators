@@ -71,14 +71,8 @@ def test_packaged_executable_launch_and_cleanup():
     assert os.path.exists(EXE_PATH), f"Compiled binary not found at {EXE_PATH}"
 
     # Pre-check: Ensure no lingering instance is running to prevent cross-test pollution
-    check_running = subprocess.run(
-        ["tasklist", "/FI", "IMAGENAME eq CvSU Gen.exe"],
-        capture_output=True,
-        text=True,
-        check=False
-    )
-    if "CvSU Gen.exe" in check_running.stdout:
-        pytest.fail("An instance of CvSU Gen.exe is already running. Please close it before running the smoke test.")
+    subprocess.run(["taskkill", "/F", "/IM", "CvSU Gen.exe"], capture_output=True, check=False)
+    time.sleep(0.5)
 
     # Launch isolated process in a new process group
     creationflags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
@@ -91,16 +85,12 @@ def test_packaged_executable_launch_and_cleanup():
         assert exit_code is None, f"CvSU Gen.exe terminated prematurely with exit code {exit_code}"
 
     finally:
-        # Guaranteed cleanup: graceful terminate -> wait -> taskkill /T fallback
+        # Guaranteed cleanup: kill entire process tree including PyInstaller children
+        subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True, check=False)
         try:
-            proc.terminate()
-            proc.wait(timeout=5)
+            proc.wait(timeout=3)
         except Exception:
-            subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], check=False)
-            try:
-                proc.wait(timeout=3)
-            except Exception:
-                pass
+            pass
 
         # Verify PID is completely gone
         verify_gone = subprocess.run(

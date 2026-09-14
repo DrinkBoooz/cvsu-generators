@@ -39,7 +39,7 @@ def test_generator_factory_loads_all_7():
 def test_grade_gen_normalization():
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     templates_dir = os.path.join(repo_root, "templates")
-    gg = GradeGenerator(templates_dir)
+    gg = GradeGenerator.for_class(templates_dir, {})
 
     sem, year = gg._parse_semester_and_year("2nd Semester / 2025-2026")
     assert sem == "2nd Semester"

@@ -17,6 +17,7 @@ from modules.parsers.roster_parser import load_students
 from modules.parsers.ceit_directory import parse_filename_hints, KNOWN_LAB_SUBJECT_CODES, is_known_lab_subject
 from modules.generators.grade_gen import GradeGenerator
 from modules.generators.attendance_gen import generate_attendance_for_month
+from modules.services.template_recipe_service import TemplateRecipeResolver
 
 
 
@@ -501,7 +502,11 @@ def process_all(
             }
             
             try:
-                grade_gen = GradeGenerator(templates_dir)
+                template_filename = "GRADING_LECTURE_LAB_TEMPLATE.xlsx" if has_lab else "GRADING_LECTURE_TEMPLATE.xlsx"
+                template_path = os.path.join(templates_dir, template_filename)
+                resolver = TemplateRecipeResolver.get_instance()
+                recipe = resolver.resolve(template_path, "grade_sheet_xlsx")
+                grade_gen = GradeGenerator(template_path, recipe)
                 grade_out_name = f"{course_sec_safe}_{schedule_code_safe}_GRADING_SHEET.xlsx"
                 grade_out_path = os.path.join(grade_dir, grade_out_name)
                 grade_gen.generate(grade_info, students, grade_out_path)

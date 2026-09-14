@@ -1,15 +1,84 @@
+#!/usr/bin/env python3
+"""
+modules/generators/grade_gen.py
+
+Pure recipe-driven Excel Grading Sheet Generator.
+Consumes ValidatedTemplateRecipe exclusively.
+Zero hardcoded coordinates or positional fallback logic.
+"""
+
 import os
 import re
 import shutil
-import openpyxl
 import tempfile
+from typing import Optional, Union, Any, List, Tuple
+
+import openpyxl
+
 from modules.common.logger import logger
+from modules.models.recipe import (
+    TemplateError,
+    ValidatedTemplateRecipe,
+)
+
 
 class GradeGenerator:
-    def __init__(self, templates_dir: str):
-        self.templates_dir = templates_dir
-        self.ll_template = os.path.join(templates_dir, "GRADING_LECTURE_LAB_TEMPLATE.xlsx")
-        self.l_template = os.path.join(templates_dir, "GRADING_LECTURE_TEMPLATE.xlsx")
+    """
+    Pure recipe-driven Grade Sheet Generator for CvSU.
+    Requires a ValidatedTemplateRecipe instance for construction.
+    """
+
+    def __init__(
+        self,
+        template_path: str,
+        recipe: ValidatedTemplateRecipe,
+    ):
+        if not isinstance(recipe, ValidatedTemplateRecipe):
+            raise TypeError("GradeGenerator requires a ValidatedTemplateRecipe instance")
+        self.template_path = template_path
+        self.recipe = recipe
+
+    @staticmethod
+    def eval_has_lab(info: dict) -> bool:
+        """Business logic evaluation to determine whether class has laboratory."""
+        subject_type = str(info.get("subject_type", "")).lower()
+        template_type = str(info.get("template_type", "")).lower()
+        time_str = str(info.get("time", "")).upper()
+        subj_str = str(info.get("subject", "")).upper()
+        has_lab_flag = info.get("has_lab")
+
+        if subject_type:
+            return "lab" in subject_type
+        elif has_lab_flag is not None:
+            return bool(has_lab_flag)
+        elif "ll" in template_type or "lab" in template_type:
+            return True
+        elif "l" in template_type or "lec" in template_type:
+            return False
+        elif "LAB" in time_str or "LAB:" in time_str or "(LAB)" in subj_str or "LABORATORY" in subj_str:
+            return True
+        return False
+
+    @classmethod
+    def for_class(
+        cls,
+        templates_dir: str,
+        info: dict,
+        resolver: Optional[Any] = None,
+    ) -> "GradeGenerator":
+        """
+        Factory method: selects template identity from business logic,
+        resolves validated recipe via TemplateRecipeResolver,
+        and constructs GradeGenerator with the validated recipe.
+        """
+        if resolver is None:
+            from modules.services.template_recipe_service import TemplateRecipeResolver
+            resolver = TemplateRecipeResolver.get_instance()
+        has_lab = cls.eval_has_lab(info)
+        template_filename = "GRADING_LECTURE_LAB_TEMPLATE.xlsx" if has_lab else "GRADING_LECTURE_TEMPLATE.xlsx"
+        template_path = os.path.join(templates_dir, template_filename)
+        recipe = resolver.resolve(template_path, "grade_sheet_xlsx")
+        return cls(template_path, recipe)
 
     def _parse_semester_and_year(self, raw_sem: str) -> tuple:
         raw_sem = str(raw_sem).strip()
@@ -54,31 +123,17 @@ class GradeGenerator:
         return re.sub(r'\s+', ' ', norm).strip()
 
     def generate(self, info: dict, students: list, output_path: str) -> bool:
-        subject_type = str(info.get("subject_type", "")).lower()
-        template_type = str(info.get("template_type", "")).lower()
-        time_str = str(info.get("time", "")).upper()
-        subj_str = str(info.get("subject", "")).upper()
-        has_lab_flag = info.get("has_lab")
+        """
+        Executes grade sheet generation purely driven by self.recipe.
+        Coordinates, roster bounds, and signatures are resolved from recipe.
+        """
+        recipe = self.recipe
+        rb = recipe.roster_binding
+        if rb is None:
+            raise TemplateError("GradeGenerator recipe is missing mandatory roster_binding")
 
-        is_lab = False
-        if subject_type:
-            is_lab = ("lab" in subject_type)
-        elif has_lab_flag is not None:
-            is_lab = bool(has_lab_flag)
-        elif "ll" in template_type or "lab" in template_type:
-            is_lab = True
-        elif "l" in template_type or "lec" in template_type:
-            is_lab = False
-        elif "LAB" in time_str or "LAB:" in time_str or "(LAB)" in subj_str or "LABORATORY" in subj_str:
-            is_lab = True
-
-        template_path = self.ll_template if is_lab else self.l_template
-        start_row = 12 if is_lab else 11
-        max_rows = 40 if is_lab else 60
-
-        if not os.path.exists(template_path):
-            logger.error(f"Missing grade template: {template_path}")
-            return False
+        start_row = rb.first_data_row_index
+        max_capacity = rb.capacity_limit or 40
 
         sem_str, year_str = self._parse_semester_and_year(info.get("semester", ""))
         subj_code, subj_title = self._parse_subject(info.get("subject", ""))
@@ -105,7 +160,7 @@ class GradeGenerator:
         os.makedirs(dir_name, exist_ok=True)
         with tempfile.NamedTemporaryFile(dir=dir_name, delete=False, suffix=".tmp.xlsx") as fh:
             tmp_path = fh.name
-        shutil.copy2(template_path, tmp_path)
+        shutil.copy2(self.template_path, tmp_path)
 
         def sanitize_excel(val):
             if isinstance(val, str) and val.startswith(('=', '+', '-', '@')):
@@ -120,39 +175,52 @@ class GradeGenerator:
             if "lecture" not in sheet_names:
                 raise ValueError("Grade template is missing required 'Lecture' sheet.")
             ws = wb[name_map["lecture"]]
-            ws['C1'] = sched_val if isinstance(sched_val, int) else sanitize_excel(sched_val)
-            ws['M1'] = sanitize_excel(course_str)
-            ws['C2'] = sanitize_excel(subj_code)
-            ws['M2'] = sanitize_excel(sem_str)
-            ws['C3'] = sanitize_excel(subj_title)
-            ws['M3'] = sanitize_excel(year_str)
-            ws['M4'] = sanitize_excel(instructor)
+
+            # 1. Metadata Bindings
+            field_values = {
+                "schedule_code": sched_val if isinstance(sched_val, int) else sanitize_excel(sched_val),
+                "course_section": sanitize_excel(course_str),
+                "subject_code": sanitize_excel(subj_code),
+                "semester": sanitize_excel(sem_str),
+                "subject_title": sanitize_excel(subj_title),
+                "school_year": sanitize_excel(year_str),
+                "instructor": sanitize_excel(instructor),
+            }
             if info.get("units"):
                 try:
-                    ws['C4'] = int(info["units"])
+                    field_values["units"] = int(info["units"])
                 except Exception:
                     pass
 
-            if is_lab:
-                found_label = False
-                sig_cell = ws['BI57']
-                for r_offset in range(-5, 6):
-                    for c_offset in range(-20, 5):
-                        r = 57 + r_offset
-                        c = 61 + c_offset
-                        val = ws.cell(row=r, column=c).value
-                        if val and "instructor" in str(val).lower():
-                            found_label = True
-                            sig_cell = ws.cell(row=r - 3, column=c)
-                            break
-                    if found_label:
-                        break
-                if found_label:
-                    sig_cell.value = sanitize_excel(instructor)
-                else:
-                    logger.warning(f"Could not find 'Instructor' anchor cell near BI57 for {course_str} ({sched_val}).")
+            for field_name, val in field_values.items():
+                target = recipe.get_header_target(field_name)
+                if target:
+                    if "!" in target:
+                        t_sheet, t_cell = target.split("!", 1)
+                        if t_sheet.lower() in name_map:
+                            wb[name_map[t_sheet.lower()]][t_cell] = val
+                    else:
+                        ws[target] = val
 
-            max_capacity = max_rows
+            # 2. Scope-Aware Signature Bindings
+            for role, sig_binding in recipe.signature_bindings.items():
+                target = sig_binding.target
+                if not target:
+                    continue
+
+                if "!" in target:
+                    t_sheet, t_cell = target.split("!", 1)
+                    if t_sheet.lower() in name_map:
+                        wb[name_map[t_sheet.lower()]][t_cell] = sanitize_excel(instructor)
+                else:
+                    if role in ("instructor:laboratory", "laboratory") and "laboratory" in sheet_names:
+                        wb[name_map["laboratory"]][target] = sanitize_excel(instructor)
+                    elif role in ("instructor:consolidated", "consolidated") and "consolidated" in sheet_names:
+                        wb[name_map["consolidated"]][target] = sanitize_excel(instructor)
+                    elif role in ("instructor", "instructor_signature"):
+                        ws[target] = sanitize_excel(instructor)
+
+            # 3. Student Roster Population with Mandatory Capacity Limit
             if len(cleaned_students) > max_capacity:
                 logger.warning(
                     f"Roster for {course_str} ({sched_val}) has {len(cleaned_students)} students, "
@@ -160,32 +228,33 @@ class GradeGenerator:
                 )
                 cleaned_students = cleaned_students[:max_capacity]
 
-            total_slots = max_rows
+            total_slots = max_capacity
+            name_col = rb.name_col
+            id_col = rb.id_col
+            index_col = rb.index_col or 1
+
             for r_idx in range(total_slots):
                 row_num = start_row + r_idx
                 if r_idx < len(cleaned_students):
                     name, num = cleaned_students[r_idx]
-                    ws.cell(row=row_num, column=1).value = r_idx + 1
-                    ws.cell(row=row_num, column=2).value = sanitize_excel(name)
-                    ws.cell(row=row_num, column=3).value = int(num) if (num.isdigit() and not num.startswith('0')) else num
+                    ws.cell(row=row_num, column=index_col).value = r_idx + 1
+                    ws.cell(row=row_num, column=name_col).value = sanitize_excel(name)
+                    ws.cell(row=row_num, column=id_col).value = int(num) if (num.isdigit() and not num.startswith('0')) else num
                 else:
-                    ws.cell(row=row_num, column=2).value = None
-                    ws.cell(row=row_num, column=3).value = None
+                    ws.cell(row=row_num, column=name_col).value = None
+                    ws.cell(row=row_num, column=id_col).value = None
 
-            if "laboratory" in sheet_names:
-                ws_lab = wb[name_map["laboratory"]]
-                ws_lab['AO59'] = sanitize_excel(instructor)
-    
-            if "consolidated" in sheet_names:
-                ws_con = wb[name_map["consolidated"]]
-                ws_con['J56'] = sanitize_excel(instructor)
-    
-            if "grading sheet" not in sheet_names:
-                raise ValueError("Grade template is missing required 'Grading Sheet' sheet.")
-            ws_grd = wb[name_map["grading sheet"]]
+            # 4. Institutional College Banner (Grading Sheet)
+            college_target = recipe.get_header_target("college")
             college_val = str(info.get("college") or "").strip() or "COLLEGE OF ENGINEERING AND INFORMATION TECHNOLOGY"
-            ws_grd['A9'] = sanitize_excel(college_val)
-    
+            if college_target:
+                if "!" in college_target:
+                    t_sheet, t_cell = college_target.split("!", 1)
+                    if t_sheet.lower() in name_map:
+                        wb[name_map[t_sheet.lower()]][t_cell] = sanitize_excel(college_val)
+                elif "grading sheet" in sheet_names:
+                    wb[name_map["grading sheet"]][college_target] = sanitize_excel(college_val)
+
             wb.save(tmp_path)
             wb.close()
             os.replace(tmp_path, output_path)

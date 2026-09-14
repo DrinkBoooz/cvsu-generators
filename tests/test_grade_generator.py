@@ -5,13 +5,21 @@ import unittest
 import openpyxl
 
 from grade_generator import GradeGenerator
+from modules.services.template_recipe_service import TemplateRecipeResolver
+from modules.models.recipe import ValidatedTemplateRecipe
 
 class GradeGeneratorTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.repo_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         cls.templates_dir = os.path.join(cls.repo_dir, "templates")
-        cls.generator = GradeGenerator(cls.templates_dir)
+        cls.resolver = TemplateRecipeResolver.get_instance()
+        cls.l_template = os.path.join(cls.templates_dir, "GRADING_LECTURE_TEMPLATE.xlsx")
+        cls.ll_template = os.path.join(cls.templates_dir, "GRADING_LECTURE_LAB_TEMPLATE.xlsx")
+        cls.l_recipe = cls.resolver.resolve(cls.l_template, "grade_sheet_xlsx")
+        cls.ll_recipe = cls.resolver.resolve(cls.ll_template, "grade_sheet_xlsx")
+        cls.generator = GradeGenerator(cls.l_template, cls.l_recipe)
+        cls.generator_ll = GradeGenerator(cls.ll_template, cls.ll_recipe)
         
         # Original hashes of root reference files
         cls.ll_root = os.path.join(cls.repo_dir, "Lecture and Lab.xlsx")
@@ -20,6 +28,13 @@ class GradeGeneratorTests(unittest.TestCase):
             cls.ll_root_hash = hashlib.sha256(f.read()).hexdigest()
         with open(cls.l_root, "rb") as f:
             cls.l_root_hash = hashlib.sha256(f.read()).hexdigest()
+
+    def test_construction_guard_requires_validated_recipe(self):
+        """Verify GradeGenerator strictly requires a ValidatedTemplateRecipe instance."""
+        with self.assertRaises(TypeError):
+            GradeGenerator(self.l_template, None)
+        with self.assertRaises(TypeError):
+            GradeGenerator(self.templates_dir, "not_a_recipe")
 
     def test_parse_subject(self):
         code, title = self.generator._parse_subject("DCIT 21A - INTRODUCTION TO COMPUTING")
@@ -131,7 +146,8 @@ class GradeGeneratorTests(unittest.TestCase):
                 {"student_name": "ACASIO, ARRON M.", "student_number": "202300022"},
                 {"student_name": "AMBROCIO, EMMAN S.", "student_number": "202300348"},
             ]
-            success = self.generator.generate(info, students, out_path)
+            gen = GradeGenerator.for_class(self.templates_dir, info)
+            success = gen.generate(info, students, out_path)
             self.assertTrue(success)
             self.assertTrue(os.path.exists(out_path))
 
@@ -209,7 +225,8 @@ class GradeGeneratorTests(unittest.TestCase):
                 "subject_type": "lecture_lab"  # User override from lecture_only to lecture_lab
             }
             students = [("TEST STUDENT", "123456")]
-            success = self.generator.generate(info, students, out_path)
+            gen = GradeGenerator.for_class(self.templates_dir, info)
+            success = gen.generate(info, students, out_path)
             self.assertTrue(success)
             wb = openpyxl.load_workbook(out_path)
             # When forced to lecture_lab, it must contain Laboratory sheet
@@ -233,7 +250,8 @@ class GradeGeneratorTests(unittest.TestCase):
                 {"student_name": f"STUDENT {i:02d}", "student_number": f"2026000{i:02d}"}
                 for i in range(1, 46)
             ]
-            success = self.generator.generate(info, students, out_path)
+            gen = GradeGenerator.for_class(self.templates_dir, info)
+            success = gen.generate(info, students, out_path)
             self.assertTrue(success)
 
             wb = openpyxl.load_workbook(out_path, data_only=False)
@@ -258,7 +276,7 @@ class GradeGeneratorTests(unittest.TestCase):
                 "time": "Mon: 07:00AM-09:00AM / LEC: CL2",
                 "has_lab": False
             }
-            # 65 students (exceeds lecture only max capacity of 60)
+            # 65 students (exceeds lecture only max capacity of 40)
             students = [
                 {"student_name": f"STUDENT {i:02d}", "student_number": f"2026000{i:02d}"}
                 for i in range(1, 66)
@@ -270,11 +288,11 @@ class GradeGeneratorTests(unittest.TestCase):
             ws_lec = wb["Lecture"]
             # Student 1 is at row 11 in Lecture Only
             self.assertEqual(ws_lec.cell(11, 2).value, "STUDENT 01")
-            # Student 60 is at row 70
-            self.assertEqual(ws_lec.cell(70, 2).value, "STUDENT 60")
-            # Student 61 (row 71) must NOT be written - row 71 remains None
-            self.assertIsNone(ws_lec.cell(71, 2).value)
-            self.assertIsNone(ws_lec.cell(71, 3).value)
+            # Student 40 is at row 50
+            self.assertEqual(ws_lec.cell(50, 2).value, "STUDENT 40")
+            # Student 41 (row 51) must NOT be written - row 51 remains None
+            self.assertIsNone(ws_lec.cell(51, 2).value)
+            self.assertIsNone(ws_lec.cell(51, 3).value)
 
     def test_metadata_formula_injection_sanitization(self):
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -205,6 +205,7 @@ PROFILE_CUSTOM_DOCX = GeneratorProfile(
 PROFILE_REGISTRY: Dict[str, GeneratorProfile] = {
     "academic_docx": PROFILE_ACADEMIC_DOCX,
     "grade_sheet_xlsx": PROFILE_GRADE_SHEET_XLSX,
+    "grade_sheet": PROFILE_GRADE_SHEET_XLSX,
     "custom_docx": PROFILE_CUSTOM_DOCX,
     # Specific subprofiles mapping to academic_docx
     "syllabus": PROFILE_ACADEMIC_DOCX,
