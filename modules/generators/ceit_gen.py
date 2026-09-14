@@ -234,22 +234,14 @@ class ExamReturnsGenerator(DocumentGenerator):
     Pure recipe-driven execution; zero positional fallbacks.
     """
 
-    def __init__(self, template_path: str, arg2: Any = None, arg3: Any = None, **kwargs):
-        recipe = None
-        period = "MIDTERM"
-        if isinstance(arg2, ValidatedTemplateRecipe):
-            recipe = arg2
-            if isinstance(arg3, str):
-                period = arg3
-        elif isinstance(arg3, ValidatedTemplateRecipe):
-            recipe = arg3
-            if isinstance(arg2, str):
-                period = arg2
+    def __init__(self, template_path: str, recipe: ValidatedTemplateRecipe = None, period: str = "MIDTERM", **kwargs):
+        if isinstance(period, ValidatedTemplateRecipe) and isinstance(recipe, str):
+            recipe, period = period, recipe
         elif "recipe" in kwargs and isinstance(kwargs["recipe"], ValidatedTemplateRecipe):
+            if isinstance(recipe, str):
+                period = recipe
             recipe = kwargs["recipe"]
-            if isinstance(arg2, str):
-                period = arg2
-        if recipe is None:
+        if not isinstance(recipe, ValidatedTemplateRecipe):
             raise TypeError("ExamReturnsGenerator requires a ValidatedTemplateRecipe instance")
         super().__init__(template_path, recipe)
         self._period = period
@@ -266,22 +258,14 @@ class TOSGenerator(DocumentGenerator):
     Pure recipe-driven execution; appends period to semester_ay field.
     """
 
-    def __init__(self, template_path: str, arg2: Any = None, arg3: Any = None, **kwargs):
-        recipe = None
-        period = "Midterm"
-        if isinstance(arg2, ValidatedTemplateRecipe):
-            recipe = arg2
-            if isinstance(arg3, str):
-                period = arg3
-        elif isinstance(arg3, ValidatedTemplateRecipe):
-            recipe = arg3
-            if isinstance(arg2, str):
-                period = arg2
+    def __init__(self, template_path: str, recipe: ValidatedTemplateRecipe = None, period: str = "Midterm", **kwargs):
+        if isinstance(period, ValidatedTemplateRecipe) and isinstance(recipe, str):
+            recipe, period = period, recipe
         elif "recipe" in kwargs and isinstance(kwargs["recipe"], ValidatedTemplateRecipe):
+            if isinstance(recipe, str):
+                period = recipe
             recipe = kwargs["recipe"]
-            if isinstance(arg2, str):
-                period = arg2
-        if recipe is None:
+        if not isinstance(recipe, ValidatedTemplateRecipe):
             raise TypeError("TOSGenerator requires a ValidatedTemplateRecipe instance")
         super().__init__(template_path, recipe)
         self._period = period
@@ -310,22 +294,14 @@ class GradeDiscussionGenerator(DocumentGenerator):
     Pure recipe-driven execution; zero positional fallbacks.
     """
 
-    def __init__(self, template_path: str, arg2: Any = None, arg3: Any = None, **kwargs):
-        recipe = None
-        period = "Midterm"
-        if isinstance(arg2, ValidatedTemplateRecipe):
-            recipe = arg2
-            if isinstance(arg3, str):
-                period = arg3
-        elif isinstance(arg3, ValidatedTemplateRecipe):
-            recipe = arg3
-            if isinstance(arg2, str):
-                period = arg2
+    def __init__(self, template_path: str, recipe: ValidatedTemplateRecipe = None, period: str = "Midterm", **kwargs):
+        if isinstance(period, ValidatedTemplateRecipe) and isinstance(recipe, str):
+            recipe, period = period, recipe
         elif "recipe" in kwargs and isinstance(kwargs["recipe"], ValidatedTemplateRecipe):
+            if isinstance(recipe, str):
+                period = recipe
             recipe = kwargs["recipe"]
-            if isinstance(arg2, str):
-                period = arg2
-        if recipe is None:
+        if not isinstance(recipe, ValidatedTemplateRecipe):
             raise TypeError("GradeDiscussionGenerator requires a ValidatedTemplateRecipe instance")
         super().__init__(template_path, recipe)
         self._period = period
