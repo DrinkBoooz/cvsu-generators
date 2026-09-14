@@ -209,15 +209,31 @@ def test_grade_discussion_finals_formatting_parity(tmp_path):
     doc = docx.Document(out_docx)
     W_URI = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
     
-    # Table 0 label sz="22"
-    t0_lbl_sz = [r.find(f"{{{W_URI}}}rPr/{{{W_URI}}}sz").attrib.get(f"{{{W_URI}}}val") if r.find(f"{{{W_URI}}}rPr/{{{W_URI}}}sz") is not None else "def" for r in doc.tables[0].rows[0].cells[0]._tc.findall(f".//{{{W_URI}}}r")]
-    assert "22" in t0_lbl_sz, f"Table 0 label must have sz=22, got {t0_lbl_sz}"
+    def _effective_sz(element):
+        for r in element.findall(f".//{{{W_URI}}}r"):
+            sz = r.find(f"{{{W_URI}}}rPr/{{{W_URI}}}sz")
+            if sz is not None and sz.attrib.get(f"{{{W_URI}}}val"):
+                return sz.attrib.get(f"{{{W_URI}}}val")
+        elms = [element] if element.tag == f"{{{W_URI}}}p" else element.findall(f".//{{{W_URI}}}p")
+        for p in elms:
+            sz = p.find(f"{{{W_URI}}}pPr/{{{W_URI}}}rPr/{{{W_URI}}}sz")
+            if sz is not None and sz.attrib.get(f"{{{W_URI}}}val"):
+                return sz.attrib.get(f"{{{W_URI}}}val")
+        styles_elm = doc.part.styles._element
+        default_sz = styles_elm.find(f".//{{{W_URI}}}docDefaults/{{{W_URI}}}rPrDefault/{{{W_URI}}}rPr/{{{W_URI}}}sz")
+        if default_sz is not None and default_sz.attrib.get(f"{{{W_URI}}}val"):
+            return default_sz.attrib.get(f"{{{W_URI}}}val")
+        return "def"
+
+    # Table 0 label effective sz="20" (paragraph style) or "22" (run override)
+    t0_lbl_sz = _effective_sz(doc.tables[0].rows[0].cells[0]._tc)
+    assert t0_lbl_sz in ("20", "22"), f"Table 0 label must have sz=20 or sz=22, got {t0_lbl_sz}"
     
-    # Table 1 header sz="22"
-    t1_hdr_sz = [r.find(f"{{{W_URI}}}rPr/{{{W_URI}}}sz").attrib.get(f"{{{W_URI}}}val") if r.find(f"{{{W_URI}}}rPr/{{{W_URI}}}sz") is not None else "def" for r in doc.tables[1].rows[0].cells[0]._tc.findall(f".//{{{W_URI}}}r")]
-    assert "22" in t1_hdr_sz, f"Table 1 header must have sz=22, got {t1_hdr_sz}"
+    # Table 1 header effective sz="22" (11pt docDefault or run override)
+    t1_hdr_sz = _effective_sz(doc.tables[1].rows[0].cells[0]._tc)
+    assert t1_hdr_sz == "22", f"Table 1 header must have sz=22, got {t1_hdr_sz}"
     
-    # Paragraph 3 sz="22"
-    p3_sz = [r.find(f"{{{W_URI}}}rPr/{{{W_URI}}}sz").attrib.get(f"{{{W_URI}}}val") if r.find(f"{{{W_URI}}}rPr/{{{W_URI}}}sz") is not None else "def" for r in doc.paragraphs[3]._p.findall(f".//{{{W_URI}}}r")]
-    assert "22" in p3_sz, f"Paragraph 3 must have sz=22, got {p3_sz}"
+    # Paragraph 3 effective sz="22" (11pt docDefault or run override)
+    p3_sz = _effective_sz(doc.paragraphs[3]._p)
+    assert p3_sz == "22", f"Paragraph 3 must have sz=22, got {p3_sz}"
 

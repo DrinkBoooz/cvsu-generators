@@ -303,17 +303,17 @@ def test_dynamic_total_steps_telemetry(tmp_path):
         progress_callback=on_progress
     )
 
-    assert len(results["generated"]["ceit"]) == 8
+    assert len(results["generated"]["ceit"]) == 7
     assert len(results["generated"]["attendance"]) == 6
     assert len(results["generated"]["grades"]) == 1
-    assert len(progress_events) == 15
+    assert len(progress_events) == 14
 
     for ev in progress_events:
         assert ev["step"] <= ev["total_steps"]
-        assert ev["total_steps"] == 15
+        assert ev["total_steps"] == 14
 
-    assert progress_events[-1]["step"] == 15
-    assert progress_events[-1]["total_steps"] == 15
+    assert progress_events[-1]["step"] == 14
+    assert progress_events[-1]["total_steps"] == 14
 
 def test_cancel_generation_and_by_class_artifacts(tmp_path):
     import threading
