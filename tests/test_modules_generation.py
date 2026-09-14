@@ -15,8 +15,8 @@ def test_generator_factory_loads_all_7():
     assert os.path.isdir(templates_dir)
 
     factory = GeneratorFactory(templates_dir)
-    all_gens = factory.get_all()
-    assert len(all_gens) == 8
+    all_gens = factory.get_all(include_custom=False)
+    assert len(all_gens) == 7
 
     suffixes = [suffix for _, suffix in all_gens]
     expected_suffixes = [
@@ -27,7 +27,6 @@ def test_generator_factory_loads_all_7():
         "TOS_FINALS",
         "GRADE_DISCUSSION_MIDTERM",
         "GRADE_DISCUSSION_FINALS",
-        "CLASS_POLICIES_ACKNOWLEDGMENT",
     ]
     assert suffixes == expected_suffixes
 

@@ -45,11 +45,9 @@ def test_roster_parser_retains_student_with_surname_name():
 
 def test_roster_parser_fixes_portal_enye_corruption():
     """Verify UTF-8 / ASCII portal encoding glitches like SAÃEZ are corrected to SAÑEZ."""
-    cs16_roster = os.path.join(
-        SCHEDULES_DIR,
-        "BSCS1-6 List of Students for 202612058-DCIT 21 - INTRODUCTION TO COMPUTING.xlsx"
-    )
-    assert os.path.exists(cs16_roster), f"Roster file {cs16_roster} must exist"
+    cs16_candidates = glob.glob(os.path.join(SCHEDULES_DIR, "*202612058*.xlsx"))
+    assert cs16_candidates, f"Roster file for schedule code 202612058 must exist in {SCHEDULES_DIR}"
+    cs16_roster = cs16_candidates[0]
 
     students = roster_parser.load_students(cs16_roster)
     sanez_student = [s for s in students if "261017240" in s[1]]
@@ -85,7 +83,6 @@ def test_grade_discussion_template_and_generator_row_count(tmp_path):
     """Verify Grade Discussion templates and generated outputs have exactly 6 rows in Table 0 without orphan row."""
     templates = [
         os.path.join(WORKSPACE_DIR, "templates", "Final-Grade-Discussion_LATEST.docx"),
-        os.path.join(WORKSPACE_DIR, "templates", "Finals-Grade-Discussion_LATEST.docx"),
         os.path.join(WORKSPACE_DIR, "templates", "Midterm-Grade-Discussion_LATEST.docx"),
     ]
     for tmpl in templates:
@@ -129,6 +126,9 @@ def test_cs14_lab_auto_detection():
     assert is_known_lab_subject("DCIT 21 - INTRODUCTION TO COMPUTING") is True
     assert is_known_lab_subject("DCIT 21") is True
     assert is_known_lab_subject("DCIT21") is True
+    assert is_known_lab_subject("DCIT 21A - INTRODUCTION TO COMPUTING") is True
+    assert is_known_lab_subject("DCIT 21A") is True
+    assert is_known_lab_subject("DCIT21A") is True
     assert is_known_lab_subject("CVSU 101 - INSTITUTIONAL ORIENTATION") is False
 
     rosters = glob.glob(os.path.join(SCHEDULES_DIR, "*.xlsx"))

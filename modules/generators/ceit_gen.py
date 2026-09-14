@@ -407,10 +407,6 @@ class GeneratorFactory:
     def _path(self, key: str) -> str:
         p = os.path.join(self._dir, self.TEMPLATE_FILES[key])
         if not os.path.exists(p):
-            if key == "grade_finals":
-                alt = os.path.join(self._dir, "Finals-Grade-Discussion_LATEST.docx")
-                if os.path.exists(alt):
-                    return alt
             raise FileNotFoundError(
                 f"Template not found: {p}\n"
                 f"Expected file: {self.TEMPLATE_FILES[key]}"
