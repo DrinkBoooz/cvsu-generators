@@ -15,9 +15,9 @@ from modules.parsers.schedule_parser import (
 )
 from modules.parsers.roster_parser import load_students
 from modules.parsers.ceit_directory import parse_filename_hints, KNOWN_LAB_SUBJECT_CODES, is_known_lab_subject
-from modules.generators.ceit_gen import GeneratorFactory
 from modules.generators.grade_gen import GradeGenerator
 from modules.generators.attendance_gen import generate_attendance_for_month
+
 
 
 def process_all(
@@ -58,6 +58,7 @@ def process_all(
         logger.error(f"Templates directory not found at {templates_dir}")
         return results
         
+    from modules.generators.ceit_gen import GeneratorFactory
     factory = GeneratorFactory(templates_dir)
     enabled_engines = set(engine_filter) if engine_filter else {"attendance", "ceit", "grades"}
     

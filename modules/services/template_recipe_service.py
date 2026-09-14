@@ -143,6 +143,13 @@ class TemplateRecipeResolver:
         for k in idx_keys:
             self._fingerprint_index.pop(k, None)
 
+    resolve = resolve_recipe
+
+    @classmethod
+    def get_instance(cls) -> "TemplateRecipeResolver":
+        """Returns the global shared TemplateRecipeResolver singleton."""
+        return recipe_resolver
+
 
 # Global singleton instance
 recipe_resolver = TemplateRecipeResolver()

@@ -51,6 +51,9 @@ class RecipeValidator:
         if not candidate:
             raise InvalidRecipeError("Cannot validate empty candidate")
 
+        if isinstance(profile, str):
+            profile = PROFILE_REGISTRY.get(profile, PROFILE_ACADEMIC_DOCX)
+
         # 1. Resolve and check collisions / ambiguities
         cls._resolve_collisions(candidate, profile)
 
@@ -118,20 +121,56 @@ class RecipeValidator:
         clean_data = {k: v for k, v in data.items() if k != "_construction_token"}
 
         profile_id = clean_data.get("profile_id", "academic_docx")
-        if profile is None:
+        if isinstance(profile, str):
+            profile = PROFILE_REGISTRY.get(profile, PROFILE_REGISTRY.get(profile_id, PROFILE_ACADEMIC_DOCX))
+        elif profile is None:
             profile = PROFILE_REGISTRY.get(profile_id, PROFILE_ACADEMIC_DOCX)
 
         # Reconstruct components
-        roster_data = clean_data.get("roster_binding")
-        roster_binding = RosterBinding.from_dict(roster_data) if roster_data else None
+        roster_data = clean_data.get("roster_binding") or clean_data.get("roster_table")
 
-        header_bindings: Dict[str, HeaderCellBinding] = {}
-        for k, v in clean_data.get("header_bindings", {}).items():
-            header_bindings[k] = HeaderCellBinding.from_dict(v)
+        raw_headers = clean_data.get("header_bindings", {})
+        header_candidates: List[Dict[str, Any]] = []
+        if isinstance(raw_headers, dict):
+            header_candidates = [v if isinstance(v, dict) else v.to_dict() for v in raw_headers.values()]
+        elif isinstance(raw_headers, list):
+            for item in raw_headers:
+                if isinstance(item, dict):
+                    if item.get("type") == "table_cell":
+                        header_candidates.append({
+                            "cell_type": "docx_table",
+                            "target": (item.get("table_index", 0), item.get("row_index", 0), item.get("cell_index", 1)),
+                            "field": item.get("field"),
+                            "shrink_threshold": item.get("shrink_threshold", 0),
+                            "shrink_sz": item.get("shrink_sz", "18"),
+                            "confidence": float(item.get("confidence", 1.0)),
+                        })
+                    elif item.get("type") == "paragraph_colon":
+                        header_candidates.append({
+                            "cell_type": "docx_paragraph",
+                            "target": item.get("para_index", 0),
+                            "field": item.get("field"),
+                            "shrink_threshold": item.get("shrink_threshold", 0),
+                            "shrink_sz": item.get("shrink_sz", "18"),
+                            "confidence": float(item.get("confidence", 1.0)),
+                        })
+                    else:
+                        header_candidates.append(item)
 
-        signature_bindings: Dict[str, SignatureBinding] = {}
-        for k, v in clean_data.get("signature_bindings", {}).items():
-            signature_bindings[k] = SignatureBinding.from_dict(v)
+        raw_signatures = clean_data.get("signature_bindings", {})
+        signature_candidates: List[Dict[str, Any]] = []
+        if isinstance(raw_signatures, dict):
+            signature_candidates = [v if isinstance(v, dict) else v.to_dict() for v in raw_signatures.values()]
+        elif isinstance(raw_signatures, list):
+            signature_candidates = [s for s in raw_signatures if isinstance(s, dict)]
+
+        meta = clean_data.get("metadata")
+        if not isinstance(meta, dict):
+            meta = {
+                "title": clean_data.get("title", ""),
+                "suffix": clean_data.get("suffix", ""),
+                "placeholders": clean_data.get("placeholders", []),
+            }
 
         # Construct candidate to run full validation checks
         candidate = RawTemplateRecipeCandidate(
@@ -139,10 +178,10 @@ class RecipeValidator:
             profile_id=profile_id,
             fingerprint=clean_data.get("fingerprint", ""),
             roster_candidate=roster_data,
-            header_candidates=[v.to_dict() for v in header_bindings.values()],
-            signature_candidates=[v.to_dict() for v in signature_bindings.values()],
+            header_candidates=header_candidates,
+            signature_candidates=signature_candidates,
             collisions=[],
-            metadata=clean_data.get("metadata", {}),
+            metadata=meta,
         )
 
         return cls.validate(candidate, profile)

@@ -50,6 +50,8 @@ class RosterBinding:
     last_name_col: Optional[int] = None
     first_name_col: Optional[int] = None
     middle_name_col: Optional[int] = None
+    index_col: Optional[int] = None
+    signature_col: Optional[int] = None
     capacity_limit: Optional[int] = None
 
     def to_dict(self) -> Dict[str, Any]:
@@ -66,6 +68,10 @@ class RosterBinding:
             d["first_name_col"] = self.first_name_col
         if self.middle_name_col is not None:
             d["middle_name_col"] = self.middle_name_col
+        if self.index_col is not None:
+            d["index_col"] = self.index_col
+        if self.signature_col is not None:
+            d["signature_col"] = self.signature_col
         if self.capacity_limit is not None:
             d["capacity_limit"] = self.capacity_limit
         return d
@@ -74,13 +80,15 @@ class RosterBinding:
     def from_dict(cls, d: Dict[str, Any]) -> "RosterBinding":
         return cls(
             table_index=d["table_index"],
-            first_data_row_index=d["first_data_row_index"],
+            first_data_row_index=d.get("first_data_row_index", d.get("first_data_row", 1)),
             name_col=d["name_col"],
             id_col=d["id_col"],
             has_split_names=d.get("has_split_names", False),
             last_name_col=d.get("last_name_col"),
             first_name_col=d.get("first_name_col"),
             middle_name_col=d.get("middle_name_col"),
+            index_col=d.get("index_col"),
+            signature_col=d.get("signature_col"),
             capacity_limit=d.get("capacity_limit"),
         )
 
