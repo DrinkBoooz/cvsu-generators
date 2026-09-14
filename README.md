@@ -256,16 +256,27 @@ CVSU GENERATORS/
   - `CPEN` &rarr; Department of Computer Engineering
 - Identifies whether a subject contains laboratory sessions by cross-referencing user configuration and catalog defaults.
 
-#### 4. `template_inspector.py` (`TemplateInspector`)
+#### 4. `semantic_registry.py` (`SemanticRegistry`)
 
-- **Deterministic Heuristic Template Analyzer**: 100% offline, local analysis (<20ms) of any arbitrary Word (`.docx`) file.
-- **Zero-AI / Zero-LLM**: Operates using deterministic OpenXML syntax trees and pattern heuristics.
+- Pure lexical and semantic registry for normalization, alias matching, candidate extraction, and collision observations across DOCX and XLSX templates.
+- Does not authorize bindings or make final validity decisions.
+
+#### 5. `template_inspector.py` (`DocxTemplateInspector`, `XlsxTemplateInspector`, `TemplateInspector`)
+
+- **Deterministic Template Inspection Layer**: Analyzes Word (`.docx`) and Excel (`.xlsx`) templates.
+- **Inspector Non-Authority Invariant**: Inspectors emit candidate observations (`RawTemplateRecipeCandidate`) and **never** construct or return `ValidatedTemplateRecipe`.
 - **Analyzes**:
-  1. **Metadata Bindings**: Locates where `Instructor`, `Course/Section`, `Schedule Code`, `Subject`, `Time/Days/Room`, and `Semester/AY` live across table cells and colon paragraphs.
+  1. **Metadata Candidates**: Locates where `Instructor`, `Course/Section`, `Schedule Code`, `Subject`, `Time/Days/Room`, and `Semester/AY` live across table cells, colon paragraphs, and discrete spreadsheet cells.
   2. **Tag Placeholders**: Discovers template tags such as `{{INSTRUCTOR}}`, `{{COURSE_SECTION}}`, `{{SCHEDULE_CODE}}`, `{{SUBJECT}}`.
-  3. **Student Roster Table**: Scans all tables to detect student rows, classifying columns for `index`, `id_number`, `student_name`, and `signature`.
-  4. **Mutual Column Disambiguation**: Enforces strict precedence so ID tokens (`Student Number`, `LRN`, `Numero`) never collide with generic Name tokens.
-  5. **Confidence Scoring**: Computes a 0–100% confidence rating based on structural match quality.
+  3. **Student Roster Candidate**: Scans tables and worksheets to detect student rows, classifying columns for `index`, `id_number`, `student_name`, `signature`, and `capacity_limit`.
+  4. **Structural Merged Signature Geometry**: Discovers instructor signature targets in Excel by merged cell geometry above signature labels (Mutation M8).
+- `TemplateInspector`: Backward-compatible public API facade running inspection & validation.
+
+#### 6. `recipe_validator.py` (`RecipeValidator`)
+
+- **Sole Authority**: Transforms `RawTemplateRecipeCandidate` into immutable `ValidatedTemplateRecipe`.
+- Enforces strict `schema_version == 2`, profile constraints (`required_fields`, `prohibited_fields`, `capacity_limit`), collision resolutions, and verified safe assertions.
+- Protects `ValidatedTemplateRecipe` with private construction sentinel and AST static analysis.
 
 ---
 
@@ -273,49 +284,54 @@ CVSU GENERATORS/
 
 #### 1. `ceit_gen.py`
 
-- Base class `DocumentGenerator(ABC)` orchestrating the document pipeline:
+- Base class `DocumentGenerator(ABC)` orchestrating pure recipe-driven execution:
   ```python
+  def __init__(self, template_path: str, recipe: ValidatedTemplateRecipe):
+      ...
   def generate(self, info: ClassInfo, output_path: str) -> None:
-      zin, root, body = load_docx(self._template_path)
+      zin, root, body = load_docx(self.template_path)
       self.fill_header(body, info)
       self.fill_table(body, info)
       save_docx(zin, root, output_path)
   ```
-- **7 Built-in CEIT Generators**:
+- **7 Built-in CEIT Generators** (all consume validated recipes and zero hardcoded coordinates):
   1. `SyllabusGenerator`: Course Syllabus Acceptance Form (`VPAA-QF-12`).
-  2. `ExamReturnsGenerator(..., "MIDTERM")`: Midterm Examination Returns.
-  3. `ExamReturnsGenerator(..., "FINAL")`: Final Examination Returns.
-  4. `TOSGenerator(..., "Midterm")`: Table of Specifications (Midterm).
-  5. `TOSGenerator(..., "Finals")`: Table of Specifications (Finals).
-  6. `GradeDiscussionGenerator(..., "Midterm")`: Midterm Grade Discussion Form.
-  7. `GradeDiscussionGenerator(..., "Finals")`: Final Grade Discussion Form.
-- `GeneratorFactory`: Factory class loading all built-in generators alongside any user-defined custom template generators registered in `ParserConfigManager`.
+  2. `ExamReturnsGenerator`: Midterm Examination Returns (`period="MIDTERM"`).
+  3. `ExamReturnsGenerator`: Final Examination Returns (`period="FINAL"`).
+  4. `TOSGenerator`: Table of Specifications (`period="Midterm"`).
+  5. `TOSGenerator`: Table of Specifications (`period="Finals"`).
+  6. `GradeDiscussionGenerator`: Midterm Grade Discussion Form (`period="Midterm"`).
+  7. `GradeDiscussionGenerator`: Final Grade Discussion Form (`period="Finals"`).
+- `GeneratorFactory`: Factory class resolving recipes through `TemplateRecipeResolver` and instantiating built-in and custom generators.
 
 #### 2. `attendance_gen.py` (`AttendanceGenerator`)
 
 - Generates monthly attendance sheets (`.docx`) for each month across the semester.
-- **Calendar Engine**: Calculates the exact calendar meeting dates (e.g. every Monday and Thursday in September) based on the class's scheduled days.
+- **Calendar Engine**: Calculates the exact calendar meeting dates based on the class's scheduled days.
 - **Multi-Slot Times**: Combines lecture and lab meeting times on the header.
 - Formats table columns with meeting dates, populating student rows with auto-scaled font widths.
 
 #### 3. `grade_gen.py` (`GradeGenerator`)
 
-- Generates official CvSU Excel grading workbooks (`.xlsx`).
-- **Two Formats Supported**:
-  - `GRADING_LECTURE_TEMPLATE.xlsx`: Lecture courses (Lecture & Grade Sheet tabs).
-  - `GRADING_LECTURE_LAB_TEMPLATE.xlsx`: Lecture + Lab courses (Lecture, Laboratory, Consolidated, and Grade Sheet tabs).
-- **Formula Preservation**: Injects student names, student numbers, instructor, course, and schedule metadata directly into existing cell references without recalculating or stripping Excel formulas (`SUM`, `AVERAGE`, `VLOOKUP`, conditional formatting).
+- Generates official CvSU Excel grading workbooks (`.xlsx`) using pure recipe-driven execution.
+- Strictly requires `ValidatedTemplateRecipe` in `__init__`; zero hardcoded cell coordinates.
+- **Capacity Clamping**: Dynamically clamps student entries to `recipe.roster_binding.capacity_limit` (40 students max based on verified template formulas).
+- **Structural Signature Discovery**: Injects instructor signature into dynamically resolved merged cell coordinates based on structural geometry above signature labels.
 
 #### 4. `generic_doc_gen.py` (`ConfigurableDocumentGenerator`)
 
-- Dynamic generator that consumes a declarative recipe produced by `TemplateInspector` (or modified by the user).
-- Directly populates arbitrary Word documents with `ClassInfo` and student rosters according to detected table coordinates, paragraph colons, and tag placeholders.
+- Dynamic generator that consumes `ValidatedTemplateRecipe` to populate arbitrary Word documents with `ClassInfo` and student rosters according to detected bindings and tag placeholders.
 
 ---
 
 ### `modules.services`
 
-#### 1. `orchestrator.py` (`GenerationOrchestrator`)
+#### 1. `template_recipe_service.py` (`TemplateRecipeResolver`)
+
+- Centralized shared recipe resolution service utilized by both `GeneratorFactory` and `orchestrator.py`.
+- Owns absolute path resolution, SHA-256 template fingerprinting, 3-tuple caching `(absolute_path, profile_id, fingerprint)`, stale cache invalidation, inspector dispatch, and `RecipeValidator` execution.
+
+#### 2. `orchestrator.py` (`GenerationOrchestrator`)
 
 - Coordinates the complete batch execution:
   1. Validates inputs and pairs schedules with rosters.
