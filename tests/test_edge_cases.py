@@ -30,22 +30,10 @@ def test_atomic_write_max_path(temp_env):
     if os.name == 'nt' and not long_path.startswith("\\\\?\\"):
         long_path = "\\\\?\\" + os.path.abspath(long_path)
     
-    # Fake some data for DocumentGenerator
-    fake_template = os.path.join(temp_env, "fake.docx")
-    with zipfile.ZipFile(fake_template, "w") as zf:
-        zf.writestr("word/document.xml", """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-        <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-            <w:body><w:tbl>
-                <w:tr><w:tc><w:p><w:r><w:t>No.</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>Name of Student</w:t></w:r></w:p></w:tc></w:tr>
-                <w:tr><w:tc><w:p><w:r><w:t>1</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>Student A</w:t></w:r></w:p></w:tc></w:tr>
-            </w:tbl></w:body>
-        </w:document>""")
-        
-    class MockDocGen(ceit_generator.DocumentGenerator):
-        def fill_header(self, body, info): pass
-        def _fill_student_row(self, row, student, idx): pass
-    
-    gen = MockDocGen(fake_template)
+    from modules.services.template_recipe_service import TemplateRecipeResolver
+    real_template = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "templates", "template_syllabus.docx")
+    recipe = TemplateRecipeResolver.get_instance().resolve(real_template, "academic_docx")
+    gen = ceit_generator.SyllabusGenerator(real_template, recipe)
     info = ceit_generator.ClassInfo("I", "C", "S", "Sub", "Sem", "T", [])
     gen.generate(info, long_path)
     assert os.path.exists(long_path)
@@ -89,11 +77,12 @@ def test_corrupt_template(temp_env):
     with open(fake_template, "wb") as f:
         pass
         
-    gen = ceit_generator.SyllabusGenerator(fake_template)
-    info = ceit_generator.ClassInfo("I", "C", "S", "Sub", "Sem", "T", [])
-    
-    # BadZipFile should be caught or raised gracefully
+    from modules.services.template_recipe_service import TemplateRecipeResolver
+    # Resolving recipe or generating from 0-byte file should raise an Exception gracefully
     with pytest.raises(Exception):
+        recipe = TemplateRecipeResolver.get_instance().resolve(fake_template, "academic_docx")
+        gen = ceit_generator.SyllabusGenerator(fake_template, recipe)
+        info = ceit_generator.ClassInfo("I", "C", "S", "Sub", "Sem", "T", [])
         gen.generate(info, os.path.join(temp_env, "out.docx"))
 
 # 3. Path & Encoding Anomalies

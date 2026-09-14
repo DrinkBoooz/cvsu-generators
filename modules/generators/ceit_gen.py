@@ -199,7 +199,7 @@ class DocumentGenerator(ABC):
         rb = self._recipe.roster_binding
         if rb is None:
             return
-        if rb.index_col is not None and rb.index_col < len(cells):
+        if self._recipe.profile_id == "custom_docx" and rb.index_col is not None and rb.index_col < len(cells):
             set_cell_text(cells[rb.index_col], str(idx + 1))
         if rb.name_col is not None and rb.name_col < len(cells):
             set_cell_text(cells[rb.name_col], name, shrink_threshold=32, shrink_sz="18")
@@ -220,80 +220,18 @@ class DocumentGenerator(ABC):
 class SyllabusGenerator(DocumentGenerator):
     """
     VPAA-QF-12 — Course Syllabus Acceptance Form
-    Columns: No. | Name of Student | Student Number | Signature
-    Header fields: Instructor, Course/Section, Schedule Code,
-                   Subject, Time/Days/Room, Semester/AY
+    Pure recipe-driven execution; zero positional fallbacks.
     """
 
     def __init__(self, template_path: str, recipe: ValidatedTemplateRecipe):
         super().__init__(template_path, recipe)
-
-    def fill_header(self, body, info: ClassInfo) -> None:
-        tables = body.findall(w("tbl"))
-        if not tables:
-            return
-        info_tbl = tables[0]
-        rows = info_tbl.findall(w("tr"))
-        mapping = [
-            (0, info.instructor, 30),
-            (1, info.course_section, 0),
-            (2, info.schedule_code, 0),
-            (3, info.subject, 35),
-            (4, info.time_days_room, 45),
-            (5, info.semester_ay, 0),
-        ]
-        for row_idx, val, thresh in mapping:
-            if row_idx < len(rows):
-                cells = rows[row_idx].findall(w("tc"))
-                if len(cells) > 1:
-                    set_cell_text(cells[1], val, shrink_threshold=thresh, shrink_sz="18")
-
-    def _fill_student_row(self, cells, idx, name, stnum):
-        set_cell_text(cells[1], name, shrink_threshold=32, shrink_sz="18")
-        set_cell_text(cells[2], stnum)
-
-    def fill_table(self, body, info: ClassInfo) -> None:
-        tbls = body.findall(w("tbl"))
-        target = None
-        for tbl in tbls:
-            if self._is_student_table(tbl):
-                target = tbl
-                break
-        if target is None:
-            raise TemplateError("Could not find the student list table in the syllabus template.")
-
-        rows = target.findall(w("tr"))
-        if len(rows) < 2:
-            raise TemplateError("Syllabus student list table must have at least 2 rows (1 header, 1 student).")
-        header_row = rows[0]
-        template_row = rows[1]
-
-        for tr in rows[1:]:
-            target.remove(tr)
-
-        for idx, (name, stnum) in enumerate(info.students):
-            tr = copy.deepcopy(template_row)
-            for tc in tr.findall(w("tc")):
-                for p in tc.findall(w("p")):
-                    for r in p.findall(w("r")):
-                        for t in r.findall(w("t")):
-                            t.text = ""
-            cells = tr.findall(w("tc"))
-            while len(cells) < 3:
-                new_tc = etree.Element(w("tc"))
-                tr.append(new_tc)
-                cells = tr.findall(w("tc"))
-            self._fill_student_row(cells, idx, name, stnum)
-            target.append(tr)
 
 
 # ══ Exam Returns Generator ════════════════════════════════════════════════════
 class ExamReturnsGenerator(DocumentGenerator):
     """
     CEIT-QF-03 — Exam Returns Form
-    Columns: Name of Students | Student Number | Signature
-    Header fields: Instructor, Course/Section, Schedule Code,
-                   Subject, Semester/AY
+    Pure recipe-driven execution; zero positional fallbacks.
     """
 
     def __init__(self, template_path: str, arg2: Any = None, arg3: Any = None, **kwargs):
@@ -320,50 +258,12 @@ class ExamReturnsGenerator(DocumentGenerator):
     def period(self) -> str:
         return self._period
 
-    def fill_header(self, body, info: ClassInfo) -> None:
-        tables = body.findall(w("tbl"))
-        if tables:
-            info_tbl = tables[0]
-            rows = info_tbl.findall(w("tr"))
-            mapping = [
-                (0, info.instructor, 30),
-                (1, info.course_section, 0),
-                (2, info.schedule_code, 0),
-                (3, info.subject, 35),
-                (4, info.semester_ay, 0),
-            ]
-            for row_idx, val, thresh in mapping:
-                if row_idx < len(rows):
-                    cells = rows[row_idx].findall(w("tc"))
-                    if len(cells) > 1:
-                        set_cell_text(cells[1], val, shrink_threshold=thresh, shrink_sz="18")
-        else:
-            paras = body.findall(w("p"))
-            if len(paras) < 10:
-                raise TemplateError("Exam Returns template missing required paragraphs for the header.")
-            replace_value_run(paras[1], 2, info.instructor, shrink_threshold=30, shrink_sz="18")
-            replace_value_run(paras[2], 3, info.course_section)
-            replace_value_run(paras[3], 6, info.schedule_code)
-            replace_value_run(paras[4], 3, info.subject, shrink_threshold=35, shrink_sz="18")
-            collapse_runs_after_colon(paras[5], info.semester_ay)
-            runs = paras[9].findall(w("r"))
-            if runs:
-                set_run_text(runs[0], f"{self._period} EXAMINATION")
-                for r in runs[1:]:
-                    paras[9].remove(r)
-
-    def _fill_student_row(self, cells, idx, name, stnum):
-        set_cell_text(cells[0], name, shrink_threshold=32, shrink_sz="18")
-        set_cell_text(cells[1], stnum)
-
 
 # ══ TOS Generator ════════════════════════════════════════════════════════════
 class TOSGenerator(DocumentGenerator):
     """
     TOS Acknowledgment Form
-    Columns: Name of Students | Student Number | Signature
-    Header fields: Instructor, Course/Section, Schedule Code,
-                   Subject, Time/Days/Room, Semester/AY + (Midterm/Finals)
+    Pure recipe-driven execution; appends period to semester_ay field.
     """
 
     def __init__(self, template_path: str, arg2: Any = None, arg3: Any = None, **kwargs):
@@ -391,48 +291,23 @@ class TOSGenerator(DocumentGenerator):
         return self._period
 
     def fill_header(self, body, info: ClassInfo) -> None:
-        tables = body.findall(w("tbl"))
-        if tables:
-            info_tbl = tables[0]
-            rows = info_tbl.findall(w("tr"))
-            mapping = [
-                (0, info.instructor, 30),
-                (1, info.course_section, 0),
-                (2, info.schedule_code, 0),
-                (3, info.subject, 35),
-                (4, info.time_days_room, 45),
-                (5, f"{info.semester_ay} ({self._period})", 0),
-            ]
-            for row_idx, val, thresh in mapping:
-                if row_idx < len(rows):
-                    cells = rows[row_idx].findall(w("tc"))
-                    if len(cells) > 1:
-                        set_cell_text(cells[1], val, shrink_threshold=thresh, shrink_sz="18")
-        else:
-            paras = body.findall(w("p"))
-            if len(paras) < 7:
-                raise TemplateError("TOS template missing required paragraphs for the header.")
-            replace_after_colon(paras[1], info.instructor, shrink_threshold=30, shrink_sz="18")
-            replace_value_run(paras[2], 2, info.course_section)
-            replace_value_run(paras[3], 4, info.schedule_code)
-            replace_after_colon(paras[4], info.subject, shrink_threshold=35, shrink_sz="18")
-            replace_after_colon(paras[5], info.time_days_room, shrink_threshold=45, shrink_sz="18")
-            collapse_runs_after_colon(
-                paras[6], f"{info.semester_ay} ({self._period})"
-            )
-
-    def _fill_student_row(self, cells, idx, name, stnum):
-        set_cell_text(cells[0], name, shrink_threshold=32, shrink_sz="18")
-        set_cell_text(cells[1], stnum)
+        info_with_period = ClassInfo(
+            instructor=info.instructor,
+            course_section=info.course_section,
+            schedule_code=info.schedule_code,
+            subject=info.subject,
+            time_days_room=info.time_days_room,
+            semester_ay=f"{info.semester_ay} ({self._period})",
+            students=info.students,
+        )
+        super().fill_header(body, info_with_period)
 
 
 # ══ Grade Discussion Generator ════════════════════════════════════════════════
 class GradeDiscussionGenerator(DocumentGenerator):
     """
     Grade Discussion Form (Midterm / Finals)
-    Columns: Name of Students | Student Number | Signature
-    Header fields: Instructor, Course/Section, Schedule Code,
-                   Subject, Time/Days/Room, Semester/AY, Date
+    Pure recipe-driven execution; zero positional fallbacks.
     """
 
     def __init__(self, template_path: str, arg2: Any = None, arg3: Any = None, **kwargs):
@@ -459,59 +334,6 @@ class GradeDiscussionGenerator(DocumentGenerator):
     def period(self) -> str:
         return self._period
 
-    def fill_header(self, body, info: ClassInfo) -> None:
-        tables = body.findall(w("tbl"))
-        if not tables:
-            return
-        info_tbl = tables[0]
-        rows = info_tbl.findall(w("tr"))
-        
-        for r_idx, row in enumerate(rows):
-            cells = row.findall(w("tc"))
-            if len(cells) < 3:
-                continue
-            label = get_full_text(cells[0]).upper().strip()
-            val = None
-            thresh = 0
-            if "INSTRUCTOR" in label:
-                val = info.instructor
-                thresh = 30
-            elif "COURSE" in label or "SECTION" in label:
-                val = info.course_section
-            elif "SCHEDULE" in label:
-                val = info.schedule_code
-            elif "SUBJECT" in label:
-                val = info.subject
-                thresh = 35
-            elif "SEMESTER" in label or "ACADEMIC" in label:
-                val = info.semester_ay
-            elif "TIME" in label or "ROOM" in label or "DAY" in label:
-                val = info.time_days_room
-                thresh = 45
-            elif "DATE" in label:
-                val = None  # Left blank for manual date/signing
-            else:
-                if r_idx == 0:
-                    val = info.instructor
-                    thresh = 30
-                elif r_idx == 1:
-                    val = info.course_section
-                elif r_idx == 2:
-                    val = info.schedule_code
-                elif r_idx == 3:
-                    val = info.subject
-                    thresh = 35
-                elif r_idx == 4:
-                    val = info.semester_ay
-                elif r_idx == 5:
-                    val = None
-
-            if val is not None:
-                set_cell_text(cells[2], val, shrink_threshold=thresh, shrink_sz="18")
-
-    def _fill_student_row(self, cells, idx, name, stnum):
-        set_cell_text(cells[0], name, shrink_threshold=32, shrink_sz="18")
-        set_cell_text(cells[1], stnum)
 
 
 # ══ GeneratorFactory ══════════════════════════════════════════════════════════

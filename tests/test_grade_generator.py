@@ -111,8 +111,8 @@ class GradeGeneratorTests(unittest.TestCase):
             self.assertEqual(ws_grd["A18"].value, "=Lecture!B11")
             self.assertEqual(ws_grd["B18"].value, "=Lecture!C11")
             self.assertEqual(ws_grd["C18"].value, "=Lecture!CA11")
-            self.assertEqual(ws_grd["D80"].value, "=UPPER(Lecture!M4)")
-            self.assertEqual(ws_grd["A97"].value, "PROF. CHARLOTTE B. CARANDANG")
+            self.assertEqual(ws_grd["D60"].value, "=UPPER(Lecture!M4)")
+            self.assertEqual(ws_grd["A77"].value, "PROF. CHARLOTTE B. CARANDANG")
 
     def test_generate_lecture_and_lab(self):
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -40,8 +40,9 @@ class GradeDiscussionGeneratorTests(unittest.TestCase):
 
     def test_generate_midterm_grade_discussion(self):
         out_path = os.path.join(self.temp_dir.name, "midterm_gd.docx")
+        recipe = self.factory._get_validated_recipe("grade_midterm", self.factory._path("grade_midterm"))
         gen = ceit_generator.GradeDiscussionGenerator(
-            self.factory._path("grade_midterm"), "Midterm"
+            self.factory._path("grade_midterm"), recipe, "Midterm"
         )
         gen.generate(self.info, out_path)
         self.assertTrue(os.path.exists(out_path))
@@ -71,8 +72,9 @@ class GradeDiscussionGeneratorTests(unittest.TestCase):
 
     def test_generate_finals_grade_discussion(self):
         out_path = os.path.join(self.temp_dir.name, "finals_gd.docx")
+        recipe = self.factory._get_validated_recipe("grade_finals", self.factory._path("grade_finals"))
         gen = ceit_generator.GradeDiscussionGenerator(
-            self.factory._path("grade_finals"), "Finals"
+            self.factory._path("grade_finals"), recipe, "Finals"
         )
         gen.generate(self.info, out_path)
         self.assertTrue(os.path.exists(out_path))

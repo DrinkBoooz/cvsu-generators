@@ -92,8 +92,10 @@ def test_grade_discussion_template_and_generator_row_count(tmp_path):
         assert len(t0.rows) == 6, f"Template {os.path.basename(tmpl)} must have exactly 6 rows in Table 0, got {len(t0.rows)}"
 
     # Test generation with GradeDiscussionGenerator
+    from modules.services.template_recipe_service import TemplateRecipeResolver
     finals_tmpl = os.path.join(WORKSPACE_DIR, "templates", "Final-Grade-Discussion_LATEST.docx")
-    finals_gen = GradeDiscussionGenerator(finals_tmpl, "Finals")
+    recipe = TemplateRecipeResolver.get_instance().resolve(finals_tmpl, "academic_docx")
+    finals_gen = GradeDiscussionGenerator(finals_tmpl, recipe, "Finals")
     info = ClassInfo(
         instructor="DAN JOSEPH A. ORTEGA",
         course_section="BSCS 4-1",
@@ -187,10 +189,12 @@ def test_grade_discussion_finals_formatting_parity(tmp_path):
     """Verify Finals Grade Discussion has sz=22 for Table 0 labels, Table 1 header, and Paragraph 3."""
     from modules.generators.ceit_gen import GradeDiscussionGenerator
     
+    from modules.services.template_recipe_service import TemplateRecipeResolver
     tmpl = os.path.join(WORKSPACE_DIR, "templates", "Final-Grade-Discussion_LATEST.docx")
     out_docx = str(tmp_path / "test_gd_finals.docx")
     
-    gen = GradeDiscussionGenerator(tmpl, "Finals")
+    recipe = TemplateRecipeResolver.get_instance().resolve(tmpl, "academic_docx")
+    gen = GradeDiscussionGenerator(tmpl, recipe, "Finals")
     info = ClassInfo(
         instructor="DAN JOSEPH A. ORTEGA",
         course_section="CS1-4",

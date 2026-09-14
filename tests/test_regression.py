@@ -35,14 +35,18 @@ def test_ceit_generator_missing_table(temp_env):
     class TestGenerator(ceit_generator.DocumentGenerator):
         def fill_header(self, body, info):
             pass
-        def _fill_student_row(self, row, student, idx):
+        def _fill_student_row(self, cells, idx, name, stnum):
             pass
 
-    gen = TestGenerator(fake_template)
-    info = ceit_generator.ClassInfo("Instructor", "Course", "Sched", "Subject", "Semester", "Time", [])
-    
-    with pytest.raises(ceit_generator.TemplateError, match="Could not find the student list table in the template."):
-        gen.generate(info, os.path.join(temp_env, "out.docx"))
+    # Invariant: Construction without ValidatedTemplateRecipe raises TypeError
+    with pytest.raises(TypeError, match="requires a ValidatedTemplateRecipe instance|missing 1 required positional argument"):
+        TestGenerator(fake_template)
+
+    # Invariant: Attempting to resolve a recipe for a template missing required tables raises TemplateError
+    from modules.services.template_recipe_service import TemplateRecipeResolver
+    from modules.models.recipe import TemplateError
+    with pytest.raises(TemplateError):
+        TemplateRecipeResolver.get_instance().resolve(fake_template, "academic_docx")
 
 def test_ceit_generator_syllabus_missing_table(temp_env):
     fake_template = os.path.join(temp_env, "fake_template.docx")
@@ -52,11 +56,15 @@ def test_ceit_generator_syllabus_missing_table(temp_env):
             <w:body><w:p/></w:body>
         </w:document>""")
 
-    gen = ceit_generator.SyllabusGenerator(fake_template)
-    info = ceit_generator.ClassInfo("I", "C", "S", "Sub", "Sem", "T", [])
-    
-    with pytest.raises(ceit_generator.TemplateError, match="Could not find the student list table in the syllabus template."):
-        gen.generate(info, os.path.join(temp_env, "out.docx"))
+    # Construction without recipe raises TypeError
+    with pytest.raises(TypeError, match="requires a ValidatedTemplateRecipe instance|missing 1 required positional argument"):
+        ceit_generator.SyllabusGenerator(fake_template)
+
+    # Resolving recipe for invalid template raises TemplateError
+    from modules.services.template_recipe_service import TemplateRecipeResolver
+    from modules.models.recipe import TemplateError
+    with pytest.raises(TemplateError):
+        TemplateRecipeResolver.get_instance().resolve(fake_template, "academic_docx")
 
 def test_ceit_generator_paragraph_bounds(temp_env):
     fake_template = os.path.join(temp_env, "fake_template.docx")
@@ -66,15 +74,12 @@ def test_ceit_generator_paragraph_bounds(temp_env):
             <w:body><w:p/></w:body>
         </w:document>""")
 
-    gen = ceit_generator.ExamReturnsGenerator(fake_template, "Midterm")
-    info = ceit_generator.ClassInfo("I", "C", "S", "Sub", "Sem", "T", [])
-    
-    with pytest.raises(ceit_generator.TemplateError, match="Exam Returns template missing required paragraphs"):
-        gen.generate(info, os.path.join(temp_env, "out.docx"))
+    # Construction without recipe raises TypeError
+    with pytest.raises(TypeError, match="requires a ValidatedTemplateRecipe instance"):
+        ceit_generator.ExamReturnsGenerator(fake_template, "Midterm")
 
-    gen = ceit_generator.TOSGenerator(fake_template, "Midterm")
-    with pytest.raises(ceit_generator.TemplateError, match="TOS template missing required paragraphs"):
-        gen.generate(info, os.path.join(temp_env, "out.docx"))
+    with pytest.raises(TypeError, match="requires a ValidatedTemplateRecipe instance"):
+        ceit_generator.TOSGenerator(fake_template, "Midterm")
 
 def test_process_all_catches_ceit_errors(temp_env):
     class FailingGenerator:
