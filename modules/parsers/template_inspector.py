@@ -90,16 +90,34 @@ class DocxTemplateInspector:
 
         total_tables = len(tables)
 
-        # 1. Inspect Tables
+        # 0. Check all tables to detect candidate roster tables
+        candidate_roster_tables = []
         for t_idx, tbl in enumerate(tables):
-            rows = tbl.findall(w("tr"))
-            if not rows:
+            r_info = self._detect_roster_table(tbl, t_idx)
+            if r_info:
+                candidate_roster_tables.append(r_info)
+
+        if len(candidate_roster_tables) > 1:
+            best_score = max(c.get("score", 0) for c in candidate_roster_tables)
+            top_candidates = [c for c in candidate_roster_tables if c.get("score", 0) == best_score]
+            if len(top_candidates) > 1:
+                raise TemplateError(
+                    f"Multiple candidate roster tables detected in '{os.path.basename(template_path)}': "
+                    f"tables {[c['table_index'] for c in top_candidates]}. Ambiguous roster tables detected."
+                )
+            roster_candidate = top_candidates[0]
+        elif candidate_roster_tables:
+            roster_candidate = candidate_roster_tables[0]
+        else:
+            roster_candidate = None
+
+        # 1. Inspect Table Cells for Metadata and Signatures
+        for t_idx, tbl in enumerate(tables):
+            if roster_candidate and t_idx == roster_candidate["table_index"]:
                 continue
 
-            # Check if this table is the student roster table
-            r_info = self._detect_roster_table(tbl, t_idx)
-            if r_info and roster_candidate is None:
-                roster_candidate = r_info
+            rows = tbl.findall(w("tr"))
+            if not rows:
                 continue
 
             # Otherwise, inspect table cells for metadata and signatures
@@ -322,6 +340,7 @@ class DocxTemplateInspector:
                         "total_rows": len(rows),
                         "capacity_limit": capacity_limit if capacity_limit > 0 else 50,
                         "has_split_names": False,
+                        "score": best_score,
                     }
 
         return best_candidate
@@ -383,94 +402,6 @@ class DocxTemplateInspector:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# XlsxTemplateInspector Skeleton (To be extended in Stage 6)
-# ═══════════════════════════════════════════════════════════════════════════════
-
-class XlsxTemplateInspector:
-    """
-    Analyzes Excel (.xlsx) templates and emits candidate observations.
-    CRITICAL: inspect() returns RawTemplateRecipeCandidate.
-    XlsxTemplateInspector NEVER constructs or returns ValidatedTemplateRecipe.
-    """
-
-    def inspect(
-        self,
-        template_path: str,
-        profile_id: str = "grade_sheet_xlsx",
-    ) -> RawTemplateRecipeCandidate:
-        """
-        Inspects an Excel grading template and returns raw candidate observations.
-        Full implementation integrated in Stage 6.
-        """
-        import openpyxl
-
-        if not os.path.exists(template_path):
-            raise FileNotFoundError(f"Template file not found: {template_path}")
-
-        with open(template_path, "rb") as f:
-            fingerprint = hashlib.sha256(f.read()).hexdigest()
-
-        wb = openpyxl.load_workbook(template_path, data_only=True)
-        sheet_names = [s.lower() for s in wb.sheetnames]
-        name_map = {s.lower(): s for s in wb.sheetnames}
-
-        if "lecture" not in sheet_names:
-            raise TemplateError("Missing required 'Lecture' sheet in grading template")
-
-        ws = wb[name_map["lecture"]]
-        is_lab = "laboratory" in sheet_names
-
-        # Header candidates
-        header_candidates = [
-            {"cell_type": "xlsx_cell", "target": "C1", "field": "schedule_code", "confidence": 1.0},
-            {"cell_type": "xlsx_cell", "target": "M1", "field": "course_section", "confidence": 1.0},
-            {"cell_type": "xlsx_cell", "target": "C2", "field": "subject_code", "confidence": 1.0},
-            {"cell_type": "xlsx_cell", "target": "M2", "field": "semester", "confidence": 1.0},
-            {"cell_type": "xlsx_cell", "target": "C3", "field": "subject_title", "confidence": 1.0},
-            {"cell_type": "xlsx_cell", "target": "M3", "field": "school_year", "confidence": 1.0},
-            {"cell_type": "xlsx_cell", "target": "C4", "field": "units", "confidence": 1.0},
-            {"cell_type": "xlsx_cell", "target": "M4", "field": "instructor", "confidence": 1.0},
-        ]
-
-        # Roster candidates: row 12 for lab, row 11 for lecture only
-        first_row = 12 if is_lab else 11
-        capacity = 40
-        roster_candidate = {
-            "table_index": 0,
-            "first_data_row_index": first_row,
-            "name_col": 2,
-            "id_col": 3,
-            "capacity_limit": capacity,
-            "has_split_names": False,
-        }
-
-        # Signature candidates
-        signature_candidates = []
-        if is_lab:
-            signature_candidates.append({
-                "role": "instructor_signature",
-                "target": "BI57",
-                "confidence": 0.95,
-            })
-            signature_candidates.append({
-                "role": "lab_instructor_signature",
-                "target": "AO59",
-                "confidence": 0.95,
-            })
-
-        return RawTemplateRecipeCandidate(
-            template_path=template_path,
-            profile_id=profile_id,
-            fingerprint=fingerprint,
-            roster_candidate=roster_candidate,
-            header_candidates=header_candidates,
-            signature_candidates=signature_candidates,
-            collisions=[],
-            metadata={"is_lab": is_lab, "capacity": capacity},
-        )
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
 # XlsxTemplateInspector
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -500,6 +431,10 @@ class XlsxTemplateInspector:
         if "lecture" not in sheet_map:
             raise TemplateError(
                 f"Grade sheet template '{os.path.basename(template_path)}' is missing required 'Lecture' worksheet."
+            )
+        if "grading sheet" not in sheet_map:
+            raise TemplateError(
+                f"Grade sheet template '{os.path.basename(template_path)}' is missing required 'Grading Sheet' worksheet."
             )
 
         ws_lec = wb[sheet_map["lecture"]]

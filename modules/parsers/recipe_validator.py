@@ -117,8 +117,10 @@ class RecipeValidator:
                 f"Expected {RECIPE_SCHEMA_VERSION}. Missing, v1, or future versions are rejected."
             )
 
-        # Ignore / strip any externally supplied construction token
-        clean_data = {k: v for k, v in data.items() if k != "_construction_token"}
+        # Reject externally supplied construction token
+        if "_construction_token" in data:
+            raise InvalidRecipeError("Externally supplied '_construction_token' is prohibited.")
+        clean_data = dict(data)
 
         profile_id = clean_data.get("profile_id", "academic_docx")
         if isinstance(profile, str):
