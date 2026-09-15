@@ -416,13 +416,22 @@ class GeneratorFactory:
                         suffix = ct.get("suffix") or "CUSTOM_FORM"
                         profile_id = ct.get("profile_id") or recipe_data.get("profile_id") or "custom_docx"
                         if t_path and os.path.exists(t_path):
-                            if recipe_data:
-                                from modules.parsers.recipe_validator import RecipeValidator
-                                validated = RecipeValidator.validate_dict(recipe_data, profile_id)
-                                if not validated.template_path:
-                                    validated.template_path = t_path
-                            else:
-                                validated = self._resolver.resolve(t_path, profile_id=profile_id)
+                            validated = self._resolver.resolve(t_path, profile_id=profile_id)
+                            saved_meta = recipe_data.get("metadata") if isinstance(recipe_data, dict) else {}
+                            if not isinstance(saved_meta, dict):
+                                saved_meta = {}
+                            raw_folder = saved_meta.get("output_folder") or (recipe_data.get("output_folder") if isinstance(recipe_data, dict) else None)
+                            if raw_folder is not None:
+                                from modules.common.path_utils import validate_output_folder
+                                validated.metadata["output_folder"] = validate_output_folder(raw_folder, default="CEIT_Forms")
+                            for k, v in saved_meta.items():
+                                if k != "output_folder":
+                                    validated.metadata[k] = v
+                            if suffix:
+                                validated.metadata["suffix"] = suffix
+                            title = ct.get("title")
+                            if title:
+                                validated.metadata["title"] = title
 
                             def _make_custom_gen(p=t_path, v=validated):
                                 return ConfigurableDocumentGenerator(p, v)

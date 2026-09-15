@@ -392,7 +392,7 @@ def process_all(
                 try:
                     generator = gen_factory()
                     target_subfolder = validate_output_folder(
-                        getattr(generator, "output_folder", "CEIT_Forms"),
+                        generator.output_folder,
                         default="CEIT_Forms",
                     )
                     target_dir = os.path.join(course_dir, target_subfolder)

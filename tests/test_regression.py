@@ -83,6 +83,8 @@ def test_ceit_generator_paragraph_bounds(temp_env):
 
 def test_process_all_catches_ceit_errors(temp_env):
     class FailingGenerator:
+        output_folder = "CEIT_Forms"
+
         def generate(self, info, out_path):
             raise Exception("simulated failure")
             

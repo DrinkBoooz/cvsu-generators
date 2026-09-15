@@ -169,7 +169,7 @@ def test_config_manager_output_folder_single_source_of_truth(tmp_path):
     assert "output_folder" not in t
 
 
-def test_orchestrator_custom_template_routing(tmp_path):
+def test_custom_template_generator_properties_and_resolution(tmp_path):
     mgr = ParserConfigManager(config_dir=str(tmp_path / "config"))
     source_template = os.path.join(TEMPLATES_DIR, "template_syllabus.docx")
     inspector = TemplateInspector()
@@ -222,25 +222,89 @@ def test_orchestrator_custom_template_routing(tmp_path):
     assert gens_by_suffix["CUSTOM_ADVISING"].output_folder == os.path.normpath("Advising/Logs")
     assert gens_by_suffix["CUSTOM_DEFAULT"].output_folder == "CEIT_Forms"
 
-    # Simulate orchestrator target dir calculation and generation
-    course_dir = str(tmp_path / "output" / "BSIT_1A")
-    info = ClassInfo(
-        instructor="Dr. Ortega",
-        course_section="BSIT 1-A",
-        schedule_code="12345",
-        subject="ITEC 50",
-        students=[("Dela Cruz, Juan", "20240001")],
+
+def test_orchestrator_custom_template_routing(monkeypatch, tmp_path):
+    import sys
+    from modules.services.orchestrator import process_all
+
+    mgr = ParserConfigManager(config_dir=str(tmp_path / "config"))
+    monkeypatch.setattr(sys.modules["modules.common.config_manager"], "config_manager", mgr)
+
+    source_template = os.path.join(TEMPLATES_DIR, "template_syllabus.docx")
+    inspector = TemplateInspector()
+
+    # 1. Custom template routing to Attendance
+    recipe_att = inspector.inspect_docx(source_template)
+    recipe_att["metadata"] = {"output_folder": "Attendance"}
+    mgr.save_custom_template(
+        source_path=source_template,
+        title="Custom Attendance",
+        suffix="CUSTOM_ATTENDANCE",
+        recipe=recipe_att,
+        enabled=True,
     )
 
-    for suffix, gen in gens_by_suffix.items():
-        subfolder = validate_output_folder(gen.output_folder, default="CEIT_Forms")
-        target_dir = os.path.join(course_dir, subfolder)
-        os.makedirs(target_dir, exist_ok=True)
-        out_file = os.path.join(target_dir, f"BSIT_1A_12345_{suffix}.docx")
-        gen.generate(info, out_file)
-        assert os.path.isfile(out_file)
+    # 2. Custom template routing to nested subfolder Advising/Logs
+    recipe_adv = inspector.inspect_docx(source_template)
+    recipe_adv["metadata"] = {"output_folder": "Advising/Logs"}
+    mgr.save_custom_template(
+        source_path=source_template,
+        title="Custom Advising",
+        suffix="CUSTOM_ADVISING",
+        recipe=recipe_adv,
+        enabled=True,
+    )
 
-    assert os.path.isfile(os.path.join(course_dir, "Attendance", "BSIT_1A_12345_CUSTOM_ATTENDANCE.docx"))
-    nested_path = os.path.normpath("Advising/Logs/BSIT_1A_12345_CUSTOM_ADVISING.docx")
-    assert os.path.isfile(os.path.join(course_dir, nested_path))
-    assert os.path.isfile(os.path.join(course_dir, "CEIT_Forms", "BSIT_1A_12345_CUSTOM_DEFAULT.docx"))
+    # 3. Custom template with no output_folder (defaults to CEIT_Forms)
+    recipe_def = inspector.inspect_docx(source_template)
+    recipe_def["metadata"] = {}
+    mgr.save_custom_template(
+        source_path=source_template,
+        title="Custom Default",
+        suffix="CUSTOM_DEFAULT",
+        recipe=recipe_def,
+        enabled=True,
+    )
+
+    schedule_path = os.path.join(REPO_ROOT, "ORTEGA_SCHEDULE.xls")
+    assert os.path.isfile(schedule_path)
+
+    roster_file = tmp_path / "BSCS1-4 List of Students for 202612040-DCIT 21A - INTRODUCTION TO COMPUTING.csv"
+    roster_file.write_text("Name,Student number\nOrtega, Dan,20261001\n", encoding="utf-8")
+
+    out_dir = tmp_path / "output"
+    out_dir.mkdir()
+
+    results = process_all(
+        schedule_path=schedule_path,
+        xlsx_files=[str(roster_file)],
+        output_dir_base=str(out_dir),
+        class_filter=["202612040_CS1-4"],
+        engine_filter=["ceit"],
+    )
+
+    assert results["errors"]["ceit"] == []
+    course_dir = os.path.join(str(out_dir), "CS1-4")
+
+    # 1. Verify custom template with metadata.output_folder = "Attendance" produces file in <Course>/Attendance/
+    att_file = os.path.join(course_dir, "Attendance", "CS1-4_202612040_CUSTOM_ATTENDANCE.docx")
+    assert os.path.isfile(att_file), f"Expected attendance file at {att_file}"
+
+    # 2. Verify nested Advising/Logs produces the nested path
+    nested_adv_file = os.path.join(course_dir, os.path.normpath("Advising/Logs"), "CS1-4_202612040_CUSTOM_ADVISING.docx")
+    assert os.path.isfile(nested_adv_file), f"Expected nested file at {nested_adv_file}"
+
+    # 3. Verify missing output_folder defaults to <Course>/CEIT_Forms/
+    def_file = os.path.join(course_dir, "CEIT_Forms", "CS1-4_202612040_CUSTOM_DEFAULT.docx")
+    assert os.path.isfile(def_file), f"Expected default file at {def_file}"
+
+    # 4. Verify native CEIT behavior remains unchanged (files generated in <Course>/CEIT_Forms/)
+    native_syllabus = os.path.join(course_dir, "CEIT_Forms", "CS1-4_202612040_SYLLABUS_ACCEPTANCE.docx")
+    native_tos = os.path.join(course_dir, "CEIT_Forms", "CS1-4_202612040_TOS_MIDTERM.docx")
+    native_exam = os.path.join(course_dir, "CEIT_Forms", "CS1-4_202612040_EXAM_RETURNS_MIDTERM.docx")
+    native_grade = os.path.join(course_dir, "CEIT_Forms", "CS1-4_202612040_GRADE_DISCUSSION_MIDTERM.docx")
+
+    assert os.path.isfile(native_syllabus), f"Expected native syllabus at {native_syllabus}"
+    assert os.path.isfile(native_tos), f"Expected native TOS at {native_tos}"
+    assert os.path.isfile(native_exam), f"Expected native exam returns at {native_exam}"
+    assert os.path.isfile(native_grade), f"Expected native grade discussion at {native_grade}"
