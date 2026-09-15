@@ -115,7 +115,7 @@ def test_program_matches_without_course_section_collision():
 
 
 def test_course_section_compound_labels_do_not_collide_with_program():
-    for label in ("Course / Section", "Course & Section", "Degree Program & Section", "Degree Program / Section"):
+    for label in ("Course / Section", "Course & Section", "Degree Program & Section", "Degree Program / Section", "Section", "Section:", "SECTION"):
         matches = SemanticRegistry.match_metadata_candidate(label)
         assert len(matches) == 1, f"Expected exactly 1 match for {label!r}, got {matches}"
         field, conf = matches[0]

@@ -1,5 +1,5 @@
 from .student import Student
-from .schedule import ScheduleMeeting, ScheduleBlock, ClassInfo
+from .schedule import ScheduleMeeting, ScheduleBlock, ClassInfo, LEGACY_DEFAULT_COLLEGE
 from .config import RosterConfig
 from .recipe import (
     RECIPE_SCHEMA_VERSION,
@@ -23,6 +23,7 @@ __all__ = [
     "ScheduleMeeting",
     "ScheduleBlock",
     "ClassInfo",
+    "LEGACY_DEFAULT_COLLEGE",
     "RosterConfig",
     "RECIPE_SCHEMA_VERSION",
     "TemplateError",

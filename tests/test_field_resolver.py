@@ -226,3 +226,89 @@ def test_unknown_field_returns_empty_string():
     assert resolve_field_value("nonexistent_unknown_field", info) == ""
     assert resolve_field_value("", info) == ""
     assert resolve_field_value(None, info) == ""
+
+
+# ══ Explicit Precedence Conflict Tests (Issue 1) ══════════════════════════════
+
+def test_precedence_explicit_model_field_overrides_metadata():
+    """Explicit ClassInfo subject_code takes precedence over conflicting recipe metadata."""
+    info = ClassInfo(subject_code="COSC 70")
+    recipe = _make_dummy_recipe(metadata={"subject_code": "WRONG_METADATA"})
+    assert resolve_field_value("subject_code", info, recipe) == "COSC 70"
+
+
+def test_precedence_derived_school_year_overrides_metadata():
+    """Derived school_year from ClassInfo takes precedence over conflicting recipe metadata."""
+    info = ClassInfo(semester_ay="1st Semester / 2026-2027")
+    recipe = _make_dummy_recipe(metadata={"school_year": "2099-2100", "academic_year": "2099-2100"})
+    assert resolve_field_value("school_year", info, recipe) == "2026-2027"
+    assert resolve_field_value("academic_year", info, recipe) == "2026-2027"
+
+
+def test_precedence_derived_semester_overrides_metadata():
+    """Derived semester from ClassInfo takes precedence over conflicting recipe metadata."""
+    info = ClassInfo(semester_ay="1st Semester / 2026-2027")
+    recipe = _make_dummy_recipe(metadata={"semester": "Midyear"})
+    assert resolve_field_value("semester", info, recipe) == "1st Semester"
+
+
+def test_precedence_derived_subject_code_and_title_override_metadata():
+    """Derived subject_code and subject_title from ClassInfo.subject override recipe metadata."""
+    info = ClassInfo(subject="COSC 70 - SOFTWARE ENGINEERING")
+    recipe = _make_dummy_recipe(metadata={
+        "subject_code": "WRONG_CODE",
+        "subject_title": "WRONG_TITLE",
+    })
+    assert resolve_field_value("subject_code", info, recipe) == "COSC 70"
+    assert resolve_field_value("subject_title", info, recipe) == "SOFTWARE ENGINEERING"
+
+
+def test_precedence_metadata_fallback_when_classinfo_has_no_derived_source():
+    """When ClassInfo lacks a source to derive from, recipe metadata fallback is used."""
+    info = ClassInfo(subject="", semester_ay="")
+    recipe = _make_dummy_recipe(metadata={
+        "subject_code": "BIO 101",
+        "subject_title": "GENERAL BIOLOGY",
+        "semester": "2nd Semester",
+        "school_year": "2026-2027",
+    })
+    assert resolve_field_value("subject_code", info, recipe) == "BIO 101"
+    assert resolve_field_value("subject_title", info, recipe) == "GENERAL BIOLOGY"
+    assert resolve_field_value("semester", info, recipe) == "2nd Semester"
+    assert resolve_field_value("school_year", info, recipe) == "2026-2027"
+
+
+# ══ College Legacy Default vs Explicit Resolution Tests (Issue 2) ══════════════
+
+def test_college_legacy_default_overridden_by_recipe_metadata():
+    """When ClassInfo has the un-specified legacy CEIT default, recipe metadata overrides it."""
+    info = ClassInfo()  # default college
+    assert info.has_explicit_college is False
+    assert info.college == "COLLEGE OF ENGINEERING AND INFORMATION TECHNOLOGY"
+
+    recipe = _make_dummy_recipe(metadata={"college": "COLLEGE OF ARTS AND SCIENCES"})
+    assert resolve_field_value("college", info, recipe) == "COLLEGE OF ARTS AND SCIENCES"
+
+
+def test_college_legacy_default_preserved_when_no_recipe_metadata():
+    """When ClassInfo has the default and no metadata is supplied, legacy default is preserved."""
+    info = ClassInfo()
+    assert resolve_field_value("college", info) == "COLLEGE OF ENGINEERING AND INFORMATION TECHNOLOGY"
+
+
+def test_college_explicit_class_info_overrides_recipe_metadata():
+    """When ClassInfo explicitly specifies college, it takes authoritative precedence over recipe metadata."""
+    info = ClassInfo(college="COLLEGE OF COMPUTER STUDIES")
+    assert info.has_explicit_college is True
+
+    recipe = _make_dummy_recipe(metadata={"college": "COLLEGE OF ARTS AND SCIENCES"})
+    assert resolve_field_value("college", info, recipe) == "COLLEGE OF COMPUTER STUDIES"
+
+
+def test_college_explicit_ceit_takes_precedence_over_metadata():
+    """When CEIT college is explicitly supplied, has_explicit_college is True and takes precedence."""
+    info = ClassInfo(college="COLLEGE OF ENGINEERING AND INFORMATION TECHNOLOGY")
+    assert info.has_explicit_college is True
+
+    recipe = _make_dummy_recipe(metadata={"college": "COLLEGE OF ARTS AND SCIENCES"})
+    assert resolve_field_value("college", info, recipe) == "COLLEGE OF ENGINEERING AND INFORMATION TECHNOLOGY"
