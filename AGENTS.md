@@ -27,7 +27,7 @@ All git commit messages must strictly follow the format:
 
 ## Git Branching & Merging Rules
 
-- **Development on `dev`**: All active work, feature implementations, tests, and task commits belong strictly on the `dev` branch.
+- **Development on `dev`**: All active work, feature implementations, tests, and task commits belong strictly on the `dev` branch and origin/dev.
 - **Do NOT Auto-Merge to `main`**: Merging into `main` must **NEVER** happen automatically at the end of a task or chat. Merging to `main` requires an explicit user prompt or request.
 - **Merging into `main` (Only When Prompted by User)**:
   When the user explicitly instructs to merge `dev` into `main`:
