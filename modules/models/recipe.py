@@ -46,6 +46,7 @@ class RosterBinding:
     first_data_row_index: int
     name_col: int
     id_col: int
+    worksheet_name: Optional[str] = None
     has_split_names: bool = False
     last_name_col: Optional[int] = None
     first_name_col: Optional[int] = None
@@ -66,6 +67,8 @@ class RosterBinding:
             "header_row_index": self.header_row_index,
             "header_row_count": self.header_row_count,
         }
+        if self.worksheet_name is not None:
+            d["worksheet_name"] = self.worksheet_name
         if self.last_name_col is not None:
             d["last_name_col"] = self.last_name_col
         if self.first_name_col is not None:
@@ -87,6 +90,7 @@ class RosterBinding:
             first_data_row_index=d.get("first_data_row_index", d.get("first_data_row", 1)),
             name_col=d["name_col"],
             id_col=d["id_col"],
+            worksheet_name=d.get("worksheet_name"),
             has_split_names=d.get("has_split_names", False),
             last_name_col=d.get("last_name_col"),
             first_name_col=d.get("first_name_col"),

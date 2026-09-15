@@ -174,7 +174,12 @@ class GradeGenerator:
 
             if "lecture" not in sheet_names:
                 raise ValueError("Grade template is missing required 'Lecture' sheet.")
-            ws = wb[name_map["lecture"]]
+            roster_sheet = rb.worksheet_name or name_map["lecture"]
+            if roster_sheet.lower() not in name_map:
+                raise TemplateError(
+                    f"Grade template is missing roster worksheet '{roster_sheet}'."
+                )
+            ws = wb[name_map[roster_sheet.lower()]]
 
             # 1. Metadata Bindings
             field_values = {

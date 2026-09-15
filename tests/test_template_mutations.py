@@ -392,3 +392,55 @@ def test_m8_xlsx_structural_signature_geometry(tmp_path):
     assert out_ws["AA27"].value == "DR. JUAN DELA CRUZ"
     # 2. BI57 remains empty / unmolested
     assert out_ws["BI57"].value is None
+
+
+def test_m9_xlsx_roster_outside_legacy_scan_window(tmp_path):
+        """M9: Move the roster beyond the former fixed scan window.
+
+        Evidence record:
+        - Pre-change assumption: roster headers were restricted to rows 6-15 and
+            columns 1-9, with execution implicitly targeting Lecture.
+        - Current authority: XlsxTemplateInspector discovers roster coordinates and
+            RecipeValidator stores them in RosterBinding for GradeGenerator.
+        - Demonstrated failure: a valid roster at row 20 / columns L-N was not
+            discovered and could not reach recipe-driven execution.
+        - Phase 4 rationale: this is physical template structure, not Phase 3
+            field precedence or business/data transformation.
+        """
+        repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        src = os.path.join(repo_root, "templates", "GRADING_LECTURE_TEMPLATE.xlsx")
+        mut_path = str(tmp_path / "mut_grade_roster_m9.xlsx")
+        shutil.copy2(src, mut_path)
+
+        wb = openpyxl.load_workbook(mut_path)
+        ws = wb["Lecture"]
+        for row in range(7, 51):
+            for col in range(1, 4):
+                cell = ws.cell(row, col)
+                if cell.__class__.__name__ != "MergedCell":
+                    cell.value = None
+
+        ws["L20"] = "#"
+        ws["M20"] = "Student Name"
+        ws["N20"] = "Student Number"
+        for index in range(1, 41):
+            ws.cell(20 + index + 3, 12).value = index
+        wb.save(mut_path)
+
+        resolver = TemplateRecipeResolver.get_instance()
+        recipe = resolver.resolve(mut_path, "grade_sheet_xlsx")
+        assert recipe.roster_binding.worksheet_name == "Lecture"
+        assert recipe.roster_binding.first_data_row_index == 24
+        assert recipe.roster_binding.name_col == 13
+        assert recipe.roster_binding.id_col == 14
+
+        out_path = str(tmp_path / "out_m9.xlsx")
+        GradeGenerator(mut_path, recipe).generate(
+                SAMPLE_GRADE_INFO,
+                SAMPLE_GRADE_STUDENTS,
+                out_path,
+        )
+        out_wb = openpyxl.load_workbook(out_path, data_only=False)
+        out_ws = out_wb["Lecture"]
+        assert out_ws.cell(24, 13).value == "ALVAREZ, MARIA A."
+        assert out_ws.cell(24, 14).value == 202310001

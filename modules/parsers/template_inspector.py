@@ -573,7 +573,7 @@ class XlsxTemplateInspector:
         signature_candidates: List[Dict[str, Any]] = []
         roster_candidate: Optional[Dict[str, Any]] = None
 
-        # 1. Header Metadata Discovery in Lecture sheet (rows 1-6, cols 1-20)
+        # 1. Header Metadata Discovery in Lecture sheet
         lec_merges = list(ws_lec.merged_cells.ranges)
 
         def find_target_for_label(row_idx: int, col_idx: int) -> str:
@@ -586,13 +586,17 @@ class XlsxTemplateInspector:
                 return f"{get_column_letter(closest_merge.min_col)}{closest_merge.min_row}"
             return f"{get_column_letter(col_idx + 1)}{row_idx}"
 
-        for r in range(1, 7):
-            for c in range(1, 20):
+        for r in range(1, ws_lec.max_row + 1):
+            for c in range(1, ws_lec.max_column + 1):
                 val = ws_lec.cell(r, c).value
                 if not val or not isinstance(val, str):
                     continue
                 text = val.strip()
                 if not text:
+                    continue
+
+                # Signature labels are discovered separately from metadata bindings.
+                if "INSTRUCTOR" in text.upper() and r > 6:
                     continue
 
                 matches = SemanticRegistry.match_metadata_candidate(text)
@@ -612,8 +616,8 @@ class XlsxTemplateInspector:
         # 2. Institutional College Banner Discovery (Grading Sheet!A9)
         if "grading sheet" in sheet_map:
             ws_grd = wb[sheet_map["grading sheet"]]
-            for r in range(1, 15):
-                for c in range(1, 10):
+            for r in range(1, ws_grd.max_row + 1):
+                for c in range(1, ws_grd.max_column + 1):
                     val = ws_grd.cell(r, c).value
                     if val and isinstance(val, str) and "COLLEGE OF" in val.upper():
                         header_candidates.append({
@@ -633,8 +637,8 @@ class XlsxTemplateInspector:
         name_col = None
         id_col = None
 
-        for r in range(6, 16):
-            for c in range(1, 10):
+        for r in range(1, ws_lec.max_row + 1):
+            for c in range(1, ws_lec.max_column + 1):
                 c_val = ws_lec.cell(r, c).value
                 if not c_val or not isinstance(c_val, str):
                     continue
@@ -655,7 +659,7 @@ class XlsxTemplateInspector:
             capacity_limit = 0
 
             check_col = index_col if index_col is not None else 1
-            for r in range(header_row + 1, header_row + 20):
+            for r in range(header_row + 1, ws_lec.max_row + 1):
                 v = ws_lec.cell(r, check_col).value
                 if v == 1 or str(v).strip() == "1":
                     first_data_row = r
@@ -676,6 +680,7 @@ class XlsxTemplateInspector:
             if first_data_row is not None and capacity_limit > 0:
                 roster_candidate = {
                     "table_index": 0,
+                    "worksheet_name": sheet_map["lecture"],
                     "first_data_row_index": first_data_row,
                     "name_col": name_col,
                     "id_col": id_col,

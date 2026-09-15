@@ -246,6 +246,10 @@ class RecipeValidator:
         if table_idx is None or first_row is None:
             raise TemplateError("Roster binding missing table_index or first_data_row_index")
 
+        worksheet_name = roster_data.get("worksheet_name")
+        if worksheet_name is not None and not isinstance(worksheet_name, str):
+            raise TemplateError("Roster binding worksheet_name must be a string")
+
         if name_col is None and not roster_data.get("has_split_names"):
             raise TemplateError("Roster binding requires name_col or split names")
 
