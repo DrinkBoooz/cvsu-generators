@@ -60,6 +60,11 @@ class ClassInfo:
     subject_name: str = ""
     has_explicit_college: bool = field(default=False, init=False)
 
+    def __setattr__(self, name, value):
+        object.__setattr__(self, name, value)
+        if name == "college" and "has_explicit_college" in self.__dict__:
+            object.__setattr__(self, "has_explicit_college", value is not None)
+
     def __post_init__(self):
         if self.college is None:
             self.college = LEGACY_DEFAULT_COLLEGE

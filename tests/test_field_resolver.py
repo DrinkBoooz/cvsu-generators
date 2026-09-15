@@ -312,3 +312,30 @@ def test_college_explicit_ceit_takes_precedence_over_metadata():
 
     recipe = _make_dummy_recipe(metadata={"college": "COLLEGE OF ARTS AND SCIENCES"})
     assert resolve_field_value("college", info, recipe) == "COLLEGE OF ENGINEERING AND INFORMATION TECHNOLOGY"
+
+
+def test_college_mutation_after_initialization_is_authoritative():
+    info = ClassInfo()
+    info.college = "COLLEGE OF COMPUTER STUDIES"
+    recipe = _make_dummy_recipe(metadata={"college": "COLLEGE OF ARTS AND SCIENCES"})
+
+    assert info.has_explicit_college is True
+    assert resolve_field_value("college", info, recipe) == "COLLEGE OF COMPUTER STUDIES"
+
+
+def test_single_semester_year_does_not_fabricate_academic_year():
+    info = ClassInfo(semester_ay="1st Semester 2026")
+    assert resolve_field_value("school_year", info) == ""
+
+
+def test_single_semester_year_uses_metadata_fallback():
+    info = ClassInfo(semester_ay="1st Semester 2026")
+    recipe = _make_dummy_recipe(metadata={"school_year": "2026-2027"})
+    assert resolve_field_value("school_year", info, recipe) == "2026-2027"
+
+
+def test_explicit_model_school_year_overrides_derived_and_metadata_values():
+    info = ClassInfo(semester_ay="1st Semester / 2026-2027")
+    info.school_year = "2030-2031"
+    recipe = _make_dummy_recipe(metadata={"school_year": "2099-2100"})
+    assert resolve_field_value("school_year", info, recipe) == "2030-2031"

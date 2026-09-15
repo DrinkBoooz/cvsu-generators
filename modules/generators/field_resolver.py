@@ -334,7 +334,7 @@ class FieldResolver:
 
     @staticmethod
     def _derive_school_year(semester_ay: str) -> str:
-        """Extracts school year (e.g. 2026-2027) from semester_ay string."""
+        """Extracts an explicit academic-year range from semester_ay."""
         if not semester_ay:
             return ""
         raw = str(semester_ay).strip()
@@ -351,8 +351,7 @@ class FieldResolver:
         if len(years) == 1:
             if "midyear" in raw.lower() or "summer" in raw.lower():
                 return years[0]
-            y = int(years[0])
-            return f"{y}-{y+1}"
+            return ""
 
         return ""
 
