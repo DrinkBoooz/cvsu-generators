@@ -254,11 +254,20 @@ class DocxTemplateInspector:
             "SCHEDULE_CODE": "schedule_code",
             "SCHED_CODE": "schedule_code",
             "SUBJECT": "subject",
-            "SUBJECT_CODE": "subject",
+            "SUBJECT_CODE": "subject_code",
+            "SUBJECT_TITLE": "subject_title",
             "TIME_DAYS_ROOM": "time_days_room",
             "TIME_ROOM": "time_days_room",
-            "SEMESTER": "semester_ay",
+            "SEMESTER": "semester",
             "SEMESTER_AY": "semester_ay",
+            "SCHOOL_YEAR": "school_year",
+            "ACADEMIC_YEAR": "school_year",
+            "COLLEGE": "college",
+            "DEPARTMENT": "department",
+            "PROGRAM": "program",
+            "DATE": "date",
+            "PERIOD": "period",
+            "UNITS": "units",
         }
 
         seen = set()

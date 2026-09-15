@@ -299,6 +299,10 @@ class RecipeValidator:
             if not field:
                 continue
 
+            # Respect profile allowed_fields restriction if defined
+            if profile.allowed_fields is not None and field not in profile.allowed_fields:
+                continue
+
             # Skip if higher confidence candidate already bound this field
             if field in bindings:
                 continue

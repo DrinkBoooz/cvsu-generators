@@ -18,6 +18,9 @@ from modules.parsers.semantic_registry import (
     FIELD_SUBJECT,
     FIELD_SCHEDULE_CODE,
     FIELD_COURSE_SECTION,
+    FIELD_COLLEGE,
+    FIELD_DEPARTMENT,
+    FIELD_PROGRAM,
 )
 
 
@@ -80,3 +83,43 @@ def test_schedule_code_matches_schedule_code():
 def test_signature_region_suppression():
     """Verify compound patterns do not trigger in signature regions."""
     assert SemanticRegistry.match_metadata_candidate("Course Code & Title", is_signature_region=True) == []
+
+
+def test_department_matches_without_signature_collision():
+    for label in ("Department", "Department:", "department", "Dept.", "DEPT:"):
+        matches = SemanticRegistry.match_metadata_candidate(label)
+        assert len(matches) == 1, f"Expected exactly 1 match for {label!r}, got {matches}"
+        field, conf = matches[0]
+        assert field == FIELD_DEPARTMENT
+        assert conf >= 0.9
+
+
+def test_college_matches_college():
+    for label in ("College", "College:", "college", "Col.", "COL:"):
+        matches = SemanticRegistry.match_metadata_candidate(label)
+        assert len(matches) == 1, f"Expected exactly 1 match for {label!r}, got {matches}"
+        field, conf = matches[0]
+        assert field == FIELD_COLLEGE
+        assert conf >= 0.9
+
+
+def test_program_matches_without_course_section_collision():
+    for label in ("Program", "Program:", "Degree Program", "Degree Program:", "Academic Program"):
+        matches = SemanticRegistry.match_metadata_candidate(label)
+        assert len(matches) == 1, f"Expected exactly 1 match for {label!r}, got {matches}"
+        field, conf = matches[0]
+        assert field == FIELD_PROGRAM
+        assert conf >= 0.9
+        # Must not collide with course_section
+        assert not any(f == FIELD_COURSE_SECTION for f, _ in matches)
+
+
+def test_course_section_compound_labels_do_not_collide_with_program():
+    for label in ("Course / Section", "Course & Section", "Degree Program & Section", "Degree Program / Section"):
+        matches = SemanticRegistry.match_metadata_candidate(label)
+        assert len(matches) == 1, f"Expected exactly 1 match for {label!r}, got {matches}"
+        field, conf = matches[0]
+        assert field == FIELD_COURSE_SECTION
+        assert conf >= 0.9
+        # Must not collide with program
+        assert not any(f == FIELD_PROGRAM for f, _ in matches)

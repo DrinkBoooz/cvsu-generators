@@ -28,6 +28,9 @@ FIELD_UNITS = "units"
 FIELD_PERIOD = "period"
 FIELD_DATE = "date"
 FIELD_TIME_DAYS_ROOM = "time_days_room"
+FIELD_COLLEGE = "college"
+FIELD_DEPARTMENT = "department"
+FIELD_PROGRAM = "program"
 
 # Signature role names
 ROLE_INSTRUCTOR_SIGNATURE = "instructor_signature"
@@ -46,8 +49,8 @@ SEMANTIC_ALIASES: Dict[str, List[re.Pattern]] = {
         re.compile(r"\b(?:schedule\s*code|sched\.?\s*code)\b", re.IGNORECASE),
     ],
     FIELD_COURSE_SECTION: [
-        re.compile(r"^\s*(?:course\s*(?:and|&|/)?\s*(?:year|yr\.?)?\s*(?:and|&|/)?\s*sec(?:tion)?|degree\s*program(?:\s*(?:and|&|/)?\s*sec(?:tion)?)?|class|section)\s*:?\s*$", re.IGNORECASE),
-        re.compile(r"\b(?:course\s*(?:and|&|/)?\s*sec(?:tion)?|degree\s*program|section)\b", re.IGNORECASE),
+        re.compile(r"^\s*(?:course\s*(?:and|&|/)?\s*(?:year|yr\.?)?\s*(?:and|&|/)?\s*sec(?:tion)?|degree\s*program\s*(?:and|&|/)\s*sec(?:tion)?|class|section)\s*:?\s*$", re.IGNORECASE),
+        re.compile(r"\b(?:course\s*(?:and|&|/)?\s*sec(?:tion)?|degree\s*program\s*(?:and|&|/)\s*sec(?:tion)?|section)\b", re.IGNORECASE),
     ],
     FIELD_SUBJECT_CODE: [
         re.compile(r"^\s*(?:subject\s*code|course\s*code|subj\.?\s*code)\s*:?\s*$", re.IGNORECASE),
@@ -85,6 +88,18 @@ SEMANTIC_ALIASES: Dict[str, List[re.Pattern]] = {
     FIELD_TIME_DAYS_ROOM: [
         re.compile(r"^\s*(?:time\s*(?:and|&|/)?\s*days?\s*(?:and|&|/)?\s*room(?:\s*no\.?)?|class\s*hours?|class\s*schedule)\s*:?\s*$", re.IGNORECASE),
         re.compile(r"\b(?:time\s*(?:and|&|/)?\s*days?|class\s*schedule)\b", re.IGNORECASE),
+    ],
+    FIELD_COLLEGE: [
+        re.compile(r"^\s*(?:college|col\.?)\s*:?\s*$", re.IGNORECASE),
+        re.compile(r"\b(?:college)\b", re.IGNORECASE),
+    ],
+    FIELD_DEPARTMENT: [
+        re.compile(r"^\s*(?:department|dept\.?)\s*:?\s*$", re.IGNORECASE),
+        re.compile(r"\b(?:department|dept\.?)\b", re.IGNORECASE),
+    ],
+    FIELD_PROGRAM: [
+        re.compile(r"^\s*(?:degree\s*program|academic\s*program|program)\s*:?\s*$", re.IGNORECASE),
+        re.compile(r"\b(?:degree\s*program|academic\s*program|program)\b", re.IGNORECASE),
     ],
 }
 
@@ -159,6 +174,15 @@ class SemanticRegistry:
                 continue
             # Labels with "schedule" or "sched" or "code" should not match course_section unless explicitly course
             if field == FIELD_COURSE_SECTION and re.search(r"\b(?:sched|code)\b", cleaned, re.IGNORECASE) and not re.search(r"\b(?:course|section|program)\b", cleaned, re.IGNORECASE):
+                continue
+            # Standalone program should not match course_section
+            if field == FIELD_COURSE_SECTION and re.search(r"^\s*(?:degree\s*program|academic\s*program|program)\s*:?\s*$", cleaned, re.IGNORECASE):
+                continue
+            # Labels with "section" should not match program
+            if field == FIELD_PROGRAM and re.search(r"\b(?:section|sec)\b", cleaned, re.IGNORECASE):
+                continue
+            # Department labels should not match if chair/head is present (signature role)
+            if field == FIELD_DEPARTMENT and re.search(r"\b(?:chair|head|person)\b", cleaned, re.IGNORECASE):
                 continue
 
             for idx, pattern in enumerate(patterns):

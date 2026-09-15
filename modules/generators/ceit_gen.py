@@ -49,175 +49,12 @@ from modules.parsers.roster_parser import (
 from typing import Optional, Any, Union, Dict, List, Tuple
 from modules.models.recipe import ValidatedTemplateRecipe
 from modules.services.template_recipe_service import TemplateRecipeResolver, recipe_resolver
+from modules.generators.document_generator import (
+    DocumentGenerator,
+    ConfigurableDocumentGenerator,
+    TemplateError,
+)
 
-class TemplateError(Exception):
-    """Raised when a docx template structure does not match expectations."""
-    pass
-
-
-
-# ══ Abstract base class ═══════════════════════════════════════════════════════
-class DocumentGenerator(ABC):
-    """
-    Abstract base — defines the template method pattern.
-    Pure execution engine driven by an authoritative ValidatedTemplateRecipe.
-    Contains no heuristic template scanning or discovery.
-    """
-
-    def __init__(self, template_path: str, recipe: ValidatedTemplateRecipe):
-        if not isinstance(recipe, ValidatedTemplateRecipe):
-            raise TypeError(
-                f"DocumentGenerator requires a ValidatedTemplateRecipe instance, got {type(recipe).__name__}"
-            )
-        self._template_path = template_path
-        self._recipe = recipe
-
-    @property
-    def template_path(self) -> str:
-        return self._template_path
-
-    @property
-    def recipe(self) -> ValidatedTemplateRecipe:
-        return self._recipe
-
-    @property
-    def output_folder(self) -> str:
-        """Target subfolder relative to <Course_Sec>/ for output document placement."""
-        return self._recipe.metadata.get("output_folder") or "CEIT_Forms"
-
-    def fill_header(self, body, info: ClassInfo) -> None:
-        """Fills header fields driven strictly by recipe header_bindings and placeholders."""
-        tables = body.findall(w("tbl"))
-        paras = body.findall(w("p"))
-
-        field_values = {
-            "instructor": info.instructor or "",
-            "course_section": info.course_section or "",
-            "schedule_code": info.schedule_code or "",
-            "subject": info.subject or "",
-            "time_days_room": info.time_days_room or "",
-            "semester_ay": info.semester_ay or "",
-            "date": "",
-        }
-
-        for field_name, b in self._recipe.header_bindings.items():
-            val = field_values.get(field_name, "")
-            thresh = b.shrink_threshold
-            sz = b.shrink_sz or "18"
-
-            if b.cell_type == "docx_table":
-                t = b.target
-                if isinstance(t, (tuple, list)) and len(t) == 3:
-                    tbl_idx, r_idx, c_idx = t
-                    if tbl_idx < len(tables):
-                        rows = tables[tbl_idx].findall(w("tr"))
-                        if r_idx < len(rows):
-                            cells = rows[r_idx].findall(w("tc"))
-                            if c_idx < len(cells):
-                                set_cell_text(cells[c_idx], val, shrink_threshold=thresh, shrink_sz=sz)
-            elif b.cell_type == "docx_paragraph":
-                p_idx = b.target
-                if isinstance(p_idx, int) and p_idx < len(paras):
-                    replace_after_colon(paras[p_idx], val, shrink_threshold=thresh, shrink_sz=sz)
-
-        # Placeholders if present in metadata
-        placeholders = self._recipe.metadata.get("placeholders", [])
-        if placeholders:
-            for p_holder in placeholders:
-                token = p_holder.get("tag") or f"{{{{{p_holder.get('raw_token', '')}}}}}"
-                field_name = p_holder.get("field")
-                val = field_values.get(field_name, "")
-                if not token or not val:
-                    continue
-                for t in body.iter(w("t")):
-                    if t.text and token in t.text:
-                        t.text = t.text.replace(token, val)
-                for p in body.iter(w("p")):
-                    runs = p.findall(w("r"))
-                    p_txt = "".join(r.findtext(w("t")) or "" for r in runs)
-                    if token in p_txt:
-                        new_p_txt = p_txt.replace(token, val)
-                        if runs:
-                            t0 = runs[0].find(w("t"))
-                            if t0 is not None:
-                                t0.text = new_p_txt
-                            for r in runs[1:]:
-                                for t_node in r.findall(w("t")):
-                                    t_node.text = ""
-
-    def _is_student_table(self, tbl) -> bool:
-        """Deprecated legacy student table locator; prefer recipe.roster_binding."""
-        rows = tbl.findall(w("tr"))
-        if not rows:
-            return False
-        cells = rows[0].findall(w("tc"))
-        if not cells:
-            return False
-        hdr = " ".join("".join((t.text or '') for t in c.iter(w('t'))) for c in cells).lower()
-        if any(k in hdr for k in ("instructor", "course /", "schedule code", "subject code", "semester /", "time / days / room")):
-            return False
-        return ("student" in hdr or "name of student" in hdr or "name of students" in hdr or "no." in hdr) and (
-            "signature" in hdr or "student number" in hdr or "studentnumber" in hdr or "name of student" in hdr
-        )
-
-    def fill_table(self, body, info: ClassInfo) -> None:
-        """Fills student roster table driven strictly by recipe roster_binding."""
-        rb = self._recipe.roster_binding
-        if rb is None:
-            return
-
-        tables = body.findall(w("tbl"))
-        if rb.table_index >= len(tables):
-            raise TemplateError(
-                f"Roster table index {rb.table_index} not found in template ({len(tables)} tables present)."
-            )
-
-        target = tables[rb.table_index]
-        rows = target.findall(w("tr"))
-        if len(rows) <= rb.first_data_row_index:
-            raise TemplateError(
-                f"Student list table must have at least {rb.first_data_row_index + 1} rows."
-            )
-
-        template_row = rows[rb.first_data_row_index]
-
-        for tr in rows[rb.first_data_row_index:]:
-            target.remove(tr)
-
-        for idx, (name, stnum) in enumerate(info.students):
-            tr = copy.deepcopy(template_row)
-            for tc in tr.findall(w("tc")):
-                for p in tc.findall(w("p")):
-                    for r in p.findall(w("r")):
-                        for t in r.findall(w("t")):
-                            t.text = ""
-            cells = tr.findall(w("tc"))
-            while len(cells) < 3:
-                new_tc = etree.Element(w("tc"))
-                tr.append(new_tc)
-                cells = tr.findall(w("tc"))
-            self._fill_student_row(cells, idx, name, stnum)
-            target.append(tr)
-
-    def _fill_student_row(self, cells: list, idx: int, name: str, stnum: str) -> None:
-        """Fills one student row's cells based on recipe."""
-        rb = self._recipe.roster_binding
-        if rb is None:
-            return
-        if self._recipe.profile_id == "custom_docx" and rb.index_col is not None and rb.index_col < len(cells):
-            set_cell_text(cells[rb.index_col], str(idx + 1))
-        if rb.name_col is not None and rb.name_col < len(cells):
-            set_cell_text(cells[rb.name_col], name, shrink_threshold=32, shrink_sz="18")
-        if rb.id_col is not None and rb.id_col < len(cells):
-            set_cell_text(cells[rb.id_col], stnum)
-
-    def generate(self, info: ClassInfo, output_path: str) -> None:
-        """Template method — orchestrates the full generation pipeline."""
-        zin, root, body = load_docx(self._template_path)
-        self.fill_header(body, info)
-        self.fill_table(body, info)
-        save_docx(zin, root, output_path)
-        logger.info(f"Generated {os.path.basename(output_path)}")
 
 
 
@@ -406,7 +243,7 @@ class GeneratorFactory:
             try:
                 from modules.common.config_manager import config_manager as default_cm
                 cm = self._config_manager or default_cm
-                from modules.generators.generic_doc_gen import ConfigurableDocumentGenerator
+                from modules.generators.document_generator import ConfigurableDocumentGenerator
 
                 custom_templates = cm.get_custom_templates()
                 for ct in custom_templates:

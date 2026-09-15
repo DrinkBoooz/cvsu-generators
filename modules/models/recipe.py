@@ -178,6 +178,7 @@ class GeneratorProfile:
     prohibited_fields: Tuple[str, ...] = ()
     requires_capacity: bool = False
     supports_auto_scaling: bool = True
+    allowed_fields: Optional[Tuple[str, ...]] = None
 
 
 # Predefined generator profiles
@@ -188,6 +189,22 @@ PROFILE_ACADEMIC_DOCX = GeneratorProfile(
     prohibited_fields=(),
     requires_capacity=False,
     supports_auto_scaling=True,
+    allowed_fields=(
+        "instructor",
+        "course_section",
+        "schedule_code",
+        "subject",
+        "subject_code",
+        "subject_title",
+        "time_days_room",
+        "semester_ay",
+        "semester",
+        "school_year",
+        "college",
+        "date",
+        "period",
+        "units",
+    ),
 )
 
 PROFILE_GRADE_SHEET_XLSX = GeneratorProfile(
