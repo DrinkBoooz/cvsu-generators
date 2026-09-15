@@ -69,9 +69,10 @@
         );
         const btnCancel = document.getElementById("btnCancelGeneration");
         const resultsCard = document.getElementById("resultsCard");
+        const readiness = getGenerationReadiness();
 
         // Validate basic inputs using non-blocking toasts
-        if (!state.schedulePath) {
+        if (!readiness.schedule) {
           window._isGenerationRunning = false;
           window._generationState = "idle";
           window._activeGenerationId = null;
@@ -83,7 +84,7 @@
           scrollToStep("cardStep1");
           return;
         }
-        if (!state.rosters || state.rosters.length === 0) {
+        if (!readiness.rosters) {
           window._isGenerationRunning = false;
           window._generationState = "idle";
           window._activeGenerationId = null;
@@ -114,7 +115,7 @@
           selectedClasses.push(cb.getAttribute("data-class-id"));
         });
 
-        if (selectedClasses.length === 0) {
+        if (!readiness.classes) {
           window._isGenerationRunning = false;
           window._generationState = "idle";
           window._activeGenerationId = null;
@@ -133,7 +134,7 @@
         if (state.engines.ceit) enabledEngines.push("ceit");
         if (state.engines.grades) enabledEngines.push("grades");
 
-        if (enabledEngines.length === 0) {
+        if (!readiness.engines || enabledEngines.length === 0) {
           window._isGenerationRunning = false;
           window._generationState = "idle";
           window._activeGenerationId = null;

@@ -8,17 +8,52 @@
           !window.pywebview.api.get_custom_templates
         ) {
           renderCustomTemplatesList(state.customTemplates || []);
+          renderCustomWorkflowPackages(state.customTemplates || []);
           return;
         }
         try {
           const templates = await window.pywebview.api.get_custom_templates();
           state.customTemplates = templates || [];
           renderCustomTemplatesList(templates || []);
+          renderCustomWorkflowPackages(templates || []);
           updateFileEstimate();
         } catch (err) {
           console.error("Failed to load custom templates:", err);
           renderCustomTemplatesList(state.customTemplates || []);
+          renderCustomWorkflowPackages(state.customTemplates || []);
         }
+      }
+
+      function renderCustomWorkflowPackages(templates) {
+        const container = document.getElementById("customWorkflowPackages");
+        if (!container) return;
+
+        const enabled = (templates || []).filter((template) => template.enabled !== false);
+        if (enabled.length === 0) {
+          container.classList.add("d-none");
+          container.innerHTML = "";
+          return;
+        }
+
+        container.classList.remove("d-none");
+        container.innerHTML = `
+          <div class="form-label" style="margin: 12px 0 6px">Custom Forms Included with CEIT</div>
+          <div class="template-spec-box" role="list" aria-label="Enabled custom document forms">
+            ${enabled.map((template) => {
+              const title = escapeHTML(template.title || template.id || "Custom Form");
+              const suffix = escapeHTML(template.suffix || "CUSTOM_FORM");
+              const folder = escapeHTML(
+                (template.recipe && template.recipe.metadata && template.recipe.metadata.output_folder) || "CEIT_Forms",
+              );
+              return `
+                <div role="listitem" style="display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 6px 0;">
+                  <span>${title}</span>
+                  <span class="filter-pill active" title="Output folder: ${folder}">${suffix}</span>
+                </div>
+              `;
+            }).join("")}
+          </div>
+        `;
       }
 
       function renderCustomTemplatesList(templates) {

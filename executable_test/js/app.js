@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (typeof initScrollAwareDock === 'function') initScrollAwareDock();
   if (typeof updateStepperStatus === 'function') updateStepperStatus();
   if (typeof loadParserSettingsDefaults === 'function') loadParserSettingsDefaults();
+  if (typeof loadCustomTemplatesUI === 'function') loadCustomTemplatesUI();
 });
 
 window.addEventListener('pywebviewready', () => {

@@ -394,6 +394,45 @@ def test_m8_xlsx_structural_signature_geometry(tmp_path):
     assert out_ws["BI57"].value is None
 
 
+def test_m10_xlsx_signature_offset_fallback_is_compatibility_behavior(tmp_path):
+        """M10: Preserve the documented legacy signature offset fallback.
+
+        Evidence record:
+        - Pre-change assumption: a plain INSTRUCTOR label without merged geometry
+            may derive its target three rows above within the legacy scan window.
+        - Current authority: XlsxTemplateInspector emits the fallback candidate;
+            GradeGenerator consumes its validated signature binding.
+        - Demonstrated boundary: no merged signature box exists, so structural
+            geometry cannot provide a target; the compatibility fallback is used.
+        - Phase 4 rationale: this is existing template-discovery compatibility,
+            not Phase 3 field resolution or business/data transformation.
+        """
+        repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        src = os.path.join(repo_root, "templates", "GRADING_LECTURE_TEMPLATE.xlsx")
+        mut_path = str(tmp_path / "mut_grade_sig_m10.xlsx")
+        shutil.copy2(src, mut_path)
+
+        wb = openpyxl.load_workbook(mut_path)
+        ws = wb["Lecture"]
+        for rng in ("BI57:BR59", "BI60:BR62"):
+                if rng in [str(existing) for existing in ws.merged_cells.ranges]:
+                        ws.unmerge_cells(rng)
+        ws["BI57"] = None
+        ws["BI60"] = None
+        ws["E70"] = "INSTRUCTOR"
+        wb.save(mut_path)
+
+        recipe = TemplateRecipeResolver.get_instance().resolve(mut_path, "grade_sheet_xlsx")
+        lecture_signature = recipe.signature_bindings.get("instructor")
+        assert lecture_signature is not None
+        assert lecture_signature.target == "E67"
+
+        out_path = str(tmp_path / "out_m10.xlsx")
+        GradeGenerator(mut_path, recipe).generate(SAMPLE_GRADE_INFO, SAMPLE_GRADE_STUDENTS, out_path)
+        out_wb = openpyxl.load_workbook(out_path)
+        assert out_wb["Lecture"]["E67"].value == "DR. JUAN DELA CRUZ"
+
+
 def test_m9_xlsx_roster_outside_legacy_scan_window(tmp_path):
         """M9: Move the roster beyond the former fixed scan window.
 

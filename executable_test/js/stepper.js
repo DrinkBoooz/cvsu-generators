@@ -109,25 +109,36 @@
         }
       }
 
-      function updateStepperStatus() {
-        const s1Ready = !!state.schedulePath;
-        const s2Ready = state.rosters && state.rosters.length > 0;
+      function getGenerationReadiness() {
         const selectedClasses = document.querySelectorAll(
           ".item-class-check:checked",
         ).length;
-        const hasEngines =
+        const detectedClasses = Array.isArray(state.detectedClasses)
+          ? state.detectedClasses.length
+          : 0;
+        const enginesReady = !!(
           document.getElementById("checkAttendance")?.checked ||
           document.getElementById("checkCeit")?.checked ||
-          document.getElementById("checkGrades")?.checked;
-        const s3Ready = !!hasEngines;
-        const s4Ready = true;
-        const s5Ready = !!state.outputDir;
-        const s6Ready =
-          s1Ready &&
-          s2Ready &&
-          s3Ready &&
-          s5Ready &&
-          (state.detectedClasses.length === 0 || selectedClasses > 0);
+          document.getElementById("checkGrades")?.checked
+        );
+        const readiness = {
+          schedule: !!state.schedulePath,
+          rosters: !!(state.rosters && state.rosters.length > 0),
+          classes: detectedClasses > 0 && selectedClasses > 0,
+          engines: enginesReady,
+          output: !!state.outputDir,
+        };
+        readiness.ready = Object.values(readiness).every(Boolean);
+        return readiness;
+      }
+
+      function updateStepperStatus() {
+        const readiness = getGenerationReadiness();
+        const s1Ready = readiness.schedule;
+        const s2Ready = readiness.rosters;
+        const s3Ready = readiness.engines;
+        const s5Ready = readiness.output;
+        const s6Ready = readiness.ready;
 
         const stepNames = {
           chipStep1: "Schedule",
@@ -167,10 +178,7 @@
         setChip(
           "chipStep4",
           "statusStep4",
-          !!(
-            document.getElementById("startDate").value ||
-            document.getElementById("endDate").value
-          ),
+          true,
           "📅",
         );
         setChip("chipStep5", "statusStep5", s5Ready);
