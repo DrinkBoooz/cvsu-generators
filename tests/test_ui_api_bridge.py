@@ -275,7 +275,10 @@ def test_handle_dropped_schedule_and_rosters(tmp_path):
     assert len(res3["validation"]) == 1
     assert res3["validation"][0]["status"] == "valid"
 
-def test_dynamic_total_steps_telemetry(tmp_path):
+def test_dynamic_total_steps_telemetry(tmp_path, monkeypatch):
+    from modules.common.config_manager import config_manager
+    monkeypatch.setattr(config_manager, "get_custom_templates", lambda: [])
+
     schedule_path = os.path.join(WORKSPACE_DIR, "ORTEGA_SCHEDULE.xls")
     roster_file = tmp_path / "BSCS1-4 List of Students for 202612040-DCIT 21A - INTRODUCTION TO COMPUTING.csv"
     roster_file.write_text("Name,Student number\nOrtega, Dan,20261001\n", encoding="utf-8")

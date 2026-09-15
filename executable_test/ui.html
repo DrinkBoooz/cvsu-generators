@@ -2837,7 +2837,7 @@
               <div
                 style="
                   display: grid;
-                  grid-template-columns: 1fr 1fr;
+                  grid-template-columns: 1fr 1fr 1fr;
                   gap: 12px;
                   margin-bottom: 14px;
                 "
@@ -2878,6 +2878,51 @@
                     placeholder="e.g. CONSULTATION_LOG"
                   />
                 </div>
+                <div>
+                  <label
+                    style="
+                      font-size: 11.5px;
+                      font-weight: 600;
+                      color: var(--text-secondary);
+                      display: block;
+                      margin-bottom: 4px;
+                    "
+                    >Target Folder</label
+                  >
+                  <select
+                    id="customFormTargetFolderSelect"
+                    class="form-control-custom"
+                    onchange="onCustomTargetFolderChange(this.value)"
+                  >
+                    <option value="CEIT_Forms">📁 CEIT_Forms (Default)</option>
+                    <option value="Attendance">📁 Attendance</option>
+                    <option value="custom">✏️ Custom Subfolder...</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Custom Folder Input (when custom selected) -->
+              <div
+                id="customFormCustomFolderContainer"
+                class="d-none"
+                style="margin-top: -6px; margin-bottom: 14px;"
+              >
+                <label
+                  style="
+                    font-size: 11.5px;
+                    font-weight: 600;
+                    color: var(--text-secondary);
+                    display: block;
+                    margin-bottom: 4px;
+                  "
+                  >Custom Relative Subfolder (e.g. Advising/Logs)</label
+                >
+                <input
+                  type="text"
+                  id="customFormCustomFolderInput"
+                  class="form-control-custom"
+                  placeholder="e.g. Advising/Logs"
+                />
               </div>
 
               <!-- Inspection Metadata Grid -->

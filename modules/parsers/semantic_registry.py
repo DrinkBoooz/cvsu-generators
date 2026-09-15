@@ -42,7 +42,7 @@ ROLE_DEAN = "dean"
 # Alias patterns mapping raw labels to canonical semantic fields
 SEMANTIC_ALIASES: Dict[str, List[re.Pattern]] = {
     FIELD_SCHEDULE_CODE: [
-        re.compile(r"^\s*(?:schedule\s*code|sched\.?\s*code|class\s*code|course\s*code)\s*:?\s*$", re.IGNORECASE),
+        re.compile(r"^\s*(?:schedule\s*code|sched\.?\s*code|class\s*code)\s*:?\s*$", re.IGNORECASE),
         re.compile(r"\b(?:schedule\s*code|sched\.?\s*code)\b", re.IGNORECASE),
     ],
     FIELD_COURSE_SECTION: [
@@ -56,7 +56,7 @@ SEMANTIC_ALIASES: Dict[str, List[re.Pattern]] = {
         re.compile(r"^\s*(?:subject\s*title|course\s*title|subj\.?\s*title|descriptive\s*title)\s*:?\s*$", re.IGNORECASE),
     ],
     FIELD_SUBJECT: [
-        re.compile(r"^\s*(?:subject|course|subject\s*(?:and|&|/)?\s*title|subject\s*descriptive\s*title)\s*:?\s*$", re.IGNORECASE),
+        re.compile(r"^\s*(?:subject|course|subject\s*(?:and|&|/)?\s*title|course\s*(?:code\s*(?:and|&|/)\s*title|title\s*(?:and|&|/)\s*code)|subject\s*(?:code\s*(?:and|&|/)\s*title|title\s*(?:and|&|/)\s*code)|subject\s*descriptive\s*title)\s*:?\s*$", re.IGNORECASE),
         re.compile(r"\b(?:subject|descriptive\s*title)\b", re.IGNORECASE),
     ],
     FIELD_SEMESTER: [

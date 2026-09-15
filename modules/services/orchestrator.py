@@ -18,6 +18,7 @@ from modules.parsers.ceit_directory import parse_filename_hints, KNOWN_LAB_SUBJE
 from modules.generators.grade_gen import GradeGenerator
 from modules.generators.attendance_gen import generate_attendance_for_month
 from modules.services.template_recipe_service import TemplateRecipeResolver
+from modules.common.path_utils import validate_output_folder
 
 
 
@@ -388,9 +389,15 @@ def process_all(
                     break
                 safe_suffix = sanitize_filename(suffix)
                 out_name = f"{course_sec_safe}_{schedule_code_safe}_{safe_suffix}.docx"
-                out_path = os.path.join(ceit_dir, out_name)
                 try:
                     generator = gen_factory()
+                    target_subfolder = validate_output_folder(
+                        getattr(generator, "output_folder", "CEIT_Forms"),
+                        default="CEIT_Forms",
+                    )
+                    target_dir = os.path.join(course_dir, target_subfolder)
+                    os.makedirs(target_dir, exist_ok=True)
+                    out_path = os.path.join(target_dir, out_name)
                     generator.generate(info, out_path)
                     results["generated"]["ceit"].append(out_name)
                     results["by_class"][course_sec]["ceit"].append({"name": out_name, "path": out_path})

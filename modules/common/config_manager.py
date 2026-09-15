@@ -7,6 +7,7 @@ import tempfile
 from datetime import datetime
 from copy import deepcopy
 from modules.common.logger import logger
+from modules.common.path_utils import validate_output_folder
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -517,6 +518,15 @@ class ParserConfigManager:
 
             # Copy template file
             shutil.copy2(source_path, dest_path)
+
+            # Ensure metadata exists and output_folder is valid and normalized
+            if isinstance(recipe, dict):
+                meta = recipe.setdefault("metadata", {})
+                if isinstance(meta, dict):
+                    raw_out = meta.get("output_folder")
+                    meta["output_folder"] = validate_output_folder(raw_out, default="CEIT_Forms")
+                # Strip any stray top-level output_folder from recipe
+                recipe.pop("output_folder", None)
 
             templates = self.get_custom_templates()
             # Remove any existing entry with the same id

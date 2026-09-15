@@ -80,6 +80,11 @@ class DocumentGenerator(ABC):
     def recipe(self) -> ValidatedTemplateRecipe:
         return self._recipe
 
+    @property
+    def output_folder(self) -> str:
+        """Target subfolder relative to <Course_Sec>/ for output document placement."""
+        return self._recipe.metadata.get("output_folder") or "CEIT_Forms"
+
     def fill_header(self, body, info: ClassInfo) -> None:
         """Fills header fields driven strictly by recipe header_bindings and placeholders."""
         tables = body.findall(w("tbl"))
@@ -411,7 +416,14 @@ class GeneratorFactory:
                         suffix = ct.get("suffix") or "CUSTOM_FORM"
                         profile_id = ct.get("profile_id") or recipe_data.get("profile_id") or "custom_docx"
                         if t_path and os.path.exists(t_path):
-                            validated = self._resolver.resolve(t_path, profile_id=profile_id)
+                            if recipe_data:
+                                from modules.parsers.recipe_validator import RecipeValidator
+                                validated = RecipeValidator.validate_dict(recipe_data, profile_id)
+                                if not validated.template_path:
+                                    validated.template_path = t_path
+                            else:
+                                validated = self._resolver.resolve(t_path, profile_id=profile_id)
+
                             def _make_custom_gen(p=t_path, v=validated):
                                 return ConfigurableDocumentGenerator(p, v)
 

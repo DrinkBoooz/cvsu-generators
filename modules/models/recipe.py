@@ -53,6 +53,8 @@ class RosterBinding:
     index_col: Optional[int] = None
     signature_col: Optional[int] = None
     capacity_limit: Optional[int] = None
+    header_row_index: int = 0
+    header_row_count: int = 1
 
     def to_dict(self) -> Dict[str, Any]:
         d: Dict[str, Any] = {
@@ -61,6 +63,8 @@ class RosterBinding:
             "name_col": self.name_col,
             "id_col": self.id_col,
             "has_split_names": self.has_split_names,
+            "header_row_index": self.header_row_index,
+            "header_row_count": self.header_row_count,
         }
         if self.last_name_col is not None:
             d["last_name_col"] = self.last_name_col
@@ -90,6 +94,8 @@ class RosterBinding:
             index_col=d.get("index_col"),
             signature_col=d.get("signature_col"),
             capacity_limit=d.get("capacity_limit"),
+            header_row_index=d.get("header_row_index", 0),
+            header_row_count=d.get("header_row_count", 1),
         )
 
 

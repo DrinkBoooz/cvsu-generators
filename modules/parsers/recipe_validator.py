@@ -30,6 +30,7 @@ from modules.parsers.semantic_registry import (
     ROLE_INSTRUCTOR_SIGNATURE,
     FIELD_INSTRUCTOR,
 )
+from modules.common.path_utils import validate_output_folder
 
 
 class RecipeValidator:
@@ -82,7 +83,12 @@ class RecipeValidator:
                     f"Contains prohibited field '{pro_field}'."
                 )
 
-        # 7. Construct Authoritative ValidatedTemplateRecipe
+        # 7. Ensure output_folder is validated in metadata
+        metadata = dict(candidate.metadata)
+        output_folder = metadata.get("output_folder", "CEIT_Forms")
+        metadata["output_folder"] = validate_output_folder(output_folder, default="CEIT_Forms")
+
+        # 8. Construct Authoritative ValidatedTemplateRecipe
         return ValidatedTemplateRecipe(
             schema_version=RECIPE_SCHEMA_VERSION,
             profile_id=profile.profile_id,
@@ -91,7 +97,7 @@ class RecipeValidator:
             roster_binding=roster_binding,
             header_bindings=header_bindings,
             signature_bindings=signature_bindings,
-            metadata=dict(candidate.metadata),
+            metadata=metadata,
             verified_safe=True,
             _construction_token=_PRIVATE_CONSTRUCTION_SENTINEL,
         )
@@ -171,8 +177,13 @@ class RecipeValidator:
             meta = {
                 "title": clean_data.get("title", ""),
                 "suffix": clean_data.get("suffix", ""),
+                "output_folder": clean_data.get("output_folder", "CEIT_Forms"),
                 "placeholders": clean_data.get("placeholders", []),
             }
+        else:
+            meta = dict(meta)
+            if "output_folder" not in meta and "output_folder" in clean_data:
+                meta["output_folder"] = clean_data["output_folder"]
 
         # Construct candidate to run full validation checks
         candidate = RawTemplateRecipeCandidate(
@@ -249,6 +260,17 @@ class RecipeValidator:
                     f"grade_sheet profile '{profile.profile_id}' requires capacity_limit > 0, "
                     f"got {capacity}."
                 )
+
+        # Validate multi-row header structure if specified
+        header_row_idx = roster_data.get("header_row_index", 0)
+        header_row_cnt = roster_data.get("header_row_count", 1)
+        if header_row_cnt < 1:
+            raise TemplateError(f"header_row_count must be >= 1, got {header_row_cnt}")
+        if first_row < header_row_idx + header_row_cnt:
+            raise TemplateError(
+                f"first_data_row_index ({first_row}) cannot precede headers "
+                f"(header_row_index {header_row_idx} + count {header_row_cnt})"
+            )
 
         return RosterBinding.from_dict(roster_data)
 

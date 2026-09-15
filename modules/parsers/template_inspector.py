@@ -320,7 +320,24 @@ class DocxTemplateInspector:
                     score += 3
 
             if name_col is not None and (id_col is not None or sig_col is not None):
-                first_data_row = r_idx + 1
+                # Scan subsequent rows for secondary header rows (multi-row headers)
+                header_row_count = 1
+                curr_r = r_idx + 1
+                while curr_r < min(r_idx + 4, len(rows)):
+                    cand_tr = rows[curr_r]
+                    cand_cells = cand_tr.findall(w("tc"))
+                    if not cand_cells:
+                        break
+
+                    if self._is_secondary_header_row(
+                        cand_tr, cand_cells, name_col, id_col, index_col
+                    ):
+                        header_row_count += 1
+                        curr_r += 1
+                    else:
+                        break
+
+                first_data_row = r_idx + header_row_count
                 total_cols = len(rows[first_data_row].findall(w("tc"))) if first_data_row < len(rows) else len(cells)
                 capacity_limit = len(rows) - first_data_row
 
@@ -329,6 +346,7 @@ class DocxTemplateInspector:
                     best_candidate = {
                         "table_index": table_index,
                         "header_row_index": r_idx,
+                        "header_row_count": header_row_count,
                         "template_row_index": first_data_row,
                         "first_data_row": first_data_row,
                         "first_data_row_index": first_data_row,
@@ -344,6 +362,110 @@ class DocxTemplateInspector:
                     }
 
         return best_candidate
+
+    def _is_secondary_header_row(
+        self,
+        tr_elem: Any,
+        cells: List[Any],
+        name_col: int,
+        id_col: Optional[int],
+        index_col: Optional[int],
+    ) -> bool:
+        """
+        Determines whether a subsequent row is a secondary/continuation header row
+        or a template data row.
+
+        Signals combined:
+          1. Explicit Word header marker (<w:tblHeader/>).
+          2. Student data presence (rejects header classification).
+          3. Blank row presence (blank row without <w:tblHeader/> is treated as data template row, NOT header).
+          4. Semantic/header continuation markers in non-name/id columns or subheader keywords.
+        """
+        # 1. Explicit Word header element
+        trPr = tr_elem.find(w("trPr"))
+        has_tbl_header = False
+        if trPr is not None and trPr.find(w("tblHeader")) is not None:
+            has_tbl_header = True
+
+        # Extract normalized cell text
+        cell_texts = [SemanticRegistry.normalize_text(get_full_text(c)) for c in cells]
+
+        # Check if row is completely blank (all cells empty or whitespace)
+        all_blank = all(not t for t in cell_texts)
+        if all_blank:
+            # A blank row without explicit Word tblHeader is a data template row, NOT a header
+            return has_tbl_header
+
+        # 2. Check for student data in id_col or name_col
+        # Check student ID patterns in id_col
+        if id_col is not None and id_col < len(cell_texts):
+            id_txt = cell_texts[id_col].strip()
+            clean_digits = re.sub(r"[^\d]", "", id_txt)
+            if len(clean_digits) >= 5:
+                return False  # Real student ID present, definitely data row
+
+        # Check real student name in name_col
+        if name_col < len(cell_texts):
+            name_txt = cell_texts[name_col].strip()
+            if name_txt:
+                lower_name = name_txt.lower()
+                is_header_kw = any(kw in lower_name for kw in ("name", "student", "signature", "date", "no.", "no"))
+                if "," in name_txt and not is_header_kw and len(name_txt) > 3:
+                    return False  # Real student name with comma, definitely data row
+
+        # Check index_col for numbered template row (e.g. '1', '2')
+        if index_col is not None and index_col < len(cell_texts):
+            idx_txt = cell_texts[index_col].strip()
+            if idx_txt.isdigit() and int(idx_txt) >= 1:
+                # Check if any other cell has distinct subheader keywords
+                has_header_keywords = False
+                for c_idx, txt in enumerate(cell_texts):
+                    if c_idx == index_col:
+                        continue
+                    clean_w = set(re.sub(r"[^a-z0-9]", " ", txt.lower()).split())
+                    if clean_w & {"date", "day", "days", "week", "weel", "time", "score", "quiz", "exam", "lab", "lec", "remarks"}:
+                        has_header_keywords = True
+                        break
+                if not has_header_keywords and not has_tbl_header:
+                    return False  # Pre-numbered row template (e.g. '1', '', '', '')
+
+        # If explicit Word header marker is present, trust it
+        if has_tbl_header:
+            return True
+
+        # 3. Semantic subheader keywords in other columns
+        SUBHEADER_KEYWORDS = {
+            "date", "day", "days", "week", "weel", "time", "room", "score", "quiz",
+            "exam", "lab", "lec", "lecture", "laboratory", "remarks", "remark",
+            "signature", "sig", "total", "subtotal", "grade", "equivalent",
+            "status", "initial", "item", "items", "unit", "units", "hours", "hrs",
+            "topic", "criteria", "percentage", "m", "f", "mon", "tue", "wed", "thu", "fri", "sat", "sun",
+            "first", "last", "middle", "suffix", "period", "month", "year"
+        }
+
+        # Check non-name/id cells (or sub-divided header cells) for subheader keywords
+        for c_idx, txt in enumerate(cell_texts):
+            clean_txt = re.sub(r"[^a-z0-9]", " ", txt.lower()).strip()
+            words = set(clean_txt.split())
+            if words & SUBHEADER_KEYWORDS:
+                return True
+
+        # Check vertical merge continuation (vMerge without val="restart")
+        has_vmerge_continuation = False
+        for c in cells:
+            tcPr = c.find(w("tcPr"))
+            if tcPr is not None:
+                vm = tcPr.find(w("vMerge"))
+                if vm is not None:
+                    val = vm.attrib.get(w("val"), "")
+                    if val != "restart":
+                        has_vmerge_continuation = True
+                        break
+
+        if has_vmerge_continuation and not any(len(re.sub(r"[^\d]", "", t)) >= 5 for t in cell_texts):
+            return True
+
+        return False
 
     def _suggest_title_and_suffix(self, template_path: str, paragraphs: List[Any]) -> Tuple[str, str]:
         """Infers document title and file suffix from filename or top paragraphs."""
