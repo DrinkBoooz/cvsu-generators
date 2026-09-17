@@ -10,6 +10,7 @@ authoritative precedence (Rule B), and safe empty-string behavior (Rule C).
 
 import re
 from typing import Optional, Any, Dict, Union
+from collections.abc import Mapping
 
 from modules.models.schedule import ClassInfo, LEGACY_DEFAULT_COLLEGE
 from modules.models.recipe import ValidatedTemplateRecipe
@@ -80,13 +81,13 @@ class FieldResolver:
         key = str(field_name).strip().lower()
 
         # Extract recipe metadata dictionary if available
-        meta: Dict[str, Any] = {}
+        meta: Any = {}
         if recipe is not None:
-            if isinstance(recipe, dict):
+            if isinstance(recipe, (dict, Mapping)):
                 meta = recipe.get("metadata", {})
-                if not isinstance(meta, dict):
+                if not isinstance(meta, (dict, Mapping)):
                     meta = {}
-            elif hasattr(recipe, "metadata") and isinstance(recipe.metadata, dict):
+            elif hasattr(recipe, "metadata") and isinstance(recipe.metadata, (dict, Mapping)):
                 meta = recipe.metadata
 
         # -------------------------------------------------------------------------

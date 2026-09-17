@@ -23,8 +23,14 @@ from modules.models.recipe import (
     PROFILE_REGISTRY,
     PROFILE_ACADEMIC_DOCX,
     PROFILE_GRADE_SHEET_XLSX,
+    PROFILE_ATTENDANCE_DOCX,
     RawTemplateRecipeCandidate,
+    RawAttendanceTemplateRecipeCandidate,
+    ValidatedRecipeBase,
     ValidatedTemplateRecipe,
+    ValidatedAttendanceTemplateRecipe,
+    AttendanceInfoBinding,
+    AttendanceMatrixBinding,
 )
 from modules.parsers.semantic_registry import (
     ROLE_INSTRUCTOR_SIGNATURE,
@@ -42,18 +48,33 @@ class RecipeValidator:
     @classmethod
     def validate(
         cls,
-        candidate: RawTemplateRecipeCandidate,
-        profile: GeneratorProfile,
-    ) -> ValidatedTemplateRecipe:
+        candidate: Union[RawTemplateRecipeCandidate, RawAttendanceTemplateRecipeCandidate],
+        profile: Union[GeneratorProfile, str],
+    ) -> ValidatedRecipeBase:
         """
         Validates raw candidate observations against profile requirements and structural invariants.
-        Returns authoritative ValidatedTemplateRecipe.
+        Returns authoritative ValidatedRecipeBase (ValidatedTemplateRecipe or ValidatedAttendanceTemplateRecipe).
         """
         if not candidate:
             raise InvalidRecipeError("Cannot validate empty candidate")
 
         if isinstance(profile, str):
             profile = PROFILE_REGISTRY.get(profile, PROFILE_ACADEMIC_DOCX)
+
+        if isinstance(candidate, RawAttendanceTemplateRecipeCandidate):
+            if profile.profile_id not in ("attendance_docx", "attendance"):
+                raise TemplateError(
+                    f"Template '{os.path.basename(candidate.template_path)}' is an attendance candidate "
+                    f"and cannot be validated against profile '{profile.profile_id}'."
+                )
+            return cls._validate_attendance(candidate, profile)
+
+        # Non-attendance candidate with attendance profile -> E18 fail closed
+        if profile.profile_id in ("attendance_docx", "attendance"):
+            raise TemplateError(
+                f"Template '{os.path.basename(candidate.template_path)}' fails profile '{profile.profile_id}': "
+                f"Candidate is {type(candidate).__name__} without required attendance matrix structure (E18)."
+            )
 
         # 1. Resolve and check collisions / ambiguities
         cls._resolve_collisions(candidate, profile)
@@ -103,11 +124,153 @@ class RecipeValidator:
         )
 
     @classmethod
+    def _validate_attendance(
+        cls,
+        candidate: RawAttendanceTemplateRecipeCandidate,
+        profile: GeneratorProfile,
+    ) -> ValidatedAttendanceTemplateRecipe:
+        if candidate.collisions:
+            raise AmbiguousTemplateError(
+                f"Template '{os.path.basename(candidate.template_path)}' has conflicting structural candidates: "
+                f"{candidate.collisions}"
+            )
+
+        if not candidate.info_candidate:
+            raise TemplateError(
+                f"Template '{os.path.basename(candidate.template_path)}' is missing required information table (E13)."
+            )
+
+        if not candidate.matrix_candidate:
+            raise TemplateError(
+                f"Template '{os.path.basename(candidate.template_path)}' is missing required attendance matrix table (E11)."
+            )
+
+        info_cand = candidate.info_candidate
+        tbl_idx = info_cand.get("table_index")
+        bindings = info_cand.get("bindings", {})
+        if tbl_idx is None or not bindings:
+            raise TemplateError(
+                f"Template '{os.path.basename(candidate.template_path)}' information table bindings are invalid."
+            )
+
+        matrix_cand = candidate.matrix_candidate
+        m_tbl_idx = matrix_cand.get("table_index")
+        if m_tbl_idx is None:
+            raise TemplateError(
+                f"Template '{os.path.basename(candidate.template_path)}' matrix table index is missing."
+            )
+
+        # E12: check student name and student number columns
+        name_col = matrix_cand.get("name_col")
+        id_col = matrix_cand.get("id_col")
+        if name_col is None or id_col is None:
+            raise TemplateError(
+                f"Template '{os.path.basename(candidate.template_path)}' missing student name or student number column (E12)."
+            )
+
+        # Check geometry
+        date_start = matrix_cand.get("date_columns_start")
+        if date_start is None or date_start < 0:
+            raise TemplateError(
+                f"Template '{os.path.basename(candidate.template_path)}' has invalid date columns start (E16)."
+            )
+
+        session_capacity = matrix_cand.get("template_session_capacity", 0)
+        if session_capacity <= 0:
+            raise TemplateError(
+                f"Template '{os.path.basename(candidate.template_path)}' has invalid session capacity (E16)."
+            )
+
+        student_row_idx = matrix_cand.get("student_template_row_index")
+        if student_row_idx is None or student_row_idx < 0:
+            raise TemplateError(
+                f"Template '{os.path.basename(candidate.template_path)}' has invalid student template row (E16)."
+            )
+
+        info_binding = AttendanceInfoBinding(
+            table_index=tbl_idx,
+            bindings=bindings,
+        )
+
+        matrix_binding = AttendanceMatrixBinding(
+            table_index=m_tbl_idx,
+            header_row0_index=matrix_cand.get("header_row0_index", 0),
+            header_row1_index=matrix_cand.get("header_row1_index", 1),
+            student_template_row_index=student_row_idx,
+            no_col=matrix_cand.get("no_col", 0),
+            name_col=name_col,
+            id_col=id_col,
+            date_columns_start=date_start,
+            summary_columns_count=matrix_cand.get("summary_columns_count", 3),
+            summary_column_names=tuple(matrix_cand.get("summary_column_names", ("lb", "lc", "r"))),
+            template_session_capacity=session_capacity,
+            template_student_row_capacity=matrix_cand.get("template_student_row_capacity", 40),
+        )
+
+        metadata = dict(candidate.metadata)
+        if "output_folder" not in metadata:
+            metadata["output_folder"] = "Attendance"
+
+        return ValidatedAttendanceTemplateRecipe(
+            schema_version=RECIPE_SCHEMA_VERSION,
+            profile_id=profile.profile_id if hasattr(profile, "profile_id") else "attendance_docx",
+            fingerprint=candidate.fingerprint,
+            template_path=candidate.template_path,
+            info_binding=info_binding,
+            matrix_binding=matrix_binding,
+            metadata=metadata,
+            verified_safe=True,
+            _construction_token=_PRIVATE_CONSTRUCTION_SENTINEL,
+        )
+
+    @classmethod
+    def with_metadata(
+        cls,
+        recipe: ValidatedRecipeBase,
+        extra_metadata: Dict[str, Any],
+    ) -> ValidatedRecipeBase:
+        """
+        Produces a new ValidatedRecipe with extra/overridden metadata without mutating the original.
+        """
+        if isinstance(recipe, ValidatedTemplateRecipe):
+            merged_meta = dict(recipe.metadata)
+            merged_meta.update(extra_metadata)
+            if "output_folder" in merged_meta:
+                merged_meta["output_folder"] = validate_output_folder(merged_meta["output_folder"], default="CEIT_Forms")
+            return ValidatedTemplateRecipe(
+                schema_version=recipe.schema_version,
+                profile_id=recipe.profile_id,
+                fingerprint=recipe.fingerprint,
+                template_path=recipe.template_path,
+                roster_binding=recipe.roster_binding,
+                header_bindings=dict(recipe.header_bindings),
+                signature_bindings=dict(recipe.signature_bindings),
+                metadata=merged_meta,
+                verified_safe=recipe.verified_safe,
+                _construction_token=_PRIVATE_CONSTRUCTION_SENTINEL,
+            )
+        elif isinstance(recipe, ValidatedAttendanceTemplateRecipe):
+            merged_meta = dict(recipe.metadata)
+            merged_meta.update(extra_metadata)
+            return ValidatedAttendanceTemplateRecipe(
+                schema_version=recipe.schema_version,
+                profile_id=recipe.profile_id,
+                fingerprint=recipe.fingerprint,
+                template_path=recipe.template_path,
+                info_binding=recipe.info_binding,
+                matrix_binding=recipe.matrix_binding,
+                metadata=merged_meta,
+                verified_safe=recipe.verified_safe,
+                _construction_token=_PRIVATE_CONSTRUCTION_SENTINEL,
+            )
+        raise TypeError(f"Unsupported recipe type: {type(recipe)}")
+
+    @classmethod
     def validate_dict(
         cls,
         data: Dict[str, Any],
         profile: Optional[GeneratorProfile] = None,
-    ) -> ValidatedTemplateRecipe:
+    ) -> ValidatedRecipeBase:
         """
         Validates and deserializes a serialized recipe dictionary.
         Strictly enforces schema_version == 2 and ignores/rejects external construction tokens.
@@ -133,6 +296,27 @@ class RecipeValidator:
             profile = PROFILE_REGISTRY.get(profile, PROFILE_REGISTRY.get(profile_id, PROFILE_ACADEMIC_DOCX))
         elif profile is None:
             profile = PROFILE_REGISTRY.get(profile_id, PROFILE_ACADEMIC_DOCX)
+
+        # Attendance deserialization
+        if profile.profile_id in ("attendance_docx", "attendance") or ("info_binding" in clean_data and "matrix_binding" in clean_data):
+            info_d = clean_data.get("info_binding", {})
+            matrix_d = clean_data.get("matrix_binding", {})
+            info_binding = AttendanceInfoBinding.from_dict(info_d)
+            matrix_binding = AttendanceMatrixBinding.from_dict(matrix_d)
+            metadata = dict(clean_data.get("metadata", {}))
+            if "output_folder" not in metadata:
+                metadata["output_folder"] = "Attendance"
+            return ValidatedAttendanceTemplateRecipe(
+                schema_version=RECIPE_SCHEMA_VERSION,
+                profile_id=clean_data.get("profile_id", "attendance_docx"),
+                fingerprint=clean_data.get("fingerprint", ""),
+                template_path=clean_data.get("template_path", ""),
+                info_binding=info_binding,
+                matrix_binding=matrix_binding,
+                metadata=metadata,
+                verified_safe=clean_data.get("verified_safe", True),
+                _construction_token=_PRIVATE_CONSTRUCTION_SENTINEL,
+            )
 
         # Reconstruct components
         roster_data = clean_data.get("roster_binding") or clean_data.get("roster_table")

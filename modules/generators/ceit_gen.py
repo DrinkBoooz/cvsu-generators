@@ -257,18 +257,23 @@ class GeneratorFactory:
                             saved_meta = recipe_data.get("metadata") if isinstance(recipe_data, dict) else {}
                             if not isinstance(saved_meta, dict):
                                 saved_meta = {}
+                            extra_meta = {}
                             raw_folder = saved_meta.get("output_folder") or (recipe_data.get("output_folder") if isinstance(recipe_data, dict) else None)
                             if raw_folder is not None:
                                 from modules.common.path_utils import validate_output_folder
-                                validated.metadata["output_folder"] = validate_output_folder(raw_folder, default="CEIT_Forms")
+                                extra_meta["output_folder"] = validate_output_folder(raw_folder, default="CEIT_Forms")
                             for k, v in saved_meta.items():
                                 if k != "output_folder":
-                                    validated.metadata[k] = v
+                                    extra_meta[k] = v
                             if suffix:
-                                validated.metadata["suffix"] = suffix
+                                extra_meta["suffix"] = suffix
                             title = ct.get("title")
                             if title:
-                                validated.metadata["title"] = title
+                                extra_meta["title"] = title
+
+                            if extra_meta:
+                                from modules.parsers.recipe_validator import RecipeValidator
+                                validated = RecipeValidator.with_metadata(validated, extra_meta)
 
                             def _make_custom_gen(p=t_path, v=validated):
                                 return ConfigurableDocumentGenerator(p, v)

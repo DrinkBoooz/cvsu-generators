@@ -10,10 +10,24 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Tuple, Optional, Any, Union
 
 
+from types import MappingProxyType
+from collections.abc import Mapping
+
 RECIPE_SCHEMA_VERSION = 2
 
 # Private construction sentinel known only within recipe_validator and this module.
 _PRIVATE_CONSTRUCTION_SENTINEL = object()
+
+
+def freeze_value(val: Any) -> Any:
+    """Recursively converts dict -> MappingProxyType, list -> tuple, set -> frozenset."""
+    if isinstance(val, (dict, Mapping)):
+        return MappingProxyType({k: freeze_value(v) for k, v in val.items()})
+    elif isinstance(val, (list, tuple)):
+        return tuple(freeze_value(v) for v in val)
+    elif isinstance(val, (set, frozenset)):
+        return frozenset(freeze_value(v) for v in val)
+    return val
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -38,6 +52,82 @@ class InvalidRecipeError(TemplateError):
 # ═══════════════════════════════════════════════════════════════════════════════
 # Recipe Component Models
 # ═══════════════════════════════════════════════════════════════════════════════
+
+@dataclass(frozen=True)
+class AttendanceInfoBinding:
+    """Encapsulates discovered information table coordinates and field targets."""
+    table_index: int
+    bindings: Dict[str, Tuple[int, int]]  # field_name -> (row_idx, col_idx)
+
+    def __post_init__(self):
+        object.__setattr__(self, "bindings", freeze_value(dict(self.bindings)))
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "table_index": self.table_index,
+            "bindings": {k: list(v) for k, v in self.bindings.items()},
+        }
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]) -> "AttendanceInfoBinding":
+        return cls(
+            table_index=d["table_index"],
+            bindings={k: tuple(v) for k, v in d.get("bindings", {}).items()},
+        )
+
+
+@dataclass(frozen=True)
+class AttendanceMatrixBinding:
+    """Encapsulates discovered attendance matrix table geometry and column indices."""
+    table_index: int
+    header_row0_index: int
+    header_row1_index: int
+    student_template_row_index: int
+    no_col: int
+    name_col: int
+    id_col: int
+    date_columns_start: int
+    summary_columns_count: int
+    summary_column_names: Tuple[str, ...]
+    template_session_capacity: int
+    template_student_row_capacity: int
+
+    def __post_init__(self):
+        object.__setattr__(self, "summary_column_names", tuple(self.summary_column_names))
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "table_index": self.table_index,
+            "header_row0_index": self.header_row0_index,
+            "header_row1_index": self.header_row1_index,
+            "student_template_row_index": self.student_template_row_index,
+            "no_col": self.no_col,
+            "name_col": self.name_col,
+            "id_col": self.id_col,
+            "date_columns_start": self.date_columns_start,
+            "summary_columns_count": self.summary_columns_count,
+            "summary_column_names": list(self.summary_column_names),
+            "template_session_capacity": self.template_session_capacity,
+            "template_student_row_capacity": self.template_student_row_capacity,
+        }
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]) -> "AttendanceMatrixBinding":
+        return cls(
+            table_index=d["table_index"],
+            header_row0_index=d.get("header_row0_index", 0),
+            header_row1_index=d.get("header_row1_index", 1),
+            student_template_row_index=d.get("student_template_row_index", 2),
+            no_col=d.get("no_col", 0),
+            name_col=d.get("name_col", 1),
+            id_col=d.get("id_col", 2),
+            date_columns_start=d.get("date_columns_start", 3),
+            summary_columns_count=d.get("summary_columns_count", 3),
+            summary_column_names=tuple(d.get("summary_column_names", ("lb", "lc", "r"))),
+            template_session_capacity=d.get("template_session_capacity", 4),
+            template_student_row_capacity=d.get("template_student_row_capacity", 40),
+        )
+
 
 @dataclass(frozen=True)
 class RosterBinding:
@@ -177,7 +267,7 @@ class SignatureBinding:
 class GeneratorProfile:
     """Defines requirements, constraints, and validation rules for a generator family."""
     profile_id: str
-    document_family: str  # "academic_docx", "grade_sheet_xlsx", "custom_docx"
+    document_family: str  # "academic_docx", "grade_sheet_xlsx", "custom_docx", "attendance_docx"
     required_fields: Tuple[str, ...]
     prohibited_fields: Tuple[str, ...] = ()
     requires_capacity: bool = False
@@ -229,11 +319,22 @@ PROFILE_CUSTOM_DOCX = GeneratorProfile(
     supports_auto_scaling=True,
 )
 
+PROFILE_ATTENDANCE_DOCX = GeneratorProfile(
+    profile_id="attendance_docx",
+    document_family="attendance_docx",
+    required_fields=("course_code_title", "class_schedule", "semester_ay", "instructor", "month_year"),
+    prohibited_fields=(),
+    requires_capacity=True,
+    supports_auto_scaling=True,
+)
+
 PROFILE_REGISTRY: Dict[str, GeneratorProfile] = {
     "academic_docx": PROFILE_ACADEMIC_DOCX,
     "grade_sheet_xlsx": PROFILE_GRADE_SHEET_XLSX,
     "grade_sheet": PROFILE_GRADE_SHEET_XLSX,
     "custom_docx": PROFILE_CUSTOM_DOCX,
+    "attendance_docx": PROFILE_ATTENDANCE_DOCX,
+    "attendance": PROFILE_ATTENDANCE_DOCX,
     # Specific subprofiles mapping to academic_docx
     "syllabus": PROFILE_ACADEMIC_DOCX,
     "exam_midterm": PROFILE_ACADEMIC_DOCX,
@@ -246,7 +347,7 @@ PROFILE_REGISTRY: Dict[str, GeneratorProfile] = {
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Inspection Candidate (Unvalidated)
+# Inspection Candidates (Unvalidated)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @dataclass
@@ -265,15 +366,29 @@ class RawTemplateRecipeCandidate:
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass
+class RawAttendanceTemplateRecipeCandidate:
+    """
+    Unvalidated candidate observations emitted strictly by AttendanceTemplateInspector.
+    Inspectors NEVER construct or return ValidatedAttendanceTemplateRecipe.
+    """
+    template_path: str
+    profile_id: str
+    fingerprint: str
+    info_candidate: Optional[Dict[str, Any]] = None
+    matrix_candidate: Optional[Dict[str, Any]] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    collisions: List[Dict[str, Any]] = field(default_factory=list)
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
-# Validated Recipe (Authoritative)
+# Validated Recipes (Authoritative)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-class ValidatedTemplateRecipe:
+class ValidatedRecipeBase:
     """
-    Authoritative, validated template recipe.
-    Can ONLY be constructed via RecipeValidator.validate().
-    Protected by private construction sentinel and AST lint rules.
+    Abstract base class for all authoritative validated template recipes.
+    Protects instance immutability and enforces private construction sentinel token.
     """
 
     __slots__ = (
@@ -281,11 +396,60 @@ class ValidatedTemplateRecipe:
         "profile_id",
         "fingerprint",
         "template_path",
+        "metadata",
+        "verified_safe",
+    )
+
+    def __init__(
+        self,
+        schema_version: int,
+        profile_id: str,
+        fingerprint: str,
+        template_path: str,
+        metadata: Dict[str, Any],
+        verified_safe: bool = True,
+        _construction_token: Any = None,
+    ):
+        if _construction_token is not _PRIVATE_CONSTRUCTION_SENTINEL:
+            raise PermissionError(
+                f"{self.__class__.__name__} can only be constructed via RecipeValidator.validate(). "
+                "Direct instantiation is forbidden."
+            )
+
+        if schema_version != RECIPE_SCHEMA_VERSION:
+            raise InvalidRecipeError(
+                f"Unsupported recipe schema_version: {schema_version}. Expected {RECIPE_SCHEMA_VERSION}."
+            )
+
+        object.__setattr__(self, "schema_version", schema_version)
+        object.__setattr__(self, "profile_id", profile_id)
+        object.__setattr__(self, "fingerprint", fingerprint)
+        object.__setattr__(self, "template_path", template_path)
+        object.__setattr__(self, "metadata", freeze_value(dict(metadata)))
+        object.__setattr__(self, "verified_safe", verified_safe)
+
+    def __setattr__(self, key, value):
+        raise TypeError(f"{self.__class__.__name__} is immutable; cannot modify {key}")
+
+    def __delattr__(self, key):
+        raise TypeError(f"{self.__class__.__name__} is immutable; cannot delete {key}")
+
+    def with_metadata(self, extra_metadata: Dict[str, Any]) -> "ValidatedRecipeBase":
+        from modules.parsers.recipe_validator import RecipeValidator
+        return RecipeValidator.with_metadata(self, extra_metadata)
+
+
+class ValidatedTemplateRecipe(ValidatedRecipeBase):
+    """
+    Authoritative, validated template recipe for Academic/Custom DOCX and Grading XLSX.
+    Can ONLY be constructed via RecipeValidator.validate().
+    Protected by private construction sentinel and AST lint rules.
+    """
+
+    __slots__ = (
         "roster_binding",
         "header_bindings",
         "signature_bindings",
-        "metadata",
-        "verified_safe",
     )
 
     def __init__(
@@ -301,38 +465,32 @@ class ValidatedTemplateRecipe:
         verified_safe: bool = True,
         _construction_token: Any = None,
     ):
-        if _construction_token is not _PRIVATE_CONSTRUCTION_SENTINEL:
-            raise PermissionError(
-                "ValidatedTemplateRecipe can only be constructed via RecipeValidator.validate(). "
-                "Direct instantiation is forbidden."
-            )
+        super().__init__(
+            schema_version=schema_version,
+            profile_id=profile_id,
+            fingerprint=fingerprint,
+            template_path=template_path,
+            metadata=metadata,
+            verified_safe=verified_safe,
+            _construction_token=_construction_token,
+        )
 
-        if schema_version != RECIPE_SCHEMA_VERSION:
-            raise InvalidRecipeError(
-                f"Unsupported recipe schema_version: {schema_version}. Expected {RECIPE_SCHEMA_VERSION}."
-            )
-
-        object.__setattr__(self, "schema_version", schema_version)
-        object.__setattr__(self, "profile_id", profile_id)
-        object.__setattr__(self, "fingerprint", fingerprint)
-        object.__setattr__(self, "template_path", template_path)
         object.__setattr__(self, "roster_binding", roster_binding)
-        object.__setattr__(self, "header_bindings", header_bindings)
-        object.__setattr__(self, "signature_bindings", signature_bindings)
-        object.__setattr__(self, "metadata", metadata)
-        object.__setattr__(self, "verified_safe", verified_safe)
-
-    def __setattr__(self, key, value):
-        raise TypeError(f"ValidatedTemplateRecipe is immutable; cannot modify {key}")
-
-    def __delattr__(self, key):
-        raise TypeError(f"ValidatedTemplateRecipe is immutable; cannot delete {key}")
+        object.__setattr__(self, "header_bindings", freeze_value(dict(header_bindings)))
+        object.__setattr__(self, "signature_bindings", freeze_value(dict(signature_bindings)))
 
     def to_dict(self) -> Dict[str, Any]:
         """
         Serializes recipe to plain dictionary for caching, persistence, or IPC.
         CRITICAL: _construction_token is NEVER included.
         """
+        def _unfreeze(v):
+            if isinstance(v, Mapping):
+                return {k: _unfreeze(val) for k, val in v.items()}
+            elif isinstance(v, tuple):
+                return [_unfreeze(val) for val in v]
+            return v
+
         return {
             "schema_version": self.schema_version,
             "profile_id": self.profile_id,
@@ -341,7 +499,7 @@ class ValidatedTemplateRecipe:
             "roster_binding": self.roster_binding.to_dict() if self.roster_binding else None,
             "header_bindings": {k: v.to_dict() for k, v in self.header_bindings.items()},
             "signature_bindings": {k: v.to_dict() for k, v in self.signature_bindings.items()},
-            "metadata": dict(self.metadata),
+            "metadata": _unfreeze(self.metadata),
             "verified_safe": self.verified_safe,
         }
 
@@ -355,3 +513,61 @@ class ValidatedTemplateRecipe:
     def get_signature_target(self, role: str) -> Optional[Any]:
         b = self.signature_bindings.get(role)
         return b.target if b else None
+
+
+class ValidatedAttendanceTemplateRecipe(ValidatedRecipeBase):
+    """
+    Authoritative, validated template recipe for Attendance DOCX.
+    Can ONLY be constructed via RecipeValidator.validate().
+    Protected by private construction sentinel and AST lint rules.
+    """
+
+    __slots__ = (
+        "info_binding",
+        "matrix_binding",
+    )
+
+    def __init__(
+        self,
+        schema_version: int,
+        profile_id: str,
+        fingerprint: str,
+        template_path: str,
+        info_binding: AttendanceInfoBinding,
+        matrix_binding: AttendanceMatrixBinding,
+        metadata: Dict[str, Any],
+        verified_safe: bool = True,
+        _construction_token: Any = None,
+    ):
+        super().__init__(
+            schema_version=schema_version,
+            profile_id=profile_id,
+            fingerprint=fingerprint,
+            template_path=template_path,
+            metadata=metadata,
+            verified_safe=verified_safe,
+            _construction_token=_construction_token,
+        )
+
+        object.__setattr__(self, "info_binding", info_binding)
+        object.__setattr__(self, "matrix_binding", matrix_binding)
+
+    def to_dict(self) -> Dict[str, Any]:
+        def _unfreeze(v):
+            if isinstance(v, Mapping):
+                return {k: _unfreeze(val) for k, val in v.items()}
+            elif isinstance(v, tuple):
+                return [_unfreeze(val) for val in v]
+            return v
+
+        return {
+            "schema_version": self.schema_version,
+            "profile_id": self.profile_id,
+            "fingerprint": self.fingerprint,
+            "template_path": self.template_path,
+            "info_binding": self.info_binding.to_dict(),
+            "matrix_binding": self.matrix_binding.to_dict(),
+            "metadata": _unfreeze(self.metadata),
+            "verified_safe": self.verified_safe,
+        }
+

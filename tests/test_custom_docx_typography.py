@@ -578,7 +578,7 @@ def test_custom_template_routing_and_lifecycle(tmp_path):
     assert templates[0]["recipe"]["metadata"]["output_folder"] == "Advising_Logs"
 
     # Generator output_folder property
-    recipe.metadata["output_folder"] = "Advising_Logs"
+    recipe = recipe.with_metadata({"output_folder": "Advising_Logs"})
     gen = ConfigurableDocumentGenerator(tmpl_path, recipe)
     assert gen.output_folder == "Advising_Logs"
 

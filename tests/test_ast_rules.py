@@ -39,33 +39,38 @@ def test_ast_no_direct_validated_recipe_construction():
                     elif isinstance(func, ast.Attribute):
                         name = func.attr
 
-                    if name == "ValidatedTemplateRecipe":
+                    if name in ("ValidatedTemplateRecipe", "ValidatedAttendanceTemplateRecipe"):
                         rel = os.path.relpath(fpath, REPO_ROOT)
                         violations.append(f"{rel}:{node.lineno}")
 
     assert not violations, (
-        f"Direct construction of ValidatedTemplateRecipe is forbidden in generators/services:\n"
+        f"Direct construction of ValidatedTemplateRecipe or ValidatedAttendanceTemplateRecipe is forbidden in generators/services:\n"
         + "\n".join(violations)
     )
 
 
 def test_ast_no_hardcoded_template_bindings_in_ceit_gen():
-    """Rule 2: ceit_gen.py must not contain hardcoded positional table/cell bindings
+    """Rule 2: ceit_gen.py and attendance_gen.py must not contain hardcoded positional table/cell bindings
     (e.g. tables[0], tables[1], rows[0].cells[1] for metadata binding)."""
-    ceit_gen_path = os.path.join(REPO_ROOT, "modules", "generators", "ceit_gen.py")
-    with open(ceit_gen_path, "r", encoding="utf-8") as f:
-        tree = ast.parse(f.read(), filename=ceit_gen_path)
-
+    target_files = [
+        os.path.join(REPO_ROOT, "modules", "generators", "ceit_gen.py"),
+        os.path.join(REPO_ROOT, "modules", "generators", "attendance_gen.py"),
+    ]
     violations = []
-    for node in ast.walk(tree):
-        # Check for subscript access like tables[0] or tables[1]
-        if isinstance(node, ast.Subscript):
-            if isinstance(node.value, ast.Name) and node.value.id in ("tables", "doc_tables"):
-                if isinstance(node.slice, ast.Constant) and isinstance(node.slice.value, int):
-                    violations.append(f"Subscript on tables[{node.slice.value}] at line {node.lineno}")
+    for fpath in target_files:
+        with open(fpath, "r", encoding="utf-8") as f:
+            tree = ast.parse(f.read(), filename=fpath)
+
+        for node in ast.walk(tree):
+            # Check for subscript access like tables[0] or tables[1]
+            if isinstance(node, ast.Subscript):
+                if isinstance(node.value, ast.Name) and node.value.id in ("tables", "doc_tables"):
+                    if isinstance(node.slice, ast.Constant) and isinstance(node.slice.value, int):
+                        rel = os.path.relpath(fpath, REPO_ROOT)
+                        violations.append(f"{rel}: Subscript on tables[{node.slice.value}] at line {node.lineno}")
 
     assert not violations, (
-        f"Found hardcoded positional table indexing in ceit_gen.py:\n"
+        f"Found hardcoded positional table indexing in generators:\n"
         + "\n".join(violations)
     )
 
@@ -106,10 +111,11 @@ def test_ast_no_hardcoded_cell_coordinates_in_grade_gen():
 
 
 def test_ast_generators_require_recipe_in_init():
-    """Rule 4: All generator classes in ceit_gen.py and grade_gen.py must require a recipe parameter in __init__."""
+    """Rule 4: All generator classes in ceit_gen.py, grade_gen.py, and attendance_gen.py must require a recipe parameter in __init__."""
     target_files = [
         os.path.join(REPO_ROOT, "modules", "generators", "ceit_gen.py"),
         os.path.join(REPO_ROOT, "modules", "generators", "grade_gen.py"),
+        os.path.join(REPO_ROOT, "modules", "generators", "attendance_gen.py"),
     ]
 
     for fpath in target_files:

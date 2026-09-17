@@ -11,13 +11,26 @@ from modules.models.recipe import (
     AmbiguousTemplateError,
     InvalidRecipeError,
     RawTemplateRecipeCandidate,
+    RawAttendanceTemplateRecipeCandidate,
+    ValidatedAttendanceTemplateRecipe,
+    AttendanceInfoBinding,
+    AttendanceMatrixBinding,
     PROFILE_ACADEMIC_DOCX,
     PROFILE_GRADE_SHEET_XLSX,
+    PROFILE_ATTENDANCE_DOCX,
     PROFILE_REGISTRY,
 )
 from modules.parsers.recipe_validator import RecipeValidator
-from modules.parsers.template_inspector import DocxTemplateInspector, XlsxTemplateInspector
+from modules.parsers.template_inspector import (
+    DocxTemplateInspector,
+    XlsxTemplateInspector,
+    AttendanceTemplateInspector,
+)
 from modules.generators.ceit_gen import GeneratorFactory
+from modules.generators.attendance_gen import (
+    AttendanceGenerator,
+    generate_attendance_for_month,
+)
 from modules.services.template_recipe_service import TemplateRecipeResolver
 
 
@@ -379,3 +392,249 @@ def test_e10_legacy_and_unsupported_schema_rejection():
             _construction_token="unauthorized_sentinel",
         )
     assert "can only be constructed via RecipeValidator.validate()" in str(exc_info.value)
+
+    # 6. Direct instantiation of ValidatedAttendanceTemplateRecipe outside validator is forbidden
+    with pytest.raises(PermissionError) as exc_info:
+        ValidatedAttendanceTemplateRecipe(
+            schema_version=RECIPE_SCHEMA_VERSION,
+            profile_id="attendance_docx",
+            fingerprint="fake_fp",
+            template_path="fake.docx",
+            info_binding=AttendanceInfoBinding(0, {}),
+            matrix_binding=AttendanceMatrixBinding(1, 0, 1, 2, 0, 1, 2, 3, 3, ("lb", "lc", "r"), 4, 40),
+            metadata={},
+            verified_safe=True,
+            _construction_token="unauthorized_sentinel",
+        )
+    assert "can only be constructed via RecipeValidator.validate()" in str(exc_info.value)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Attendance Invalid-Template Tests (E11–E18) & Recipe Path Enforcement
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def test_e11_missing_attendance_matrix(tmp_path):
+    """E11: Template missing required attendance matrix table raises TemplateError."""
+    candidate = RawAttendanceTemplateRecipeCandidate(
+        template_path=str(tmp_path / "dummy_att.docx"),
+        profile_id="attendance_docx",
+        fingerprint="dummy_fp",
+        info_candidate={
+            "table_index": 0,
+            "bindings": {"course_code_title": (0, 1), "month_year": (0, 4)},
+        },
+        matrix_candidate=None,
+        metadata={},
+        collisions=[],
+    )
+    with pytest.raises(TemplateError) as exc_info:
+        RecipeValidator.validate(candidate, PROFILE_ATTENDANCE_DOCX)
+    assert "missing required attendance matrix table" in str(exc_info.value)
+
+
+def test_e12_missing_student_name_or_number(tmp_path):
+    """E12: Matrix table missing student name or student number column raises TemplateError."""
+    candidate = RawAttendanceTemplateRecipeCandidate(
+        template_path=str(tmp_path / "dummy_att.docx"),
+        profile_id="attendance_docx",
+        fingerprint="dummy_fp",
+        info_candidate={
+            "table_index": 0,
+            "bindings": {"course_code_title": (0, 1)},
+        },
+        matrix_candidate={
+            "table_index": 1,
+            "name_col": 1,
+            "id_col": None,  # Missing student number column
+            "date_columns_start": 3,
+            "template_session_capacity": 4,
+            "student_template_row_index": 2,
+        },
+        metadata={},
+        collisions=[],
+    )
+    with pytest.raises(TemplateError) as exc_info:
+        RecipeValidator.validate(candidate, PROFILE_ATTENDANCE_DOCX)
+    assert "missing student name or student number column" in str(exc_info.value)
+
+
+def test_e13_missing_info_table(tmp_path):
+    """E13: Template missing required information table raises TemplateError."""
+    candidate = RawAttendanceTemplateRecipeCandidate(
+        template_path=str(tmp_path / "dummy_att.docx"),
+        profile_id="attendance_docx",
+        fingerprint="dummy_fp",
+        info_candidate=None,
+        matrix_candidate={
+            "table_index": 1,
+            "name_col": 1,
+            "id_col": 2,
+            "date_columns_start": 3,
+            "template_session_capacity": 4,
+            "student_template_row_index": 2,
+        },
+        metadata={},
+        collisions=[],
+    )
+    with pytest.raises(TemplateError) as exc_info:
+        RecipeValidator.validate(candidate, PROFILE_ATTENDANCE_DOCX)
+    assert "missing required information table" in str(exc_info.value)
+
+
+def test_e14_ambiguous_attendance_matrices(tmp_path):
+    """E14: Conflicting or ambiguous attendance matrix candidates raise AmbiguousTemplateError."""
+    candidate = RawAttendanceTemplateRecipeCandidate(
+        template_path=str(tmp_path / "dummy_att.docx"),
+        profile_id="attendance_docx",
+        fingerprint="dummy_fp",
+        info_candidate={"table_index": 0, "bindings": {"course_code_title": (0, 1)}},
+        matrix_candidate=None,
+        metadata={},
+        collisions=[
+            {
+                "type": "ambiguous_matrix_table",
+                "candidates": [1, 2],
+            }
+        ],
+    )
+    with pytest.raises(AmbiguousTemplateError) as exc_info:
+        RecipeValidator.validate(candidate, PROFILE_ATTENDANCE_DOCX)
+    assert "conflicting structural candidates" in str(exc_info.value)
+
+
+def test_e15_ambiguous_date_session_structure(tmp_path):
+    """E15: Conflicting structural signals in template raise AmbiguousTemplateError."""
+    candidate = RawAttendanceTemplateRecipeCandidate(
+        template_path=str(tmp_path / "dummy_att.docx"),
+        profile_id="attendance_docx",
+        fingerprint="dummy_fp",
+        info_candidate={"table_index": 0, "bindings": {"course_code_title": (0, 1)}},
+        matrix_candidate=None,
+        metadata={},
+        collisions=[
+            {
+                "type": "ambiguous_info_table",
+                "candidates": [0, 1],
+            }
+        ],
+    )
+    with pytest.raises(AmbiguousTemplateError) as exc_info:
+        RecipeValidator.validate(candidate, PROFILE_ATTENDANCE_DOCX)
+    assert "conflicting structural candidates" in str(exc_info.value)
+
+
+def test_e16_invalid_attendance_geometry(tmp_path):
+    """E16: Matrix candidate with invalid geometry (negative columns, 0 capacity) raises TemplateError."""
+    candidate = RawAttendanceTemplateRecipeCandidate(
+        template_path=str(tmp_path / "dummy_att.docx"),
+        profile_id="attendance_docx",
+        fingerprint="dummy_fp",
+        info_candidate={"table_index": 0, "bindings": {"course_code_title": (0, 1)}},
+        matrix_candidate={
+            "table_index": 1,
+            "name_col": 1,
+            "id_col": 2,
+            "date_columns_start": -1,  # Invalid
+            "template_session_capacity": 0,  # Invalid
+            "student_template_row_index": 2,
+        },
+        metadata={},
+        collisions=[],
+    )
+    with pytest.raises(TemplateError) as exc_info:
+        RecipeValidator.validate(candidate, PROFILE_ATTENDANCE_DOCX)
+    assert "invalid date columns start" in str(exc_info.value) or "invalid session capacity" in str(exc_info.value)
+
+
+def test_e17_insufficient_generation_capacity(tmp_path):
+    """E17: Requesting sessions that exceed printable width threshold (DATE_W < 25 pct) raises TemplateError."""
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    tmpl_path = os.path.join(repo_root, "attendance", "template lec.docx")
+    assert os.path.exists(tmpl_path)
+
+    resolver = TemplateRecipeResolver.get_instance()
+    recipe = resolver.resolve(tmpl_path, profile_id="attendance_docx")
+    assert isinstance(recipe, ValidatedAttendanceTemplateRecipe)
+
+    gen = AttendanceGenerator(tmpl_path, recipe)
+    out_path = str(tmp_path / "out_e17.docx")
+
+    # 12 months with 5 days a week -> over 250 dates, column width < 10 pct -> raises TemplateError
+    all_months = list(range(1, 13))
+    all_weekdays = [0, 1, 2, 3, 4]  # Mon-Fri
+    with pytest.raises(TemplateError) as exc_info:
+        gen.generate(
+            output_path=out_path,
+            course_code_title="COSC 100",
+            class_schedule="08:00AM-09:00AM / Mon, Tue, Wed, Thu, Fri",
+            semester_ay="1st Sem",
+            room_assignment="CL1",
+            instructor="Prof. Test",
+            months=all_months,
+            year=2026,
+            weekdays=all_weekdays,
+            students=[("Student A", "20261001")],
+        )
+    assert "Insufficient generation capacity" in str(exc_info.value)
+
+
+def test_e18_wrong_profile_supplied_to_ordinary_docx(tmp_path):
+    """E18: Supplying wrong profile to template fails closed with TemplateError."""
+    # 1. Ordinary non-attendance candidate with attendance profile
+    raw_cand = RawTemplateRecipeCandidate(
+        template_path=str(tmp_path / "ordinary.docx"),
+        profile_id="academic_docx",
+        fingerprint="fp_ord",
+    )
+    with pytest.raises(TemplateError) as exc_info:
+        RecipeValidator.validate(raw_cand, profile=PROFILE_ATTENDANCE_DOCX)
+    assert "fails profile 'attendance_docx'" in str(exc_info.value)
+
+    # 2. Attendance candidate with non-attendance profile
+    att_cand = RawAttendanceTemplateRecipeCandidate(
+        template_path=str(tmp_path / "att.docx"),
+        profile_id="attendance_docx",
+        fingerprint="fp_att",
+    )
+    with pytest.raises(TemplateError) as exc_info:
+        RecipeValidator.validate(att_cand, profile=PROFILE_ACADEMIC_DOCX)
+    assert "cannot be validated against profile 'academic_docx'" in str(exc_info.value)
+
+
+def test_direct_recipe_path_enforcement(tmp_path):
+    """Requirement 15: Prove AttendanceGenerator rejects invalid recipes,
+    and generate_attendance_for_month cannot bypass recipe resolution."""
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    tmpl_path = os.path.join(repo_root, "attendance", "template lec.docx")
+    assert os.path.exists(tmpl_path)
+
+    # 1. AttendanceGenerator rejects arbitrary/invalid objects
+    with pytest.raises(TypeError) as exc_info:
+        AttendanceGenerator(tmpl_path, "not_a_recipe")
+    assert "requires a ValidatedAttendanceTemplateRecipe" in str(exc_info.value)
+
+    with pytest.raises(TypeError) as exc_info:
+        AttendanceGenerator(tmpl_path, None)
+    assert "requires a ValidatedAttendanceTemplateRecipe" in str(exc_info.value)
+
+    # 2. AttendanceGenerator rejects non-attendance ValidatedTemplateRecipe
+    resolver = TemplateRecipeResolver.get_instance()
+    syl_path = os.path.join(repo_root, "templates", "template_syllabus.docx")
+    syl_recipe = resolver.resolve(syl_path, profile_id="academic_docx")
+    with pytest.raises(TypeError) as exc_info:
+        AttendanceGenerator(tmpl_path, syl_recipe)
+    assert "requires a ValidatedAttendanceTemplateRecipe" in str(exc_info.value)
+
+    # 3. generate_attendance_for_month cannot bypass recipe resolution on nonexistent template
+    out_path = str(tmp_path / "out_enforce.docx")
+    with pytest.raises(FileNotFoundError):
+        generate_attendance_for_month(
+            template_path=str(tmp_path / "nonexistent_tmpl.docx"),
+            output_path=out_path,
+            info={"course": "CS", "subject": "Math"},
+            students=[],
+            month="DECEMBER",
+            year=2026,
+            class_day="Mon",
+        )
+

@@ -20,12 +20,16 @@ from modules.common.logger import logger
 from modules.common.docx_utils import load_docx, get_full_text, w
 from modules.models.recipe import (
     TemplateError,
+    AmbiguousTemplateError,
     GeneratorProfile,
     PROFILE_REGISTRY,
     PROFILE_ACADEMIC_DOCX,
     PROFILE_GRADE_SHEET_XLSX,
+    PROFILE_ATTENDANCE_DOCX,
     RawTemplateRecipeCandidate,
+    RawAttendanceTemplateRecipeCandidate,
     ValidatedTemplateRecipe,
+    ValidatedAttendanceTemplateRecipe,
 )
 from modules.parsers.semantic_registry import (
     SemanticRegistry,
@@ -906,3 +910,287 @@ class TemplateInspector:
         candidate = self._docx_inspector.inspect(template_path, profile_id=profile_id)
         profile = PROFILE_REGISTRY.get(profile_id, PROFILE_ACADEMIC_DOCX)
         return RecipeValidator.validate(candidate, profile)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# AttendanceTemplateInspector
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class AttendanceTemplateInspector:
+    """
+    Analyzes Word (.docx) templates specifically for Attendance sheets
+    and emits raw candidate observations.
+    CRITICAL: inspect() returns RawAttendanceTemplateRecipeCandidate.
+    Inspectors NEVER construct or return ValidatedAttendanceTemplateRecipe.
+    RecipeValidator owns validation authority.
+    """
+
+    INFO_PATTERNS = {
+        "course_code_title": re.compile(r"(?i)\b(course\s*(?:code)?(?:\s*&)?\s*title|subject|course)\b"),
+        "month_year": re.compile(r"(?i)\b(month\s*(?:&)?\s*year|for\s+the\s+month|month)\b"),
+        "class_schedule": re.compile(r"(?i)\b(class\s*schedule|schedule|time)\b"),
+        "semester_ay": re.compile(r"(?i)\b(semester\s*(?:&)?\s*ay|semester|a\.?y\.?|academic\s*year)\b"),
+        "room_assignment": re.compile(r"(?i)\b(room\s*assignment|room)\b"),
+        "instructor": re.compile(r"(?i)\b(name\s*of\s*instructor|instructor|professor|faculty)\b"),
+    }
+
+    def inspect(
+        self,
+        template_path: str,
+        profile_id: str = "attendance_docx",
+    ) -> RawAttendanceTemplateRecipeCandidate:
+        """
+        Inspects an Attendance Word (.docx) template file and produces raw candidate observations.
+        """
+        if not os.path.exists(template_path):
+            raise FileNotFoundError(f"Template file not found: {template_path}")
+
+        h = hashlib.sha256()
+        with open(template_path, "rb") as f:
+            for chunk in iter(lambda: f.read(65536), b""):
+                h.update(chunk)
+        fingerprint = h.hexdigest()
+
+        zin, root, body = load_docx(template_path)
+        zin.close()
+        tables = body.findall(w("tbl"))
+
+        info_candidates: List[Dict[str, Any]] = []
+        matrix_candidates: List[Dict[str, Any]] = []
+        collisions: List[Dict[str, Any]] = []
+
+        for tbl_idx, tbl in enumerate(tables):
+            # 1. Evaluate for info table
+            info_score, bindings = self._evaluate_info_table(tbl, tbl_idx)
+            if info_score >= 3:
+                info_candidates.append({
+                    "table_index": tbl_idx,
+                    "score": info_score,
+                    "bindings": bindings,
+                })
+
+            # 2. Evaluate for matrix table
+            matrix_cand = self._evaluate_matrix_table(tbl, tbl_idx)
+            if matrix_cand is not None:
+                matrix_candidates.append(matrix_cand)
+
+        selected_info = None
+        if len(info_candidates) == 1:
+            selected_info = info_candidates[0]
+        elif len(info_candidates) > 1:
+            info_candidates.sort(key=lambda x: x["score"], reverse=True)
+            if info_candidates[0]["score"] == info_candidates[1]["score"]:
+                collisions.append({
+                    "type": "ambiguous_info_table",
+                    "candidates": [c["table_index"] for c in info_candidates],
+                })
+            else:
+                selected_info = info_candidates[0]
+
+        selected_matrix = None
+        if len(matrix_candidates) == 1:
+            selected_matrix = matrix_candidates[0]
+        elif len(matrix_candidates) > 1:
+            collisions.append({
+                "type": "ambiguous_matrix_table",
+                "candidates": [c["table_index"] for c in matrix_candidates],
+            })
+
+        if selected_info and selected_matrix and selected_info["table_index"] == selected_matrix["table_index"]:
+            collisions.append({
+                "type": "table_identity_collision",
+                "table_index": selected_info["table_index"],
+            })
+            selected_info = None
+            selected_matrix = None
+
+        return RawAttendanceTemplateRecipeCandidate(
+            template_path=template_path,
+            profile_id=profile_id,
+            fingerprint=fingerprint,
+            info_candidate=selected_info,
+            matrix_candidate=selected_matrix,
+            metadata={"output_folder": "Attendance"},
+            collisions=collisions,
+        )
+
+    def _evaluate_info_table(self, tbl, tbl_idx: int) -> Tuple[int, Dict[str, Tuple[int, int]]]:
+        rows = tbl.findall(w("tr"))
+        if len(rows) < 2:
+            return 0, {}
+
+        bindings: Dict[str, Tuple[int, int]] = {}
+        matched_fields = set()
+
+        for r_idx, tr in enumerate(rows):
+            cells = tr.findall(w("tc"))
+            for c_idx, tc in enumerate(cells):
+                txt = get_full_text(tc).strip()
+                if not txt:
+                    continue
+
+                for field_name, pattern in self.INFO_PATTERNS.items():
+                    if field_name in matched_fields:
+                        continue
+                    if pattern.search(txt):
+                        if c_idx + 1 < len(cells):
+                            target_cell = (r_idx, c_idx + 1)
+                        else:
+                            target_cell = (r_idx, c_idx)
+                        bindings[field_name] = target_cell
+                        matched_fields.add(field_name)
+
+        return len(matched_fields), bindings
+
+    def _evaluate_matrix_table(self, tbl, tbl_idx: int) -> Optional[Dict[str, Any]]:
+        rows = tbl.findall(w("tr"))
+        if len(rows) < 3:
+            return None
+
+        no_col = None
+        name_col = None
+        id_col = None
+        header_row0_idx = None
+        header_row1_idx = None
+        student_template_row_idx = None
+
+        for r_idx, tr in enumerate(rows[:6]):
+            cells = tr.findall(w("tc"))
+            row_texts = [get_full_text(c).strip().upper() for c in cells]
+
+            has_no = any(bool(re.match(r"^(\s*NO\.?|\s*#|\s*ITEM)\s*$", t)) for t in row_texts)
+            has_name = any("NAME" in t or "PANGALAN" in t for t in row_texts)
+            has_id = any("STUDENT NUMBER" in t or "STUDENT NO" in t or "NUMERO" in t or "ID" in t for t in row_texts)
+            has_week = any("WEEK" in t for t in row_texts)
+
+            if (has_no and has_name) or (has_week and (has_name or has_no or has_id)):
+                if header_row0_idx is None:
+                    header_row0_idx = r_idx
+                elif header_row1_idx is None:
+                    header_row1_idx = r_idx
+
+        if header_row0_idx is None:
+            return None
+
+        if header_row1_idx is None and header_row0_idx + 1 < len(rows):
+            r1_cells = rows[header_row0_idx + 1].findall(w("tc"))
+            r1_texts = [get_full_text(c).strip().upper() for c in r1_cells]
+            if (
+                any(t in ("LB", "LC", "R") for t in r1_texts)
+                or any("DATE" in t for t in r1_texts)
+                or any(t.isdigit() for t in r1_texts)
+            ):
+                header_row1_idx = header_row0_idx + 1
+            else:
+                header_row1_idx = header_row0_idx
+
+        eval_rows = [header_row0_idx]
+        if header_row1_idx is not None and header_row1_idx != header_row0_idx:
+            eval_rows.append(header_row1_idx)
+
+        summary_cols = []
+        summary_names = []
+
+        for r_idx in eval_rows:
+            cells = rows[r_idx].findall(w("tc"))
+            for c_idx, c in enumerate(cells):
+                txt = get_full_text(c).strip().upper()
+                if no_col is None and re.match(r"^(\s*NO\.?|\s*#|\s*ITEM)\s*$", txt):
+                    no_col = c_idx
+                if name_col is None and ("NAME" in txt or "PANGALAN" in txt):
+                    name_col = c_idx
+                if id_col is None and ("STUDENT NUMBER" in txt or "STUDENT NO" in txt or "NUMERO" in txt or "ID" in txt):
+                    id_col = c_idx
+                if txt in ("LB", "LC", "R") or txt in ("REMARKS", "TOTAL", "ABSENT"):
+                    if c_idx not in summary_cols:
+                        summary_cols.append(c_idx)
+                        summary_names.append(txt.lower())
+
+        if name_col is None or id_col is None:
+            return None
+
+        if no_col is None:
+            no_col = 0
+
+        start_search = max(eval_rows) + 1
+        student_rows_count = 0
+
+        for r_idx in range(start_search, len(rows)):
+            tr = rows[r_idx]
+            cells = tr.findall(w("tc"))
+            if len(cells) < 3:
+                continue
+
+            cell_texts = [get_full_text(c).strip() for c in cells]
+            
+            # Check for decorative / guidance rows (e.g. non-numeric text in no_col like "GUIDE", "NOTE" with empty name/id)
+            no_text = cell_texts[no_col] if no_col < len(cell_texts) else ""
+            name_text = cell_texts[name_col] if name_col < len(cell_texts) else ""
+            id_text = cell_texts[id_col] if id_col < len(cell_texts) else ""
+            is_decorative = (
+                (no_text and not no_text.isdigit() and not name_text and not id_text)
+                or (no_text.upper() in ("GUIDE", "NOTE", "INSTRUCTIONS", "REMARKS"))
+            )
+            if is_decorative and student_template_row_idx is None:
+                continue
+
+            if student_template_row_idx is None:
+                # Discovered prototype student row
+                student_template_row_idx = r_idx
+                student_rows_count += 1
+            else:
+                student_rows_count += 1
+
+        if student_template_row_idx is None:
+            student_template_row_idx = max(eval_rows) + 1
+
+        student_cols = [c for c in (no_col, name_col, id_col) if c is not None]
+
+        # Discover actual starting column of date/session columns
+        first_date_col = None
+        for r_idx in eval_rows:
+            cells = rows[r_idx].findall(w("tc"))
+            for c_idx, c in enumerate(cells):
+                txt = get_full_text(c).strip().upper()
+                if "WEEK" in txt or txt.startswith("DATE") or (r_idx == header_row1_idx and txt.isdigit() and int(txt) <= 31):
+                    if c_idx not in student_cols:
+                        if first_date_col is None or c_idx < first_date_col:
+                            first_date_col = c_idx
+
+        if first_date_col is not None:
+            date_columns_start = first_date_col
+        else:
+            date_columns_start = max(student_cols) + 1
+
+        summary_cols_sorted = sorted(summary_cols)
+        summary_count = len(summary_cols_sorted) if summary_cols_sorted else 3
+        if not summary_names:
+            summary_names = ["lb", "lc", "r"]
+
+        target_row_for_len = (
+            rows[student_template_row_idx]
+            if student_template_row_idx < len(rows)
+            else rows[header_row1_idx or 0]
+        )
+        num_cols = len(target_row_for_len.findall(w("tc")))
+        if summary_cols_sorted:
+            first_summary_col = summary_cols_sorted[0]
+            template_session_capacity = max(1, first_summary_col - date_columns_start)
+        else:
+            template_session_capacity = max(1, num_cols - date_columns_start - summary_count)
+
+        return {
+            "table_index": tbl_idx,
+            "header_row0_index": header_row0_idx,
+            "header_row1_index": header_row1_idx if header_row1_idx is not None else header_row0_idx,
+            "student_template_row_index": student_template_row_idx,
+            "no_col": no_col,
+            "name_col": name_col,
+            "id_col": id_col,
+            "date_columns_start": date_columns_start,
+            "summary_columns_count": summary_count,
+            "summary_column_names": tuple(summary_names),
+            "template_session_capacity": template_session_capacity,
+            "template_student_row_capacity": max(student_rows_count, 40),
+        }
+

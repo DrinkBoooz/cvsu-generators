@@ -6,7 +6,13 @@ from .schedule_parser import (
     _find_candidate_classes_from_hints, get_day_name, get_subject_code,
     normalize_room, format_canonical_schedule
 )
-from .template_inspector import TemplateInspector
+from .template_inspector import (
+    TemplateInspector,
+    DocxTemplateInspector,
+    XlsxTemplateInspector,
+    AttendanceTemplateInspector,
+)
+from .recipe_validator import RecipeValidator
 
 __all__ = [
     "CEIT_PREFIX_MAP",
@@ -28,4 +34,8 @@ __all__ = [
     "get_day_name",
     "get_subject_code",
     "TemplateInspector",
+    "DocxTemplateInspector",
+    "XlsxTemplateInspector",
+    "AttendanceTemplateInspector",
+    "RecipeValidator",
 ]
