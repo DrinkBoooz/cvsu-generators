@@ -164,3 +164,84 @@ def test_settings_modal_responsive_short_viewport():
         assert m_info["bodyOverflowY"] in ["auto", "scroll"], "Modal body must remain scrollable on short viewports"
 
         browser.close()
+
+
+def test_settings_degree_aliases_stretches_and_faculty_apple_hig():
+    """Assert Degree Aliases table wrapper fills uniform box and Faculty Defaults adheres to Apple HIG with live preview."""
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": 1280, "height": 800})
+        page.goto(FILE_URL)
+
+        # 1. Verify Step 4 Dates Chip is initially dynamic (not ready when dates empty)
+        chip4 = page.locator("#chipStep4")
+        page.evaluate("""() => {
+            document.getElementById('startDate').value = '';
+            document.getElementById('endDate').value = '';
+            if (typeof updateStepperStatus === 'function') updateStepperStatus();
+        }""")
+        page.wait_for_timeout(50)
+        assert "ready" not in (chip4.get_attribute("class") or ""), "Step 4 chip must NOT be ready when dates are blank"
+
+        # Fill dates and verify chip turns ready
+        page.evaluate("""() => {
+            document.getElementById('startDate').value = '2026-08-01';
+            document.getElementById('endDate').value = '2026-12-18';
+            if (typeof updateStepperStatus === 'function') updateStepperStatus();
+        }""")
+        page.wait_for_timeout(50)
+        assert "ready" in (chip4.get_attribute("class") or ""), "Step 4 chip must be ready when dates are provided"
+
+        # Open Settings Modal
+        page.click("#btnOpenSettings")
+        page.wait_for_selector("#modalParserSettingsBackdrop:not(.d-none)")
+
+        # 2. Check Degree Aliases Tab stretches to fill uniform dialog
+        page.click("#cfgTabDegrees")
+        page.wait_for_timeout(100)
+
+        deg_info = page.evaluate("""() => {
+            const wrap = document.querySelector('#cfgPaneDegrees .settings-table-wrapper');
+            const r = wrap.getBoundingClientRect();
+            const cs = window.getComputedStyle(wrap);
+            return {
+                height: r.height,
+                maxHeight: cs.maxHeight,
+                flex: cs.flex
+            };
+        }""")
+        assert deg_info["maxHeight"] == "none", f"Degree aliases wrapper must have max-height: none, got {deg_info['maxHeight']}"
+        assert deg_info["height"] >= 280, f"Degree aliases wrapper must stretch to fill dialog (expected >=280px, got {deg_info['height']}px)"
+
+        # 3. Check Faculty Defaults Tab (Apple HIG Grouped List + Live Preview Card)
+        page.click("#cfgTabSchedule")
+        page.wait_for_timeout(100)
+
+        hig_info = page.evaluate("""() => {
+            const group = document.querySelector('#cfgPaneSchedule .apple-hig-group');
+            const rows = document.querySelectorAll('#cfgPaneSchedule .apple-hig-row');
+            const preview = document.querySelector('#cfgPaneSchedule .apple-hig-preview-card');
+            const tiles = document.querySelectorAll('#cfgPaneSchedule .apple-hig-icon-tile');
+            return {
+                hasGroup: !!group,
+                rowCount: rows.length,
+                hasPreview: !!preview,
+                tileCount: tiles.length
+            };
+        }""")
+        assert hig_info["hasGroup"], "Apple HIG Grouped list must exist in Faculty Defaults"
+        assert hig_info["rowCount"] == 3, f"Expected 3 Apple HIG rows, found {hig_info['rowCount']}"
+        assert hig_info["hasPreview"], "Document Header Live Preview card must exist"
+        assert hig_info["tileCount"] == 3, "Each row must have a leading icon tile"
+
+        # 4. Verify Live Sync in Document Header Preview
+        instr_input = page.locator("#cfgDefaultInstructor")
+        preview_instr = page.locator("#previewHeaderInstructor")
+        instr_input.fill("PROF. DAN JOSEPH A. ORTEGA")
+        page.wait_for_timeout(50)
+        assert "PROF. DAN JOSEPH A. ORTEGA" in preview_instr.inner_text(), (
+            f"Preview must update live: got '{preview_instr.inner_text()}'"
+        )
+
+        browser.close()
+

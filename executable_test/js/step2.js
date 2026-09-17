@@ -836,6 +836,7 @@
         if (s) document.getElementById("startDate").value = s;
         if (e) document.getElementById("endDate").value = e;
         renderActiveMonths();
+        updateStepperStatus();
       }
 
       function setSemesterPreset(type) {

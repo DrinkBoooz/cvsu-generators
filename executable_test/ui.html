@@ -2539,10 +2539,7 @@
                 + Add Degree Alias
               </button>
             </div>
-            <div
-              class="settings-table-wrapper selectable"
-              style="max-height: 240px"
-            >
+            <div class="settings-table-wrapper selectable">
               <table class="settings-data-table" aria-label="Configured Degree Aliases Table">
                 <thead>
                   <tr>
@@ -2600,7 +2597,6 @@
                 <div
                   class="tag-cloud-container selectable"
                   id="cfgNameTokensCloud"
-                  style="max-height: 180px"
                 ></div>
               </div>
               <div>
@@ -2631,56 +2627,140 @@
                 <div
                   class="tag-cloud-container selectable"
                   id="cfgIdTokensCloud"
-                  style="max-height: 180px"
                 ></div>
               </div>
             </div>
           </div>
 
-          <!-- Tab 5: Faculty & Schedule Defaults -->
+          <!-- Tab 5: Faculty & Schedule Defaults (Apple HIG Grouped List & Live Preview) -->
           <div id="cfgPaneSchedule" class="settings-tab-pane d-none">
-            <p
-              style="
-                font-size: 12.5px;
-                color: var(--text-secondary);
-                margin-bottom: 12px;
-                line-height: 1.5;
-              "
-            >
-              Fallback defaults applied when schedule spreadsheet headers cannot
-              be cleanly detected from merged title cells.
+            <div class="apple-hig-section-header">
+              Faculty &amp; Academic Unit Defaults
+            </div>
+
+            <div class="apple-hig-group">
+              <!-- Row 1: Instructor Name -->
+              <div class="apple-hig-row">
+                <div class="apple-hig-row-meta">
+                  <div class="apple-hig-icon-tile icon-tile-blue" aria-hidden="true">
+                    👤
+                  </div>
+                  <div class="apple-hig-text-stack">
+                    <label for="cfgDefaultInstructor" class="apple-hig-label">
+                      Default Instructor Full Name
+                    </label>
+                    <span class="apple-hig-caption">
+                      Primary faculty name injected into generated headers and signatory blocks
+                    </span>
+                  </div>
+                </div>
+                <div class="apple-hig-input-wrap">
+                  <input
+                    type="text"
+                    id="cfgDefaultInstructor"
+                    class="form-control-custom apple-hig-input"
+                    placeholder="e.g. DAN JOSEPH A. ORTEGA"
+                    oninput="updateFacultyDefaultsPreview()"
+                    aria-label="Default Instructor Full Name"
+                  />
+                </div>
+              </div>
+
+              <!-- Row 2: College Name -->
+              <div class="apple-hig-row">
+                <div class="apple-hig-row-meta">
+                  <div class="apple-hig-icon-tile icon-tile-emerald" aria-hidden="true">
+                    🏛️
+                  </div>
+                  <div class="apple-hig-text-stack">
+                    <label for="cfgDefaultCollege" class="apple-hig-label">
+                      Default College Name
+                    </label>
+                    <span class="apple-hig-caption">
+                      Official collegiate header displayed on CEIT forms and grading sheets
+                    </span>
+                  </div>
+                </div>
+                <div class="apple-hig-input-wrap">
+                  <input
+                    type="text"
+                    id="cfgDefaultCollege"
+                    class="form-control-custom apple-hig-input"
+                    placeholder="e.g. COLLEGE OF ENGINEERING AND INFORMATION TECHNOLOGY"
+                    oninput="updateFacultyDefaultsPreview()"
+                    aria-label="Default College Name"
+                  />
+                </div>
+              </div>
+
+              <!-- Row 3: Semester & Academic Year -->
+              <div class="apple-hig-row">
+                <div class="apple-hig-row-meta">
+                  <div class="apple-hig-icon-tile icon-tile-amber" aria-hidden="true">
+                    🗓️
+                  </div>
+                  <div class="apple-hig-text-stack">
+                    <label for="cfgDefaultSemester" class="apple-hig-label">
+                      Default Semester &amp; Academic Year
+                    </label>
+                    <span class="apple-hig-caption">
+                      Term and AY metadata applied when timetable header merged cells are missing
+                    </span>
+                  </div>
+                </div>
+                <div class="apple-hig-input-wrap">
+                  <input
+                    type="text"
+                    id="cfgDefaultSemester"
+                    class="form-control-custom apple-hig-input"
+                    placeholder="e.g. FIRST SEMESTER, AY 2026 - 2027"
+                    oninput="updateFacultyDefaultsPreview()"
+                    aria-label="Default Semester & Academic Year"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <!-- Apple HIG Footnote Note -->
+            <p class="apple-hig-footnote">
+              Fallback defaults are automatically used when the timetable schedule spreadsheet header has unmerged title blocks or missing cells.
             </p>
-            <div class="settings-card-section">
-              <div class="mapping-field">
-                <label class="mapping-label"
-                  >Default Instructor Full Name</label
-                >
-                <input
-                  type="text"
-                  id="cfgDefaultInstructor"
-                  class="form-control-custom"
-                  placeholder="e.g. DAN JOSEPH A. ORTEGA"
-                />
+
+            <!-- Live Document Header Preview Card (macOS Quick Look style) -->
+            <div class="apple-hig-preview-card">
+              <div class="apple-hig-preview-topbar">
+                <div class="apple-hig-preview-title-wrap">
+                  <span class="preview-doc-glyph" aria-hidden="true">📄</span>
+                  <span class="preview-doc-heading">Document Header Live Preview</span>
+                </div>
+                <span class="apple-hig-live-badge">Live Sync</span>
               </div>
-              <div class="mapping-field">
-                <label class="mapping-label">Default College Name</label>
-                <input
-                  type="text"
-                  id="cfgDefaultCollege"
-                  class="form-control-custom"
-                  placeholder="e.g. COLLEGE OF ENGINEERING AND INFORMATION TECHNOLOGY"
-                />
+
+              <div class="apple-hig-preview-sheet selectable">
+                <div class="preview-sheet-crest">
+                  <span class="preview-cvsu-republic">Republic of the Philippines</span>
+                  <span class="preview-cvsu-main">CAVITE STATE UNIVERSITY</span>
+                  <span class="preview-cvsu-campus">Don Severino de las Alas Campus</span>
+                </div>
+                <div class="preview-sheet-college" id="previewHeaderCollege">
+                  COLLEGE OF ENGINEERING AND INFORMATION TECHNOLOGY
+                </div>
+                <div class="preview-sheet-divider"></div>
+                <div class="preview-sheet-meta-grid">
+                  <div class="preview-meta-item">
+                    <span class="preview-meta-k">Term / Academic Year:</span>
+                    <span class="preview-meta-v" id="previewHeaderSemester">FIRST SEMESTER, AY 2026 - 2027</span>
+                  </div>
+                  <div class="preview-meta-item preview-meta-right">
+                    <span class="preview-meta-k">Faculty Instructor:</span>
+                    <span class="preview-meta-v" id="previewHeaderInstructor">DAN JOSEPH A. ORTEGA</span>
+                  </div>
+                </div>
               </div>
-              <div class="mapping-field">
-                <label class="mapping-label"
-                  >Default Semester &amp; Academic Year</label
-                >
-                <input
-                  type="text"
-                  id="cfgDefaultSemester"
-                  class="form-control-custom"
-                  placeholder="e.g. FIRST SEMESTER, AY 2026 - 2027"
-                />
+
+              <div class="apple-hig-preview-caption">
+                <span class="preview-tip-bullet">💡</span>
+                <span>Values above update dynamically in real time and mirror the exact typography printed on generated CEIT Forms, Attendance Sheets, and Grading Sheets.</span>
               </div>
             </div>
           </div>

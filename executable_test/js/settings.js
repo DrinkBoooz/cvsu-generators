@@ -118,6 +118,9 @@
         if (tabName === "CustomTemplates") {
           loadCustomTemplatesUI();
         }
+        if (tabName === "Schedule") {
+          updateFacultyDefaultsPreview();
+        }
       }
 
       function renderConfigUI() {
@@ -432,6 +435,30 @@
         }
       }
 
+      function updateFacultyDefaultsPreview() {
+        const instr = document.getElementById("cfgDefaultInstructor");
+        const college = document.getElementById("cfgDefaultCollege");
+        const sem = document.getElementById("cfgDefaultSemester");
+
+        const previewInstr = document.getElementById("previewHeaderInstructor");
+        const previewCollege = document.getElementById("previewHeaderCollege");
+        const previewSem = document.getElementById("previewHeaderSemester");
+
+        if (previewInstr) {
+          previewInstr.textContent =
+            (instr?.value?.trim()) || "DAN JOSEPH A. ORTEGA";
+        }
+        if (previewCollege) {
+          previewCollege.textContent =
+            (college?.value?.trim()) ||
+            "COLLEGE OF ENGINEERING AND INFORMATION TECHNOLOGY";
+        }
+        if (previewSem) {
+          previewSem.textContent =
+            (sem?.value?.trim()) || "FIRST SEMESTER, AY 2026 - 2027";
+        }
+      }
+
       function renderConfigScheduleDefaults() {
         if (!activeParserConfig) return;
         const sc = activeParserConfig.schedule_config || {};
@@ -441,6 +468,7 @@
         if (instr) instr.value = sc.default_instructor || "";
         if (college) college.value = sc.default_college || "";
         if (sem) sem.value = sc.default_semester || "";
+        updateFacultyDefaultsPreview();
       }
 
       async function saveConfigSettings() {

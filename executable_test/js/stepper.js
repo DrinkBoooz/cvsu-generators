@@ -172,15 +172,14 @@
           }
         };
 
+        const s4Ready = !!(
+          document.getElementById("startDate")?.value &&
+          document.getElementById("endDate")?.value
+        );
         setChip("chipStep1", "statusStep1", s1Ready);
         setChip("chipStep2", "statusStep2", s2Ready);
         setChip("chipStep3", "statusStep3", s3Ready);
-        setChip(
-          "chipStep4",
-          "statusStep4",
-          true,
-          "📅",
-        );
+        setChip("chipStep4", "statusStep4", s4Ready, "✓");
         setChip("chipStep5", "statusStep5", s5Ready);
         setChip("chipStep6", "statusStep6", s6Ready, "🚀");
 
