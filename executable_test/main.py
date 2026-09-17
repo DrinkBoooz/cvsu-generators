@@ -34,6 +34,7 @@ __all__ = [
     "setup_window_drag_and_drop",
     "sanitize_filename",
     "create_app",
+    "_setup_diagnostics",
     "main",
 ]
 
@@ -70,36 +71,113 @@ def create_app():
     return window, api
 
 def _setup_diagnostics(window, doc_url):
-    """Activates non-perturbing telemetry listeners when CVSU_DIAGNOSTIC_MODE=1 is set."""
+    """
+    Activates non-perturbing telemetry listeners when CVSU_DIAGNOSTIC_MODE=1 is set.
+    Uses an in-memory deque buffer and background flusher thread.
+    Callbacks perform ZERO synchronous file I/O and ZERO JSON serialization.
+    """
     try:
         import datetime
         import json
+        import threading
+        import time
+        from collections import deque
+
         diag_dir = Path(os.environ.get('TEMP', os.path.expanduser('~'))) / 'cvsu_diagnostics'
         diag_dir.mkdir(parents=True, exist_ok=True)
         ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         log_path = diag_dir / f"cvsu_exe_diag_{ts}.jsonl"
 
-        with open(log_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps({"event": "diagnostic_init", "document_url": doc_url}) + "\n")
+        event_buffer = deque()
+        buffer_lock = threading.Lock()
+        stop_event = threading.Event()
 
-        def on_request(req):
-            try:
-                with open(log_path, "a", encoding="utf-8") as f:
-                    f.write(json.dumps({"event": "request_sent", "url": getattr(req, "url", str(req))}) + "\n")
-            except Exception:
-                pass
+        # Initial startup record
+        event_buffer.append({
+            "event": "diagnostic_init",
+            "timestamp": time.time(),
+            "document_url": doc_url
+        })
 
-        def on_response(req, resp):
-            try:
-                with open(log_path, "a", encoding="utf-8") as f:
-                    f.write(json.dumps({"event": "response_received", "url": getattr(req, "url", str(req)), "status": getattr(resp, "status", None)}) + "\n")
-            except Exception:
-                pass
+        def on_request(request):
+            """Strictly read-only, non-mutating callback with zero synchronous I/O."""
+            t = time.time()
+            url = str(getattr(request, "url", request))
+            method = str(getattr(request, "method", "GET"))
+            with buffer_lock:
+                event_buffer.append({
+                    "event": "request_sent",
+                    "timestamp": t,
+                    "url": url,
+                    "method": method
+                })
+
+        def on_response(response):
+            """Strictly read-only callback accepting one Response object with zero synchronous I/O."""
+            t = time.time()
+            url = str(getattr(response, "url", response))
+            status_code = getattr(response, "status_code", None)
+            with buffer_lock:
+                event_buffer.append({
+                    "event": "response_received",
+                    "timestamp": t,
+                    "url": url,
+                    "status_code": status_code
+                })
+
+        def flush_worker():
+            """Asynchronously flushes buffered records to the diagnostic JSONL session file."""
+            while not stop_event.is_set():
+                items_to_write = []
+                with buffer_lock:
+                    while event_buffer:
+                        items_to_write.append(event_buffer.popleft())
+                if items_to_write:
+                    try:
+                        with open(log_path, "a", encoding="utf-8") as f:
+                            for item in items_to_write:
+                                f.write(json.dumps(item) + "\n")
+                    except Exception:
+                        pass
+                stop_event.wait(0.2)
+
+            # Final drain upon window close / stop
+            items_to_write = []
+            with buffer_lock:
+                while event_buffer:
+                    items_to_write.append(event_buffer.popleft())
+            if items_to_write:
+                try:
+                    with open(log_path, "a", encoding="utf-8") as f:
+                        for item in items_to_write:
+                            f.write(json.dumps(item) + "\n")
+                except Exception:
+                    pass
+
+        flusher = threading.Thread(target=flush_worker, daemon=True, name="CvSUDiagnosticFlusher")
+        flusher.start()
+
+        def on_closed():
+            stop_event.set()
+            flusher.join(timeout=1.0)
 
         window.events.request_sent += on_request
         window.events.response_received += on_response
+        window.events.closed += on_closed
+
+        # Store state object for inspection and unit testing
+        window._diag_state = {
+            "buffer": event_buffer,
+            "lock": buffer_lock,
+            "stop_event": stop_event,
+            "log_path": log_path,
+            "on_request": on_request,
+            "on_response": on_response,
+            "flusher": flusher
+        }
+        return window._diag_state
     except Exception:
-        pass
+        return None
 
 if __name__ == '__main__':
     app_window, app_api = create_app()
