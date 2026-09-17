@@ -133,21 +133,6 @@ class DocumentGenerator(ABC):
                                         t_mid.text = ""
                         p_txt = "".join(r.findtext(w("t")) or "" for r in runs)
 
-    def _is_student_table(self, tbl) -> bool:
-        """Deprecated legacy student table locator; prefer recipe.roster_binding."""
-        rows = tbl.findall(w("tr"))
-        if not rows:
-            return False
-        cells = rows[0].findall(w("tc"))
-        if not cells:
-            return False
-        hdr = " ".join("".join((t.text or '') for t in c.iter(w('t'))) for c in cells).lower()
-        if any(k in hdr for k in ("instructor", "course /", "schedule code", "subject code", "semester /", "time / days / room")):
-            return False
-        return ("student" in hdr or "name of student" in hdr or "name of students" in hdr or "no." in hdr) and (
-            "signature" in hdr or "student number" in hdr or "studentnumber" in hdr or "name of student" in hdr
-        )
-
     def fill_table(self, body, info: ClassInfo) -> None:
         """Fills student roster table driven strictly by recipe roster_binding."""
         rb = self._recipe.roster_binding

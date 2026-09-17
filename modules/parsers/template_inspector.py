@@ -360,7 +360,7 @@ class DocxTemplateInspector:
                         "first_data_row": first_data_row,
                         "first_data_row_index": first_data_row,
                         "name_col": name_col,
-                        "id_col": id_col if id_col is not None else 1,
+                        "id_col": id_col,
                         "index_col": index_col,
                         "signature_col": sig_col,
                         "total_cols": total_cols,

@@ -193,6 +193,25 @@ def test_e5_missing_student_id_column(tmp_path):
     assert "Roster binding requires id_col" in str(exc_info.value)
 
 
+def test_e5_physical_docx_missing_student_id_column(tmp_path):
+    """E5: Physical DOCX template with roster table missing Student ID column raises TemplateError."""
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = os.path.join(repo_root, "templates", "template_syllabus.docx")
+    mut_path = str(tmp_path / "missing_id_col.docx")
+    shutil.copy2(src, mut_path)
+
+    doc = docx.Document(mut_path)
+    # In table 1 (roster), replace 'Student Number' header with 'Remarks'
+    roster_tbl = doc.tables[1]
+    roster_tbl.rows[0].cells[1].text = "Remarks"
+    doc.save(mut_path)
+
+    resolver = TemplateRecipeResolver.get_instance()
+    with pytest.raises(TemplateError) as exc_info:
+        resolver.resolve(mut_path, "academic_docx")
+    assert "id_col" in str(exc_info.value).lower() or "roster" in str(exc_info.value).lower()
+
+
 def test_e6_missing_roster_table(tmp_path):
     """E6: Missing required roster table on an academic profile raises TemplateError."""
     candidate = RawTemplateRecipeCandidate(
