@@ -15,7 +15,7 @@ EXE_PATH = os.path.join(WORKSPACE_DIR, "executable_test", "dist", "CvSU Gen.exe"
 
 
 def test_packaged_executable_binary_and_pe_metadata():
-    """Verify packaged binary exists, has valid PE metadata, and version conforms to Release v1.0.1."""
+    """Verify packaged binary exists, has valid PE metadata, and version conforms to Release v1.1.0."""
     assert os.path.exists(EXE_PATH), f"Compiled binary not found at {EXE_PATH}"
     size_bytes = os.path.getsize(EXE_PATH)
     assert size_bytes > 15 * 1024 * 1024, f"Binary size {size_bytes} is unexpectedly small (< 15MB)"
@@ -31,8 +31,8 @@ def test_packaged_executable_binary_and_pe_metadata():
     import json
     vinfo = json.loads(result.stdout)
 
-    assert vinfo.get("FileVersion") == "1.0.1.0", f"Expected FileVersion 1.0.1.0, got {vinfo.get('FileVersion')}"
-    assert vinfo.get("ProductVersion") == "1.0.1.0", f"Expected ProductVersion 1.0.1.0, got {vinfo.get('ProductVersion')}"
+    assert vinfo.get("FileVersion") == "1.1.0.0", f"Expected FileVersion 1.1.0.0, got {vinfo.get('FileVersion')}"
+    assert vinfo.get("ProductVersion") == "1.1.0.0", f"Expected ProductVersion 1.1.0.0, got {vinfo.get('ProductVersion')}"
     assert "Dan Joseph Ortega" in vinfo.get("CompanyName", ""), "CompanyName must contain Dan Joseph Ortega"
     assert "Dan Joseph Ortega" in vinfo.get("LegalCopyright", ""), "LegalCopyright must contain Dan Joseph Ortega"
     assert vinfo.get("ProductName") == "CvSU Document Generator", "ProductName must match CvSU Document Generator"

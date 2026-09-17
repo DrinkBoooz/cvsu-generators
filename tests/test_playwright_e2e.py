@@ -331,7 +331,7 @@ def test_playwright_e2e_happy_path_workflow(app_page):
     page = app_page
 
     # 1. Startup & Initial UI State
-    expect(page.locator(".badge-version").first).to_have_text("Release v1.0.1")
+    expect(page.locator(".badge-version").first).to_have_text("Release v1.1.0")
     expect_step_ready(page, 1, False)
     expect_step_ready(page, 2, False)
     expect_step_ready(page, 5, False)

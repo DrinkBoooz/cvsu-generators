@@ -141,6 +141,12 @@ _(e.g., `[CvSU Gen (Beta) - Schedule Parsing Error]`)_
 
 ## 🏷️ Version History
  
+- **Release v1.1.0**:
+  - **Apple HIG Preferences Redesign**: Transformed Faculty Defaults into an Apple Human Interface Guidelines Inset Grouped List (`.apple-hig-group`) featuring themed squircle icon tiles (👤 Instructor, 🏛️ College, 🗓️ Term), semibold primary labels with descriptive subtitles, and right-aligned controls with smooth focus rings.
+  - **Document Header Live Preview**: Integrated an interactive macOS Quick Look-style header simulation card with a glowing `• LIVE SYNC` badge that reflects typography, university branding, and metadata changes in real-time as the user types.
+  - **Uniform Modal Geometry & Elastic Components**: Stabilized Curriculum & Parser Settings across all 6 sections at `width: min(920px, calc(100vw - 32px))` and `height: min(680px, 88vh)`, eliminating tab switching height jitter. Data table wrappers (`#cfgPanePrefixes`, `#cfgPaneDegrees`) and keyword token clouds stretch elastically to fill the dialog body down to the action footer.
+  - **Dynamic Step 4 Dates Stepper Chip**: Converted Step 4 from static ready state to dynamic evaluation based on `startDate` and `endDate` boundaries, displaying a neutral `•` indicator until dates are configured or semester presets applied.
+  - **Multi-Breakpoint Responsive Adaptation**: Added fluid 3x2 tablet and 2x3 mobile tab grids, stacked 2-row dialog footers, and compact viewport support (`<= 640px height`).
 - **Release v1.0.1**:
   - **WCAG 2.1 AA Accessibility Hardening Pass**: Implemented comprehensive WCAG 2.1 AA accessibility hardening across the desktop application, including full keyboard navigation, focus management, ARIA semantics, live announcements, and Windows forced-colors support.
   - **Focus Trapping & Focus Restoration**: Implemented stack-aware modal and slide-over drawer focus traps (`FocusTrapManager`) ensuring Tab stays bounded within open dialogs and restores focus to the triggering element upon dismissal.

@@ -122,6 +122,7 @@ def test_obsidian_moc_exists_and_links_all_categories():
         "Template Guidelines",
         "User Manual",
         "v1.0.1",
+        "v1.1.0",
         "Development Workflow",
     ]
     for expected in expected_links:
