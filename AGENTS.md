@@ -1,5 +1,12 @@
 # Project Rules
 
+## 0. Agent Governance & Rule Modification
+
+- **Controlled Artifact**: `AGENTS.md` defines the immutable operating rules for agents in this workspace.
+- **No Unauthorized Modifications**: Agents must NEVER modify `AGENTS.md`, `.agents/agents/`, `.agents/rules/`, `.agents/workflows/`, or any other agent-governance artifacts simply because they believe instructions could be improved.
+- **No Silent Updates**: Documentation audits, refactors, or implementation tasks must not silently alter agent governance.
+- **Reporting Issues**: If a task exposes a governance problem or contradiction, the agent must report it to the user rather than changing governance rules without explicit authorization.
+
 ## Tests Location
 
 All test programs, test suites, test fixtures, and testing utilities must always be placed under the `tests/` directory:
@@ -20,7 +27,7 @@ All git commit messages must strictly follow the format:
 
 ## Git Branching & Merging Rules
 
-- **Development on `dev`**: All active work, feature implementations, tests, and task commits belong strictly on the `dev` branch.
+- **Development on `dev`**: All active work, feature implementations, tests, and task commits belong strictly on the `dev` branch and origin/dev.
 - **Do NOT Auto-Merge to `main`**: Merging into `main` must **NEVER** happen automatically at the end of a task or chat. Merging to `main` requires an explicit user prompt or request.
 - **Merging into `main` (Only When Prompted by User)**:
   When the user explicitly instructs to merge `dev` into `main`:
@@ -37,23 +44,230 @@ All git commit messages must strictly follow the format:
 
 ## Version Numbering & Synchronization
 
-- **Single Source of Truth**: The active application version is displayed in `executable/ui.html` via the `<span class="badge-version">vX.Y Beta</span>` badge in the navigation header.
+- **Single Source of Truth**: The active application version is displayed in `executable_test/ui.html` via the `<span class="badge-version">Release vX.Y.Z</span>` badge in the navigation header. This is the canonical application-version representation; all other locations are synchronized consumers.
+- **Development Changes**: Normal bug fixes, internal improvements, refactors, tests, documentation changes, and other development commits do **NOT** automatically require a version bump. Do not interpret every development commit as a release.
 - **When to Bump the Version**:
-  - Whenever new features, UX workflows, generators, or significant fixes are implemented across a chat or milestone, the version number must be bumped (e.g. from `v1.1 Beta` -> `v1.2 Beta`).
+  - A version bump is required ONLY when the project is intentionally producing a new application release, or when the user/task explicitly requests a version bump (e.g. from `Release v1.0.0` -> `Release v1.0.1`).
   - Never leave the version number stale across releases or major feature updates.
 - **Synchronization Checklist**:
-  1. `executable/ui.html`: Update the header badge `<span class="badge-version">vX.Y Beta</span>`.
+  1. `executable_test/ui.html`: Update the header badge `<span class="badge-version">Release vX.Y.Z</span>`.
   2. `tests/test_ui_consistency.py`: Ensure test assertions verify the current version badge.
-  3. `executable/README.md`: If version numbers or changelog items are listed, keep them synchronized.
-  4. `executable/file_version_info.txt`: Synchronize `filevers`, `prodvers`, `FileVersion`, and `ProductVersion`.
+  3. `executable_test/README.md`: If version numbers or changelog items are listed, keep them synchronized.
+  4. `executable_test/file_version_info.txt`: Synchronize `filevers`, `prodvers`, `FileVersion`, and `ProductVersion`.
+  5. `cvsu-generator_documentation/05 - Releases & Changelog/`: Add or update release notes for the new version in the Obsidian documentation vault.
+
+## Obsidian Documentation Vault Protocol
+
+> [!IMPORTANT]
+>
+> ## Project and Documentation Relationship
+>
+> The project consists of two coordinated resources:
+>
+> 1. **Application Repository**
+>    - Location: `C:\Users\danjo\OneDrive\CVSU GENERATORS`
+>    - Git repository: `DrinkBoooz/cvsu-generators`
+>    - Active development branch: `dev`
+>    - Contains application source code, tests, templates, executable build configuration, and project configuration.
+>
+> 2. **Companion Obsidian Documentation Vault**
+>    - Location: `C:\Users\danjo\OneDrive\cvsu-generator_documentation`
+>    - Git repository: `DrinkBoooz/cvsu-generator_documentation`
+>    - Active development branch: `dev`
+>    - Contains the project's human-readable technical documentation, architecture knowledge, generator specifications, template documentation, user guides, and release documentation.
+>
+> The Obsidian vault is the project's **primary human-readable knowledge repository**. It documents the behavior and structure of the application but does not override the source code, tests, or actual templates.
+>
+> The application repository (`C:\Users\danjo\OneDrive\CVSU GENERATORS`) and documentation vault (`C:\Users\danjo\OneDrive\cvsu-generator_documentation`) are sibling components of the same project workspace. The vault is physically located outside the application repository and must not be copied into or committed to `CVSU GENERATORS`. Both components are version-controlled and synchronized by development agents.
+
+### 1. Source-of-Truth Hierarchy
+
+When discrepancies or questions arise, agents must strictly observe this priority hierarchy:
+
+1. **Executable / Application Source Code**: Active Python and frontend runtime code.
+2. **Automated Tests**: Validated test suites and test fixtures (`tests/`).
+3. **Templates**: Word (`.docx`) and Excel (`.xlsx`) files actively consumed by generator engines.
+4. **Obsidian Documentation Vault**: Primary human-readable knowledge repository and architectural guides.
+5. **README / Supplementary Documentation**: Quickstart summaries and release notes.
+
+> **Obsidian is the primary human-readable documentation and knowledge repository. It must reflect the behavior of the application, tests, and templates; it does not override implementation or test behavior.**
+
+### 1.1 Existing Obsidian Documentation as Context
+
+The Obsidian vault is a persistent, human-readable knowledge layer that agents should use to establish context before performing broad reconnaissance.
+
+#### When to Read Obsidian First
+If the task touches a subsystem that is documented in Obsidian:
+```text
+Read relevant Obsidian note
+→ Identify relevant implementation areas
+→ Perform targeted verification
+```
+If no relevant note exists, proceed directly to source/tests/templates. For trivial isolated changes where documentation cannot materially affect the task, a broad Obsidian read is unnecessary.
+
+#### Documentation Confidence
+Agents should mentally classify relevant documentation to determine how much source verification is necessary:
+1. **High confidence**: Recently maintained, referenced implementation appears unchanged, no known contradictions.
+2. **Medium confidence**: Documentation exists but current implementation may have changed.
+3. **Low confidence**: Stale note, changed referenced files, missing source references, known contradiction, or forensic/current-state accuracy is required.
+
+#### Documentation is NOT Executable Verification
+Obsidian documentation establishes context and navigation, but **cannot substitute for executable tests or source/template inspection** when current behavior needs verification and such evidence is reasonably available.
+
+#### Conflicting Obsidian Notes
+If two Obsidian notes conflict, do not choose one based on note age, title, or perceived authority. Instead:
+```text
+Verify the underlying: Source Code → Tests → Templates
+Then correct the affected documentation.
+```
+
+The intended workflow is:
+
+```text
+Existing Obsidian context
+        ↓
+Identify relevant implementation areas
+        ↓
+Targeted source/test/template verification
+        ↓
+Resolve discrepancies
+        ↓
+Implement or document
+        ↓
+Update Obsidian knowledge
+```
+
+**Note on Large Audits:**
+For large architecture or documentation audits, agents should first build a documentation-context map from the existing vault:
+
+```text
+Vault note
+    ↓
+Documented subsystem
+    ↓
+Referenced source files
+    ↓
+Current implementation verification
+    ↓
+Only investigate gaps/differences deeply
+```
+
+Agents should distinguish between already documented and verified knowledge, documented but requiring current verification, undocumented behavior, and stale/contradictory documentation. This prevents a full repository reread when the vault already contains reliable architectural context.
+
+**Note on Vault Contents:**
+The vault should remain human-readable documentation. Do NOT instruct agents to copy entire Python files, JavaScript files, CSS files, huge test files, generated build output, raw logs, or arbitrary repository dumps into Obsidian merely to preserve context. Use links/references to source files where appropriate.
+
+**Note on Documentation Freshness:**
+The context-cache benefit depends on keeping the vault synchronized. When a behavior-changing implementation change occurs and the behavior is covered by the vault:
+
+```text
+Implementation changes
+        ↓
+Relevant documentation becomes potentially stale
+        ↓
+Agent updates affected note
+```
+
+Agents should avoid allowing the vault to become a misleading cache.
+
+### 2. Never Fabricate Documentation
+
+**Documentation must be derived from the current implementation, templates, tests, and verified project behavior. Agents must not infer or invent undocumented generator behavior, template mappings, coordinates, filenames, or workflow requirements.**
+
+Before writing or updating documentation:
+
+- Inspect the active source code.
+- Inspect the physical template files using diagnostic scripts or parser tests.
+- Verify exact cell names, coordinates, function signatures, and naming conventions from the actual files.
+
+### 3. Documentation-First vs. Code-First Workflows
+
+- **For Implementation Changes**:
+  ```text
+  Read relevant Obsidian context
+  → Inspect affected implementation
+  → Inspect affected tests/templates
+  → Implement
+  → Run tests
+  → Update Obsidian
+  → Verify documentation
+  ```
+- **For Documentation-Only Changes**:
+  ```text
+  Read relevant Obsidian context
+  → Inspect affected implementation
+  → Inspect affected tests/templates where necessary
+  → Update Obsidian
+  → Verify documentation against implementation
+  ```
+
+### 4. Documentation Synchronization Triggers
+
+#### Explicit Architecture-Change Rule
+Internal implementation changes that alter architectural boundaries, subsystem responsibilities, public interfaces, data flow, lifecycle behavior, configuration schemas, generator relationships, or other documented architecture **require the relevant Obsidian documentation to be reviewed and updated**, even if end-user behavior appears unchanged.
+
+#### Changes Requiring Obsidian Updates:
+
+- Application architecture and subsystem restructuring
+- Generator engine logic, inputs, outputs, or new form registrations
+- Template file structure, coordinates, placeholders, or auto-scaling rules
+- User workflow steps, dialog flows, or public-facing UI features
+- File naming patterns, folder organization, or roster column rules
+- Application configuration management or settings schemas
+- PyWebView bridge methods, IPC contracts, or threading/lifecycle mechanics
+- Standalone packaging, PyInstaller specs, or code signing procedures
+- Application version bumps and official release notes
+
+#### Changes NOT Requiring Obsidian Updates:
+
+- Typo corrections or code comment adjustments
+- Pure styling tweaks or formatting-only CSS changes
+- Internal code refactoring, BUT ONLY IF BOTH are true: 1) externally observable behavior remains unchanged, AND 2) the documented architecture/structure does not materially change. (e.g. A refactor from a monolithic API bridge to modular ScriptAPI mixins preserves external behavior but requires documentation updates because the architecture changed.)
+- Test suite enhancements or refactoring that do not alter observable system contracts
+- Minor dependency maintenance without behavioral impact
+
+### 5. Vault Structure & Taxonomy
+
+Documentation within `c:\Users\danjo\OneDrive\cvsu-generator_documentation` must adhere to:
+
+- **`00 - Index/`**: Maps of Content (MOC), root indexes, and high-level navigation (`CvSU Document Generator MOC.md`).
+- **`01 - Architecture/`**: Core technical architecture, PyWebView API bridge, generator pipeline, orchestrator lifecycle, and UI architecture.
+- **`02 - Generators/`**: Technical documentation for document generators (`ceit_gen.py`, `attendance_gen.py`, `grade_gen.py`).
+- **`03 - Templates/`**: Template schema definitions, placeholder mapping tables, cell coordinates, and auto-scaling rules.
+- **`04 - User Guides/`**: End-user manuals, step-by-step walkthroughs, file naming conventions, and troubleshooting.
+- **`05 - Releases & Changelog/`**: Historical release notes (`vX.Y.Z.md`) synchronized with `ui.html` badges and `file_version_info.txt`.
+- **`06 - Development/`**: Developer workflow, testing strategy, build & packaging recipes, and agent development rules.
+
+### 6. Obsidian Markdown & Graph Conventions
+
+- **YAML Frontmatter**: Standardized frontmatter for every note:
+  ```yaml
+  ---
+  title: "<Note Title>"
+  tags:
+    - cvsu-generator
+    - <category-tag>
+  status: active # active | draft | deprecated | archived
+  last_modified: YYYY-MM-DD # Note modification date, not app code date
+  source_of_truth:
+    - <relative/path/to/source/file>
+  ---
+  ```
+- **Wikilinks**: Use `[[Target Note Name]]` or `[[Target Note Name|Display Text]]`. Keep links valid and ensure graph connections represent actual system dependencies.
+- **MOC Maintenance**: When a new top-level documentation area or major component is created, update the relevant MOC / index note.
+- **Git Separation**: The vault is physically located outside the Git repository. Agents must never copy the vault into the repository or commit it unintentionally.
 
 ## Executable Packaging, Copyright & Code Signing
 
 Whenever the application is exported, compiled, or packaged as a standalone Windows executable (`.exe`):
 
-- **Windows PE Version Information**: `executable/file_version_info.txt` must always be maintained with official copyright (`Copyright © 2026 Dan Joseph Ortega. All rights reserved.`), company/author name (`Dan Joseph Ortega`), product name (`CvSU Document Generator`), and version numbers synchronized with `ui.html`.
-- **PyInstaller Integration**: Both `executable/build.bat` and `executable/CvSU Gen (Beta).spec` must embed `file_version_info.txt` via `--version-file` / `version='file_version_info.txt'` so Windows Explorer (Properties -> Details), hover tooltips, and Task Manager display the author and copyright.
-- **Authenticode Code Signing**: Executable binaries compiled in `executable/dist/` should be digitally signed via `executable/sign_exe.ps1` (or automated post-build in `build.bat`) using `signtool.exe` and the author's Authenticode certificate (`Dan Joseph Ortega`). This ensures Windows SmartScreen and UAC prompts identify the verified author/publisher instead of "Unknown Publisher".
+- **Windows PE Version Information**: `executable_test/file_version_info.txt` must always be maintained with official copyright (`Copyright © 2026 Dan Joseph Ortega. All rights reserved.`), company/author name (`Dan Joseph Ortega`), product name (`CvSU Document Generator`), and version numbers synchronized with `ui.html`.
+- **PyInstaller Integration**: Both `executable_test/build.bat` and `executable_test/CvSU Gen.spec` must embed `file_version_info.txt` via `--version-file` / `version='file_version_info.txt'` so Windows Explorer (Properties -> Details), hover tooltips, and Task Manager display the author and copyright.
+- **Authenticode Code Signing**: If a valid project Authenticode certificate is configured and available, executable binaries compiled in `executable_test/dist/` should be digitally signed via `executable_test/sign_exe.ps1` (or automated post-build in `build.bat`) using `signtool.exe`.
+  - **Agents must not assume** that a certificate exists merely because the author's name is known.
+  - **Agents must not fabricate** certificate identity, certificate paths, thumbprints, or signing credentials.
+  - If signing is required but the certificate/tooling is unavailable, report the limitation rather than inventing a signing configuration.
+  - Note: Code signing establishes publisher/signature identity but does not guarantee that Windows SmartScreen will eliminate all warnings or establish immediate reputation.
 - **Automated Tests**: Any changes to versioning or executable metadata must be validated by tests under `tests/` (including `tests/test_pe_version_info.py`).
 
 ## Adding New Templates & Generators Protocol
@@ -82,32 +296,37 @@ When instructed to add or create a new form generator from a `.docx` template:
        for r_idx, r in enumerate(tbl.rows[:3]):
            print(f"  Row {r_idx}: {[c.text.strip() for c in r.cells]}")
    ```
-3. **Implement Generator Subclass in `modules/generators/ceit_gen.py`**:
-   - Subclass `DocumentGenerator(ABC)`.
-   - Implement `fill_header(self, body, info: ClassInfo) -> None`:
-     - Access header tables or paragraphs.
-     - Replace metadata placeholders (`info.instructor`, `info.course_section`, `info.schedule_code`, `info.subject`, `info.time_days_room`, `info.semester_ay`).
-     - Use helper functions from `modules.common.docx_utils`: `set_cell_text`, `replace_after_colon`, `replace_value_run`, and `shrink_threshold` font scaling.
-   - Implement `_fill_student_row(self, cells: list, idx: int, name: str, stnum: str) -> None`:
-     - Assign row cells (e.g. `cells[0]` for row number or name, `cells[1]` for student number, etc.).
-     - Apply `set_cell_text(cells[col], name, shrink_threshold=32, shrink_sz="18")` to protect against long student names wrapping awkwardly.
-4. **Register in `GeneratorFactory` (`modules/generators/ceit_gen.py`)**:
-   - Add template key to `GeneratorFactory.TEMPLATE_FILES`:
-     ```python
-     "new_key": "template_new_file.docx",
-     ```
-   - Add instantiation tuple to `GeneratorFactory.get_all()`:
-     ```python
-     (lambda: NewFormGenerator(self._path("new_key")), "NEW_FORM_SUFFIX"),
-     ```
+3. **Implement Generator Logic**:
+   - Inspect the current generator architecture and follow the established implementation pattern in the active generator engine.
+   - For example, if extending the CEIT forms pattern:
+     - Subclass `DocumentGenerator(ABC)`.
+     - Implement `fill_header(self, body, info: ClassInfo) -> None` (replace metadata placeholders, use helpers like `set_cell_text`, `replace_value_run`).
+     - Implement `_fill_student_row(self, cells: list, idx: int, name: str, stnum: str) -> None` (assign row cells, apply scaling logic).
+4. **Register in Factory or Configuration**:
+   - Inspect how generators are instantiated and register the new template accordingly.
+   - For example, in `GeneratorFactory` (`ceit_gen.py`):
+     - Add template key to `GeneratorFactory.TEMPLATE_FILES`:
+       ```python
+       "new_key": "template_new_file.docx",
+       ```
+     - Add instantiation tuple to `GeneratorFactory.get_all()`:
+       ```python
+       (lambda: NewFormGenerator(self._path("new_key")), "NEW_FORM_SUFFIX"),
+       ```
 5. **Export in `modules/generators/__init__.py`**:
    - Import the new generator class and add it to `__all__`.
 6. **Orchestrator Telemetry & Packaging**:
    - `modules/services/orchestrator.py` automatically scales: `num_ceit_generators = len(factory.get_all())` calculates total progress steps dynamically.
-   - Both `executable/CvSU Gen (Beta).spec` and `executable/build.bat` bundle the entire `templates/` directory (`--add-data "..\templates;templates/"`), so the new file is automatically packaged into `.exe` builds.
-7. **Synchronize Documentation & README**:
-   - `executable/README.md`: If the total count of CEIT forms (e.g. "7 complete forms") or list of forms is described, update the count and bullet item.
-   - `tests/test_ui_consistency.py`: Keep README assertions synchronized.
+   - Both `executable_test/CvSU Gen.spec` and `executable_test/build.bat` bundle the entire `templates/` directory (`--add-data "..\templates;templates/"`), so the new file is automatically packaged into `.exe` builds.
+7. **Step 7 — Synchronize Documentation**:
+   After implementing and testing a new generator or template:
+   1. Update `executable_test/README.md` when the change affects developer-facing repository documentation.
+   2. Create or update the corresponding Obsidian documentation note in `cvsu-generator_documentation/02 - Generators/` or `03 - Templates/`.
+   3. Update the relevant generator/template/architecture notes.
+   4. Update affected wikilinks and MOCs (`00 - Index/CvSU Document Generator MOC.md`).
+   5. Verify that documented behavior matches the implementation and actual template.
+   6. Update `last_modified` in the note frontmatter.
+   7. Do not document behavior that has not been verified against the physical template and code.
 8. **Automate & Validate Tests**:
    - Update `tests/test_modules_generation.py`:
      - Update `assert len(all_gens) == <new_total>`

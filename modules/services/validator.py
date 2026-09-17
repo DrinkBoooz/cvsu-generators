@@ -4,7 +4,8 @@ import csv
 from modules.common.logger import logger
 from modules.parsers.schedule_parser import (
     parse_schedule, find_blocks_for_section, get_subject_code,
-    _find_class_details_by_schedule_code, _find_candidate_classes_from_hints
+    _find_class_details_by_schedule_code, _find_candidate_classes_from_hints,
+    format_canonical_schedule, normalize_room
 )
 from modules.parsers.roster_parser import load_students
 from modules.parsers.ceit_directory import (
@@ -282,10 +283,12 @@ def detect_classes(schedule_path: str, roster_paths: list, roster_configs: dict 
                 subject_name = os.path.splitext(filename)[0]
         
         blocks = []
+        found_sched = None
         for sched in parsed_schedules:
-            b = find_blocks_for_section(sched["grid"], course_sec, sched["start_row"], sched["end_row"])
+            b = find_blocks_for_section(sched["grid"], course_sec, sched["start_row"], sched["end_row"], instructor=sched.get("instructor", ""))
             if b:
                 blocks = b
+                found_sched = sched
                 break
         has_lab = any(b.get("type", "").upper() == "LAB" for b in blocks)
         if not blocks and ("LAB" in subject_name.upper() or "LABORATORY" in subject_name.upper()):
@@ -304,11 +307,8 @@ def detect_classes(schedule_path: str, roster_paths: list, roster_configs: dict 
                 rest = parts[1] if len(parts) > 1 else ""
                 subject_name = f"{clean_sched_code} {rest}".strip() if rest else clean_sched_code
 
-            parts = []
-            for b in blocks:
-                typ = f"{b['type']}: " if b['type'] else ""
-                parts.append(f"{b['day']}: {b['start_time']}-{b['end_time']} / {typ}{b['room']}")
-            time_days_room = "; ".join(parts)
+            inst_hint = found_sched.get("instructor", "") if found_sched else ""
+            time_days_room = format_canonical_schedule(blocks, instructor=inst_hint)
         else:
             time_days_room = "SEE SCHEDULE"
 

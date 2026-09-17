@@ -3,7 +3,7 @@ import csv
 import pytest
 import roster_parser
 import process_schedule
-from executable.main import ScriptAPI
+from executable_test.main import ScriptAPI
 
 def test_ceit_prefix_directory_completeness():
     """Verify all 15 official CEIT prefixes and department mappings are present."""

@@ -47,7 +47,17 @@
         }
       }
 
+      window._generationSequence = window._generationSequence || 0;
+      window._activeGenerationId = null;
+      window._generationState = "idle";
+
       async function startGeneration() {
+        if (window._isGenerationRunning || window._generationState !== "idle") return;
+        window._isGenerationRunning = true;
+        window._generationState = "running";
+        const currentGenId = ++window._generationSequence;
+        window._activeGenerationId = currentGenId;
+
         const btn = document.getElementById("processBtn");
         const btnLabel = document.getElementById("processBtnLabel");
         const progressContainer = document.getElementById("progressContainer");
@@ -59,9 +69,13 @@
         );
         const btnCancel = document.getElementById("btnCancelGeneration");
         const resultsCard = document.getElementById("resultsCard");
+        const readiness = getGenerationReadiness();
 
         // Validate basic inputs using non-blocking toasts
-        if (!state.schedulePath) {
+        if (!readiness.schedule) {
+          window._isGenerationRunning = false;
+          window._generationState = "idle";
+          window._activeGenerationId = null;
           showToast(
             "Schedule Required",
             "Please select or drop your Instructor Schedule (.xls / .xlsx) before proceeding.",
@@ -70,7 +84,10 @@
           scrollToStep("cardStep1");
           return;
         }
-        if (!state.rosters || state.rosters.length === 0) {
+        if (!readiness.rosters) {
+          window._isGenerationRunning = false;
+          window._generationState = "idle";
+          window._activeGenerationId = null;
           showToast(
             "Rosters Required",
             "Please select or drop at least one Student Roster file before proceeding.",
@@ -80,6 +97,9 @@
           return;
         }
         if (!state.outputDir) {
+          window._isGenerationRunning = false;
+          window._generationState = "idle";
+          window._activeGenerationId = null;
           showToast(
             "Output Folder Required",
             "Please select a Target Output Folder for saving documents.",
@@ -95,7 +115,10 @@
           selectedClasses.push(cb.getAttribute("data-class-id"));
         });
 
-        if (selectedClasses.length === 0) {
+        if (!readiness.classes) {
+          window._isGenerationRunning = false;
+          window._generationState = "idle";
+          window._activeGenerationId = null;
           showToast(
             "No Classes Selected",
             "Please select at least one class to generate.",
@@ -111,7 +134,10 @@
         if (state.engines.ceit) enabledEngines.push("ceit");
         if (state.engines.grades) enabledEngines.push("grades");
 
-        if (enabledEngines.length === 0) {
+        if (!readiness.engines || enabledEngines.length === 0) {
+          window._isGenerationRunning = false;
+          window._generationState = "idle";
+          window._activeGenerationId = null;
           showToast(
             "No Packages Selected",
             "Please enable at least one document package (Attendance, CEIT Forms, or Grades).",
@@ -158,8 +184,8 @@
         // Reset and start stopwatch timer
         generationStartTime = Date.now();
         if (progressElapsedTimer) progressElapsedTimer.innerText = "⏱️ 00:00";
-        if (elapsedTimerInterval) clearInterval(elapsedTimerInterval);
-        elapsedTimerInterval = setInterval(() => {
+        if (window.elapsedTimerInterval) clearInterval(window.elapsedTimerInterval);
+        window.elapsedTimerInterval = setInterval(() => {
           const sec = Math.floor((Date.now() - generationStartTime) / 1000);
           const m = String(Math.floor(sec / 60)).padStart(2, "0");
           const s = String(sec % 60).padStart(2, "0");
@@ -179,40 +205,99 @@
           btnCancel.classList.remove("d-none");
         }
 
-        const payload = await window.pywebview.api.run_generation(
-          typeOverrides,
-          dateOverrides,
-          selectedClasses,
-          enabledEngines,
-          state.rosterConfigs,
-        );
+        try {
+          const payload = await window.pywebview.api.run_generation(
+            typeOverrides,
+            dateOverrides,
+            selectedClasses,
+            enabledEngines,
+            state.rosterConfigs,
+          );
 
-        if (
-          payload &&
-          (payload.status === "error" || payload.status === "cancelled")
-        ) {
-          onGenerationComplete(payload);
+          if (
+            payload &&
+            (payload.status === "error" || payload.status === "cancelled")
+          ) {
+            window.onGenerationComplete(payload, currentGenId);
+          }
+        } catch (error) {
+          console.error("Generation API failure:", error);
+          window.onGenerationComplete({
+            status: "error",
+            message: `Generation failed: ${error?.message || error}`,
+            generation_id: currentGenId,
+          }, currentGenId);
         }
       }
 
       // Telemetry callback called continuously from Python background thread
-      window.onGenerationProgress = function (info) {
+      window.onGenerationProgress = function (info, callbackGenId = null) {
+        if (window._activeGenerationId === null) {
+          return;
+        }
+        const cbId =
+          info && info.generation_id !== undefined && info.generation_id !== null
+            ? info.generation_id
+            : callbackGenId;
+
+        if (cbId !== window._activeGenerationId) {
+          console.warn(
+            "Ignoring stale progress callback. Active:",
+            window._activeGenerationId,
+            "Got:",
+            cbId,
+          );
+          return;
+        }
+
         const fill = document.getElementById("progressFill");
         const pctDisplay = document.getElementById("progressPercent");
         const taskDisplay = document.getElementById("progressTaskLabel");
+        const container = document.getElementById("progressContainer");
 
-        fill.style.width = `${info.percent}%`;
-        pctDisplay.innerText = `${info.percent}%`;
-        taskDisplay.innerText = `${info.current_class}: ${info.current_task} (${info.step}/${info.total_steps})`;
+        const pct = info.percent || 0;
+        const taskText = `${info.current_class}: ${info.current_task} (${info.step}/${info.total_steps})`;
+        fill.style.width = `${pct}%`;
+        pctDisplay.innerText = `${pct}%`;
+        taskDisplay.innerText = taskText;
+
+        if (container) {
+          container.setAttribute("aria-valuenow", String(pct));
+          container.setAttribute("aria-valuetext", `${pct}% - ${taskText}`);
+        }
       };
 
       // Completion callback called when background thread finishes
-      window.onGenerationComplete = function (payload) {
+      window.onGenerationComplete = function (payload, callbackGenId = null) {
+        if (window._activeGenerationId === null) {
+          console.warn("Ignoring duplicate/untracked generation callback while idle.");
+          return;
+        }
+        const cbId =
+          payload && payload.generation_id !== undefined && payload.generation_id !== null
+            ? payload.generation_id
+            : callbackGenId;
+
+        if (cbId !== window._activeGenerationId) {
+          console.warn(
+            "Ignoring stale completion callback. Active:",
+            window._activeGenerationId,
+            "Got:",
+            cbId,
+          );
+          return;
+        }
+
+        // Authoritative state transition to IDLE
+        window._activeGenerationId = null;
+        window._generationState = "idle";
+
         const btn = document.getElementById("processBtn");
         const btnLabel = document.getElementById("processBtnLabel");
         const progressFill = document.getElementById("progressFill");
         const pctDisplay = document.getElementById("progressPercent");
         const taskDisplay = document.getElementById("progressTaskLabel");
+        const container = document.getElementById("progressContainer");
         const btnCancel = document.getElementById("btnCancelGeneration");
         const resultsCard = document.getElementById("resultsCard");
         const resultsIcon = document.getElementById("resultsIcon");
@@ -221,9 +306,9 @@
         const metricsContainer = document.getElementById("resultsMetricsPills");
         const treeContainer = document.getElementById("fileTreeContainer");
 
-        if (elapsedTimerInterval) {
-          clearInterval(elapsedTimerInterval);
-          elapsedTimerInterval = null;
+        if (window.elapsedTimerInterval) {
+          clearInterval(window.elapsedTimerInterval);
+          window.elapsedTimerInterval = null;
         }
 
         setGenerationRunningState(false, "Initialize Workflow");
@@ -241,6 +326,10 @@
 
         progressFill.style.width = "100%";
         if (pctDisplay) pctDisplay.innerText = "100%";
+        if (container) {
+          container.setAttribute("aria-valuenow", "100");
+          container.setAttribute("aria-valuetext", "100% - Generation complete");
+        }
 
         resultsCard.classList.remove(
           "d-none",
@@ -253,6 +342,9 @@
           resultsIcon.innerHTML = `<circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line>`;
           resultsTitleText.innerText = "Generation Cancelled";
           resultsTitleText.style.color = "var(--accent-amber)";
+          if (window.announceA11y) {
+            window.announceA11y("Document compilation was cancelled.");
+          }
           resultsMessage.innerText =
             payload.message || "Generation was stopped by the user.";
           if (taskDisplay) taskDisplay.innerText = "Generation stopped by user";
@@ -410,9 +502,9 @@
         setGenerationRunningState(false, "Initialize Workflow");
         const btnCancel = document.getElementById("btnCancelGeneration");
         if (btnCancel) btnCancel.classList.add("d-none");
-        if (elapsedTimerInterval) {
-          clearInterval(elapsedTimerInterval);
-          elapsedTimerInterval = null;
+        if (window.elapsedTimerInterval) {
+          clearInterval(window.elapsedTimerInterval);
+          window.elapsedTimerInterval = null;
         }
         showToast(
           "Error",

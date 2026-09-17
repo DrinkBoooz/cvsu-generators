@@ -41,6 +41,9 @@ class ScheduleBlock:
             "is_async": self.is_async,
         }
 
+LEGACY_DEFAULT_COLLEGE = "COLLEGE OF ENGINEERING AND INFORMATION TECHNOLOGY"
+
+
 @dataclass
 class ClassInfo:
     """Encapsulates input data for a class; shared across document generators and validation."""
@@ -51,12 +54,24 @@ class ClassInfo:
     time_days_room: str = ""
     semester_ay: str = ""
     students: list = field(default_factory=list)
-    college: str = "COLLEGE OF ENGINEERING AND INFORMATION TECHNOLOGY"
+    college: Optional[str] = None
     has_lab: bool = False
     subject_code: str = ""
     subject_name: str = ""
+    has_explicit_college: bool = field(default=False, init=False)
+
+    def __setattr__(self, name, value):
+        object.__setattr__(self, name, value)
+        if name == "college" and "has_explicit_college" in self.__dict__:
+            object.__setattr__(self, "has_explicit_college", value is not None)
 
     def __post_init__(self):
+        if self.college is None:
+            self.college = LEGACY_DEFAULT_COLLEGE
+            self.has_explicit_college = False
+        else:
+            self.has_explicit_college = True
+
         if not self.subject_name and self.subject:
             self.subject_name = self.subject
         if not self.subject and self.subject_name:
@@ -85,5 +100,6 @@ class ClassInfo:
             "semester_ay": self.semester_ay,
             "students": self.students,
             "college": self.college,
+            "has_explicit_college": self.has_explicit_college,
             "has_lab": self.has_lab,
         }

@@ -18,12 +18,12 @@ A desktop application for Cavite State University (CvSU) faculty members to auto
 
 ## 🚀 How to Run
 
-1. Locate **`CvSU Gen (Beta).exe`**.
-2. Double-click **`CvSU Gen (Beta).exe`** to open the program.
+1. Locate **`CvSU Gen.exe`**.
+2. Double-click **`CvSU Gen.exe`** to open the program.
 
 > **Note on Windows Defender / SmartScreen & Publisher Identity:**
 > Because this is a custom institutional tool developed specifically for Cavite State University, Windows may display a prompt stating _"Windows protected your PC"_.
-> - **Verified Author & Copyright**: You can right-click **`CvSU Gen (Beta).exe`** &rarr; **Properties** &rarr; **Details** or **Digital Signatures** tab to verify the official copyright, company, and developer signature (**Dan Joseph Ortega**).
+> - **Verified Author & Copyright**: You can right-click **`CvSU Gen.exe`** &rarr; **Properties** &rarr; **Details** or **Digital Signatures** tab to verify the official copyright, company, and developer signature (**Dan Joseph Ortega**).
 > - **Standard Launch**: Simply click **"More info"** and then select **"Run anyway"**.
 > - **Permanent Trust (Optional)**: Run **`install_trusted_publisher.bat`** once to add the verified institutional publisher certificate to your computer, permanently enabling clean launches without SmartScreen warnings.
 
@@ -140,7 +140,23 @@ _(e.g., `[CvSU Gen (Beta) - Schedule Parsing Error]`)_
 ---
 
 ## 🏷️ Version History
-
+ 
+- **Release v1.1.0**:
+  - **Apple HIG Preferences Redesign**: Transformed Faculty Defaults into an Apple Human Interface Guidelines Inset Grouped List (`.apple-hig-group`) featuring themed squircle icon tiles (👤 Instructor, 🏛️ College, 🗓️ Term), semibold primary labels with descriptive subtitles, and right-aligned controls with smooth focus rings.
+  - **Document Header Live Preview**: Integrated an interactive macOS Quick Look-style header simulation card with a glowing `• LIVE SYNC` badge that reflects typography, university branding, and metadata changes in real-time as the user types.
+  - **Uniform Modal Geometry & Elastic Components**: Stabilized Curriculum & Parser Settings across all 6 sections at `width: min(920px, calc(100vw - 32px))` and `height: min(680px, 88vh)`, eliminating tab switching height jitter. Data table wrappers (`#cfgPanePrefixes`, `#cfgPaneDegrees`) and keyword token clouds stretch elastically to fill the dialog body down to the action footer.
+  - **Dynamic Step 4 Dates Stepper Chip**: Converted Step 4 from static ready state to dynamic evaluation based on `startDate` and `endDate` boundaries, displaying a neutral `•` indicator until dates are configured or semester presets applied.
+  - **Multi-Breakpoint Responsive Adaptation**: Added fluid 3x2 tablet and 2x3 mobile tab grids, stacked 2-row dialog footers, and compact viewport support (`<= 640px height`).
+- **Release v1.0.1**:
+  - **WCAG 2.1 AA Accessibility Hardening Pass**: Implemented comprehensive WCAG 2.1 AA accessibility hardening across the desktop application, including full keyboard navigation, focus management, ARIA semantics, live announcements, and Windows forced-colors support.
+  - **Focus Trapping & Focus Restoration**: Implemented stack-aware modal and slide-over drawer focus traps (`FocusTrapManager`) ensuring Tab stays bounded within open dialogs and restores focus to the triggering element upon dismissal.
+  - **Windows High-Contrast / Forced-Colors Mode**: Dedicated `@media (forced-colors: active)` styling enforcing high-contrast `Highlight` focus indicators, `ButtonBorder` boundaries, and dashed `CanvasText` dropzone borders.
+  - **Accessible Table & Progress Semantics**: Upgraded data preview grids and directories with explicit `scope="col"` and `scope="row"` headers, non-color status tags, and progress bar live updates.
+  - **ARIA Live Regions & Screen Reader Support**: Added polite live region announcers for toast notifications, step readiness changes, and document compilation milestones.
+- **Release v1.0.0**:
+  - **Modularized UI & Script Architecture**: Completely decoupled monolith UI into cleanly structured CSS modules (`css/tokens.css`, `components.css`, `drawers.css`, etc.) and JavaScript controllers (`js/state.js`, `step1.js`, `settings.js`, etc.) with zero performance regression.
+  - **Native Drag-and-Drop & Resilient File Bridge**: Integrated native OLE Win32 drag-and-drop alongside pywebview HTML5 dropzones with memory caching for drag operations.
+  - **Official Production Release**: Transitioned from Beta to production Release v1.0.0 (`CvSU Gen.exe`).
 - **v1.8 Beta**:
   - **Apple HIG Spatial Rhythm & Responsive Layout Refinement**: Eliminated layout compression and horizontal overflow dead-zones across small screens and Windows Snap Assist views with fluid `minmax(0, 1fr)` columns and a standardized 8pt spacing grid.
   - **Illuminated Stepper Connectors & Active Indicators**: Introduced dynamic gradient-illuminated stepper progress lines connecting workflow steps, real-time scroll-spy step tracking, and macOS-style segmented indicator lines on the slide drawer navigation tabs.

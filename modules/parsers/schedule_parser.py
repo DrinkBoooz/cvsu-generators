@@ -155,12 +155,138 @@ def parse_schedule(schedule_path: str) -> list:
         
     return results
 
-def find_blocks_for_section(grid, section, start_row, end_row):
+def _extract_instructor_tokens(instructor: str) -> set:
+    """Extracts significant name tokens from an instructor string (uppercase)."""
+    if not instructor:
+        return set()
+    inst_clean = re.sub(
+        r'\b(PROF|ENGR|DR|MR|MS|MRS|INSTRUCTOR|FACULTY|DEPT|PHD|MSC|BSC|MIT|MAED|MENG)\b\.?',
+        '',
+        instructor,
+        flags=re.IGNORECASE
+    )
+    tokens = re.findall(r'[A-Za-z]+', inst_clean.upper())
+    return {t for t in tokens if len(t) >= 2}
+
+def _is_instructor_only_cell(val: str, instructor: str) -> bool:
+    """Returns True if a cell value contains only instructor name tokens."""
+    if not val:
+        return False
+    tokens = _extract_instructor_tokens(instructor)
+    if not tokens:
+        return False
+    val_tokens = {t.upper() for t in re.findall(r'[A-Za-z]+', val)}
+    return bool(val_tokens and val_tokens.issubset(tokens))
+
+def normalize_room(room_str: str, instructor: str = "") -> str:
+    """
+    Normalizes a room string by separating legitimate room values from instructor suffixes.
+
+    Requirements:
+    - 'OS / ORTEGA' -> 'OS'
+    - 'CCL 102 / ORTEGA' -> 'CCL 102'
+    - 'OS' -> 'OS'
+    - 'CCL 102' -> 'CCL 102'
+    - Legitimate room values with punctuation (e.g. 'ITC 501 / ITC 502', 'RM 101-A') are preserved.
+    - If a schedule cell contains a room followed by the parsed instructor, do not include the instructor in room.
+    - Does not blindly remove arbitrary text after every slash without considering the actual parsed instructor.
+    - Keeps instructor as its own semantic field.
+    """
+    if not room_str:
+        return ""
+    room = str(room_str).strip()
+    if "/" not in room:
+        return room
+
+    target_instructor = (instructor or "").strip()
+    if not target_instructor:
+        try:
+            target_instructor = config_manager.get_schedule_defaults().get("default_instructor", "")
+        except Exception:
+            target_instructor = ""
+
+    tokens = _extract_instructor_tokens(target_instructor) if target_instructor else set()
+
+    parts = [p.strip() for p in room.split('/') if p.strip()]
+    if len(parts) <= 1:
+        return room
+
+    last_part = parts[-1]
+    last_tokens = {t.upper() for t in re.findall(r'[A-Za-z]+', last_part)}
+
+    if tokens and (last_tokens & tokens):
+        return " / ".join(parts[:-1]).strip()
+
+    return room
+
+def format_canonical_schedule(blocks: list, instructor: str = "") -> str:
+    """
+    Produces canonical CEIT schedule string:
+    'Wed: 11:00AM-01:00PM / LEC: OS; Fri: 09:00AM-11:00AM / LAB: CCL 102'
+    - Abbreviated day names already used by the project
+    - Preserves AM/PM formatting
+    - Preserves LEC/LAB type
+    - Exactly '; ' between meetings
+    - Exactly ' / ' before the type/room portion
+    - Never appends instructor
+    - Never inserts newline characters
+    - Never inserts Word line breaks
+    """
+    if not blocks:
+        return "SEE SCHEDULE"
+
+    parts = []
+    for b in blocks:
+        day = b.get('day', '')
+        start = b.get('start_time', '')
+        end = b.get('end_time', '')
+        typ = b.get('type', '')
+        raw_room = b.get('room', '')
+        room = normalize_room(raw_room, instructor)
+
+        time_str = f"{day}: {start}-{end}" if (start and end) else day
+
+        if typ and room:
+            desc_part = f"{typ}: {room}"
+        elif typ:
+            desc_part = typ
+        elif room:
+            desc_part = room
+        else:
+            desc_part = ""
+
+        if desc_part:
+            parts.append(f"{time_str} / {desc_part}")
+        else:
+            parts.append(time_str)
+
+    return "; ".join(parts)
+
+def find_blocks_for_section(grid, section, start_row, end_row, instructor: str = ""):
     search_str = section.replace("CSCS", "CS")
     if search_str.upper().startswith("BS"):
         search_str = search_str[2:]
         
     search_str = re.sub(r'([a-zA-Z]+)(\d)', r'\1 \2', search_str)
+
+    if not instructor:
+        for r_check in range(len(grid)):
+            for c_check in range(len(grid[r_check])):
+                v_check = str(grid[r_check][c_check]).upper().replace(":", "").strip()
+                if v_check == "NAME":
+                    if c_check + 1 < len(grid[r_check]) and str(grid[r_check][c_check + 1]).strip():
+                        instructor = str(grid[r_check][c_check + 1]).strip()
+                        break
+                    elif c_check + 2 < len(grid[r_check]) and str(grid[r_check][c_check + 2]).strip():
+                        instructor = str(grid[r_check][c_check + 2]).strip()
+                        break
+            if instructor:
+                break
+        if not instructor:
+            try:
+                instructor = config_manager.get_schedule_defaults().get("default_instructor", "")
+            except Exception:
+                instructor = ""
     
     seen_noon = False
     row_is_pm = {}
@@ -191,6 +317,8 @@ def find_blocks_for_section(grid, section, start_row, end_row):
                         if i > r and val.startswith(subject_prefixes):
                             break
                         if val:
+                            if _is_instructor_only_cell(val, instructor):
+                                continue
                             room_row = i
                             
                     start_time = grid[subject_row][1]
@@ -206,9 +334,10 @@ def find_blocks_for_section(grid, section, start_row, end_row):
                     
                     section_cell_parts = [p.strip() for p in grid[r][c].split('/')]
                     if len(section_cell_parts) > 1 and search_str.upper().replace(" ", "") in section_cell_parts[0].upper().replace(" ", ""):
-                        room = section_cell_parts[1]
+                        raw_room = section_cell_parts[1]
                     else:
-                        room = grid[room_row][c].strip()
+                        raw_room = grid[room_row][c].strip()
+                    room = normalize_room(raw_room, instructor)
                     
                     type_str = ""
                     is_async = False

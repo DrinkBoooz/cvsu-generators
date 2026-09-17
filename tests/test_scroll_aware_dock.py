@@ -3,7 +3,7 @@ import pytest
 from playwright.sync_api import sync_playwright
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-UI_HTML_PATH = os.path.join(WORKSPACE_DIR, "executable", "ui.html")
+UI_HTML_PATH = os.path.join(WORKSPACE_DIR, "executable_test", "ui.html")
 ARTIFACT_DIR = r"C:\Users\danjo\.gemini\antigravity-ide\brain\7cdd1ee2-d27f-4cac-ab45-d659c8cd0ed5"
 
 def test_scroll_aware_dock_behavior():

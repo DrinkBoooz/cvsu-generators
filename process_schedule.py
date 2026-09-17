@@ -23,6 +23,8 @@ from modules.parsers.schedule_parser import (
     find_blocks_for_section,
     inspect_schedule_file,
     _find_class_details_by_schedule_code,
+    normalize_room,
+    format_canonical_schedule,
 )
 from modules.services.validator import (
     validate_rosters,
@@ -53,6 +55,8 @@ __all__ = [
     "find_schedule_file",
     "parse_schedule",
     "find_blocks_for_section",
+    "normalize_room",
+    "format_canonical_schedule",
     "inspect_schedule_file",
     "_find_class_details_by_schedule_code",
     "validate_rosters",

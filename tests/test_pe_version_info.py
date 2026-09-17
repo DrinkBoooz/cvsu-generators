@@ -4,9 +4,9 @@ import pytest
 from PyInstaller.utils.win32.versioninfo import load_version_info_from_text_file
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXECUTABLE_DIR = os.path.join(WORKSPACE_DIR, "executable")
+EXECUTABLE_DIR = os.path.join(WORKSPACE_DIR, "executable_test")
 VERSION_INFO_PATH = os.path.join(EXECUTABLE_DIR, "file_version_info.txt")
-SPEC_PATH = os.path.join(EXECUTABLE_DIR, "CvSU Gen (Beta).spec")
+SPEC_PATH = os.path.join(EXECUTABLE_DIR, "CvSU Gen.spec")
 BUILD_BAT_PATH = os.path.join(EXECUTABLE_DIR, "build.bat")
 UI_HTML_PATH = os.path.join(EXECUTABLE_DIR, "ui.html")
 SIGN_EXE_PATH = os.path.join(EXECUTABLE_DIR, "sign_exe.ps1")
@@ -15,11 +15,11 @@ INSTALL_PUBLISHER_PATH = os.path.join(EXECUTABLE_DIR, "install_trusted_publisher
 
 
 def get_ui_version():
-    """Extract active version from executable/ui.html (e.g. '1.7' from 'v1.7 Beta')."""
+    """Extract active version from executable_test/ui.html (e.g. '1.0.0' from 'Release v1.0.0')."""
     assert os.path.exists(UI_HTML_PATH), "ui.html must exist"
     with open(UI_HTML_PATH, "r", encoding="utf-8") as f:
         content = f.read()
-    match = re.search(r'<span class="badge-version">v(\d+\.\d+)\s+Beta</span>', content)
+    match = re.search(r'<span class="badge-version">(?:Release\s+)?v?(\d+\.\d+(?:\.\d+)?)(?:\s+Beta)?</span>', content)
     assert match, "Version badge not found in ui.html"
     return match.group(1)
 
@@ -34,10 +34,15 @@ def test_file_version_info_exists_and_loads():
 def test_version_info_metadata_and_synchronization():
     """Verify that metadata strings and version tuples match project standards."""
     vi = load_version_info_from_text_file(VERSION_INFO_PATH)
-    ui_version = get_ui_version()  # e.g. "1.7"
-    major, minor = [int(x) for x in ui_version.split(".")]
-    expected_tuple = (major, minor, 0, 0)
-    expected_str = f"{major}.{minor}.0.0"
+    ui_version = get_ui_version()  # e.g. "1.0.0"
+    parts = [int(x) for x in ui_version.split(".")]
+    if len(parts) == 2:
+        major, minor = parts
+        patch = 0
+    else:
+        major, minor, patch = parts[:3]
+    expected_tuple = (major, minor, patch, 0)
+    expected_str = f"{major}.{minor}.{patch}.0"
 
     # Verify fixed file info tuples (MS >> 16, MS & 0xffff, LS >> 16, LS & 0xffff)
     actual_filevers = (
@@ -65,7 +70,7 @@ def test_version_info_metadata_and_synchronization():
     assert metadata.get("FileVersion") == expected_str, f"FileVersion must match {expected_str}"
     assert metadata.get("ProductVersion") == expected_str, f"ProductVersion must match {expected_str}"
     assert metadata.get("ProductName") == "CvSU Document Generator"
-    assert metadata.get("OriginalFilename") == "CvSU Gen (Beta).exe"
+    assert metadata.get("OriginalFilename") == "CvSU Gen.exe"
     assert "danjoseph.ortega@cvsu.edu.ph" in metadata.get("Comments", "")
 
 
@@ -74,7 +79,7 @@ def test_spec_and_build_bat_integration():
     with open(SPEC_PATH, "r", encoding="utf-8") as f:
         spec_content = f.read()
     assert "version='file_version_info.txt'" in spec_content or 'version="file_version_info.txt"' in spec_content, (
-        "CvSU Gen (Beta).spec must specify version='file_version_info.txt'"
+        "CvSU Gen.spec must specify version='file_version_info.txt'"
     )
 
     with open(BUILD_BAT_PATH, "r", encoding="utf-8") as f:
@@ -104,8 +109,10 @@ def test_code_signing_scripts_exist():
 
 
 def test_dist_exe_properties_and_signature_if_built():
-    """If CvSU Gen (Beta).exe has been compiled in dist, verify its version info and signature."""
-    exe_path = os.path.join(EXECUTABLE_DIR, "dist", "CvSU Gen (Beta).exe")
+    """If CvSU Gen.exe has been compiled in dist, verify its version info and signature."""
+    exe_path = os.path.join(EXECUTABLE_DIR, "dist", "CvSU Gen.exe")
+    if not os.path.exists(exe_path):
+        exe_path = os.path.join(EXECUTABLE_DIR, "dist", "CvSU Gen (Beta).exe")
     if not os.path.exists(exe_path):
         pytest.skip("dist executable has not been built yet")
 

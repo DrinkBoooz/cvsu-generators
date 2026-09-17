@@ -46,341 +46,112 @@ from modules.parsers.roster_parser import (
     _detect_roster_columns,
 )
 
-class TemplateError(Exception):
-    """Raised when a docx template structure does not match expectations."""
-    pass
+from typing import Optional, Any, Union, Dict, List, Tuple
+from modules.models.recipe import ValidatedTemplateRecipe
+from modules.services.template_recipe_service import TemplateRecipeResolver, recipe_resolver
+from modules.generators.document_generator import (
+    DocumentGenerator,
+    ConfigurableDocumentGenerator,
+    TemplateError,
+)
 
 
-# ══ Abstract base class ═══════════════════════════════════════════════════════
-class DocumentGenerator(ABC):
-    """
-    Abstract base — defines the template method pattern.
-    Subclasses implement fill_header() and (optionally) fill_table().
-    """
-
-    def __init__(self, template_path: str):
-        self._template_path = template_path
-
-    @property
-    def template_path(self) -> str:
-        return self._template_path
-
-    @abstractmethod
-    def fill_header(self, body, info: ClassInfo) -> None:
-        """Fill header fields specific to this document type."""
-
-    def _is_student_table(self, tbl) -> bool:
-        """Return True only for the actual student roster table."""
-        rows = tbl.findall(w("tr"))
-        if not rows:
-            return False
-        cells = rows[0].findall(w("tc"))
-        if not cells:
-            return False
-        hdr = " ".join("".join((t.text or '') for t in c.iter(w('t'))) for c in cells).lower()
-        if any(k in hdr for k in ("instructor", "course /", "schedule code", "subject code", "semester /", "time / days / room")):
-            return False
-        return ("student" in hdr or "name of student" in hdr or "name of students" in hdr or "no." in hdr) and (
-            "signature" in hdr or "student number" in hdr or "studentnumber" in hdr or "name of student" in hdr
-        )
-
-    def fill_table(self, body, info: ClassInfo) -> None:
-        """
-        Default table fill: clone first student row as template,
-        remove existing student rows, then write info.students.
-        Works for all CEIT document types.
-        """
-        tables = body.findall(w("tbl"))
-        target = None
-        for tbl in tables:
-            if self._is_student_table(tbl):
-                target = tbl
-                break
-        if target is None:
-            raise TemplateError("Could not find the student list table in the template.")
-        rows = target.findall(w("tr"))
-        if len(rows) < 2:
-            raise TemplateError("Student list table must have at least 2 rows (1 header, 1 student).")
-        header_row = rows[0]
-        template_row = rows[1]
-
-        for tr in rows[1:]:
-            target.remove(tr)
-
-        for idx, (name, stnum) in enumerate(info.students):
-            tr = copy.deepcopy(template_row)
-            for tc in tr.findall(w("tc")):
-                for p in tc.findall(w("p")):
-                    for r in p.findall(w("r")):
-                        for t in r.findall(w("t")):
-                            t.text = ""
-            cells = tr.findall(w("tc"))
-            while len(cells) < 3:
-                new_tc = etree.Element(w("tc"))
-                tr.append(new_tc)
-                cells = tr.findall(w("tc"))
-            self._fill_student_row(cells, idx, name, stnum)
-            target.append(tr)
-
-    @abstractmethod
-    def _fill_student_row(self, cells: list, idx: int,
-                           name: str, stnum: str) -> None:
-        """Fill one student row's cells. Signature differs by doc type."""
-
-    def generate(self, info: ClassInfo, output_path: str) -> None:
-        """Template method — orchestrates the full generation pipeline."""
-        zin, root, body = load_docx(self._template_path)
-        self.fill_header(body, info)
-        self.fill_table(body, info)
-        save_docx(zin, root, output_path)
-        logger.info(f"Generated {os.path.basename(output_path)}")
 
 
 # ══ Syllabus Generator ════════════════════════════════════════════════════════
 class SyllabusGenerator(DocumentGenerator):
     """
     VPAA-QF-12 — Course Syllabus Acceptance Form
-    Columns: No. | Name of Student | Student Number | Signature
-    Header fields: Instructor, Course/Section, Schedule Code,
-                   Subject, Time/Days/Room, Semester/AY
+    Pure recipe-driven execution; zero positional fallbacks.
     """
 
-    def fill_header(self, body, info: ClassInfo) -> None:
-        tables = body.findall(w("tbl"))
-        if not tables:
-            return
-        info_tbl = tables[0]
-        rows = info_tbl.findall(w("tr"))
-        mapping = [
-            (0, info.instructor, 30),
-            (1, info.course_section, 0),
-            (2, info.schedule_code, 0),
-            (3, info.subject, 35),
-            (4, info.time_days_room, 45),
-            (5, info.semester_ay, 0),
-        ]
-        for row_idx, val, thresh in mapping:
-            if row_idx < len(rows):
-                cells = rows[row_idx].findall(w("tc"))
-                if len(cells) > 1:
-                    set_cell_text(cells[1], val, shrink_threshold=thresh, shrink_sz="18")
-
-    def _fill_student_row(self, cells, idx, name, stnum):
-        set_cell_text(cells[1], name, shrink_threshold=32, shrink_sz="18")
-        set_cell_text(cells[2], stnum)
-
-    def fill_table(self, body, info: ClassInfo) -> None:
-        tbls = body.findall(w("tbl"))
-        target = None
-        for tbl in tbls:
-            if self._is_student_table(tbl):
-                target = tbl
-                break
-        if target is None:
-            raise TemplateError("Could not find the student list table in the syllabus template.")
-
-        rows = target.findall(w("tr"))
-        if len(rows) < 2:
-            raise TemplateError("Syllabus student list table must have at least 2 rows (1 header, 1 student).")
-        header_row = rows[0]
-        template_row = rows[1]
-
-        for tr in rows[1:]:
-            target.remove(tr)
-
-        for idx, (name, stnum) in enumerate(info.students):
-            tr = copy.deepcopy(template_row)
-            for tc in tr.findall(w("tc")):
-                for p in tc.findall(w("p")):
-                    for r in p.findall(w("r")):
-                        for t in r.findall(w("t")):
-                            t.text = ""
-            cells = tr.findall(w("tc"))
-            while len(cells) < 3:
-                new_tc = etree.Element(w("tc"))
-                tr.append(new_tc)
-                cells = tr.findall(w("tc"))
-            self._fill_student_row(cells, idx, name, stnum)
-            target.append(tr)
+    def __init__(self, template_path: str, recipe: ValidatedTemplateRecipe):
+        super().__init__(template_path, recipe)
 
 
 # ══ Exam Returns Generator ════════════════════════════════════════════════════
 class ExamReturnsGenerator(DocumentGenerator):
     """
     CEIT-QF-03 — Exam Returns Form
-    Columns: Name of Students | Student Number | Signature
-    Header fields: Instructor, Course/Section, Schedule Code,
-                   Subject, Semester/AY
+    Pure recipe-driven execution; zero positional fallbacks.
     """
 
-    def __init__(self, template_path: str, period: str):
-        super().__init__(template_path)
-        self._period = period   # "MIDTERM" or "FINAL"
+    def __init__(self, template_path: str, recipe: ValidatedTemplateRecipe = None, period: str = "MIDTERM", **kwargs):
+        if isinstance(period, ValidatedTemplateRecipe) and isinstance(recipe, str):
+            recipe, period = period, recipe
+        elif "recipe" in kwargs and isinstance(kwargs["recipe"], ValidatedTemplateRecipe):
+            if isinstance(recipe, str):
+                period = recipe
+            recipe = kwargs["recipe"]
+        if not isinstance(recipe, ValidatedTemplateRecipe):
+            raise TypeError("ExamReturnsGenerator requires a ValidatedTemplateRecipe instance")
+        super().__init__(template_path, recipe)
+        self._period = period
 
     @property
     def period(self) -> str:
         return self._period
-
-    def fill_header(self, body, info: ClassInfo) -> None:
-        tables = body.findall(w("tbl"))
-        if tables:
-            info_tbl = tables[0]
-            rows = info_tbl.findall(w("tr"))
-            mapping = [
-                (0, info.instructor, 30),
-                (1, info.course_section, 0),
-                (2, info.schedule_code, 0),
-                (3, info.subject, 35),
-                (4, info.semester_ay, 0),
-            ]
-            for row_idx, val, thresh in mapping:
-                if row_idx < len(rows):
-                    cells = rows[row_idx].findall(w("tc"))
-                    if len(cells) > 1:
-                        set_cell_text(cells[1], val, shrink_threshold=thresh, shrink_sz="18")
-        else:
-            paras = body.findall(w("p"))
-            if len(paras) < 10:
-                raise TemplateError("Exam Returns template missing required paragraphs for the header.")
-            replace_value_run(paras[1], 2, info.instructor, shrink_threshold=30, shrink_sz="18")
-            replace_value_run(paras[2], 3, info.course_section)
-            replace_value_run(paras[3], 6, info.schedule_code)
-            replace_value_run(paras[4], 3, info.subject, shrink_threshold=35, shrink_sz="18")
-            collapse_runs_after_colon(paras[5], info.semester_ay)
-            runs = paras[9].findall(w("r"))
-            if runs:
-                set_run_text(runs[0], f"{self._period} EXAMINATION")
-                for r in runs[1:]:
-                    paras[9].remove(r)
-
-    def _fill_student_row(self, cells, idx, name, stnum):
-        set_cell_text(cells[0], name, shrink_threshold=32, shrink_sz="18")
-        set_cell_text(cells[1], stnum)
 
 
 # ══ TOS Generator ════════════════════════════════════════════════════════════
 class TOSGenerator(DocumentGenerator):
     """
     TOS Acknowledgment Form
-    Columns: Name of Students | Student Number | Signature
-    Header fields: Instructor, Course/Section, Schedule Code,
-                   Subject, Time/Days/Room, Semester/AY + (Midterm/Finals)
+    Pure recipe-driven execution; appends period to semester_ay field.
     """
 
-    def __init__(self, template_path: str, period: str):
-        super().__init__(template_path)
-        self._period = period   # "Midterm" or "Finals"
+    def __init__(self, template_path: str, recipe: ValidatedTemplateRecipe = None, period: str = "Midterm", **kwargs):
+        if isinstance(period, ValidatedTemplateRecipe) and isinstance(recipe, str):
+            recipe, period = period, recipe
+        elif "recipe" in kwargs and isinstance(kwargs["recipe"], ValidatedTemplateRecipe):
+            if isinstance(recipe, str):
+                period = recipe
+            recipe = kwargs["recipe"]
+        if not isinstance(recipe, ValidatedTemplateRecipe):
+            raise TypeError("TOSGenerator requires a ValidatedTemplateRecipe instance")
+        super().__init__(template_path, recipe)
+        self._period = period
 
     @property
     def period(self) -> str:
         return self._period
 
     def fill_header(self, body, info: ClassInfo) -> None:
-        tables = body.findall(w("tbl"))
-        if tables:
-            info_tbl = tables[0]
-            rows = info_tbl.findall(w("tr"))
-            mapping = [
-                (0, info.instructor, 30),
-                (1, info.course_section, 0),
-                (2, info.schedule_code, 0),
-                (3, info.subject, 35),
-                (4, info.time_days_room, 45),
-                (5, f"{info.semester_ay} ({self._period})", 0),
-            ]
-            for row_idx, val, thresh in mapping:
-                if row_idx < len(rows):
-                    cells = rows[row_idx].findall(w("tc"))
-                    if len(cells) > 1:
-                        set_cell_text(cells[1], val, shrink_threshold=thresh, shrink_sz="18")
-        else:
-            paras = body.findall(w("p"))
-            if len(paras) < 7:
-                raise TemplateError("TOS template missing required paragraphs for the header.")
-            replace_after_colon(paras[1], info.instructor, shrink_threshold=30, shrink_sz="18")
-            replace_value_run(paras[2], 2, info.course_section)
-            replace_value_run(paras[3], 4, info.schedule_code)
-            replace_after_colon(paras[4], info.subject, shrink_threshold=35, shrink_sz="18")
-            replace_after_colon(paras[5], info.time_days_room, shrink_threshold=45, shrink_sz="18")
-            collapse_runs_after_colon(
-                paras[6], f"{info.semester_ay} ({self._period})"
-            )
-
-    def _fill_student_row(self, cells, idx, name, stnum):
-        set_cell_text(cells[0], name, shrink_threshold=32, shrink_sz="18")
-        set_cell_text(cells[1], stnum)
+        info_with_period = ClassInfo(
+            instructor=info.instructor,
+            course_section=info.course_section,
+            schedule_code=info.schedule_code,
+            subject=info.subject,
+            time_days_room=info.time_days_room,
+            semester_ay=f"{info.semester_ay} ({self._period})",
+            students=info.students,
+        )
+        super().fill_header(body, info_with_period)
 
 
 # ══ Grade Discussion Generator ════════════════════════════════════════════════
 class GradeDiscussionGenerator(DocumentGenerator):
     """
     Grade Discussion Form (Midterm / Finals)
-    Columns: Name of Students | Student Number | Signature
-    Header fields: Instructor, Course/Section, Schedule Code,
-                   Subject, Time/Days/Room, Semester/AY, Date
+    Pure recipe-driven execution; zero positional fallbacks.
     """
 
-    def __init__(self, template_path: str, period: str = "Midterm"):
-        super().__init__(template_path)
-        self._period = period   # "Midterm" or "Finals"
+    def __init__(self, template_path: str, recipe: ValidatedTemplateRecipe = None, period: str = "Midterm", **kwargs):
+        if isinstance(period, ValidatedTemplateRecipe) and isinstance(recipe, str):
+            recipe, period = period, recipe
+        elif "recipe" in kwargs and isinstance(kwargs["recipe"], ValidatedTemplateRecipe):
+            if isinstance(recipe, str):
+                period = recipe
+            recipe = kwargs["recipe"]
+        if not isinstance(recipe, ValidatedTemplateRecipe):
+            raise TypeError("GradeDiscussionGenerator requires a ValidatedTemplateRecipe instance")
+        super().__init__(template_path, recipe)
+        self._period = period
 
     @property
     def period(self) -> str:
         return self._period
 
-    def fill_header(self, body, info: ClassInfo) -> None:
-        tables = body.findall(w("tbl"))
-        if not tables:
-            return
-        info_tbl = tables[0]
-        rows = info_tbl.findall(w("tr"))
-        
-        for r_idx, row in enumerate(rows):
-            cells = row.findall(w("tc"))
-            if len(cells) < 3:
-                continue
-            label = get_full_text(cells[0]).upper().strip()
-            val = None
-            thresh = 0
-            if "INSTRUCTOR" in label:
-                val = info.instructor
-                thresh = 30
-            elif "COURSE" in label or "SECTION" in label:
-                val = info.course_section
-            elif "SCHEDULE" in label:
-                val = info.schedule_code
-            elif "SUBJECT" in label:
-                val = info.subject
-                thresh = 35
-            elif "SEMESTER" in label or "ACADEMIC" in label:
-                val = info.semester_ay
-            elif "TIME" in label or "ROOM" in label or "DAY" in label:
-                val = info.time_days_room
-                thresh = 45
-            elif "DATE" in label:
-                val = None  # Left blank for manual date/signing
-            else:
-                if r_idx == 0:
-                    val = info.instructor
-                    thresh = 30
-                elif r_idx == 1:
-                    val = info.course_section
-                elif r_idx == 2:
-                    val = info.schedule_code
-                elif r_idx == 3:
-                    val = info.subject
-                    thresh = 35
-                elif r_idx == 4:
-                    val = info.semester_ay
-                elif r_idx == 5:
-                    val = None
-
-            if val is not None:
-                set_cell_text(cells[2], val, shrink_threshold=thresh, shrink_sz="18")
-
-    def _fill_student_row(self, cells, idx, name, stnum):
-        set_cell_text(cells[0], name, shrink_threshold=32, shrink_sz="18")
-        set_cell_text(cells[1], stnum)
 
 
 # ══ GeneratorFactory ══════════════════════════════════════════════════════════
@@ -400,64 +171,114 @@ class GeneratorFactory:
         "grade_finals":   "Final-Grade-Discussion_LATEST.docx",
     }
 
-    def __init__(self, templates_dir: str, config_manager=None):
+    PROFILE_MAPPING = {
+        "syllabus":       "syllabus",
+        "exam_midterm":   "exam_returns",
+        "exam_finals":    "exam_returns",
+        "tos_midterm":    "tos",
+        "tos_finals":     "tos",
+        "grade_midterm":  "grade_discussion",
+        "grade_finals":   "grade_discussion",
+    }
+
+    def __init__(self, templates_dir: str, config_manager=None, resolver: Optional[TemplateRecipeResolver] = None):
         self._dir = templates_dir
         self._config_manager = config_manager
+        self._resolver = resolver or TemplateRecipeResolver.get_instance()
 
     def _path(self, key: str) -> str:
         p = os.path.join(self._dir, self.TEMPLATE_FILES[key])
         if not os.path.exists(p):
-            if key == "grade_finals":
-                alt = os.path.join(self._dir, "Finals-Grade-Discussion_LATEST.docx")
-                if os.path.exists(alt):
-                    return alt
             raise FileNotFoundError(
                 f"Template not found: {p}\n"
                 f"Expected file: {self.TEMPLATE_FILES[key]}"
             )
         return p
 
+    def _get_validated_recipe(self, key: str, template_path: str) -> ValidatedTemplateRecipe:
+        profile_id = self.PROFILE_MAPPING.get(key, "academic_docx")
+        return self._resolver.resolve(template_path, profile_id=profile_id)
+
     def get_all(self, include_custom: bool = True) -> list:
         """Return list of (generator_factory, output_suffix) tuples.
         The factory is a callable that returns the instantiated generator."""
         generators = [
-            (lambda: SyllabusGenerator(self._path("syllabus")),
-             "SYLLABUS_ACCEPTANCE"),
-            (lambda: ExamReturnsGenerator(self._path("exam_midterm"), "MIDTERM"),
-             "EXAM_RETURNS_MIDTERM"),
-            (lambda: ExamReturnsGenerator(self._path("exam_finals"),  "FINAL"),
-             "EXAM_RETURNS_FINALS"),
-            (lambda: TOSGenerator(self._path("tos_midterm"), "Midterm"),
-             "TOS_MIDTERM"),
-            (lambda: TOSGenerator(self._path("tos_finals"),  "Finals"),
-             "TOS_FINALS"),
-            (lambda: GradeDiscussionGenerator(self._path("grade_midterm"), "Midterm"),
-             "GRADE_DISCUSSION_MIDTERM"),
-            (lambda: GradeDiscussionGenerator(self._path("grade_finals"),  "Finals"),
-             "GRADE_DISCUSSION_FINALS"),
+            (lambda: SyllabusGenerator(
+                self._path("syllabus"),
+                self._get_validated_recipe("syllabus", self._path("syllabus")),
+             ), "SYLLABUS_ACCEPTANCE"),
+            (lambda: ExamReturnsGenerator(
+                self._path("exam_midterm"),
+                self._get_validated_recipe("exam_midterm", self._path("exam_midterm")),
+                "MIDTERM",
+             ), "EXAM_RETURNS_MIDTERM"),
+            (lambda: ExamReturnsGenerator(
+                self._path("exam_finals"),
+                self._get_validated_recipe("exam_finals", self._path("exam_finals")),
+                "FINAL",
+             ), "EXAM_RETURNS_FINALS"),
+            (lambda: TOSGenerator(
+                self._path("tos_midterm"),
+                self._get_validated_recipe("tos_midterm", self._path("tos_midterm")),
+                "Midterm",
+             ), "TOS_MIDTERM"),
+            (lambda: TOSGenerator(
+                self._path("tos_finals"),
+                self._get_validated_recipe("tos_finals", self._path("tos_finals")),
+                "Finals",
+             ), "TOS_FINALS"),
+            (lambda: GradeDiscussionGenerator(
+                self._path("grade_midterm"),
+                self._get_validated_recipe("grade_midterm", self._path("grade_midterm")),
+                "Midterm",
+             ), "GRADE_DISCUSSION_MIDTERM"),
+            (lambda: GradeDiscussionGenerator(
+                self._path("grade_finals"),
+                self._get_validated_recipe("grade_finals", self._path("grade_finals")),
+                "Finals",
+             ), "GRADE_DISCUSSION_FINALS"),
         ]
 
         if include_custom:
             try:
                 from modules.common.config_manager import config_manager as default_cm
                 cm = self._config_manager or default_cm
-                from modules.generators.generic_doc_gen import ConfigurableDocumentGenerator
+                from modules.generators.document_generator import ConfigurableDocumentGenerator
 
                 custom_templates = cm.get_custom_templates()
                 for ct in custom_templates:
                     if ct.get("enabled", True):
                         t_path = ct.get("file_path")
-                        recipe = ct.get("recipe") or {}
+                        recipe_data = ct.get("recipe") or {}
                         suffix = ct.get("suffix") or "CUSTOM_FORM"
+                        profile_id = ct.get("profile_id") or recipe_data.get("profile_id") or "custom_docx"
                         if t_path and os.path.exists(t_path):
-                            def _make_custom_gen(p=t_path, r=recipe):
-                                return ConfigurableDocumentGenerator(p, r)
+                            validated = self._resolver.resolve(t_path, profile_id=profile_id)
+                            saved_meta = recipe_data.get("metadata") if isinstance(recipe_data, dict) else {}
+                            if not isinstance(saved_meta, dict):
+                                saved_meta = {}
+                            raw_folder = saved_meta.get("output_folder") or (recipe_data.get("output_folder") if isinstance(recipe_data, dict) else None)
+                            if raw_folder is not None:
+                                from modules.common.path_utils import validate_output_folder
+                                validated.metadata["output_folder"] = validate_output_folder(raw_folder, default="CEIT_Forms")
+                            for k, v in saved_meta.items():
+                                if k != "output_folder":
+                                    validated.metadata[k] = v
+                            if suffix:
+                                validated.metadata["suffix"] = suffix
+                            title = ct.get("title")
+                            if title:
+                                validated.metadata["title"] = title
+
+                            def _make_custom_gen(p=t_path, v=validated):
+                                return ConfigurableDocumentGenerator(p, v)
 
                             generators.append((_make_custom_gen, suffix))
             except Exception as e:
                 logger.error(f"Failed to load custom templates in GeneratorFactory: {e}")
 
         return generators
+
 
 
 # ══ CLI ═══════════════════════════════════════════════════════════════════════

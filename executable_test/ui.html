@@ -5,6 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CvSU Gen — Document Automation Suite</title>
 
+    <!-- ── Critical Visibility Failsafe ── -->
+    <style>
+      .d-none {
+        display: none !important;
+      }
+    </style>
+
     <!-- ── Modular Stylesheets ── -->
     <link rel="stylesheet" href="css/tokens.css" />
     <link rel="stylesheet" href="css/base.css" />
@@ -43,7 +50,7 @@
           <div>
             <div style="display: flex; align-items: center; gap: 8px">
               <span class="brand-title">CvSU Gen</span>
-              <span class="badge-version">Release v1.0.0</span>
+              <span class="badge-version">Release v1.1.0</span>
             </div>
             <div class="brand-subtitle">
               Cavite State University Document Automation
@@ -51,7 +58,7 @@
           </div>
         </div>
 
-        <div class="header-actions">
+        <nav aria-label="Quick Actions" class="header-actions">
           <button
             class="nav-btn"
             id="btnToggleTheme"
@@ -156,21 +163,22 @@
             </svg>
             Guides
           </button>
-        </div>
+        </nav>
       </header>
 
       <!-- Stepper Readiness Tracker Bar -->
-      <div class="stepper-bar" id="workflowStepper">
+      <nav aria-label="Workflow Steps" class="stepper-bar" id="workflowStepper">
         <div class="stepper-track">
           <button
             class="step-chip"
             id="chipStep1"
             type="button"
             onclick="scrollToStep('cardStep1')"
+            aria-label="Step 1: Schedule - Incomplete"
           >
             <span class="chip-num">1</span>
             <span class="chip-txt">Schedule</span>
-            <span class="chip-status" id="statusStep1">⚪</span>
+            <span class="chip-status" id="statusStep1" aria-hidden="true">⚪</span>
           </button>
           <div class="stepper-connector" id="connector1to2"></div>
           <button
@@ -178,10 +186,11 @@
             id="chipStep2"
             type="button"
             onclick="scrollToStep('cardStep2')"
+            aria-label="Step 2: Rosters - Incomplete"
           >
             <span class="chip-num">2</span>
             <span class="chip-txt">Rosters</span>
-            <span class="chip-status" id="statusStep2">⚪</span>
+            <span class="chip-status" id="statusStep2" aria-hidden="true">⚪</span>
           </button>
           <div class="stepper-connector" id="connector2to3"></div>
           <button
@@ -189,10 +198,11 @@
             id="chipStep3"
             type="button"
             onclick="scrollToStep('cardStep3')"
+            aria-label="Step 3: Packages - Incomplete"
           >
             <span class="chip-num">3</span>
             <span class="chip-txt">Packages</span>
-            <span class="chip-status" id="statusStep3">⚪</span>
+            <span class="chip-status" id="statusStep3" aria-hidden="true">⚪</span>
           </button>
           <div class="stepper-connector" id="connector3to4"></div>
           <button
@@ -200,10 +210,11 @@
             id="chipStep4"
             type="button"
             onclick="scrollToStep('cardStep4')"
+            aria-label="Step 4: Dates - Incomplete"
           >
             <span class="chip-num">4</span>
             <span class="chip-txt">Dates</span>
-            <span class="chip-status" id="statusStep4">⚪</span>
+            <span class="chip-status" id="statusStep4" aria-hidden="true">⚪</span>
           </button>
           <div class="stepper-connector" id="connector4to5"></div>
           <button
@@ -211,10 +222,11 @@
             id="chipStep5"
             type="button"
             onclick="scrollToStep('cardStep5')"
+            aria-label="Step 5: Output - Incomplete"
           >
             <span class="chip-num">5</span>
             <span class="chip-txt">Output</span>
-            <span class="chip-status" id="statusStep5">⚪</span>
+            <span class="chip-status" id="statusStep5" aria-hidden="true">⚪</span>
           </button>
           <div class="stepper-connector" id="connector5to6"></div>
           <button
@@ -222,19 +234,21 @@
             id="chipStep6"
             type="button"
             onclick="scrollToStep('cardStep6')"
+            aria-label="Step 6: Generate - Incomplete"
           >
             <span class="chip-num">6</span>
             <span class="chip-txt">Generate</span>
-            <span class="chip-status" id="statusStep6">⚪</span>
+            <span class="chip-status" id="statusStep6" aria-hidden="true">⚪</span>
           </button>
         </div>
-      </div>
+      </nav>
     </div>
 
-    <!-- Toast Notification Container -->
-    <div id="toastContainer" class="toast-container"></div>
+    <!-- Toast Notification Container & Screen Reader Announcer -->
+    <div id="toastContainer" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+    <div id="a11yLiveAnnouncer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
 
-    <div class="app-container">
+    <main id="mainContent" class="app-container" role="main">
       <!-- ── Modern Studio 2-Column Dashboard Grid ─────────────────────────── -->
       <div class="dashboard-grid">
         <!-- ── LEFT COLUMN: Data Ingestion (Schedule & Rosters) ──────────── -->
@@ -261,6 +275,7 @@
               onclick="loadSchedule()"
               tabindex="0"
               role="button"
+              aria-label="Upload instructor master schedule spreadsheet (.xls or .xlsx)"
               onkeydown="if(event.key==='Enter' || event.key===' ') { event.preventDefault(); this.click(); }"
             >
               <svg
@@ -290,16 +305,7 @@
                 Click "Browse File" or drop master schedule (.xls / .xlsx)
               </div>
               <div style="display: flex; gap: 8px; margin-top: 6px">
-                <button
-                  class="btn-browse"
-                  type="button"
-                  onclick="
-                    event.stopPropagation();
-                    loadSchedule();
-                  "
-                >
-                  Browse File
-                </button>
+                <span class="btn-browse" aria-hidden="true">Browse File</span>
                 <button
                   class="nav-btn d-none"
                   id="btnResetSchedule"
@@ -423,6 +429,7 @@
                   type="checkbox"
                   id="autoStripCheck"
                   checked
+                  aria-label="Auto-Strip Extra Columns (Recommended)"
                   onchange="renderRosterStatus()"
                 />
                 <span class="toggle-slider"></span>
@@ -439,7 +446,7 @@
             </div>
 
             <!-- Rosters Dropzone with Browse Data button -->
-            <div id="rostersDropzone" class="dropzone" onclick="loadRosters()" tabindex="0" role="button" onkeydown="if(event.key==='Enter' || event.key===' ') { event.preventDefault(); this.click(); }">
+            <div id="rostersDropzone" class="dropzone" onclick="loadRosters()" tabindex="0" role="button" aria-label="Upload student class rosters (.xlsx, .xls, or .csv)" onkeydown="if(event.key==='Enter' || event.key===' ') { event.preventDefault(); this.click(); }">
               <svg
                 class="dropzone-icon"
                 viewBox="0 0 24 24"
@@ -459,17 +466,13 @@
                 Click "Browse Data" or drop student lists (.xlsx / .xls / .csv)
                 — hold Ctrl/Shift for multi-select
               </div>
-              <button
+              <span
                 class="btn-browse"
-                type="button"
+                aria-hidden="true"
                 style="margin-top: 6px"
-                onclick="
-                  event.stopPropagation();
-                  loadRosters();
-                "
               >
                 Browse Data
-              </button>
+              </span>
               <div id="rostersFilename" class="dropzone-status d-none"></div>
             </div>
 
@@ -695,6 +698,7 @@
                   type="checkbox"
                   id="checkAttendance"
                   class="engine-checkbox"
+                  aria-label="Compile Attendance Sheets"
                   checked
                 />
                 <div class="engine-chip-content">
@@ -711,6 +715,7 @@
                   type="checkbox"
                   id="checkCeit"
                   class="engine-checkbox"
+                  aria-label="Compile CEIT Department Forms"
                   checked
                 />
                 <div class="engine-chip-content">
@@ -727,6 +732,7 @@
                   type="checkbox"
                   id="checkGrades"
                   class="engine-checkbox"
+                  aria-label="Compile Official Grade Sheets"
                   checked
                 />
                 <div class="engine-chip-content">
@@ -735,6 +741,8 @@
                 </div>
               </div>
             </div>
+
+            <div id="customWorkflowPackages" class="d-none" aria-live="polite"></div>
 
             <!-- Progressive Disclosure Details: Template Specifications -->
             <details class="step-disclosure" id="disclosureStep3">
@@ -919,20 +927,22 @@
             <div class="date-boundary-box">
               <div class="date-inputs-row">
                 <div class="date-input-group">
-                  <span>Start:</span>
+                  <label for="startDate">Start:</label>
                   <input
                     type="date"
                     id="startDate"
                     class="date-input"
+                    aria-label="Semester start date boundary"
                     onchange="saveDates()"
                   />
                 </div>
                 <div class="date-input-group">
-                  <span>End:</span>
+                  <label for="endDate">End:</label>
                   <input
                     type="date"
                     id="endDate"
                     class="date-input"
+                    aria-label="Semester end date boundary"
                     onchange="saveDates()"
                   />
                 </div>
@@ -993,6 +1003,7 @@
                 id="outputDisplay"
                 class="text-input selectable"
                 placeholder="Select destination folder for generated files..."
+                aria-label="Target output directory path"
                 readonly
               />
               <button class="btn-browse" type="button" onclick="loadOutput()">
@@ -1061,7 +1072,7 @@
         </button>
 
         <!-- Progress Indicator -->
-        <div id="progressContainer" class="progress-container d-none">
+        <div id="progressContainer" class="progress-container d-none" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-valuetext="0% - Initializing engine...">
           <div class="progress-track">
             <div id="progressFill" class="progress-fill"></div>
           </div>
@@ -1207,7 +1218,7 @@
           </button>
         </div>
       </div>
-    </div>
+    </main>
 
     <!-- ── Drawers: Guides & Documentation ──────────────────────────────── -->
     <div
@@ -1271,7 +1282,7 @@
           oninput="filterHelpContent(this.value)"
         />
       </div>
-      <div class="drawer-body selectable">
+      <div class="drawer-body selectable" tabindex="0" role="region" aria-label="Documentation and user guide content">
         <!-- Tab 1: Overview -->
         <div id="helpContentOverview" class="help-tab-content">
           <!-- Overview -->
@@ -1562,6 +1573,7 @@
                   text-align: left;
                 "
               >
+                <caption class="sr-only">CEIT Academic Departments and Subject Prefixes Directory</caption>
                 <thead>
                   <tr
                     style="
@@ -1569,10 +1581,10 @@
                       border-bottom: 1px solid var(--border-subtle);
                     "
                   >
-                    <th style="padding: 8px 10px">Prefix</th>
-                    <th style="padding: 8px 10px">Program / Discipline</th>
-                    <th style="padding: 8px 10px">Department</th>
-                    <th style="padding: 8px 10px">Dept Badge</th>
+                    <th scope="col" style="padding: 8px 10px">Prefix</th>
+                    <th scope="col" style="padding: 8px 10px">Program / Discipline</th>
+                    <th scope="col" style="padding: 8px 10px">Department</th>
+                    <th scope="col" style="padding: 8px 10px">Dept Badge</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1909,11 +1921,11 @@
     <aside id="logsDrawer" class="drawer-panel" role="region" aria-label="Execution and diagnostic logs">
       <div class="drawer-header">
         <span class="drawer-title">Execution Diagnostics & Logs</span>
-        <button class="drawer-close" aria-label="Close logs drawer" onclick="closeAllDrawers()">
+        <button id="btnCloseLogs" class="drawer-close" aria-label="Close logs drawer" onclick="closeAllDrawers()">
           &times;
         </button>
       </div>
-      <div class="drawer-body selectable">
+      <div class="drawer-body selectable" tabindex="0" role="region" aria-label="Application execution logs">
         <div
           style="
             display: flex;
@@ -1953,6 +1965,7 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="mapModalFilename"
+      aria-describedby="mapModalSubtitle"
       onclick="closeColumnMappingModal(event)"
     >
       <div class="modal-dialog-custom" onclick="event.stopPropagation()">
@@ -2243,11 +2256,11 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="settingsModalTitle"
+      aria-describedby="settingsModalSubtitle"
       onclick="closeSettingsModal(event)"
     >
       <div
-        class="modal-dialog-custom"
-        style="max-width: 900px"
+        class="modal-dialog-custom modal-dialog-settings"
         onclick="event.stopPropagation()"
       >
         <div class="modal-header-custom">
@@ -2258,7 +2271,7 @@
               </h3>
               <span class="badge-version">Live Overrides</span>
             </div>
-            <div class="modal-subtitle-custom">
+            <div class="modal-subtitle-custom" id="settingsModalSubtitle">
               Customize recognized subject prefixes, departments, lab courses,
               column tokens, and faculty defaults.
             </div>
@@ -2409,14 +2422,14 @@
             </div>
 
             <div class="settings-table-wrapper selectable">
-              <table class="settings-data-table">
+              <table class="settings-data-table" aria-label="Configured Subject Prefixes Table">
                 <thead>
                   <tr>
-                    <th>Prefix</th>
-                    <th>Department Code</th>
-                    <th>Department Name</th>
-                    <th>Badge Preview</th>
-                    <th style="text-align: right">Action</th>
+                    <th scope="col">Prefix</th>
+                    <th scope="col">Department Code</th>
+                    <th scope="col">Department Name</th>
+                    <th scope="col">Badge Preview</th>
+                    <th scope="col" style="text-align: right">Action</th>
                   </tr>
                 </thead>
                 <tbody id="cfgPrefixTableBody">
@@ -2526,16 +2539,13 @@
                 + Add Degree Alias
               </button>
             </div>
-            <div
-              class="settings-table-wrapper selectable"
-              style="max-height: 240px"
-            >
-              <table class="settings-data-table">
+            <div class="settings-table-wrapper selectable">
+              <table class="settings-data-table" aria-label="Configured Degree Aliases Table">
                 <thead>
                   <tr>
-                    <th>Abbreviation / Search Term</th>
-                    <th>Official Section Prefix</th>
-                    <th style="text-align: right">Action</th>
+                    <th scope="col">Abbreviation / Search Term</th>
+                    <th scope="col">Official Section Prefix</th>
+                    <th scope="col" style="text-align: right">Action</th>
                   </tr>
                 </thead>
                 <tbody id="cfgDegreesTableBody">
@@ -2558,9 +2568,7 @@
               Keywords and aliases used by the roster reader to automatically
               detect Student Name and Student Number columns.
             </p>
-            <div
-              style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px"
-            >
+            <div class="settings-keywords-grid">
               <div>
                 <div class="mapping-label" style="margin-bottom: 6px">
                   Student Name Tokens
@@ -2589,7 +2597,6 @@
                 <div
                   class="tag-cloud-container selectable"
                   id="cfgNameTokensCloud"
-                  style="max-height: 180px"
                 ></div>
               </div>
               <div>
@@ -2620,63 +2627,140 @@
                 <div
                   class="tag-cloud-container selectable"
                   id="cfgIdTokensCloud"
-                  style="max-height: 180px"
                 ></div>
               </div>
             </div>
           </div>
 
-          <!-- Tab 5: Faculty & Schedule Defaults -->
+          <!-- Tab 5: Faculty & Schedule Defaults (Apple HIG Grouped List & Live Preview) -->
           <div id="cfgPaneSchedule" class="settings-tab-pane d-none">
-            <p
-              style="
-                font-size: 12.5px;
-                color: var(--text-secondary);
-                margin-bottom: 12px;
-                line-height: 1.5;
-              "
-            >
-              Fallback defaults applied when schedule spreadsheet headers cannot
-              be cleanly detected from merged title cells.
+            <div class="apple-hig-section-header">
+              Faculty &amp; Academic Unit Defaults
+            </div>
+
+            <div class="apple-hig-group">
+              <!-- Row 1: Instructor Name -->
+              <div class="apple-hig-row">
+                <div class="apple-hig-row-meta">
+                  <div class="apple-hig-icon-tile icon-tile-blue" aria-hidden="true">
+                    👤
+                  </div>
+                  <div class="apple-hig-text-stack">
+                    <label for="cfgDefaultInstructor" class="apple-hig-label">
+                      Default Instructor Full Name
+                    </label>
+                    <span class="apple-hig-caption">
+                      Primary faculty name injected into generated headers and signatory blocks
+                    </span>
+                  </div>
+                </div>
+                <div class="apple-hig-input-wrap">
+                  <input
+                    type="text"
+                    id="cfgDefaultInstructor"
+                    class="form-control-custom apple-hig-input"
+                    placeholder="e.g. DAN JOSEPH A. ORTEGA"
+                    oninput="updateFacultyDefaultsPreview()"
+                    aria-label="Default Instructor Full Name"
+                  />
+                </div>
+              </div>
+
+              <!-- Row 2: College Name -->
+              <div class="apple-hig-row">
+                <div class="apple-hig-row-meta">
+                  <div class="apple-hig-icon-tile icon-tile-emerald" aria-hidden="true">
+                    🏛️
+                  </div>
+                  <div class="apple-hig-text-stack">
+                    <label for="cfgDefaultCollege" class="apple-hig-label">
+                      Default College Name
+                    </label>
+                    <span class="apple-hig-caption">
+                      Official collegiate header displayed on CEIT forms and grading sheets
+                    </span>
+                  </div>
+                </div>
+                <div class="apple-hig-input-wrap">
+                  <input
+                    type="text"
+                    id="cfgDefaultCollege"
+                    class="form-control-custom apple-hig-input"
+                    placeholder="e.g. COLLEGE OF ENGINEERING AND INFORMATION TECHNOLOGY"
+                    oninput="updateFacultyDefaultsPreview()"
+                    aria-label="Default College Name"
+                  />
+                </div>
+              </div>
+
+              <!-- Row 3: Semester & Academic Year -->
+              <div class="apple-hig-row">
+                <div class="apple-hig-row-meta">
+                  <div class="apple-hig-icon-tile icon-tile-amber" aria-hidden="true">
+                    🗓️
+                  </div>
+                  <div class="apple-hig-text-stack">
+                    <label for="cfgDefaultSemester" class="apple-hig-label">
+                      Default Semester &amp; Academic Year
+                    </label>
+                    <span class="apple-hig-caption">
+                      Term and AY metadata applied when timetable header merged cells are missing
+                    </span>
+                  </div>
+                </div>
+                <div class="apple-hig-input-wrap">
+                  <input
+                    type="text"
+                    id="cfgDefaultSemester"
+                    class="form-control-custom apple-hig-input"
+                    placeholder="e.g. FIRST SEMESTER, AY 2026 - 2027"
+                    oninput="updateFacultyDefaultsPreview()"
+                    aria-label="Default Semester & Academic Year"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <!-- Apple HIG Footnote Note -->
+            <p class="apple-hig-footnote">
+              Fallback defaults are automatically used when the timetable schedule spreadsheet header has unmerged title blocks or missing cells.
             </p>
-            <div
-              style="
-                display: flex;
-                flex-direction: column;
-                gap: 12px;
-                max-width: 600px;
-              "
-            >
-              <div class="mapping-field">
-                <label class="mapping-label"
-                  >Default Instructor Full Name</label
-                >
-                <input
-                  type="text"
-                  id="cfgDefaultInstructor"
-                  class="form-control-custom"
-                  placeholder="e.g. DAN JOSEPH A. ORTEGA"
-                />
+
+            <!-- Live Document Header Preview Card (macOS Quick Look style) -->
+            <div class="apple-hig-preview-card">
+              <div class="apple-hig-preview-topbar">
+                <div class="apple-hig-preview-title-wrap">
+                  <span class="preview-doc-glyph" aria-hidden="true">📄</span>
+                  <span class="preview-doc-heading">Document Header Live Preview</span>
+                </div>
+                <span class="apple-hig-live-badge">Live Sync</span>
               </div>
-              <div class="mapping-field">
-                <label class="mapping-label">Default College Name</label>
-                <input
-                  type="text"
-                  id="cfgDefaultCollege"
-                  class="form-control-custom"
-                  placeholder="e.g. COLLEGE OF ENGINEERING AND INFORMATION TECHNOLOGY"
-                />
+
+              <div class="apple-hig-preview-sheet selectable">
+                <div class="preview-sheet-crest">
+                  <span class="preview-cvsu-republic">Republic of the Philippines</span>
+                  <span class="preview-cvsu-main">CAVITE STATE UNIVERSITY</span>
+                  <span class="preview-cvsu-campus">Don Severino de las Alas Campus</span>
+                </div>
+                <div class="preview-sheet-college" id="previewHeaderCollege">
+                  COLLEGE OF ENGINEERING AND INFORMATION TECHNOLOGY
+                </div>
+                <div class="preview-sheet-divider"></div>
+                <div class="preview-sheet-meta-grid">
+                  <div class="preview-meta-item">
+                    <span class="preview-meta-k">Term / Academic Year:</span>
+                    <span class="preview-meta-v" id="previewHeaderSemester">FIRST SEMESTER, AY 2026 - 2027</span>
+                  </div>
+                  <div class="preview-meta-item preview-meta-right">
+                    <span class="preview-meta-k">Faculty Instructor:</span>
+                    <span class="preview-meta-v" id="previewHeaderInstructor">DAN JOSEPH A. ORTEGA</span>
+                  </div>
+                </div>
               </div>
-              <div class="mapping-field">
-                <label class="mapping-label"
-                  >Default Semester &amp; Academic Year</label
-                >
-                <input
-                  type="text"
-                  id="cfgDefaultSemester"
-                  class="form-control-custom"
-                  placeholder="e.g. FIRST SEMESTER, AY 2026 - 2027"
-                />
+
+              <div class="apple-hig-preview-caption">
+                <span class="preview-tip-bullet">💡</span>
+                <span>Values above update dynamically in real time and mirror the exact typography printed on generated CEIT Forms, Attendance Sheets, and Grading Sheets.</span>
               </div>
             </div>
           </div>
@@ -2737,6 +2821,10 @@
               class="dropzone"
               style="min-height: 110px; margin-bottom: 16px"
               onclick="browseCustomTemplateFile()"
+              tabindex="0"
+              role="button"
+              aria-label="Upload custom document template (.docx)"
+              onkeydown="if(event.key==='Enter' || event.key===' ') { event.preventDefault(); this.click(); }"
             >
               <svg
                 class="dropzone-icon"
@@ -2825,14 +2913,7 @@
               </div>
 
               <!-- Form Details Inputs -->
-              <div
-                style="
-                  display: grid;
-                  grid-template-columns: 1fr 1fr;
-                  gap: 12px;
-                  margin-bottom: 14px;
-                "
-              >
+              <div class="settings-custom-form-grid" style="margin-bottom: 14px">
                 <div>
                   <label
                     style="
@@ -2869,6 +2950,51 @@
                     placeholder="e.g. CONSULTATION_LOG"
                   />
                 </div>
+                <div>
+                  <label
+                    style="
+                      font-size: 11.5px;
+                      font-weight: 600;
+                      color: var(--text-secondary);
+                      display: block;
+                      margin-bottom: 4px;
+                    "
+                    >Target Folder</label
+                  >
+                  <select
+                    id="customFormTargetFolderSelect"
+                    class="form-control-custom"
+                    onchange="onCustomTargetFolderChange(this.value)"
+                  >
+                    <option value="CEIT_Forms">📁 CEIT_Forms (Default)</option>
+                    <option value="Attendance">📁 Attendance</option>
+                    <option value="custom">✏️ Custom Subfolder...</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Custom Folder Input (when custom selected) -->
+              <div
+                id="customFormCustomFolderContainer"
+                class="d-none"
+                style="margin-top: -6px; margin-bottom: 14px;"
+              >
+                <label
+                  style="
+                    font-size: 11.5px;
+                    font-weight: 600;
+                    color: var(--text-secondary);
+                    display: block;
+                    margin-bottom: 4px;
+                  "
+                  >Custom Relative Subfolder (e.g. Advising/Logs)</label
+                >
+                <input
+                  type="text"
+                  id="customFormCustomFolderInput"
+                  class="form-control-custom"
+                  placeholder="e.g. Advising/Logs"
+                />
               </div>
 
               <!-- Inspection Metadata Grid -->
@@ -2958,7 +3084,7 @@
         </div>
 
         <div class="modal-footer-custom">
-          <div style="display: flex; gap: 8px">
+          <div class="modal-footer-actions-left" style="display: flex; gap: 8px">
             <button
               class="nav-btn"
               id="btnResetSettings"
@@ -2991,7 +3117,7 @@
               📤 Export
             </button>
           </div>
-          <div style="display: flex; gap: 8px">
+          <div class="modal-footer-actions-right" style="display: flex; gap: 8px">
             <button
               class="nav-btn"
               type="button"

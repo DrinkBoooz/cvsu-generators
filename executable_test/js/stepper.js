@@ -109,47 +109,77 @@
         }
       }
 
-      function updateStepperStatus() {
-        const s1Ready = !!state.schedulePath;
-        const s2Ready = state.rosters && state.rosters.length > 0;
+      function getGenerationReadiness() {
         const selectedClasses = document.querySelectorAll(
           ".item-class-check:checked",
         ).length;
-        const hasEngines =
+        const detectedClasses = Array.isArray(state.detectedClasses)
+          ? state.detectedClasses.length
+          : 0;
+        const enginesReady = !!(
           document.getElementById("checkAttendance")?.checked ||
           document.getElementById("checkCeit")?.checked ||
-          document.getElementById("checkGrades")?.checked;
-        const s3Ready = !!hasEngines;
-        const s4Ready = true;
-        const s5Ready = !!state.outputDir;
-        const s6Ready =
-          s1Ready &&
-          s2Ready &&
-          s3Ready &&
-          s5Ready &&
-          (state.detectedClasses.length === 0 || selectedClasses > 0);
+          document.getElementById("checkGrades")?.checked
+        );
+        const readiness = {
+          schedule: !!state.schedulePath,
+          rosters: !!(state.rosters && state.rosters.length > 0),
+          classes: detectedClasses > 0 && selectedClasses > 0,
+          engines: enginesReady,
+          output: !!state.outputDir,
+        };
+        readiness.ready = Object.values(readiness).every(Boolean);
+        return readiness;
+      }
 
+      function updateStepperStatus() {
+        const readiness = getGenerationReadiness();
+        const s1Ready = readiness.schedule;
+        const s2Ready = readiness.rosters;
+        const s3Ready = readiness.engines;
+        const s5Ready = readiness.output;
+        const s6Ready = readiness.ready;
+
+        const stepNames = {
+          chipStep1: "Schedule",
+          chipStep2: "Rosters",
+          chipStep3: "Packages",
+          chipStep4: "Dates",
+          chipStep5: "Output",
+          chipStep6: "Generate",
+        };
+        const stepNumbers = {
+          chipStep1: 1,
+          chipStep2: 2,
+          chipStep3: 3,
+          chipStep4: 4,
+          chipStep5: 5,
+          chipStep6: 6,
+        };
         const setChip = (chipId, statusId, isReady, okIcon = "✓") => {
           const chip = document.getElementById(chipId);
           const st = document.getElementById(statusId);
-          if (chip) chip.classList.toggle("ready", isReady);
+          if (chip) {
+            chip.classList.toggle("ready", isReady);
+            const num = stepNumbers[chipId] || 1;
+            const name = stepNames[chipId] || "";
+            const statusText = isReady ? "Ready" : "Incomplete";
+            chip.setAttribute("aria-label", `Step ${num}: ${name} - ${statusText}`);
+          }
           if (st) {
-             st.innerHTML = isReady ? okIcon : '<span style="opacity: 0.3; font-size: 14px;">•</span>';
+            st.innerHTML = isReady ? okIcon : '<span style="opacity: 0.3; font-size: 14px;">•</span>';
+            st.setAttribute("aria-hidden", "true");
           }
         };
 
+        const s4Ready = !!(
+          document.getElementById("startDate")?.value &&
+          document.getElementById("endDate")?.value
+        );
         setChip("chipStep1", "statusStep1", s1Ready);
         setChip("chipStep2", "statusStep2", s2Ready);
         setChip("chipStep3", "statusStep3", s3Ready);
-        setChip(
-          "chipStep4",
-          "statusStep4",
-          !!(
-            document.getElementById("startDate").value ||
-            document.getElementById("endDate").value
-          ),
-          "📅",
-        );
+        setChip("chipStep4", "statusStep4", s4Ready, "✓");
         setChip("chipStep5", "statusStep5", s5Ready);
         setChip("chipStep6", "statusStep6", s6Ready, "🚀");
 

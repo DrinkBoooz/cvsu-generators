@@ -3,13 +3,27 @@ import re
 import pytest
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-UI_HTML_PATH = os.path.join(WORKSPACE_DIR, "executable", "ui.html")
+UI_HTML_PATH = os.path.join(WORKSPACE_DIR, "executable_test", "ui.html")
 
 @pytest.fixture
 def ui_content():
     assert os.path.exists(UI_HTML_PATH), f"File {UI_HTML_PATH} does not exist"
     with open(UI_HTML_PATH, "r", encoding="utf-8") as f:
-        return f.read()
+        content = f.read()
+    exec_dir = os.path.dirname(UI_HTML_PATH)
+    css_dir = os.path.join(exec_dir, "css")
+    if os.path.isdir(css_dir):
+        for f in os.listdir(css_dir):
+            if f.endswith(".css"):
+                with open(os.path.join(css_dir, f), "r", encoding="utf-8") as cf:
+                    content += "\n" + cf.read()
+    js_dir = os.path.join(exec_dir, "js")
+    if os.path.isdir(js_dir):
+        for f in os.listdir(js_dir):
+            if f.endswith(".js"):
+                with open(os.path.join(js_dir, f), "r", encoding="utf-8") as jf:
+                    content += "\n" + jf.read()
+    return content
 
 def test_color_scheme_declarations(ui_content):
     # Verify color-scheme is declared for both light and dark themes
@@ -21,8 +35,11 @@ def test_date_picker_indicator_theme_rules(ui_content):
     assert "::-webkit-calendar-picker-indicator" in ui_content, "Calendar picker indicator must be styled"
     
     # Verify dark mode date input has explicit color-scheme: dark and indicator avoids black-inverting filter
-    assert '[data-bs-theme="dark"] .date-input' in ui_content, "Dark mode must explicitly configure .date-input"
-    dark_indicator_pattern = r'\[data-bs-theme=["\']dark["\']\]\s*\.date-input::-webkit-calendar-picker-indicator\s*\{[^}]*filter:\s*none'
+    assert (
+        '[data-theme="dark"] .date-input' in ui_content
+        or '[data-bs-theme="dark"] .date-input' in ui_content
+    ), "Dark mode must explicitly configure .date-input"
+    dark_indicator_pattern = r'\[data-(?:bs-)?theme=["\']dark["\']\]\s*\.date-input::-webkit-calendar-picker-indicator\s*\{[^}]*filter:\s*none'
     assert re.search(dark_indicator_pattern, ui_content), "Dark mode calendar indicator must use filter: none to prevent turning black"
 
     # Verify focus state for .date-input

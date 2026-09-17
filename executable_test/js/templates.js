@@ -8,17 +8,52 @@
           !window.pywebview.api.get_custom_templates
         ) {
           renderCustomTemplatesList(state.customTemplates || []);
+          renderCustomWorkflowPackages(state.customTemplates || []);
           return;
         }
         try {
           const templates = await window.pywebview.api.get_custom_templates();
           state.customTemplates = templates || [];
           renderCustomTemplatesList(templates || []);
+          renderCustomWorkflowPackages(templates || []);
           updateFileEstimate();
         } catch (err) {
           console.error("Failed to load custom templates:", err);
           renderCustomTemplatesList(state.customTemplates || []);
+          renderCustomWorkflowPackages(state.customTemplates || []);
         }
+      }
+
+      function renderCustomWorkflowPackages(templates) {
+        const container = document.getElementById("customWorkflowPackages");
+        if (!container) return;
+
+        const enabled = (templates || []).filter((template) => template.enabled !== false);
+        if (enabled.length === 0) {
+          container.classList.add("d-none");
+          container.innerHTML = "";
+          return;
+        }
+
+        container.classList.remove("d-none");
+        container.innerHTML = `
+          <div class="form-label" style="margin: 12px 0 6px">Custom Forms Included with CEIT</div>
+          <div class="template-spec-box" role="list" aria-label="Enabled custom document forms">
+            ${enabled.map((template) => {
+              const title = escapeHTML(template.title || template.id || "Custom Form");
+              const suffix = escapeHTML(template.suffix || "CUSTOM_FORM");
+              const folder = escapeHTML(
+                (template.recipe && template.recipe.metadata && template.recipe.metadata.output_folder) || "CEIT_Forms",
+              );
+              return `
+                <div role="listitem" style="display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 6px 0;">
+                  <span>${title}</span>
+                  <span class="filter-pill active" title="Output folder: ${folder}">${suffix}</span>
+                </div>
+              `;
+            }).join("")}
+          </div>
+        `;
       }
 
       function renderCustomTemplatesList(templates) {
@@ -44,6 +79,9 @@
             const title = escapeHTML(t.title || t.id);
             const suffix = escapeHTML(t.suffix || "FORM");
             const filename = escapeHTML(t.filename || "");
+            const outFolder = escapeHTML(
+              (t.recipe && t.recipe.metadata && t.recipe.metadata.output_folder) || "CEIT_Forms"
+            );
             return `
             <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; background: var(--surface-elevated); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); gap: 12px;">
               <div style="display: flex; align-items: center; gap: 12px; min-width: 0;">
@@ -52,6 +90,7 @@
                   <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                     <strong style="font-size: 13px; color: var(--text-primary);">${title}</strong>
                     <span class="filter-pill active" style="font-size: 10.5px; padding: 1px 7px;">${suffix}</span>
+                    <span class="filter-pill" style="font-size: 10px; padding: 1px 6px; color: var(--accent-cyan); border-color: rgba(6,182,212,0.3);">📁 ${outFolder}</span>
                   </div>
                   <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
                     File: ${filename}
@@ -129,6 +168,21 @@
         if (suffixInput) suffixInput.value = recipe.suffix || "";
         if (confBadge) confBadge.innerText = `${recipe.confidence || 0}% Match`;
 
+        const folderSelect = document.getElementById("customFormTargetFolderSelect");
+        const folderInput = document.getElementById("customFormCustomFolderInput");
+        const folderContainer = document.getElementById("customFormCustomFolderContainer");
+        const metaFolder = (recipe.metadata && recipe.metadata.output_folder) || "CEIT_Forms";
+        if (folderSelect) {
+          if (metaFolder === "CEIT_Forms" || metaFolder === "Attendance") {
+            folderSelect.value = metaFolder;
+            if (folderContainer) folderContainer.classList.add("d-none");
+          } else {
+            folderSelect.value = "custom";
+            if (folderInput) folderInput.value = metaFolder;
+            if (folderContainer) folderContainer.classList.remove("d-none");
+          }
+        }
+
         if (fieldsList) {
           const bindings = recipe.header_bindings || [];
           if (bindings.length === 0) {
@@ -183,9 +237,24 @@
           return;
         }
 
-        const recipe = currentInspectedTemplate.recipe;
+        const folderSelect = document.getElementById("customFormTargetFolderSelect");
+        const folderInput = document.getElementById("customFormCustomFolderInput");
+        let targetFolder = "CEIT_Forms";
+        if (folderSelect) {
+          if (folderSelect.value === "custom") {
+            targetFolder = folderInput ? folderInput.value.trim() : "";
+            if (!targetFolder) targetFolder = "CEIT_Forms";
+          } else {
+            targetFolder = folderSelect.value;
+          }
+        }
+
+        const recipe = currentInspectedTemplate.recipe || {};
         recipe.title = title;
         recipe.suffix = suffix;
+        recipe.metadata = recipe.metadata || {};
+        recipe.metadata.output_folder = targetFolder;
+        delete recipe.output_folder;
 
         try {
           const res = await window.pywebview.api.save_custom_template(
@@ -259,4 +328,15 @@
           console.error("Delete template error:", e);
         }
       }
-    </script>
+
+      function onCustomTargetFolderChange(val) {
+        const container = document.getElementById("customFormCustomFolderContainer");
+        if (container) {
+          if (val === "custom") {
+            container.classList.remove("d-none");
+          } else {
+            container.classList.add("d-none");
+          }
+        }
+      }
+      window.onCustomTargetFolderChange = onCustomTargetFolderChange;

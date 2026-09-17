@@ -25,17 +25,86 @@ body {
         color: #ffffff;
       }
 
-      /* Apple HIG Focus Ring Accessibility */
+      /* High-Visibility Focus Ring Accessibility (WCAG 2.1 AA & Microsoft Fluent/HIG) */
       :focus-visible {
-        outline: 2px solid var(--accent-emerald);
-        outline-offset: 2px;
+        outline: var(--a11y-focus-ring-width) solid var(--a11y-focus-ring-color);
+        outline-offset: var(--a11y-focus-ring-offset);
+        box-shadow: var(--a11y-focus-glow);
       }
       button:focus-visible,
       a:focus-visible,
       input:focus-visible,
-      select:focus-visible {
-        outline: 2px solid var(--accent-emerald);
-        outline-offset: 2px;
+      select:focus-visible,
+      textarea:focus-visible,
+      [tabindex="0"]:focus-visible,
+      .dropzone:focus-visible,
+      .step-chip:focus-visible {
+        outline: var(--a11y-focus-ring-width) solid var(--a11y-focus-ring-color) !important;
+        outline-offset: var(--a11y-focus-ring-offset) !important;
+        box-shadow: var(--a11y-focus-glow) !important;
+      }
+
+      /* Screen Reader Only Utility (Narrator / Assistive Tech) */
+      .sr-only {
+        position: absolute !important;
+        width: 1px !important;
+        height: 1px !important;
+        padding: 0 !important;
+        margin: -1px !important;
+        overflow: hidden !important;
+        clip: rect(0, 0, 0, 0) !important;
+        white-space: nowrap !important;
+        border: 0 !important;
+      }
+
+      /* Windows High-Contrast Mode / Forced Colors */
+      @media (forced-colors: active) {
+        :focus-visible,
+        button:focus-visible,
+        a:focus-visible,
+        input:focus-visible,
+        select:focus-visible,
+        textarea:focus-visible,
+        [tabindex="0"]:focus-visible,
+        .dropzone:focus-visible,
+        .step-chip:focus-visible {
+          outline: 3px solid Highlight !important;
+          outline-offset: 3px !important;
+          box-shadow: none !important;
+        }
+
+        .glass-card,
+        .modal-dialog-custom,
+        .drawer-panel,
+        .nav-btn,
+        .btn-browse,
+        .btn-primary-compact,
+        .btn-primary-action,
+        .step-chip,
+        .filter-pill,
+        .segmented-btn {
+          border: 1px solid ButtonBorder !important;
+        }
+
+        .dropzone {
+          border: 2px dashed CanvasText !important;
+        }
+
+        .step-chip.active,
+        .step-chip.ready,
+        .filter-pill.active,
+        .segmented-btn.active,
+        .drawer-tab.active,
+        .settings-nav-tab.active {
+          background: Highlight !important;
+          color: HighlightText !important;
+          border-color: Highlight !important;
+        }
+
+        .badge-version,
+        .badge-ceit-pill {
+          border: 1px solid CanvasText !important;
+        }
       }
 
       /* Unified input placeholder contrast */
@@ -65,4 +134,16 @@ body {
         scrollbar-color: var(--border-subtle) transparent;
       }
 
-      
+      /* ── Core Display & Text Utilities ────────────────────────────────── */
+      .d-none {
+        display: none !important;
+      }
+      .text-muted {
+        color: var(--text-muted);
+      }
+      .text-secondary {
+        color: var(--text-secondary);
+      }
+      .text-emerald {
+        color: var(--accent-emerald);
+      }

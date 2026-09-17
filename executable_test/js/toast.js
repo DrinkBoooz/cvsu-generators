@@ -5,6 +5,8 @@
 
         const toast = document.createElement("div");
         toast.className = `toast toast-${type}`;
+        toast.setAttribute("role", type === "error" ? "alert" : "status");
+        toast.setAttribute("aria-live", type === "error" ? "assertive" : "polite");
 
         let iconSvg = "";
         if (type === "success") {
@@ -27,8 +29,12 @@
             <div class="toast-title">${escapeHTML(title)}</div>
             <div class="toast-message">${escapeHTML(message)}</div>
           </div>
-          <button class="toast-close" type="button" onclick="this.parentElement.remove()">&times;</button>
+          <button class="toast-close" type="button" aria-label="Close notification" onclick="this.parentElement.remove()">&times;</button>
         `;
+
+        if (window.announceA11y) {
+          window.announceA11y(`${title}: ${message}`);
+        }
 
         container.appendChild(toast);
 

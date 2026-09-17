@@ -179,7 +179,7 @@ def set_cell_text(tc, text: str, remove_num: bool = False, shrink_threshold: int
     """Replaces text in first paragraph of a cell, preserving run formatting, alignment, and applying font scaling."""
     p = tc.find(w("p"))
     if p is None:
-        return
+        p = etree.SubElement(tc, w("p"))
     ppr = p.find(w("pPr"))
     if ppr is not None:
         if remove_num:
@@ -215,6 +215,8 @@ def set_cell_text(tc, text: str, remove_num: bool = False, shrink_threshold: int
     r_new = etree.SubElement(p, w("r"))
     if first_rpr is not None:
         r_new.insert(0, copy.deepcopy(first_rpr))
+    elif ppr is not None and ppr.find(w("rPr")) is not None:
+        r_new.insert(0, copy.deepcopy(ppr.find(w("rPr"))))
         
     if is_student_name:
         apply_font_size(r_new, get_student_name_font_sz(text))
@@ -227,9 +229,24 @@ def set_cell_text(tc, text: str, remove_num: bool = False, shrink_threshold: int
         t.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
 
 def load_docx(path: str):
-    """Loads a docx and returns (zin, root, body)."""
-    with open(path, "rb") as fh:
-        data = fh.read()
+    """Loads a docx and returns (zin, root, body) with transient lock retry for Windows/OneDrive."""
+    import time
+    last_err = None
+    data = None
+    for attempt in range(6):
+        try:
+            with open(path, "rb") as fh:
+                data = fh.read()
+            break
+        except FileNotFoundError:
+            raise
+        except (PermissionError, OSError) as err:
+            last_err = err
+            if attempt < 5:
+                time.sleep(0.08 * (attempt + 1))
+    if data is None:
+        raise last_err
+
     zin = zipfile.ZipFile(io.BytesIO(data))
     safe_parser = etree.XMLParser(resolve_entities=False)
     root = etree.fromstring(zin.read("word/document.xml"), parser=safe_parser)

@@ -1,14 +1,32 @@
 // ── Drawers Controller ────────────────────────────────────────────────
       function openHelpDrawer() {
+        const trigger = document.getElementById("btnOpenHelp") || document.activeElement;
         closeAllDrawers();
-        document.getElementById("helpDrawer").classList.add("active");
+        const drawer = document.getElementById("helpDrawer");
+        drawer.classList.add("active");
         document.getElementById("drawerBackdrop").classList.add("active");
+        if (typeof FocusTrapManager !== "undefined") {
+          FocusTrapManager.trap(
+            drawer,
+            document.getElementById("helpSearchInput") || document.getElementById("btnCloseHelp"),
+            trigger
+          );
+        }
       }
 
       function openLogsDrawer() {
+        const trigger = document.getElementById("btnOpenLogs") || document.activeElement;
         closeAllDrawers();
-        document.getElementById("logsDrawer").classList.add("active");
+        const drawer = document.getElementById("logsDrawer");
+        drawer.classList.add("active");
         document.getElementById("drawerBackdrop").classList.add("active");
+        if (typeof FocusTrapManager !== "undefined") {
+          FocusTrapManager.trap(
+            drawer,
+            document.getElementById("btnCloseLogs") || drawer.querySelector("button"),
+            trigger
+          );
+        }
         refreshLogs();
       }
 
@@ -17,6 +35,9 @@
           .querySelectorAll(".drawer-panel")
           .forEach((d) => d.classList.remove("active"));
         document.getElementById("drawerBackdrop").classList.remove("active");
+        if (typeof FocusTrapManager !== "undefined") {
+          FocusTrapManager.release();
+        }
       }
 
       async function refreshLogs() {

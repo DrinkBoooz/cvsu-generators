@@ -1,4 +1,6 @@
 import os
+import base64
+import tempfile
 import webview
 from modules.common.logger import logger
 from modules.parsers.schedule_parser import inspect_schedule_file
@@ -41,10 +43,21 @@ class ScheduleRosterMixin:
             return None
         return inspect_schedule_file(target)
 
-    def handle_dropped_schedule(self, filename, original_path=None):
+    def handle_dropped_schedule(self, filename, original_path=None, base64_data=None):
         target_path = None
         if original_path and os.path.exists(original_path):
             target_path = original_path
+        elif base64_data and filename:
+            clean_filename = sanitize_filename(filename)
+            cache_dir = os.path.join(tempfile.gettempdir(), "cvsu_cache", "schedules")
+            os.makedirs(cache_dir, exist_ok=True)
+            target_path = os.path.join(cache_dir, clean_filename)
+            try:
+                with open(target_path, "wb") as f:
+                    f.write(base64.b64decode(base64_data))
+            except Exception as e:
+                logger.error(f"Failed to write dropped schedule {filename}: {e}")
+                return {"cancelled": False, "path": "", "metadata": None, "validation": []}
 
         if target_path and os.path.exists(target_path):
             with self._lock:
@@ -92,11 +105,25 @@ class ScheduleRosterMixin:
         if roster_configs is not None:
             self.roster_configs = roster_configs
 
+        cache_dir = os.path.join(tempfile.gettempdir(), "cvsu_cache", "rosters")
+        os.makedirs(cache_dir, exist_ok=True)
+
         new_paths = []
         for item in files_payload:
             original_path = item.get("path")
+            base64_data = item.get("data")
+            filename = sanitize_filename(item.get("filename", ""))
+
             if original_path and os.path.exists(original_path):
                 new_paths.append(original_path)
+            elif base64_data and filename:
+                target_path = os.path.join(cache_dir, filename)
+                try:
+                    with open(target_path, "wb") as f:
+                        f.write(base64.b64decode(base64_data))
+                    new_paths.append(target_path)
+                except Exception as e:
+                    logger.error(f"Failed to write dropped roster {filename}: {e}")
 
         existing = set(self.rosters)
         for p in new_paths:

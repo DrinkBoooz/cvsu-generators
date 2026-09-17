@@ -4,7 +4,7 @@ import pytest
 from modules.common.config_manager import ParserConfigManager
 from modules.parsers.template_inspector import TemplateInspector
 from modules.generators.ceit_gen import GeneratorFactory
-from executable.main import ScriptAPI
+from executable_test.main import ScriptAPI
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TEMPLATES_DIR = os.path.join(REPO_ROOT, "templates")

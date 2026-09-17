@@ -1,15 +1,20 @@
 from .grade_gen import GradeGenerator
 from .attendance_gen import build_attendance_sheet, generate_attendance_for_month
-from .ceit_gen import (
+from .document_generator import (
     DocumentGenerator,
+    ConfigurableDocumentGenerator,
+    TemplateError,
+    FieldResolver,
+    resolve_field_value,
+)
+from .ceit_gen import (
     SyllabusGenerator,
     ExamReturnsGenerator,
     TOSGenerator,
     GradeDiscussionGenerator,
     GeneratorFactory,
-    TemplateError,
 )
-from .generic_doc_gen import ConfigurableDocumentGenerator
+
 
 __all__ = [
     "GradeGenerator",
@@ -23,4 +28,6 @@ __all__ = [
     "GeneratorFactory",
     "TemplateError",
     "ConfigurableDocumentGenerator",
+    "FieldResolver",
+    "resolve_field_value",
 ]

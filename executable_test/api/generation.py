@@ -43,11 +43,20 @@ class GenerationMixin:
             logger.info(f"Selected Engines: {engine_filter}")
             self._cancel_event.clear()
 
+            active_gen_id = None
+            try:
+                if not getattr(self, "_is_window_closed", False):
+                    active_gen_id = self._window.evaluate_js("window._activeGenerationId")
+            except Exception:
+                pass
+
             def _progress_hook(info):
                 if getattr(self, "_is_window_closed", False):
                     return
                 try:
-                    js_code = f"if (window.onGenerationProgress) window.onGenerationProgress({json.dumps(info)});"
+                    if active_gen_id is not None and isinstance(info, dict) and "generation_id" not in info:
+                        info["generation_id"] = active_gen_id
+                    js_code = f"if (window.onGenerationProgress) window.onGenerationProgress({json.dumps(info)}, {json.dumps(active_gen_id)});"
                     self._window.evaluate_js(js_code)
                 except Exception as pe:
                     logger.debug(f"Telemetry evaluate error: {pe}")
@@ -124,7 +133,9 @@ class GenerationMixin:
 
                 try:
                     if not getattr(self, "_is_window_closed", False):
-                        js_code = f"if (window.onGenerationComplete) window.onGenerationComplete({json.dumps(payload)});"
+                        if active_gen_id is not None and isinstance(payload, dict) and "generation_id" not in payload:
+                            payload["generation_id"] = active_gen_id
+                        js_code = f"if (window.onGenerationComplete) window.onGenerationComplete({json.dumps(payload)}, {json.dumps(active_gen_id)});"
                         self._window.evaluate_js(js_code)
                 except Exception as e:
                     logger.error(f"Failed to execute UI callback: {e}")

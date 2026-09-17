@@ -7,6 +7,7 @@ import tempfile
 from datetime import datetime
 from copy import deepcopy
 from modules.common.logger import logger
+from modules.common.path_utils import validate_output_folder
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -129,8 +130,8 @@ DEFAULT_BASE_SUBJECT_PREFIXES = [
 ]
 
 DEFAULT_KNOWN_LAB_SUBJECT_CODES = [
-    "DCIT 21", "DCIT 22", "DCIT 23", "DCIT 24", "DCIT 25", "DCIT 26",
-    "DCIT21", "DCIT22", "DCIT23", "DCIT24", "DCIT25", "DCIT26",
+    "DCIT 21", "DCIT 21A", "DCIT 22", "DCIT 23", "DCIT 24", "DCIT 25", "DCIT 26",
+    "DCIT21", "DCIT21A", "DCIT22", "DCIT23", "DCIT24", "DCIT25", "DCIT26",
     "COSC 111", "COSC 111A", "COSC 55", "COSC 60", "COSC 65", "COSC 70", "COSC 75", "COSC 80", "COSC 85", "COSC 101",
     "COSC111", "COSC111A", "COSC55", "COSC60", "COSC65", "COSC70", "COSC75", "COSC80", "COSC85", "COSC101",
     "ITEC 50", "ITEC 55", "ITEC 60", "ITEC 65", "ITEC 70", "ITEC 75", "ITEC 80", "ITEC 85", "ITEC 90",
@@ -517,6 +518,15 @@ class ParserConfigManager:
 
             # Copy template file
             shutil.copy2(source_path, dest_path)
+
+            # Ensure metadata exists and output_folder is valid and normalized
+            if isinstance(recipe, dict):
+                meta = recipe.setdefault("metadata", {})
+                if isinstance(meta, dict):
+                    raw_out = meta.get("output_folder")
+                    meta["output_folder"] = validate_output_folder(raw_out, default="CEIT_Forms")
+                # Strip any stray top-level output_folder from recipe
+                recipe.pop("output_folder", None)
 
             templates = self.get_custom_templates()
             # Remove any existing entry with the same id

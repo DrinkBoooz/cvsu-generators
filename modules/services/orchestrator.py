@@ -12,12 +12,16 @@ from modules.parsers.schedule_parser import (
     find_blocks_for_section,
     get_subject_code,
     _find_class_details_by_schedule_code,
+    format_canonical_schedule,
+    normalize_room,
 )
 from modules.parsers.roster_parser import load_students
 from modules.parsers.ceit_directory import parse_filename_hints, KNOWN_LAB_SUBJECT_CODES, is_known_lab_subject
-from modules.generators.ceit_gen import GeneratorFactory
 from modules.generators.grade_gen import GradeGenerator
 from modules.generators.attendance_gen import generate_attendance_for_month
+from modules.services.template_recipe_service import TemplateRecipeResolver
+from modules.common.path_utils import validate_output_folder
+
 
 
 def process_all(
@@ -58,6 +62,7 @@ def process_all(
         logger.error(f"Templates directory not found at {templates_dir}")
         return results
         
+    from modules.generators.ceit_gen import GeneratorFactory
     factory = GeneratorFactory(templates_dir)
     enabled_engines = set(engine_filter) if engine_filter else {"attendance", "ceit", "grades"}
     
@@ -110,7 +115,7 @@ def process_all(
         pre_blocks = []
         pre_best_sched = parsed_schedules[0]
         for sched in parsed_schedules:
-            b = find_blocks_for_section(sched["grid"], c_sec, sched["start_row"], sched["end_row"])
+            b = find_blocks_for_section(sched["grid"], c_sec, sched["start_row"], sched["end_row"], instructor=sched.get("instructor", ""))
             if b:
                 pre_blocks = b
                 pre_best_sched = sched
@@ -236,7 +241,7 @@ def process_all(
         blocks = []
         best_sched = parsed_schedules[0]
         for sched in parsed_schedules:
-            b = find_blocks_for_section(sched["grid"], course_sec, sched["start_row"], sched["end_row"])
+            b = find_blocks_for_section(sched["grid"], course_sec, sched["start_row"], sched["end_row"], instructor=sched.get("instructor", ""))
             if b:
                 blocks = b
                 best_sched = sched
@@ -310,11 +315,7 @@ def process_all(
                 subject_name = f"{clean_sched_code} {rest}".strip() if rest else clean_sched_code
 
         if blocks:
-            parts = []
-            for b in blocks:
-                typ = f"{b['type']}: " if b['type'] else ""
-                parts.append(f"{b['day']}: {b['start_time']}-{b['end_time']} / {typ}{b['room']}")
-            time_days_room = "; ".join(parts)
+            time_days_room = format_canonical_schedule(blocks, instructor=instructor)
         else:
             time_days_room = "SEE SCHEDULE"
             
@@ -386,9 +387,15 @@ def process_all(
                     break
                 safe_suffix = sanitize_filename(suffix)
                 out_name = f"{course_sec_safe}_{schedule_code_safe}_{safe_suffix}.docx"
-                out_path = os.path.join(ceit_dir, out_name)
                 try:
                     generator = gen_factory()
+                    target_subfolder = validate_output_folder(
+                        generator.output_folder,
+                        default="CEIT_Forms",
+                    )
+                    target_dir = os.path.join(course_dir, target_subfolder)
+                    os.makedirs(target_dir, exist_ok=True)
+                    out_path = os.path.join(target_dir, out_name)
                     generator.generate(info, out_path)
                     results["generated"]["ceit"].append(out_name)
                     results["by_class"][course_sec]["ceit"].append({"name": out_name, "path": out_path})
@@ -420,9 +427,10 @@ def process_all(
                     days_set = []
                     safe_days = []
                     for b in subj_blocks:
+                        clean_r = normalize_room(b['room'], instructor)
                         typ = f"{b['type']}: " if b['type'] else ""
                         sched_parts.append(f"{b['day']}: {b['start_time']}-{b['end_time']}")
-                        room_parts.append(f"{typ}{b['room']}")
+                        room_parts.append(f"{typ}{clean_r}")
                         if b['day'] not in days_set:
                             days_set.append(b['day'])
                             safe_days.append(sanitize_filename(b['day']))
@@ -500,7 +508,11 @@ def process_all(
             }
             
             try:
-                grade_gen = GradeGenerator(templates_dir)
+                template_filename = "GRADING_LECTURE_LAB_TEMPLATE.xlsx" if has_lab else "GRADING_LECTURE_TEMPLATE.xlsx"
+                template_path = os.path.join(templates_dir, template_filename)
+                resolver = TemplateRecipeResolver.get_instance()
+                recipe = resolver.resolve(template_path, "grade_sheet_xlsx")
+                grade_gen = GradeGenerator(template_path, recipe)
                 grade_out_name = f"{course_sec_safe}_{schedule_code_safe}_GRADING_SHEET.xlsx"
                 grade_out_path = os.path.join(grade_dir, grade_out_name)
                 grade_gen.generate(grade_info, students, grade_out_path)

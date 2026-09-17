@@ -3,7 +3,7 @@ import pytest
 from playwright.sync_api import sync_playwright
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-UI_HTML_PATH = os.path.join(WORKSPACE_DIR, "executable", "ui.html")
+UI_HTML_PATH = os.path.join(WORKSPACE_DIR, "executable_test", "ui.html")
 FILE_URL = f"file:///{UI_HTML_PATH.replace(os.sep, '/')}"
 
 def test_playwright_parser_settings_modal_flow():
@@ -208,6 +208,79 @@ def test_playwright_settings_table_sticky_header_and_scroll():
             return getComputedStyle(th).backgroundColor;
         }""")
         assert "rgba" not in light_bg or ", 1)" in light_bg or ", 0.9" in light_bg, f"Header background must be opaque in light mode, got {light_bg}"
+
+        browser.close()
+
+
+def test_playwright_generation_readiness_contract():
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.goto(FILE_URL)
+
+        readiness = page.evaluate("""() => {
+            const checkbox = document.createElement('input');
+            checkbox.className = 'item-class-check';
+            checkbox.type = 'checkbox';
+            checkbox.checked = true;
+            document.body.appendChild(checkbox);
+
+            const base = () => {
+                state.schedulePath = 'schedule.xls';
+                state.rosters = ['roster.csv'];
+                state.detectedClasses = [{ id: 'class-1' }];
+                state.outputDir = 'output';
+                document.getElementById('checkAttendance').checked = true;
+                document.getElementById('checkCeit').checked = true;
+                document.getElementById('checkGrades').checked = true;
+            };
+            const snapshot = () => getGenerationReadiness();
+
+            base();
+            const valid = snapshot();
+            document.getElementById('checkAttendance').checked = false;
+            document.getElementById('checkCeit').checked = false;
+            document.getElementById('checkGrades').checked = false;
+            const noEngines = snapshot();
+            base();
+            state.schedulePath = '';
+            const noSchedule = snapshot();
+            base();
+            state.rosters = [];
+            const noRosters = snapshot();
+            base();
+            state.detectedClasses = [];
+            const noClasses = snapshot();
+            base();
+            document.getElementById('startDate').value = '';
+            document.getElementById('endDate').value = '';
+            const optionalDates = snapshot();
+
+            renderCustomWorkflowPackages([
+                {
+                    id: 'custom-form',
+                    title: 'Custom Form',
+                    suffix: 'CUSTOM_FORM',
+                    enabled: true,
+                    recipe: { metadata: { output_folder: 'Attendance' } },
+                },
+                { id: 'disabled-form', title: 'Disabled Form', enabled: false },
+            ]);
+            const customPackageText = document.getElementById('customWorkflowPackages').innerText;
+
+            checkbox.remove();
+            return { valid, noEngines, noSchedule, noRosters, noClasses, optionalDates, customPackageText };
+        }""")
+
+        assert readiness["valid"]["ready"] is True
+        assert readiness["optionalDates"]["ready"] is True
+        assert readiness["noEngines"]["ready"] is False
+        assert readiness["noSchedule"]["ready"] is False
+        assert readiness["noRosters"]["ready"] is False
+        assert readiness["noClasses"]["ready"] is False
+        assert "Custom Form" in readiness["customPackageText"]
+        assert "CUSTOM_FORM" in readiness["customPackageText"]
+        assert "Disabled Form" not in readiness["customPackageText"]
 
         browser.close()
 
