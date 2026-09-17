@@ -3,7 +3,8 @@ from .roster_parser import inspect_roster, load_students, load_students_excel, l
 from .schedule_parser import (
     find_schedule_file, parse_schedule, find_blocks_for_section,
     inspect_schedule_file, _find_class_details_by_schedule_code,
-    _find_candidate_classes_from_hints, get_day_name, get_subject_code
+    _find_candidate_classes_from_hints, get_day_name, get_subject_code,
+    normalize_room, format_canonical_schedule
 )
 from .template_inspector import TemplateInspector
 
@@ -19,6 +20,8 @@ __all__ = [
     "find_schedule_file",
     "parse_schedule",
     "find_blocks_for_section",
+    "normalize_room",
+    "format_canonical_schedule",
     "inspect_schedule_file",
     "_find_class_details_by_schedule_code",
     "_find_candidate_classes_from_hints",

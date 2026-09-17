@@ -12,6 +12,8 @@ from modules.parsers.schedule_parser import (
     find_blocks_for_section,
     get_subject_code,
     _find_class_details_by_schedule_code,
+    format_canonical_schedule,
+    normalize_room,
 )
 from modules.parsers.roster_parser import load_students
 from modules.parsers.ceit_directory import parse_filename_hints, KNOWN_LAB_SUBJECT_CODES, is_known_lab_subject
@@ -113,7 +115,7 @@ def process_all(
         pre_blocks = []
         pre_best_sched = parsed_schedules[0]
         for sched in parsed_schedules:
-            b = find_blocks_for_section(sched["grid"], c_sec, sched["start_row"], sched["end_row"])
+            b = find_blocks_for_section(sched["grid"], c_sec, sched["start_row"], sched["end_row"], instructor=sched.get("instructor", ""))
             if b:
                 pre_blocks = b
                 pre_best_sched = sched
@@ -239,7 +241,7 @@ def process_all(
         blocks = []
         best_sched = parsed_schedules[0]
         for sched in parsed_schedules:
-            b = find_blocks_for_section(sched["grid"], course_sec, sched["start_row"], sched["end_row"])
+            b = find_blocks_for_section(sched["grid"], course_sec, sched["start_row"], sched["end_row"], instructor=sched.get("instructor", ""))
             if b:
                 blocks = b
                 best_sched = sched
@@ -313,11 +315,7 @@ def process_all(
                 subject_name = f"{clean_sched_code} {rest}".strip() if rest else clean_sched_code
 
         if blocks:
-            parts = []
-            for b in blocks:
-                typ = f"{b['type']}: " if b['type'] else ""
-                parts.append(f"{b['day']}: {b['start_time']}-{b['end_time']} / {typ}{b['room']}")
-            time_days_room = "; ".join(parts)
+            time_days_room = format_canonical_schedule(blocks, instructor=instructor)
         else:
             time_days_room = "SEE SCHEDULE"
             
@@ -429,9 +427,10 @@ def process_all(
                     days_set = []
                     safe_days = []
                     for b in subj_blocks:
+                        clean_r = normalize_room(b['room'], instructor)
                         typ = f"{b['type']}: " if b['type'] else ""
                         sched_parts.append(f"{b['day']}: {b['start_time']}-{b['end_time']}")
-                        room_parts.append(f"{typ}{b['room']}")
+                        room_parts.append(f"{typ}{clean_r}")
                         if b['day'] not in days_set:
                             days_set.append(b['day'])
                             safe_days.append(sanitize_filename(b['day']))

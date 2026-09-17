@@ -30,6 +30,7 @@ from modules.common.docx_utils import (
     save_docx,
 )
 from modules.common.logger import logger
+from modules.parsers.schedule_parser import normalize_room
 from modules.parsers.roster_parser import (
     load_students,
     load_students_excel,
@@ -164,7 +165,7 @@ def parse_explicit_schedule_meetings(schedule: str) -> list:
         if not segment or ":" not in segment:
             continue
         day_part, slot_part = segment.split(":", 1)
-        slot_label = slot_part.strip()
+        slot_label = slot_part.split("/", 1)[0].strip()
         day_tokens = [tok.strip().lower() for tok in re.split(r"[\s,]+", day_part) if tok.strip()]
         matched_days = [days[tok] for tok in day_tokens if tok in days]
         if not matched_days or not slot_label:
@@ -419,6 +420,19 @@ def build_attendance_sheet(
             return cells[cell_idx].find(w("p"))
         except IndexError:
             raise TemplateError(f"Info table structure invalid: missing cell at row {row_idx}, col {cell_idx}.")
+
+    # Ensure room_assignment is clean of instructor suffix
+    if instructor and room_assignment:
+        cleaned_rooms = []
+        for part in room_assignment.split(","):
+            part_str = part.strip()
+            if ":" in part_str:
+                typ_prefix, r_val = part_str.split(":", 1)
+                norm_r = normalize_room(r_val.strip(), instructor)
+                cleaned_rooms.append(f"{typ_prefix.strip()}: {norm_r}")
+            else:
+                cleaned_rooms.append(normalize_room(part_str, instructor))
+        room_assignment = ", ".join(cleaned_rooms)
 
     set_para_text(info_cell_para(0, 1), course_code_title, shrink_threshold=40, shrink_sz="18")
     set_para_text(info_cell_para(0, 4), month_year_label)
