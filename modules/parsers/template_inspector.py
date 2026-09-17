@@ -161,7 +161,7 @@ class DocxTemplateInspector:
                             "field": field_name,
                             "confidence": conf,
                             "pattern": text,
-                            "shrink_threshold": FIELD_SHRINK_THRESHOLDS.get(field_name, 0),
+                            "shrink_threshold": 0 if profile_id == "custom_docx" else FIELD_SHRINK_THRESHOLDS.get(field_name, 0),
                             "shrink_sz": "18",
                             "is_signature_region": is_sig,
                         })
@@ -203,7 +203,7 @@ class DocxTemplateInspector:
                             "field": field_name,
                             "confidence": conf * 0.9,
                             "pattern": lbl_norm,
-                            "shrink_threshold": FIELD_SHRINK_THRESHOLDS.get(field_name, 0),
+                            "shrink_threshold": 0 if profile_id == "custom_docx" else FIELD_SHRINK_THRESHOLDS.get(field_name, 0),
                             "shrink_sz": "18",
                             "is_signature_region": False,
                         })

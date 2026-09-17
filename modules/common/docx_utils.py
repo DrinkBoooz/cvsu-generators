@@ -179,7 +179,7 @@ def set_cell_text(tc, text: str, remove_num: bool = False, shrink_threshold: int
     """Replaces text in first paragraph of a cell, preserving run formatting, alignment, and applying font scaling."""
     p = tc.find(w("p"))
     if p is None:
-        return
+        p = etree.SubElement(tc, w("p"))
     ppr = p.find(w("pPr"))
     if ppr is not None:
         if remove_num:
@@ -215,6 +215,8 @@ def set_cell_text(tc, text: str, remove_num: bool = False, shrink_threshold: int
     r_new = etree.SubElement(p, w("r"))
     if first_rpr is not None:
         r_new.insert(0, copy.deepcopy(first_rpr))
+    elif ppr is not None and ppr.find(w("rPr")) is not None:
+        r_new.insert(0, copy.deepcopy(ppr.find(w("rPr"))))
         
     if is_student_name:
         apply_font_size(r_new, get_student_name_font_sz(text))

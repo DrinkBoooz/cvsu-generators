@@ -63,7 +63,7 @@ class DocumentGenerator(ABC):
 
         for field_name, b in self._recipe.header_bindings.items():
             val = resolve_field_value(field_name, info, self._recipe)
-            thresh = b.shrink_threshold
+            thresh = b.shrink_threshold if self._recipe.profile_id != "custom_docx" else 0
             sz = b.shrink_sz or "18"
 
             if b.cell_type == "docx_table":
@@ -96,15 +96,42 @@ class DocumentGenerator(ABC):
                 for p in body.iter(w("p")):
                     runs = p.findall(w("r"))
                     p_txt = "".join(r.findtext(w("t")) or "" for r in runs)
-                    if token in p_txt:
-                        new_p_txt = p_txt.replace(token, val)
-                        if runs:
-                            t0 = runs[0].find(w("t"))
-                            if t0 is not None:
-                                t0.text = new_p_txt
-                            for r in runs[1:]:
-                                for t_node in r.findall(w("t")):
-                                    t_node.text = ""
+                    while token in p_txt:
+                        start_pos = p_txt.find(token)
+                        end_pos = start_pos + len(token)
+                        char_accum = 0
+                        start_run_idx = None
+                        end_run_idx = None
+                        start_offset = 0
+                        end_offset = 0
+                        for r_i, r in enumerate(runs):
+                            txt = r.findtext(w("t")) or ""
+                            next_accum = char_accum + len(txt)
+                            if start_run_idx is None and next_accum > start_pos:
+                                start_run_idx = r_i
+                                start_offset = start_pos - char_accum
+                            if next_accum >= end_pos:
+                                end_run_idx = r_i
+                                end_offset = end_pos - char_accum
+                                break
+                            char_accum = next_accum
+
+                        if start_run_idx is not None and end_run_idx is not None:
+                            if start_run_idx == end_run_idx:
+                                t_node = runs[start_run_idx].find(w("t"))
+                                cur = t_node.text or ""
+                                t_node.text = cur[:start_offset] + val + cur[end_offset:]
+                            else:
+                                t_start = runs[start_run_idx].find(w("t"))
+                                t_end = runs[end_run_idx].find(w("t"))
+                                start_cur = t_start.text or ""
+                                end_cur = t_end.text or ""
+                                t_start.text = start_cur[:start_offset] + val
+                                t_end.text = end_cur[end_offset:]
+                                for mid_i in range(start_run_idx + 1, end_run_idx):
+                                    for t_mid in runs[mid_i].findall(w("t")):
+                                        t_mid.text = ""
+                        p_txt = "".join(r.findtext(w("t")) or "" for r in runs)
 
     def _is_student_table(self, tbl) -> bool:
         """Deprecated legacy student table locator; prefer recipe.roster_binding."""
