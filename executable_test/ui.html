@@ -2260,8 +2260,7 @@
       onclick="closeSettingsModal(event)"
     >
       <div
-        class="modal-dialog-custom"
-        style="max-width: 900px"
+        class="modal-dialog-custom modal-dialog-settings"
         onclick="event.stopPropagation()"
       >
         <div class="modal-header-custom">
@@ -2572,9 +2571,7 @@
               Keywords and aliases used by the roster reader to automatically
               detect Student Name and Student Number columns.
             </p>
-            <div
-              style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px"
-            >
+            <div class="settings-keywords-grid">
               <div>
                 <div class="mapping-label" style="margin-bottom: 6px">
                   Student Name Tokens
@@ -2653,14 +2650,7 @@
               Fallback defaults applied when schedule spreadsheet headers cannot
               be cleanly detected from merged title cells.
             </p>
-            <div
-              style="
-                display: flex;
-                flex-direction: column;
-                gap: 12px;
-                max-width: 600px;
-              "
-            >
+            <div class="settings-card-section">
               <div class="mapping-field">
                 <label class="mapping-label"
                   >Default Instructor Full Name</label
@@ -2843,14 +2833,7 @@
               </div>
 
               <!-- Form Details Inputs -->
-              <div
-                style="
-                  display: grid;
-                  grid-template-columns: 1fr 1fr 1fr;
-                  gap: 12px;
-                  margin-bottom: 14px;
-                "
-              >
+              <div class="settings-custom-form-grid" style="margin-bottom: 14px">
                 <div>
                   <label
                     style="
@@ -3021,7 +3004,7 @@
         </div>
 
         <div class="modal-footer-custom">
-          <div style="display: flex; gap: 8px">
+          <div class="modal-footer-actions-left" style="display: flex; gap: 8px">
             <button
               class="nav-btn"
               id="btnResetSettings"
@@ -3054,7 +3037,7 @@
               📤 Export
             </button>
           </div>
-          <div style="display: flex; gap: 8px">
+          <div class="modal-footer-actions-right" style="display: flex; gap: 8px">
             <button
               class="nav-btn"
               type="button"
