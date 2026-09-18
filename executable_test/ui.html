@@ -1324,25 +1324,26 @@
                 (64-bit)
               </li>
               <li>
-                <strong>Python / Python Packages:</strong> None required for the
-                packaged executable. The Python runtime and application dependencies
+                <strong>Python / Python Packages:</strong> None required on the target machine
+                for the packaged executable. The Python runtime and application packages
                 are embedded in <code>CvSU Gen.exe</code>.
               </li>
               <li>
-                <strong>WebView2 Runtime:</strong> Microsoft Edge WebView2 Runtime is
-                required. Included with Windows 11; most Windows 10 installations have the
-                Evergreen Runtime pre-installed (v1803+ with Nov 2022 update baseline), though
-                certain managed, LTSC, or clean setups may lack it. If missing, it must be installed
-                or reported by the system.
+                <strong>WebView2 Runtime:</strong> Microsoft Edge WebView2 Evergreen Runtime is
+                a required host prerequisite. Included with Windows 11; Microsoft documents Windows 10
+                v1803+ with the November 2022 update as the pre-installed baseline, though certain
+                managed, LTSC, or clean setups may lack it. The packaged application does not bundle
+                an automatic WebView2 installer, and no explicit application-level runtime detector
+                was verified in the current source.
               </li>
               <li>
                 <strong>.NET Framework:</strong> .NET Framework 4.7.2+ is the supported
-                Windows baseline for the native WinForms desktop host and drag-and-drop integration.
+                project baseline for the native WinForms desktop host and drag-and-drop integration.
               </li>
               <li>
                 <strong>Office Software:</strong> Microsoft Office (Word &amp;
-                Excel) or any compatible office suite to view/edit the generated
-                documents (the application generates files natively without requiring Office).
+                Excel) or any compatible office suite (only needed for viewing/editing the generated
+                documents; the application generates files natively).
               </li>
             </ul>
           </div>

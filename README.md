@@ -94,9 +94,9 @@ CvSU Document Generator is designed as a decoupled, modular system adhering to C
 
 ### Windows System Prerequisites
 - **Operating System**: Windows 10 or Windows 11 (64-bit)
-- **Python / Python Packages**: None required for the packaged executable. The Python runtime and application dependencies are embedded in `CvSU Gen.exe`.
-- **Microsoft Edge WebView2 Evergreen Runtime**: Required system prerequisite. WebView2 is included with Windows 11. Most Windows 10 systems have the Evergreen Runtime pre-installed (Microsoft documents Windows 10 version 1803+ with the November 2022 update as the preinstalled baseline), though some Windows 10, LTSC, managed, or clean systems may lack it. Missing runtime must be detected or reported by the system; the application does not include an automatic installer.
-- **.NET Framework 4.7.2+ Baseline**: Supported Windows baseline for the Python.NET WinForms host and OLE drag-and-drop integration (`executable_test/native/dnd.py`). While Python.NET supports older .NET Framework versions, 4.7.2+ is the repository's verified project baseline.
+- **Python / Python Packages**: None required on the target machine for the packaged executable. The Python runtime and application packages are embedded in `CvSU Gen.exe`.
+- **Microsoft Edge WebView2 Evergreen Runtime**: Required host prerequisite. WebView2 is included with Windows 11; Microsoft documents Windows 10 version 1803+ with the November 2022 update as the preinstalled baseline, though certain Windows 10, LTSC, managed, or clean systems may lack the Runtime. The packaged application does not bundle an automatic WebView2 installer, and no explicit application-level runtime detector was verified in the current source.
+- **.NET Framework 4.7.2+ Project Baseline**: Supported Windows baseline for the Python.NET WinForms host and OLE drag-and-drop integration (`executable_test/native/dnd.py`). While Python.NET supports older .NET Framework versions, 4.7.2+ is the repository's verified project baseline.
 - **Office Software**: Microsoft Office (Word & Excel) or compatible office suite (only needed for opening/editing generated DOCX/XLSX files).
 
 ### Dependency Manifests
