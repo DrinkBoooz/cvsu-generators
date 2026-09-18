@@ -11,10 +11,10 @@ A desktop application for Cavite State University (CvSU) faculty members to auto
 ## 💻 System Requirements
 
 - **Operating System**: Windows 10 or Windows 11 (64-bit)
-- **Dependencies**: **None!** The application is completely standalone. You do **not** need Python installed.
+- **Python / Python Packages**: None required for the packaged executable. The Python runtime and application dependencies are embedded in `CvSU Gen.exe`.
 - **Microsoft Edge WebView2 Runtime**: Required system prerequisite. WebView2 is included with Windows 11. Most Windows 10 systems have the Evergreen Runtime pre-installed (Windows 10 v1803+ with November 2022 update baseline), though certain LTSC, managed, or clean installations may lack it. If missing, WebView2 must be installed or reported by the system (the application does not bundle an automatic installer).
-- **.NET Framework 4.7.2+**: Supported Windows baseline for the Python.NET (`pythonnet`) WinForms desktop host and OLE drag-and-drop integration (`native/dnd.py`). While Python.NET supports older runtimes, 4.7.2+ is the repository's tested baseline.
-- **Office Software**: Microsoft Office (Word & Excel) or any compatible office suite to view/edit the generated documents (the application generates files natively without requiring Office).
+- **.NET Framework 4.7.2+ Baseline**: Supported Windows baseline for the Python.NET (`pythonnet`) WinForms desktop host and OLE drag-and-drop integration (`native/dnd.py`). While Python.NET supports older runtimes, 4.7.2+ is the repository's tested baseline.
+- **Office Software**: Microsoft Office (Word & Excel) or any compatible office suite (only needed for opening/editing generated DOCX/XLSX files; the application generates files natively without requiring Office).
 
 ---
 

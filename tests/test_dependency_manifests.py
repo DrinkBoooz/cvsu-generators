@@ -7,7 +7,6 @@ mappings, absence of undeclared/deprecated packages, and forwarding manifest int
 import os
 import ast
 import re
-import pytest
 
 WORKSPACE_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RUNTIME_REQ = os.path.join(WORKSPACE_ROOT, "requirements-runtime.txt")
@@ -151,7 +150,9 @@ def test_manifest_forwarding_syntax():
 def test_forwarding_manifest_resolution():
     """
     Validates that executable_test/requirements-build.txt successfully resolves all referenced
-    manifest files statically and through pip dry-run validation without modifying the environment.
+    manifest files statically and via pip dry-run direct-requirement / forwarding-manifest validation
+    without modifying the environment or performing full transitive installation.
+    (Full installed-environment dependency health is separately verified by python -m pip check).
     """
     # 1. Static path-resolution validation (100% offline, zero-network, instantaneous)
     def resolve_references_recursively(manifest_path: str, visited: set[str] | None = None) -> list[str]:
@@ -178,7 +179,7 @@ def test_forwarding_manifest_resolution():
     assert os.path.normpath(BUILD_REQ) in chain, "Build manifest chain must include requirements-build.txt"
     assert os.path.normpath(RUNTIME_REQ) in chain, "Build manifest chain must include requirements-runtime.txt"
 
-    # 2. Lightweight pip resolution via --dry-run (using local environment without installing)
+    # 2. pip dry-run direct-requirement / forwarding-manifest validation (using local environment without installing)
     import subprocess
     import sys
     result = subprocess.run(
@@ -187,7 +188,9 @@ def test_forwarding_manifest_resolution():
         text=True,
         cwd=os.path.dirname(EXEC_BUILD_REQ)
     )
-    assert result.returncode == 0, f"pip dry-run resolution failed: {result.stderr}\n{result.stdout}"
+    assert result.returncode == 0, (
+        f"pip dry-run direct-requirement / forwarding-manifest validation failed: {result.stderr}\n{result.stdout}"
+    )
 
 
 def test_all_direct_declarations_are_exact_pins():
