@@ -12,8 +12,8 @@ A desktop application for Cavite State University (CvSU) faculty members to auto
 
 - **Operating System**: Windows 10 or Windows 11 (64-bit)
 - **Dependencies**: **None!** The application is completely standalone. You do **not** need Python installed.
-- **Microsoft Edge WebView2 Runtime**: Required system prerequisite (pre-installed natively on Windows 11 and modern Windows 10). If missing, WebView2 must be installed or reported by the system.
-- **.NET Framework 4.7.2+**: Supported Windows baseline required for the Python.NET / WinForms native desktop host and OLE drag-and-drop integration.
+- **Microsoft Edge WebView2 Runtime**: Required system prerequisite. WebView2 is included with Windows 11. Most Windows 10 systems have the Evergreen Runtime pre-installed (Windows 10 v1803+ with November 2022 update baseline), though certain LTSC, managed, or clean installations may lack it. If missing, WebView2 must be installed or reported by the system (the application does not bundle an automatic installer).
+- **.NET Framework 4.7.2+**: Supported Windows baseline for the Python.NET (`pythonnet`) WinForms desktop host and OLE drag-and-drop integration (`native/dnd.py`). While Python.NET supports older runtimes, 4.7.2+ is the repository's tested baseline.
 - **Office Software**: Microsoft Office (Word & Excel) or any compatible office suite to view/edit the generated documents (the application generates files natively without requiring Office).
 
 ---

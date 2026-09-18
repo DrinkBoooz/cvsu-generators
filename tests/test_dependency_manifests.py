@@ -99,6 +99,45 @@ def test_manifest_files_exist():
     assert os.path.isfile(EXEC_BUILD_REQ), "executable_test/requirements-build.txt must exist"
 
 
+def canonicalize_pkg_name(name: str) -> str:
+    """Normalizes distribution name according to PEP 503 / packaging standards."""
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
+FORBIDDEN_DISTRIBUTIONS = {
+    canonicalize_pkg_name(pkg)
+    for pkg in [
+        "pypiwin32",
+        "pywin32",
+        "pytest-mock",
+        "pytest-playwright",
+        "pandas",
+        "numpy",
+        "pillow",
+        "pyqt5",
+        "pyqt6",
+        "pyside2",
+        "pyside6",
+        "pywinauto",
+    ]
+}
+
+
+def parse_manifest_distributions(filepath: str) -> set[str]:
+    """Extracts all declared distribution names from a requirements file (canonicalized)."""
+    assert os.path.exists(filepath), f"Manifest file does not exist: {filepath}"
+    distributions = set()
+    with open(filepath, "r", encoding="utf-8") as f:
+        for line in f:
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#") or stripped.startswith("-r"):
+                continue
+            match = re.match(r"^([A-Za-z0-9_.\-]+)", stripped)
+            if match:
+                distributions.add(canonicalize_pkg_name(match.group(1)))
+    return distributions
+
+
 def test_manifest_forwarding_syntax():
     """Verify executable_test/requirements-build.txt forwards to ../requirements-build.txt."""
     with open(EXEC_BUILD_REQ, "r", encoding="utf-8") as f:
@@ -107,6 +146,71 @@ def test_manifest_forwarding_syntax():
     assert lines == ["-r ../requirements-build.txt"], (
         f"executable_test/requirements-build.txt must forward to ../requirements-build.txt, got: {lines}"
     )
+
+
+def test_forwarding_manifest_resolution():
+    """
+    Validates that executable_test/requirements-build.txt successfully resolves all referenced
+    manifest files statically and through pip dry-run validation without modifying the environment.
+    """
+    # 1. Static path-resolution validation (100% offline, zero-network, instantaneous)
+    def resolve_references_recursively(manifest_path: str, visited: set[str] | None = None) -> list[str]:
+        if visited is None:
+            visited = set()
+        norm_path = os.path.normpath(manifest_path)
+        assert norm_path not in visited, f"Circular reference detected at {norm_path}"
+        visited.add(norm_path)
+        assert os.path.isfile(norm_path), f"Referenced manifest does not exist: {norm_path}"
+
+        resolved_files = [norm_path]
+        base_dir = os.path.dirname(norm_path)
+        with open(norm_path, "r", encoding="utf-8") as f:
+            for line in f:
+                stripped = line.strip()
+                if stripped.startswith("-r"):
+                    parts = stripped.split(maxsplit=1)
+                    assert len(parts) == 2, f"Malformed -r reference: '{stripped}' in {norm_path}"
+                    target_path = os.path.normpath(os.path.join(base_dir, parts[1]))
+                    resolved_files.extend(resolve_references_recursively(target_path, visited))
+        return resolved_files
+
+    chain = resolve_references_recursively(EXEC_BUILD_REQ)
+    assert os.path.normpath(BUILD_REQ) in chain, "Build manifest chain must include requirements-build.txt"
+    assert os.path.normpath(RUNTIME_REQ) in chain, "Build manifest chain must include requirements-runtime.txt"
+
+    # 2. Lightweight pip resolution via --dry-run (using local environment without installing)
+    import subprocess
+    import sys
+    result = subprocess.run(
+        [sys.executable, "-m", "pip", "install", "--dry-run", "--no-deps", "-r", EXEC_BUILD_REQ],
+        capture_output=True,
+        text=True,
+        cwd=os.path.dirname(EXEC_BUILD_REQ)
+    )
+    assert result.returncode == 0, f"pip dry-run resolution failed: {result.stderr}\n{result.stdout}"
+
+
+def test_all_direct_declarations_are_exact_pins():
+    """
+    Verify that every direct package declaration in runtime, test, and build manifests
+    is an exact '==' pin. Included '-r' lines are permitted. requirements.txt is excluded
+    because it is intentionally an aggregate manifest containing only '-r' forwarding lines.
+    """
+    manifests = [RUNTIME_REQ, TEST_REQ, BUILD_REQ]
+    for req_path in manifests:
+        assert os.path.exists(req_path), f"Manifest does not exist: {req_path}"
+        pin_count = 0
+        with open(req_path, "r", encoding="utf-8") as f:
+            for line_no, raw_line in enumerate(f, start=1):
+                stripped = raw_line.strip()
+                if not stripped or stripped.startswith("#") or stripped.startswith("-r"):
+                    continue
+                match = re.match(r"^([A-Za-z0-9_.\-]+)\s*==\s*([A-Za-z0-9_.\-]+)$", stripped)
+                assert match, (
+                    f"{os.path.basename(req_path)} line {line_no} must be an exact '==' pin, got: '{stripped}'"
+                )
+                pin_count += 1
+        assert pin_count > 0, f"{os.path.basename(req_path)} must declare at least one direct pin"
 
 
 def test_production_runtime_manifest_coverage():
@@ -168,10 +272,19 @@ def test_aggregate_manifest_contents():
 
 
 def test_excluded_packages_not_in_manifests():
-    """Verify pypiwin32, pywin32, pytest-mock, and pytest-playwright are absent from all manifests."""
-    forbidden = ["pypiwin32", "pywin32", "pytest-mock", "pytest-playwright"]
-    for req_path in [RUNTIME_REQ, TEST_REQ, BUILD_REQ, AGGREGATE_REQ, EXEC_BUILD_REQ]:
-        with open(req_path, "r", encoding="utf-8") as f:
-            text = f.read().lower()
-        for pkg in forbidden:
-            assert pkg not in text, f"Forbidden package '{pkg}' must not be declared in {os.path.basename(req_path)}"
+    """
+    Verify forbidden/unneeded packages are absent from all repository manifests.
+    Parses exact package identities with PEP 503 canonicalization rather than raw substrings,
+    ensuring legitimate transitive dependencies like 'pywin32-ctypes' are not rejected.
+    """
+    all_manifests = [RUNTIME_REQ, TEST_REQ, BUILD_REQ, AGGREGATE_REQ, EXEC_BUILD_REQ]
+    for req_path in all_manifests:
+        declared_dists = parse_manifest_distributions(req_path)
+        forbidden_found = declared_dists.intersection(FORBIDDEN_DISTRIBUTIONS)
+        assert not forbidden_found, (
+            f"Forbidden distribution(s) {forbidden_found} declared in {os.path.basename(req_path)}"
+        )
+
+    # Verify packaging identity precision: pywin32-ctypes is not rejected by pywin32 exclusion
+    test_dists = {"pywin32-ctypes"}
+    assert not test_dists.intersection(FORBIDDEN_DISTRIBUTIONS)

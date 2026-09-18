@@ -95,8 +95,8 @@ CvSU Document Generator is designed as a decoupled, modular system adhering to C
 ### Windows System Prerequisites
 - **Operating System**: Windows 10 or Windows 11 (64-bit)
 - **Packaged Executable**: Standalone binary (`CvSU Gen.exe`) with embedded Python runtime.
-- **Microsoft Edge WebView2 Runtime**: Required system prerequisite (pre-installed on Windows 11 and modern Windows 10). Missing runtime must be detected or reported by the system.
-- **.NET Framework 4.7.2+**: Supported Windows baseline required for the Python.NET WinForms host and OLE drag-and-drop integration.
+- **Microsoft Edge WebView2 Evergreen Runtime**: Required system prerequisite. WebView2 is included with Windows 11. Most Windows 10 systems have the Evergreen Runtime pre-installed (Microsoft documents Windows 10 version 1803+ with the November 2022 update as the preinstalled baseline), though some Windows 10, LTSC, managed, or clean systems may lack it. Missing runtime must be detected or reported by the system; the application does not include an automatic installer.
+- **.NET Framework 4.7.2+ Baseline**: Supported Windows baseline for the Python.NET WinForms host and OLE drag-and-drop integration (`executable_test/native/dnd.py`). While Python.NET supports older .NET Framework versions, 4.7.2+ is the repository's verified project baseline.
 - **Microsoft Office (Word & Excel)**: Only needed to view and edit generated documents.
 
 ### Dependency Manifests
