@@ -18,6 +18,7 @@ def test_settings_modal_height_uniformity_desktop():
 
         page.click("#btnOpenSettings")
         page.wait_for_selector("#modalParserSettingsBackdrop:not(.d-none)")
+        page.wait_for_timeout(300)
 
         measurements = []
         for t in TABS:

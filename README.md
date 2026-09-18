@@ -84,13 +84,28 @@ CvSU Document Generator is designed as a decoupled, modular system adhering to C
 | Component              | Technology / Library                   | Purpose                                                                |
 | :--------------------- | :------------------------------------- | :--------------------------------------------------------------------- |
 | **Core Runtime**       | Python 3.10 – 3.14 (x64)               | Primary execution engine                                               |
-| **GUI Framework**      | `pywebview`                            | Native Windows webview host (Edge Chromium / WebView2)                 |
-| **Frontend UI**        | HTML5, Vanilla CSS3, Modern JavaScript | Apple HIG-inspired interface with CSS design tokens                    |
-| **Word Processing**    | `python-docx` + `lxml.etree`           | High-speed XML AST manipulation (<20ms per document)                   |
-| **Spreadsheet Engine** | `openpyxl` + `xlrd`                    | Native reading of`.xls` (BIFF8) and `.xlsx` formula workbooks          |
-| **Packaging**          | `PyInstaller`                          | Bundles runtime, Python standard library, assets into standalone`.exe` |
-| **Security & Signing** | Microsoft`signtool.exe` + DigiCert     | Authenticode digital signing with RFC 3161 SHA-256 timestamping        |
-| **Automated Testing**  | `pytest`, `pytest-mock`, `playwright`  | Comprehensive unit, integration, and UI automation                     |
+| **GUI Framework**      | `pywebview` + `pythonnet`              | Native Windows webview host (Edge Chromium / WebView2) & WinForms CLR  |
+| **Frontend UI**        | HTML5, Vanilla CSS3, Modern JavaScript | Responsive interface with modular CSS design tokens                    |
+| **Word Processing**    | OpenXML AST via `lxml.etree`           | High-speed XML AST manipulation (<20ms per document)                   |
+| **Spreadsheet Engine** | `openpyxl` + `xlrd`                    | Native reading of `.xls` (BIFF8) and `.xlsx` formula workbooks         |
+| **Packaging**          | `PyInstaller`                          | Bundles runtime, Python standard library, assets into standalone `.exe`|
+| **Security & Signing** | Microsoft `signtool.exe` + DigiCert    | Authenticode digital signing with RFC 3161 SHA-256 timestamping        |
+| **Automated Testing**  | `pytest`, `python-docx`, `playwright`  | Comprehensive unit, integration, template parity, and UI automation    |
+
+### Windows System Prerequisites
+- **Operating System**: Windows 10 or Windows 11 (64-bit)
+- **Packaged Executable**: Standalone binary (`CvSU Gen.exe`) with embedded Python runtime.
+- **Microsoft Edge WebView2 Runtime**: Required system prerequisite (pre-installed on Windows 11 and modern Windows 10). Missing runtime must be detected or reported by the system.
+- **.NET Framework 4.7.2+**: Supported Windows baseline required for the Python.NET WinForms host and OLE drag-and-drop integration.
+- **Microsoft Office (Word & Excel)**: Only needed to view and edit generated documents.
+
+### Dependency Manifests
+The repository uses four distinct manifests with exact direct-dependency pins:
+- `requirements-runtime.txt`: Core production runtime (`pywebview`, `pythonnet`, `lxml`, `openpyxl`, `xlrd`).
+- `requirements-test.txt`: Testing & development suite (`pytest`, `python-docx`, `playwright` + runtime).
+- `requirements-build.txt`: Executable packaging (`pyinstaller` + runtime).
+- `requirements.txt`: Aggregate developer manifest (`-r requirements-test.txt` and `-r requirements-build.txt`).
+
 
 ---
 

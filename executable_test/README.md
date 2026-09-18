@@ -12,7 +12,9 @@ A desktop application for Cavite State University (CvSU) faculty members to auto
 
 - **Operating System**: Windows 10 or Windows 11 (64-bit)
 - **Dependencies**: **None!** The application is completely standalone. You do **not** need Python installed.
-- **Office Software**: Microsoft Office (Word & Excel) or any compatible office suite to view/edit the generated documents.
+- **Microsoft Edge WebView2 Runtime**: Required system prerequisite (pre-installed natively on Windows 11 and modern Windows 10). If missing, WebView2 must be installed or reported by the system.
+- **.NET Framework 4.7.2+**: Supported Windows baseline required for the Python.NET / WinForms native desktop host and OLE drag-and-drop integration.
+- **Office Software**: Microsoft Office (Word & Excel) or any compatible office suite to view/edit the generated documents (the application generates files natively without requiring Office).
 
 ---
 
