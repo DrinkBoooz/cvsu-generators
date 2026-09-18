@@ -1,0 +1,31 @@
+{
+  "name": "cvsu-generators",
+  "version": "1.0.0",
+  "description": "[![Release](https://img.shields.io/badge/version-v2.0%20Beta-blue.svg)](file:///c:/Users/danjo/OneDrive/CVSU%20GENERATORS/executable/ui.html)\r [![Tests](<https://img.shields.io/badge/tests-153%20passed%20(100%25)-brightgreen.svg>)](file:///c:/Users/danjo/OneDrive/CVSU%20GENERATORS/tests)\r [![Platform](<https://img.shields.io/badge/platform-Windows%2010%20%7C%2011%20(x64)-lightgrey.svg>)](file:///c:/Users/danjo/OneDrive/CVSU%20GENERATORS/executable)\r [![License](https://img.shields.io/badge/copyright-%C2%A9%202026%20Dan%20Joseph%20Ortega-purple.svg)](file:///c:/Users/danjo/OneDrive/CVSU%20GENERATORS/executable/file_version_info.txt)\r [![Authenticode](<https://img.shields.io/badge/Authenticode-Digitally%20Signed%20(DigiCert%20RFC%203161)-success.svg>)](file:///c:/Users/danjo/OneDrive/CVSU%20GENERATORS/executable/sign_exe.ps1)",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "dependencies": {
+    "playwright": "^1.63.0",
+    "playwright-core": "^1.63.0",
+    "undici-types": "^6.21.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^26.6.1"
+  },
+  "scripts": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DrinkBoooz/cvsu-generators.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/DrinkBoooz/cvsu-generators/issues"
+  },
+  "homepage": "https://github.com/DrinkBoooz/cvsu-generators#readme"
+}
