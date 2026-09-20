@@ -55,6 +55,13 @@ MONTHS = {
     9: "SEPTEMBER", 10: "OCTOBER", 11: "NOVEMBER", 12: "DECEMBER"
 }
 
+# Fixed non-date column width budget in WordprocessingML pct units (5000 = 100%)
+# Columns: NO (248) + NAME (1277) + STNUM (499) + LB (212) + LC (208) + R (133) = 2577
+FIXED_PCT = 248 + 1277 + 499 + 212 + 208 + 133  # 2577
+DATE_POOL = 5000 - FIXED_PCT  # 2423
+MIN_PRINTABLE_DATE_W = 25
+GENERATOR_MIN_STUDENT_ROWS = 40
+
 # ── Date helpers ──────────────────────────────────────────────────────────────
 
 def get_class_dates(months: list, year: int, weekday: int) -> list:
@@ -430,14 +437,21 @@ class AttendanceGenerator:
         schedule_label = build_schedule_label(class_schedule)
 
         # Capacity policy check:
-        # Fixed non-date percentage widths sum to 2577 pct units
-        FIXED_PCT = 248 + 1277 + 499 + 212 + 208 + 133
-        DATE_POOL = 5000 - FIXED_PCT
-        DATE_W = DATE_POOL // n_date_cols if n_date_cols > 0 else DATE_POOL
-        if n_date_cols > 0 and DATE_W < 25:
+        # Fixed non-date percentage widths sum to 2577 pct units (NO: 248, NAME: 1277, STNUM: 499, LB: 212, LC: 208, R: 133)
+        # DATE_POOL = 5000 - 2577 = 2423 pct units
+        matrix_binding = self.recipe.matrix_binding
+        extra_lead_cols = max(0, matrix_binding.date_columns_start - 3)
+        extra_lead_w = extra_lead_cols * 200
+        fixed_pct = 2577 + extra_lead_w
+        date_pool = max(500, 5000 - fixed_pct)
+        MIN_PRINTABLE_DATE_W = 25
+        GENERATOR_MIN_STUDENT_ROWS = 40
+
+        date_w = date_pool // n_date_cols if n_date_cols > 0 else date_pool
+        if n_date_cols > 0 and date_w < MIN_PRINTABLE_DATE_W:
             raise TemplateError(
                 f"Insufficient generation capacity: requested {n_date_cols} sessions "
-                f"exceeds printable page width capacity (column width {DATE_W} < 25 pct)."
+                f"exceeds printable page width capacity (column width {date_w} < {MIN_PRINTABLE_DATE_W} pct)."
             )
 
         zin, root, body = load_docx(self.template_path)
@@ -491,20 +505,26 @@ class AttendanceGenerator:
                 set_para_text(p, val, shrink_threshold=shrink_thresh, shrink_sz=shrink_sz)
 
         # 2. Target attendance matrix table authoritatively via recipe
-        matrix_binding = self.recipe.matrix_binding
         if matrix_binding.table_index >= len(tables):
             raise TemplateError(f"Matrix table index {matrix_binding.table_index} not found in template.")
         attn_tbl = tables[matrix_binding.table_index]
 
-        remainder = DATE_POOL - (DATE_W * n_date_cols) if n_date_cols > 0 else DATE_POOL
+        remainder = date_pool - (date_w * n_date_cols) if n_date_cols > 0 else date_pool
         NO_W = 248
         NAME_W = 1277 + remainder
         STNUM_W = 499
         LB_W = 212
         LC_W = 208
         R_W = 133
-        WEEK_W = DATE_W * session_count
-        SUM_W = LB_W + LC_W + R_W
+        WEEK_W = date_w * session_count
+
+        sum_w_map = {"lb": LB_W, "lc": LC_W, "r": R_W}
+        summary_widths = [sum_w_map.get(sn.lower(), 180) for sn in matrix_binding.summary_column_names]
+        SUM_W = sum(summary_widths)
+
+        lead_widths = [NO_W, NAME_W, STNUM_W]
+        if extra_lead_cols > 0:
+            lead_widths += [200] * extra_lead_cols
 
         orig_rows = attn_tbl.findall(w("tr"))
         if (
@@ -525,11 +545,15 @@ class AttendanceGenerator:
         if tblgrid is not None:
             attn_tbl.remove(tblgrid)
         tblgrid = etree.SubElement(attn_tbl, w("tblGrid"))
-        for cw in [NO_W, NAME_W, STNUM_W] + [DATE_W] * n_date_cols + [LB_W, LC_W, R_W]:
+        for cw in lead_widths + [date_w] * n_date_cols + summary_widths:
             gc = etree.SubElement(tblgrid, w("gridCol"))
             gc.set(w("w"), str(cw))
 
         # Reconstruct header row 0 (weeks)
+        orig_header0_cells = orig_header0.findall(w("tc"))
+        week_cell_template = orig_header0_cells[matrix_binding.week_template_cell_col]
+        summary_header0_template = orig_header0_cells[matrix_binding.summary_header0_cell_col]
+
         row0 = copy.deepcopy(orig_header0)
         row0_cells = row0.findall(w("tc"))
 
@@ -537,14 +561,10 @@ class AttendanceGenerator:
         set_cell_width(row0_cells[matrix_binding.name_col], NAME_W)
         set_cell_width(row0_cells[matrix_binding.id_col], STNUM_W)
 
+        # Remove dynamic columns (from date_columns_start onward)
         for tc in row0_cells[matrix_binding.date_columns_start:]:
             row0.remove(tc)
 
-        week_cell_template = (
-            row0_cells[matrix_binding.date_columns_start]
-            if matrix_binding.date_columns_start < len(row0_cells)
-            else row0_cells[-1]
-        )
         for wi, wg in enumerate(week_groups, 1):
             tc = copy.deepcopy(week_cell_template)
             set_cell_width(tc, WEEK_W)
@@ -554,7 +574,7 @@ class AttendanceGenerator:
                 set_para_text(p, f"WEEK {wi}")
             row0.append(tc)
 
-        sum_tc = copy.deepcopy(row0_cells[-1])
+        sum_tc = copy.deepcopy(summary_header0_template)
         set_cell_width(sum_tc, SUM_W)
         set_gridspan(sum_tc, matrix_binding.summary_columns_count)
         p = sum_tc.find(w("p"))
@@ -564,6 +584,9 @@ class AttendanceGenerator:
         attn_tbl.append(row0)
 
         # Reconstruct header row 1 (dates / session numbers / summary names)
+        orig_header1_cells = orig_header1.findall(w("tc"))
+        date_cell_template = orig_header1_cells[matrix_binding.date_template_cell_col]
+
         row1 = copy.deepcopy(orig_header1)
         row1_cells = row1.findall(w("tc"))
 
@@ -574,19 +597,13 @@ class AttendanceGenerator:
         for tc in row1_cells[matrix_binding.date_columns_start:]:
             row1.remove(tc)
 
-        date_cell_template = (
-            row1_cells[matrix_binding.date_columns_start]
-            if matrix_binding.date_columns_start < len(row1_cells)
-            else row1_cells[-1]
-        )
-
         for wg in week_groups:
             week_dates = {dt.weekday(): dt for dt in wg}
             for session_idx, (day_idx, slot_label) in enumerate(schedule_meetings, 1):
                 dt = week_dates.get(day_idx)
                 day_num = str(dt.day) if dt is not None else ""
                 tc = copy.deepcopy(date_cell_template)
-                set_cell_width(tc, DATE_W)
+                set_cell_width(tc, date_w)
                 paras = tc.findall(w("p"))
                 if len(paras) >= 2:
                     set_para_text(paras[0], day_num)
@@ -595,13 +612,13 @@ class AttendanceGenerator:
                     set_para_text(paras[0], day_num)
                 row1.append(tc)
 
-        sum_w_map = {"lb": LB_W, "lc": LC_W, "r": R_W}
-        summary_cells_source = orig_header1.findall(w("tc"))
-        summary_tmpl_cell = summary_cells_source[-1]
-
-        for sum_name in matrix_binding.summary_column_names:
-            tc = copy.deepcopy(summary_tmpl_cell)
-            wval = sum_w_map.get(sum_name.lower(), 180)
+        for sum_name, sum_col, wval in zip(
+            matrix_binding.summary_column_names,
+            matrix_binding.summary_header1_cell_cols,
+            summary_widths,
+        ):
+            source_tc = orig_header1_cells[sum_col] if sum_col < len(orig_header1_cells) else date_cell_template
+            tc = copy.deepcopy(source_tc)
             set_cell_width(tc, wval)
             p = tc.find(w("p"))
             if p is not None:
@@ -612,14 +629,9 @@ class AttendanceGenerator:
 
         # 3. Student rows
         orig_student_cells = orig_student.findall(w("tc"))
-        att_cell_template = (
-            orig_student_cells[matrix_binding.date_columns_start]
-            if matrix_binding.date_columns_start < len(orig_student_cells)
-            else orig_student_cells[-1]
-        )
-        summary_student_tmpl = orig_student_cells[-1]
+        att_cell_template = orig_student_cells[matrix_binding.student_date_template_cell_col]
 
-        target_rows = max(matrix_binding.template_student_row_capacity, len(students))
+        target_rows = max(matrix_binding.template_student_row_capacity, GENERATOR_MIN_STUDENT_ROWS, len(students))
         for row_idx in range(target_rows):
             name, stnum = students[row_idx] if row_idx < len(students) else ("", "")
 
@@ -661,15 +673,19 @@ class AttendanceGenerator:
 
             for _ in range(n_date_cols):
                 tc = copy.deepcopy(att_cell_template)
-                set_cell_width(tc, DATE_W)
+                set_cell_width(tc, date_w)
                 p = tc.find(w("p"))
                 if p is not None:
                     set_para_text(p, "")
                 tr.append(tc)
 
-            for sum_name in matrix_binding.summary_column_names:
-                tc = copy.deepcopy(summary_student_tmpl)
-                wval = sum_w_map.get(sum_name.lower(), 180)
+            for sum_name, sum_col, wval in zip(
+                matrix_binding.summary_column_names,
+                matrix_binding.student_summary_cell_cols,
+                summary_widths,
+            ):
+                source_tc = orig_student_cells[sum_col] if sum_col < len(orig_student_cells) else att_cell_template
+                tc = copy.deepcopy(source_tc)
                 set_cell_width(tc, wval)
                 p = tc.find(w("p"))
                 if p is not None:

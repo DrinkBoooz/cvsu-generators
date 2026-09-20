@@ -192,6 +192,9 @@ class RecipeValidator:
             bindings=bindings,
         )
 
+        total_cols = date_start + session_capacity + matrix_cand.get("summary_columns_count", 3)
+        default_summary_indices = tuple(range(date_start + session_capacity, total_cols))
+
         matrix_binding = AttendanceMatrixBinding(
             table_index=m_tbl_idx,
             header_row0_index=matrix_cand.get("header_row0_index", 0),
@@ -205,6 +208,13 @@ class RecipeValidator:
             summary_column_names=tuple(matrix_cand.get("summary_column_names", ("lb", "lc", "r"))),
             template_session_capacity=session_capacity,
             template_student_row_capacity=matrix_cand.get("template_student_row_capacity", 40),
+            week_template_cell_col=matrix_cand.get("week_template_cell_col", date_start),
+            summary_header0_cell_col=matrix_cand.get("summary_header0_cell_col", default_summary_indices[0] if default_summary_indices else date_start + session_capacity),
+            date_template_cell_col=matrix_cand.get("date_template_cell_col", date_start),
+            summary_column_indices=tuple(matrix_cand.get("summary_column_indices", default_summary_indices)),
+            summary_header1_cell_cols=tuple(matrix_cand.get("summary_header1_cell_cols", default_summary_indices)),
+            student_date_template_cell_col=matrix_cand.get("student_date_template_cell_col", date_start),
+            student_summary_cell_cols=tuple(matrix_cand.get("student_summary_cell_cols", default_summary_indices)),
         )
 
         metadata = dict(candidate.metadata)
@@ -291,24 +301,91 @@ class RecipeValidator:
             raise InvalidRecipeError("Externally supplied '_construction_token' is prohibited.")
         clean_data = dict(data)
 
-        profile_id = clean_data.get("profile_id", "academic_docx")
-        if isinstance(profile, str):
-            profile = PROFILE_REGISTRY.get(profile, PROFILE_REGISTRY.get(profile_id, PROFILE_ACADEMIC_DOCX))
-        elif profile is None:
-            profile = PROFILE_REGISTRY.get(profile_id, PROFILE_ACADEMIC_DOCX)
+        requested_prof = profile if profile is not None else clean_data.get("profile_id", "academic_docx")
+        if isinstance(requested_prof, GeneratorProfile):
+            profile = requested_prof
+        elif isinstance(requested_prof, str):
+            prof_key = requested_prof.strip().lower()
+            if prof_key not in PROFILE_REGISTRY:
+                raise TemplateError(f"Unknown generator profile ID '{requested_prof}'")
+            profile = PROFILE_REGISTRY[prof_key]
+        else:
+            raise InvalidRecipeError(f"Invalid profile specification: {profile}")
 
-        # Attendance deserialization
-        if profile.profile_id in ("attendance_docx", "attendance") or ("info_binding" in clean_data and "matrix_binding" in clean_data):
-            info_d = clean_data.get("info_binding", {})
-            matrix_d = clean_data.get("matrix_binding", {})
+        # Attendance deserialization & profile compatibility enforcement
+        is_attendance_profile = profile.profile_id in ("attendance_docx", "attendance")
+        has_attendance_bindings = "info_binding" in clean_data or "matrix_binding" in clean_data
+
+        if not is_attendance_profile and has_attendance_bindings:
+            raise InvalidRecipeError(
+                f"Attendance data supplied with non-attendance profile '{profile.profile_id}'."
+            )
+
+        if is_attendance_profile:
+            if not has_attendance_bindings:
+                raise InvalidRecipeError(
+                    f"Academic data supplied with attendance profile '{profile.profile_id}'."
+                )
+
+            info_d = clean_data.get("info_binding")
+            matrix_d = clean_data.get("matrix_binding")
+            if not isinstance(info_d, dict):
+                raise InvalidRecipeError("Attendance recipe requires dictionary 'info_binding'.")
+            if not isinstance(matrix_d, dict):
+                raise InvalidRecipeError("Attendance recipe requires dictionary 'matrix_binding'.")
+
+            # Check collisions
+            if clean_data.get("collisions"):
+                raise AmbiguousTemplateError(
+                    f"Serialized recipe contains unresolved collisions: {clean_data['collisions']}"
+                )
+
+            tbl_idx = info_d.get("table_index")
+            if tbl_idx is None or not isinstance(tbl_idx, int) or tbl_idx < 0:
+                raise InvalidRecipeError("Attendance info_binding missing or invalid non-negative table_index.")
+
+            bindings = info_d.get("bindings")
+            if not bindings or not isinstance(bindings, dict):
+                raise InvalidRecipeError("Attendance info_binding missing or empty bindings dictionary.")
+
+            m_tbl_idx = matrix_d.get("table_index")
+            if m_tbl_idx is None or not isinstance(m_tbl_idx, int) or m_tbl_idx < 0:
+                raise InvalidRecipeError("Attendance matrix_binding missing or invalid non-negative table_index.")
+
+            if tbl_idx == m_tbl_idx:
+                raise AmbiguousTemplateError(
+                    f"Table identity collision: info table and matrix table target identical index {tbl_idx}."
+                )
+
+            name_col = matrix_d.get("name_col")
+            id_col = matrix_d.get("id_col")
+            if name_col is None or not isinstance(name_col, int) or name_col < 0:
+                raise InvalidRecipeError("Attendance matrix missing or invalid name_col.")
+            if id_col is None or not isinstance(id_col, int) or id_col < 0:
+                raise InvalidRecipeError("Attendance matrix missing or invalid id_col.")
+
+            date_start = matrix_d.get("date_columns_start")
+            if date_start is None or not isinstance(date_start, int) or date_start < 0:
+                raise InvalidRecipeError("Attendance matrix missing or invalid date_columns_start.")
+
+            session_cap = matrix_d.get("template_session_capacity", 0)
+            if not isinstance(session_cap, int) or session_cap <= 0:
+                raise InvalidRecipeError("Attendance matrix template_session_capacity must be an integer > 0.")
+
+            st_row = matrix_d.get("student_template_row_index")
+            if st_row is None or not isinstance(st_row, int) or st_row < 0:
+                raise InvalidRecipeError("Attendance matrix missing or invalid student_template_row_index.")
+
             info_binding = AttendanceInfoBinding.from_dict(info_d)
             matrix_binding = AttendanceMatrixBinding.from_dict(matrix_d)
             metadata = dict(clean_data.get("metadata", {}))
             if "output_folder" not in metadata:
                 metadata["output_folder"] = "Attendance"
+            metadata["output_folder"] = validate_output_folder(metadata["output_folder"], default="Attendance")
+
             return ValidatedAttendanceTemplateRecipe(
                 schema_version=RECIPE_SCHEMA_VERSION,
-                profile_id=clean_data.get("profile_id", "attendance_docx"),
+                profile_id=profile.profile_id,
                 fingerprint=clean_data.get("fingerprint", ""),
                 template_path=clean_data.get("template_path", ""),
                 info_binding=info_binding,
@@ -372,7 +449,7 @@ class RecipeValidator:
         # Construct candidate to run full validation checks
         candidate = RawTemplateRecipeCandidate(
             template_path=clean_data.get("template_path", ""),
-            profile_id=profile_id,
+            profile_id=profile.profile_id,
             fingerprint=clean_data.get("fingerprint", ""),
             roster_candidate=roster_data,
             header_candidates=header_candidates,

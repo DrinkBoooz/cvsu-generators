@@ -856,6 +856,17 @@ def test_m18_summary_region_reordering(tmp_path):
     assert r1_cells[-2].text == "lc"
     assert r1_cells[-1].text == "lb"
 
+    # Verify tblGrid has reordered column widths matching r (133), lc (208), lb (212)
+    grid_cols = out_doc.tables[1]._tbl.tblGrid.findall(docx.oxml.ns.qn("w:gridCol"))
+    widths = [int(gc.get(docx.oxml.ns.qn("w:w"))) for gc in grid_cols]
+    assert widths[-3:] == [133, 208, 212], f"Expected widths [133, 208, 212] for reordered ('r', 'lc', 'lb'), got {widths[-3:]}"
+
+    # Verify student row cells also use the semantic reordered widths
+    st_cells = out_doc.tables[1].rows[2].cells
+    assert st_cells[-3]._tc.get_or_add_tcPr().tcW.w == 133
+    assert st_cells[-2]._tc.get_or_add_tcPr().tcW.w == 208
+    assert st_cells[-1]._tc.get_or_add_tcPr().tcW.w == 212
+
 
 def test_m19_additional_unrelated_matrix_column(tmp_path):
     """M19: Additional column inserted before date columns.
@@ -873,14 +884,16 @@ def test_m19_additional_unrelated_matrix_column(tmp_path):
     for r_idx, r in enumerate(attn_tbl.rows):
         txt = "SECTION" if r_idx == 0 else ("SEC" if r_idx == 1 else "")
         tc = parse_xml(f'<w:tc {ns}><w:p><w:r><w:t>{txt}</w:t></w:r></w:p></w:tc>')
-        r._tr.insert(3, tc)
+        tcs = [c for c in r._tr if c.tag.endswith('tc')]
+        insert_idx = r._tr.index(tcs[3]) if len(tcs) > 3 else len(r._tr)
+        r._tr.insert(insert_idx, tc)
     doc.save(mut_path)
 
     resolver = TemplateRecipeResolver.get_instance()
     recipe = resolver.resolve(mut_path, profile_id="attendance_docx")
     assert isinstance(recipe, ValidatedAttendanceTemplateRecipe)
-    # date_columns_start is now >= 3
-    assert recipe.matrix_binding.date_columns_start >= 3
+    # date_columns_start is now 4 (offset by inserted column)
+    assert recipe.matrix_binding.date_columns_start == 4
 
     out_path = str(tmp_path / "out_m19.docx")
     AttendanceGenerator(mut_path, recipe).generate(
@@ -896,6 +909,14 @@ def test_m19_additional_unrelated_matrix_column(tmp_path):
         students=ATTENDANCE_STUDENTS,
     )
     assert os.path.exists(out_path)
+    out_doc = docx.Document(out_path)
+    out_t = out_doc.tables[1]
+    # Extra column preserved before date columns
+    assert out_t.rows[0].cells[3].text == "SECTION"
+    assert out_t.rows[1].cells[3].text == "SEC"
+    # Date region starts at col 4
+    assert "WEEK 1" in out_t.rows[0].cells[4].text
+    assert out_t.rows[1].cells[4].text != ""
 
 
 def test_m20_student_template_row_relocation(tmp_path):
@@ -908,31 +929,30 @@ def test_m20_student_template_row_relocation(tmp_path):
 
     doc = docx.Document(mut_path)
     attn_tbl = doc.tables[1]
-    # Add decorative guidance row before the student row
+    # Add decorative guidance row before the student row with unmistakable marker text
     guide_row = copy.deepcopy(attn_tbl.rows[2]._tr)
     tcs = guide_row.findall(docx.oxml.ns.qn("w:tc"))
-    for tc in tcs[1:]:
+    for tc in tcs:
         for t in tc.iter(docx.oxml.ns.qn("w:t")):
             t.text = ""
-    t_first = list(tcs[0].iter(docx.oxml.ns.qn("w:t")))
-    if t_first:
-        t_first[0].text = "GUIDE"
-        for t in t_first[1:]:
-            t.text = ""
-    else:
-        p = tcs[0].find(docx.oxml.ns.qn("w:p"))
-        r = docx.oxml.OxmlElement("w:r")
-        t = docx.oxml.OxmlElement("w:t")
-        t.text = "GUIDE"
-        r.append(t)
-        p.append(r)
+    # Explicitly set marker text in first cell
+    p = tcs[0].find(docx.oxml.ns.qn("w:p"))
+    if p is None:
+        p = docx.oxml.OxmlElement("w:p")
+        tcs[0].append(p)
+    r = docx.oxml.OxmlElement("w:r")
+    t = docx.oxml.OxmlElement("w:t")
+    t.text = "GUIDE ROW - DO NOT CLONE"
+    r.append(t)
+    p.append(r)
     attn_tbl.rows[1]._tr.addnext(guide_row)
     doc.save(mut_path)
 
     resolver = TemplateRecipeResolver.get_instance()
     recipe = resolver.resolve(mut_path, profile_id="attendance_docx")
     assert isinstance(recipe, ValidatedAttendanceTemplateRecipe)
-    assert recipe.matrix_binding.student_template_row_index >= 2
+    # Real prototype student row moved to row 3 (greater than 2)
+    assert recipe.matrix_binding.student_template_row_index == 3
 
     out_path = str(tmp_path / "out_m20.docx")
     AttendanceGenerator(mut_path, recipe).generate(
@@ -949,7 +969,13 @@ def test_m20_student_template_row_relocation(tmp_path):
     )
     assert os.path.exists(out_path)
     out_doc = docx.Document(out_path)
-    # Output must populate students
+    out_t = out_doc.tables[1]
     name_col = recipe.matrix_binding.name_col
-    assert "ALVAREZ, MARIA A." in out_doc.tables[1].rows[2].cells[name_col].text
+
+    # Output must populate students from the real prototype, NOT from guide row 2
+    assert "ALVAREZ, MARIA A." in out_t.rows[2].cells[name_col].text
+    # Prove that the guide row was NOT cloned into any student rows
+    for r in out_t.rows[2:]:
+        for c in r.cells:
+            assert "GUIDE ROW - DO NOT CLONE" not in c.text
 

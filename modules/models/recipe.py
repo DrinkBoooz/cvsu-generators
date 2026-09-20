@@ -91,9 +91,19 @@ class AttendanceMatrixBinding:
     summary_column_names: Tuple[str, ...]
     template_session_capacity: int
     template_student_row_capacity: int
+    week_template_cell_col: int = 3
+    summary_header0_cell_col: int = 7
+    date_template_cell_col: int = 3
+    summary_column_indices: Tuple[int, ...] = (7, 8, 9)
+    summary_header1_cell_cols: Tuple[int, ...] = (7, 8, 9)
+    student_date_template_cell_col: int = 3
+    student_summary_cell_cols: Tuple[int, ...] = (7, 8, 9)
 
     def __post_init__(self):
         object.__setattr__(self, "summary_column_names", tuple(self.summary_column_names))
+        object.__setattr__(self, "summary_column_indices", tuple(self.summary_column_indices))
+        object.__setattr__(self, "summary_header1_cell_cols", tuple(self.summary_header1_cell_cols))
+        object.__setattr__(self, "student_summary_cell_cols", tuple(self.student_summary_cell_cols))
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -109,10 +119,24 @@ class AttendanceMatrixBinding:
             "summary_column_names": list(self.summary_column_names),
             "template_session_capacity": self.template_session_capacity,
             "template_student_row_capacity": self.template_student_row_capacity,
+            "week_template_cell_col": self.week_template_cell_col,
+            "summary_header0_cell_col": self.summary_header0_cell_col,
+            "date_template_cell_col": self.date_template_cell_col,
+            "summary_column_indices": list(self.summary_column_indices),
+            "summary_header1_cell_cols": list(self.summary_header1_cell_cols),
+            "student_date_template_cell_col": self.student_date_template_cell_col,
+            "student_summary_cell_cols": list(self.student_summary_cell_cols),
         }
 
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> "AttendanceMatrixBinding":
+        date_start = d.get("date_columns_start", 3)
+        session_cap = d.get("template_session_capacity", 4)
+        summary_count = d.get("summary_columns_count", 3)
+        summary_names = tuple(d.get("summary_column_names", ("lb", "lc", "r")))
+        total_cols = date_start + session_cap + summary_count
+        default_summary_indices = tuple(range(date_start + session_cap, total_cols))
+
         return cls(
             table_index=d["table_index"],
             header_row0_index=d.get("header_row0_index", 0),
@@ -121,11 +145,18 @@ class AttendanceMatrixBinding:
             no_col=d.get("no_col", 0),
             name_col=d.get("name_col", 1),
             id_col=d.get("id_col", 2),
-            date_columns_start=d.get("date_columns_start", 3),
-            summary_columns_count=d.get("summary_columns_count", 3),
-            summary_column_names=tuple(d.get("summary_column_names", ("lb", "lc", "r"))),
-            template_session_capacity=d.get("template_session_capacity", 4),
+            date_columns_start=date_start,
+            summary_columns_count=summary_count,
+            summary_column_names=summary_names,
+            template_session_capacity=session_cap,
             template_student_row_capacity=d.get("template_student_row_capacity", 40),
+            week_template_cell_col=d.get("week_template_cell_col", date_start),
+            summary_header0_cell_col=d.get("summary_header0_cell_col", default_summary_indices[0] if default_summary_indices else date_start + session_cap),
+            date_template_cell_col=d.get("date_template_cell_col", date_start),
+            summary_column_indices=tuple(d.get("summary_column_indices", default_summary_indices)),
+            summary_header1_cell_cols=tuple(d.get("summary_header1_cell_cols", default_summary_indices)),
+            student_date_template_cell_col=d.get("student_date_template_cell_col", date_start),
+            student_summary_cell_cols=tuple(d.get("student_summary_cell_cols", default_summary_indices)),
         )
 
 
@@ -273,6 +304,7 @@ class GeneratorProfile:
     requires_capacity: bool = False
     supports_auto_scaling: bool = True
     allowed_fields: Optional[Tuple[str, ...]] = None
+    canonical_inspector: str = "DocxTemplateInspector"
 
 
 # Predefined generator profiles
@@ -299,6 +331,7 @@ PROFILE_ACADEMIC_DOCX = GeneratorProfile(
         "period",
         "units",
     ),
+    canonical_inspector="DocxTemplateInspector",
 )
 
 PROFILE_GRADE_SHEET_XLSX = GeneratorProfile(
@@ -308,6 +341,7 @@ PROFILE_GRADE_SHEET_XLSX = GeneratorProfile(
     prohibited_fields=(),
     requires_capacity=True,
     supports_auto_scaling=False,
+    canonical_inspector="XlsxTemplateInspector",
 )
 
 PROFILE_CUSTOM_DOCX = GeneratorProfile(
@@ -317,6 +351,7 @@ PROFILE_CUSTOM_DOCX = GeneratorProfile(
     prohibited_fields=(),
     requires_capacity=False,
     supports_auto_scaling=True,
+    canonical_inspector="DocxTemplateInspector",
 )
 
 PROFILE_ATTENDANCE_DOCX = GeneratorProfile(
@@ -326,6 +361,7 @@ PROFILE_ATTENDANCE_DOCX = GeneratorProfile(
     prohibited_fields=(),
     requires_capacity=True,
     supports_auto_scaling=True,
+    canonical_inspector="AttendanceTemplateInspector",
 )
 
 PROFILE_REGISTRY: Dict[str, GeneratorProfile] = {
@@ -337,10 +373,13 @@ PROFILE_REGISTRY: Dict[str, GeneratorProfile] = {
     "attendance": PROFILE_ATTENDANCE_DOCX,
     # Specific subprofiles mapping to academic_docx
     "syllabus": PROFILE_ACADEMIC_DOCX,
+    "exam_returns": PROFILE_ACADEMIC_DOCX,
     "exam_midterm": PROFILE_ACADEMIC_DOCX,
     "exam_finals": PROFILE_ACADEMIC_DOCX,
+    "tos": PROFILE_ACADEMIC_DOCX,
     "tos_midterm": PROFILE_ACADEMIC_DOCX,
     "tos_finals": PROFILE_ACADEMIC_DOCX,
+    "grade_discussion": PROFILE_ACADEMIC_DOCX,
     "grade_midterm": PROFILE_ACADEMIC_DOCX,
     "grade_finals": PROFILE_ACADEMIC_DOCX,
 }

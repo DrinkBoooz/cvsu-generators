@@ -1,6 +1,8 @@
+import copy
 import os
 import shutil
 import tempfile
+from datetime import date
 import docx
 import openpyxl
 import pytest
@@ -503,18 +505,25 @@ def test_e14_ambiguous_attendance_matrices(tmp_path):
 
 
 def test_e15_ambiguous_date_session_structure(tmp_path):
-    """E15: Conflicting structural signals in template raise AmbiguousTemplateError."""
+    """E15: Conflicting or ambiguous date/session structure in template raises AmbiguousTemplateError."""
     candidate = RawAttendanceTemplateRecipeCandidate(
         template_path=str(tmp_path / "dummy_att.docx"),
         profile_id="attendance_docx",
         fingerprint="dummy_fp",
         info_candidate={"table_index": 0, "bindings": {"course_code_title": (0, 1)}},
-        matrix_candidate=None,
+        matrix_candidate={
+            "table_index": 1,
+            "name_col": 1,
+            "id_col": 2,
+            "date_columns_start": 3,
+            "template_session_capacity": 4,
+            "student_template_row_index": 2,
+        },
         metadata={},
         collisions=[
             {
-                "type": "ambiguous_info_table",
-                "candidates": [0, 1],
+                "type": "ambiguous_date_structure",
+                "candidates": [(1, 3), (1, 5)],
             }
         ],
     )
@@ -637,4 +646,363 @@ def test_direct_recipe_path_enforcement(tmp_path):
             year=2026,
             class_day="Mon",
         )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TASK 1: Resolver Profile-Aware Dispatch Tests
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def test_resolver_unknown_profile_rejection(tmp_path):
+    """Task 1: Unknown profile IDs must fail closed with TemplateError."""
+    resolver = TemplateRecipeResolver()
+    dummy_file = tmp_path / "dummy.docx"
+    dummy_file.write_text("dummy")
+
+    # get_inspector must raise TemplateError on unknown profile
+    with pytest.raises(TemplateError) as exc_info:
+        resolver.get_inspector(str(dummy_file), profile_id="unknown_profile_xyz")
+    assert "Unknown generator profile ID" in str(exc_info.value)
+
+    # resolve_recipe must raise TemplateError on unknown profile
+    with pytest.raises(TemplateError) as exc_info:
+        resolver.resolve_recipe(str(dummy_file), profile_id="unknown_profile_xyz")
+    assert "Unknown generator profile ID" in str(exc_info.value)
+
+
+def test_resolver_canonical_attendance_dispatch(tmp_path):
+    """Task 1: .docx + attendance_docx canonical dispatch selects AttendanceTemplateInspector."""
+    resolver = TemplateRecipeResolver()
+    dummy_file = tmp_path / "dummy.docx"
+    dummy_file.write_text("dummy")
+
+    inspector = resolver.get_inspector(str(dummy_file), profile_id="attendance_docx")
+    assert isinstance(inspector, AttendanceTemplateInspector)
+
+    # Subprofile alias "attendance" also maps to AttendanceTemplateInspector
+    inspector2 = resolver.get_inspector(str(dummy_file), profile_id="attendance")
+    assert isinstance(inspector2, AttendanceTemplateInspector)
+
+
+def test_resolver_legacy_registration_does_not_override_canonical_attendance(tmp_path):
+    """Task 1: Legacy extension-only registration cannot override canonical attendance dispatch."""
+    resolver = TemplateRecipeResolver()
+    dummy_file = tmp_path / "dummy.docx"
+    dummy_file.write_text("dummy")
+
+    class LegacyCustomDocxInspector:
+        pass
+
+    # Register legacy .docx override
+    resolver.register_inspector(".docx", LegacyCustomDocxInspector)
+
+    # For attendance_docx, legacy override MUST NOT take precedence over canonical inspector
+    attendance_insp = resolver.get_inspector(str(dummy_file), profile_id="attendance_docx")
+    assert isinstance(attendance_insp, AttendanceTemplateInspector)
+    assert not isinstance(attendance_insp, LegacyCustomDocxInspector)
+
+
+def test_resolver_exact_profile_registration_override(tmp_path):
+    """Task 1: Exact (extension, profile_id) registration overrides canonical mapping when intentional."""
+    resolver = TemplateRecipeResolver()
+    dummy_file = tmp_path / "dummy.docx"
+    dummy_file.write_text("dummy")
+
+    class CustomAttendanceInspector:
+        pass
+
+    resolver.register_profile_inspector(".docx", "attendance_docx", CustomAttendanceInspector)
+    insp = resolver.get_inspector(str(dummy_file), profile_id="attendance_docx")
+    assert isinstance(insp, CustomAttendanceInspector)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TASK 2: validate_dict() Attendance Validation & Profile Security Tests
+# ═══════════════════════════════════════════════════════════════════════════════
+
+VALID_ATTENDANCE_DICT = {
+    "schema_version": RECIPE_SCHEMA_VERSION,
+    "profile_id": "attendance_docx",
+    "fingerprint": "test_fp",
+    "template_path": "test.docx",
+    "info_binding": {
+        "table_index": 0,
+        "bindings": {"course_code_title": [0, 1], "instructor": [1, 1]},
+    },
+    "matrix_binding": {
+        "table_index": 1,
+        "header_row0_index": 0,
+        "header_row1_index": 1,
+        "student_template_row_index": 2,
+        "no_col": 0,
+        "name_col": 1,
+        "id_col": 2,
+        "date_columns_start": 3,
+        "summary_columns_count": 3,
+        "summary_column_names": ["lb", "lc", "r"],
+        "template_session_capacity": 4,
+        "template_student_row_capacity": 40,
+    },
+    "metadata": {"output_folder": "Attendance"},
+}
+
+VALID_ACADEMIC_DICT = {
+    "schema_version": RECIPE_SCHEMA_VERSION,
+    "profile_id": "academic_docx",
+    "fingerprint": "test_fp",
+    "template_path": "test.docx",
+    "header_bindings": {
+        "instructor": {
+            "cell_type": "docx_table",
+            "target": [0, 0, 1],
+            "field": "instructor",
+            "confidence": 1.0,
+        }
+    },
+    "signature_bindings": {},
+    "metadata": {"output_folder": "CEIT_Forms"},
+}
+
+
+def test_validate_dict_attendance_missing_info():
+    """Task 2: Deserialized attendance recipe missing info_binding raises InvalidRecipeError."""
+    bad_data = dict(VALID_ATTENDANCE_DICT)
+    bad_data.pop("info_binding")
+    with pytest.raises(InvalidRecipeError) as exc_info:
+        RecipeValidator.validate_dict(bad_data, profile="attendance_docx")
+    assert "attendance serialized recipe" in str(exc_info.value) or "info_binding" in str(exc_info.value)
+
+
+def test_validate_dict_attendance_missing_matrix():
+    """Task 2: Deserialized attendance recipe missing matrix_binding raises InvalidRecipeError."""
+    bad_data = dict(VALID_ATTENDANCE_DICT)
+    bad_data.pop("matrix_binding")
+    with pytest.raises(InvalidRecipeError) as exc_info:
+        RecipeValidator.validate_dict(bad_data, profile="attendance_docx")
+    assert "attendance serialized recipe" in str(exc_info.value) or "matrix_binding" in str(exc_info.value)
+
+
+def test_validate_dict_attendance_negative_date_start():
+    """Task 2: Deserialized attendance recipe with negative date_columns_start raises InvalidRecipeError."""
+    bad_data = copy.deepcopy(VALID_ATTENDANCE_DICT)
+    bad_data["matrix_binding"]["date_columns_start"] = -1
+    with pytest.raises(InvalidRecipeError) as exc_info:
+        RecipeValidator.validate_dict(bad_data, profile="attendance_docx")
+    assert "invalid date_columns_start" in str(exc_info.value)
+
+
+def test_validate_dict_attendance_zero_session_capacity():
+    """Task 2: Deserialized attendance recipe with zero session capacity raises InvalidRecipeError."""
+    bad_data = copy.deepcopy(VALID_ATTENDANCE_DICT)
+    bad_data["matrix_binding"]["template_session_capacity"] = 0
+    with pytest.raises(InvalidRecipeError) as exc_info:
+        RecipeValidator.validate_dict(bad_data, profile="attendance_docx")
+    assert "template_session_capacity must be an integer > 0" in str(exc_info.value)
+
+
+def test_validate_dict_attendance_invalid_student_row():
+    """Task 2: Deserialized attendance recipe with negative student_template_row_index raises InvalidRecipeError."""
+    bad_data = copy.deepcopy(VALID_ATTENDANCE_DICT)
+    bad_data["matrix_binding"]["student_template_row_index"] = -1
+    with pytest.raises(InvalidRecipeError) as exc_info:
+        RecipeValidator.validate_dict(bad_data, profile="attendance_docx")
+    assert "invalid student_template_row_index" in str(exc_info.value)
+
+
+def test_validate_dict_attendance_with_academic_profile():
+    """Task 2: Supplying attendance serialized data with academic profile raises InvalidRecipeError."""
+    with pytest.raises(InvalidRecipeError) as exc_info:
+        RecipeValidator.validate_dict(VALID_ATTENDANCE_DICT, profile="academic_docx")
+    assert "Attendance data supplied with non-attendance profile" in str(exc_info.value)
+
+
+def test_validate_dict_academic_with_attendance_profile():
+    """Task 2: Supplying academic serialized data with attendance profile raises InvalidRecipeError."""
+    with pytest.raises(InvalidRecipeError) as exc_info:
+        RecipeValidator.validate_dict(VALID_ACADEMIC_DICT, profile="attendance_docx")
+    assert "Academic data supplied with attendance profile" in str(exc_info.value)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TASK 5: Attendance Capacity Model Tests
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def test_attendance_capacity_below_template_capacity(tmp_path):
+    """Task 5: Generating with sessions below template capacity succeeds."""
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = os.path.join(repo_root, "attendance", "template lec.docx")
+    mut_path = str(tmp_path / "mut_cap_below.docx")
+    shutil.copy2(src, mut_path)
+
+    resolver = TemplateRecipeResolver.get_instance()
+    recipe = resolver.resolve(mut_path, profile_id="attendance_docx")
+    # Template has 4 date columns capacity
+    assert recipe.matrix_binding.template_session_capacity == 4
+
+    out_path = str(tmp_path / "out_below.docx")
+    # Request 3 sessions (3 dates in month)
+    AttendanceGenerator(mut_path, recipe).generate(
+        output_path=out_path,
+        course_code_title="COSC 101",
+        class_schedule="08:00AM-11:00AM / Mon",
+        semester_ay="1st Sem",
+        room_assignment="CL3",
+        instructor="DR. DELA CRUZ",
+        months=[12],
+        year=2026,
+        weekdays=[0],
+        students=[("STUDENT 1", "20230001")],
+        start_bound=(12, 1),
+        end_bound=(12, 22),  # 3 Mondays: Dec 7, 14, 21
+    )
+    assert os.path.exists(out_path)
+
+
+def test_attendance_capacity_exactly_at_template_capacity(tmp_path):
+    """Task 5: Generating with sessions exactly equal to template capacity succeeds."""
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = os.path.join(repo_root, "attendance", "template lec.docx")
+    mut_path = str(tmp_path / "mut_cap_exact.docx")
+    shutil.copy2(src, mut_path)
+
+    resolver = TemplateRecipeResolver.get_instance()
+    recipe = resolver.resolve(mut_path, profile_id="attendance_docx")
+    assert recipe.matrix_binding.template_session_capacity == 4
+
+    out_path = str(tmp_path / "out_exact.docx")
+    # Dec 2026 has 4 Mondays: 7, 14, 21, 28
+    AttendanceGenerator(mut_path, recipe).generate(
+        output_path=out_path,
+        course_code_title="COSC 101",
+        class_schedule="08:00AM-11:00AM / Mon",
+        semester_ay="1st Sem",
+        room_assignment="CL3",
+        instructor="DR. DELA CRUZ",
+        months=[12],
+        year=2026,
+        weekdays=[0],
+        students=[("STUDENT 1", "20230001")],
+    )
+    assert os.path.exists(out_path)
+
+
+def test_attendance_capacity_above_template_capacity_legal_expansion(tmp_path):
+    """Task 5: Generating with sessions above template capacity legally expands when DATE_W >= 25."""
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = os.path.join(repo_root, "attendance", "template lec.docx")
+    mut_path = str(tmp_path / "mut_cap_expand.docx")
+    shutil.copy2(src, mut_path)
+
+    resolver = TemplateRecipeResolver.get_instance()
+    recipe = resolver.resolve(mut_path, profile_id="attendance_docx")
+    assert recipe.matrix_binding.template_session_capacity == 4
+
+    out_path = str(tmp_path / "out_expand.docx")
+    # Request 8 sessions (e.g. Mon & Thu in Dec 2026 = 8 sessions). DATE_W = 2423 // 8 = 302 >= 25.
+    AttendanceGenerator(mut_path, recipe).generate(
+        output_path=out_path,
+        course_code_title="COSC 101",
+        class_schedule="08:00AM-10:00AM / Mon, Thu",
+        semester_ay="1st Sem",
+        room_assignment="CL3",
+        instructor="DR. DELA CRUZ",
+        months=[12],
+        year=2026,
+        weekdays=[0, 3],
+        students=[("STUDENT 1", "20230001")],
+    )
+    assert os.path.exists(out_path)
+    out_doc = docx.Document(out_path)
+    # Output table must have expanded date columns to accommodate 10 sessions (5 weeks * 2 days)
+    r1 = out_doc.tables[1].rows[1]
+    # date columns are between date_columns_start (col 3) and summary columns (last 3)
+    num_date_cols = len(r1.cells) - 3 - 3
+    assert num_date_cols == 10
+    assert num_date_cols > recipe.matrix_binding.template_session_capacity
+
+
+def test_attendance_capacity_above_printable_width_threshold_fails(tmp_path):
+    """Task 5: Generating with required sessions exceeding printable width (DATE_W < 25) fails closed."""
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = os.path.join(repo_root, "attendance", "template lec.docx")
+    mut_path = str(tmp_path / "mut_cap_unprintable.docx")
+    shutil.copy2(src, mut_path)
+
+    resolver = TemplateRecipeResolver.get_instance()
+    recipe = resolver.resolve(mut_path, profile_id="attendance_docx")
+
+    out_path = str(tmp_path / "out_unprintable.docx")
+    # Request 7 days a week for 6 months (massive session count, DATE_W < 25)
+    with pytest.raises(TemplateError) as exc_info:
+        AttendanceGenerator(mut_path, recipe).generate(
+            output_path=out_path,
+            course_code_title="COSC 101",
+            class_schedule="08:00AM-10:00AM / Mon, Tue, Wed, Thu, Fri, Sat, Sun",
+            semester_ay="1st Sem",
+            room_assignment="CL3",
+            instructor="DR. DELA CRUZ",
+            months=[1, 2, 3, 4, 5, 6],
+            year=2026,
+            weekdays=[0, 1, 2, 3, 4, 5, 6],
+            students=[("STUDENT 1", "20230001")],
+        )
+    assert "exceeds printable page width capacity" in str(exc_info.value)
+
+
+def test_attendance_student_count_below_template_minimum(tmp_path):
+    """Task 5: When student count is below generator minimum (40), exactly 40 rows are rendered."""
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = os.path.join(repo_root, "attendance", "template lec.docx")
+    mut_path = str(tmp_path / "mut_stu_min.docx")
+    shutil.copy2(src, mut_path)
+
+    resolver = TemplateRecipeResolver.get_instance()
+    recipe = resolver.resolve(mut_path, profile_id="attendance_docx")
+
+    out_path = str(tmp_path / "out_stu_min.docx")
+    # 2 students
+    AttendanceGenerator(mut_path, recipe).generate(
+        output_path=out_path,
+        course_code_title="COSC 101",
+        class_schedule="08:00AM-11:00AM / Mon",
+        semester_ay="1st Sem",
+        room_assignment="CL3",
+        instructor="DR. DELA CRUZ",
+        months=[12],
+        year=2026,
+        weekdays=[0],
+        students=[("STUDENT 1", "20230001"), ("STUDENT 2", "20230002")],
+    )
+    out_doc = docx.Document(out_path)
+    # 2 header rows + 40 student rows = 42 rows
+    assert len(out_doc.tables[1].rows) == 42
+
+
+def test_attendance_student_count_above_template_capacity(tmp_path):
+    """Task 5: When student count exceeds template capacity (40), renders all students without truncation."""
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = os.path.join(repo_root, "attendance", "template lec.docx")
+    mut_path = str(tmp_path / "mut_stu_max.docx")
+    shutil.copy2(src, mut_path)
+
+    resolver = TemplateRecipeResolver.get_instance()
+    recipe = resolver.resolve(mut_path, profile_id="attendance_docx")
+
+    out_path = str(tmp_path / "out_stu_max.docx")
+    # 45 students
+    many_students = [(f"STUDENT {i}", f"2023{i:04d}") for i in range(1, 46)]
+    AttendanceGenerator(mut_path, recipe).generate(
+        output_path=out_path,
+        course_code_title="COSC 101",
+        class_schedule="08:00AM-11:00AM / Mon",
+        semester_ay="1st Sem",
+        room_assignment="CL3",
+        instructor="DR. DELA CRUZ",
+        months=[12],
+        year=2026,
+        weekdays=[0],
+        students=many_students,
+    )
+    out_doc = docx.Document(out_path)
+    # 2 header rows + 45 student rows = 47 rows
+    assert len(out_doc.tables[1].rows) == 47
 

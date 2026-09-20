@@ -36,25 +36,6 @@ class TemplateRecipeResolver:
     Dispatches inspectors using 4-tier profile-aware precedence.
     """
 
-    # Canonical profile-to-inspector mapping
-    CANONICAL_INSPECTORS = {
-        (".docx", "attendance_docx"): "AttendanceTemplateInspector",
-        (".docx", "attendance"): "AttendanceTemplateInspector",
-        (".docx", "academic_docx"): "DocxTemplateInspector",
-        (".docx", "custom_docx"): "DocxTemplateInspector",
-        (".docx", "syllabus"): "DocxTemplateInspector",
-        (".docx", "exam_midterm"): "DocxTemplateInspector",
-        (".docx", "exam_finals"): "DocxTemplateInspector",
-        (".docx", "tos_midterm"): "DocxTemplateInspector",
-        (".docx", "tos_finals"): "DocxTemplateInspector",
-        (".docx", "grade_midterm"): "DocxTemplateInspector",
-        (".docx", "grade_finals"): "DocxTemplateInspector",
-        (".xlsx", "grade_sheet_xlsx"): "XlsxTemplateInspector",
-        (".xlsx", "grade_sheet"): "XlsxTemplateInspector",
-        (".xls", "grade_sheet_xlsx"): "XlsxTemplateInspector",
-        (".xls", "grade_sheet"): "XlsxTemplateInspector",
-    }
-
     def __init__(self):
         # Cache map: (absolute_path, profile_id, fingerprint, schema_version) -> ValidatedRecipeBase
         self._cache: Dict[Tuple[str, str, str, int], ValidatedRecipeBase] = {}
@@ -87,56 +68,48 @@ class TemplateRecipeResolver:
     def get_inspector(self, file_path: str, profile_id: str = "academic_docx") -> Any:
         """
         Selects inspector following authoritative 4-tier precedence:
-        1. Exact (extension, profile_id) registration
-        2. Canonical profile mapping
-        3. Legacy extension-only registration
-        4. Unsupported -> TemplateError
+        1. Exact (extension, profile_id) registration override
+        2. Canonical inspector declared by the profile registry
+        3. Narrowly defined legacy extension fallback only where safe
+        4. Otherwise -> TemplateError
         """
         ext = os.path.splitext(file_path)[1].lower()
         prof = str(profile_id).strip().lower()
+
+        # Unknown profile IDs fail closed
+        if prof not in PROFILE_REGISTRY:
+            raise TemplateError(f"Unknown generator profile ID '{profile_id}' for '{file_path}'")
+
+        profile = PROFILE_REGISTRY[prof]
 
         # 1. Exact (extension, profile_id) registration override
         if (ext, prof) in self._exact_inspectors:
             insp = self._exact_inspectors[(ext, prof)]
             return insp() if isinstance(insp, type) else insp
 
-        # 2. Explicit extension registration override
-        if ext in self._inspectors:
+        # 2. Canonical inspector declared by the profile registry
+        canonical_name = getattr(profile, "canonical_inspector", None)
+        if canonical_name == "AttendanceTemplateInspector" and ext == ".docx":
+            from modules.parsers.template_inspector import AttendanceTemplateInspector
+            return AttendanceTemplateInspector()
+        elif canonical_name == "DocxTemplateInspector" and ext == ".docx":
+            from modules.parsers.template_inspector import DocxTemplateInspector
+            return DocxTemplateInspector()
+        elif canonical_name == "XlsxTemplateInspector" and ext in (".xlsx", ".xls"):
+            from modules.parsers.template_inspector import XlsxTemplateInspector
+            return XlsxTemplateInspector()
+
+        # 3. Narrowly defined legacy extension fallback only where safe
+        # MUST NOT allow an extension-only registration to override canonical attendance dispatch
+        if ext in self._inspectors and prof not in ("attendance_docx", "attendance"):
             insp = self._inspectors[ext]
             return insp() if isinstance(insp, type) else insp
 
-        # 3. Canonical profile mapping
-        if (ext, prof) in self.CANONICAL_INSPECTORS:
-            name = self.CANONICAL_INSPECTORS[(ext, prof)]
-            if name == "AttendanceTemplateInspector":
-                from modules.parsers.template_inspector import AttendanceTemplateInspector
-                return AttendanceTemplateInspector()
-            elif name == "DocxTemplateInspector":
-                from modules.parsers.template_inspector import DocxTemplateInspector
-                return DocxTemplateInspector()
-            elif name == "XlsxTemplateInspector":
-                from modules.parsers.template_inspector import XlsxTemplateInspector
-                return XlsxTemplateInspector()
-
-        # Check by document_family in profile registry
-        profile_obj = PROFILE_REGISTRY.get(prof)
-        if profile_obj and (ext, profile_obj.document_family.lower()) in self.CANONICAL_INSPECTORS:
-            name = self.CANONICAL_INSPECTORS[(ext, profile_obj.document_family.lower())]
-            if name == "AttendanceTemplateInspector":
-                from modules.parsers.template_inspector import AttendanceTemplateInspector
-                return AttendanceTemplateInspector()
-            elif name == "DocxTemplateInspector":
-                from modules.parsers.template_inspector import DocxTemplateInspector
-                return DocxTemplateInspector()
-            elif name == "XlsxTemplateInspector":
-                from modules.parsers.template_inspector import XlsxTemplateInspector
-                return XlsxTemplateInspector()
-
-        # Extension fallbacks for backward compatibility
-        if ext == ".docx":
+        # Extension fallbacks for backward compatibility (non-attendance only)
+        if ext == ".docx" and prof not in ("attendance_docx", "attendance"):
             from modules.parsers.template_inspector import DocxTemplateInspector
             return DocxTemplateInspector()
-        elif ext in (".xlsx", ".xls"):
+        elif ext in (".xlsx", ".xls") and prof not in ("attendance_docx", "attendance"):
             from modules.parsers.template_inspector import XlsxTemplateInspector
             return XlsxTemplateInspector()
 
@@ -167,6 +140,12 @@ class TemplateRecipeResolver:
         if not os.path.exists(abs_path):
             raise FileNotFoundError(f"Template file not found: {abs_path}")
 
+        # Unknown profile IDs fail closed
+        prof = str(profile_id).strip().lower()
+        if prof not in PROFILE_REGISTRY:
+            raise TemplateError(f"Unknown generator profile ID '{profile_id}'")
+        profile = PROFILE_REGISTRY[prof]
+
         current_fp = self.compute_fingerprint(abs_path)
         cache_key = (abs_path, profile_id, current_fp, RECIPE_SCHEMA_VERSION)
         path_key = (abs_path, profile_id, RECIPE_SCHEMA_VERSION)
@@ -181,9 +160,6 @@ class TemplateRecipeResolver:
 
         if not force_reinspect and cache_key in self._cache:
             return self._cache[cache_key]
-
-        # Resolve generator profile
-        profile = PROFILE_REGISTRY.get(profile_id, PROFILE_ACADEMIC_DOCX)
 
         # Select inspector using 4-tier profile-aware dispatch
         inspector = self.get_inspector(abs_path, profile_id=profile_id)

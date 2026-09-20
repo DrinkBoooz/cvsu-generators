@@ -1166,6 +1166,12 @@ class AttendanceTemplateInspector:
         summary_count = len(summary_cols_sorted) if summary_cols_sorted else 3
         if not summary_names:
             summary_names = ["lb", "lc", "r"]
+            if summary_cols_sorted:
+                summary_column_indices = tuple(summary_cols_sorted)
+            else:
+                summary_column_indices = tuple(range(date_columns_start + 4, date_columns_start + 4 + summary_count))
+        else:
+            summary_column_indices = tuple(summary_cols)
 
         target_row_for_len = (
             rows[student_template_row_idx]
@@ -1179,6 +1185,40 @@ class AttendanceTemplateInspector:
         else:
             template_session_capacity = max(1, num_cols - date_columns_start - summary_count)
 
+        # Discover cell column spans for header row 0 to find summary header cell
+        row0_tcs = rows[header_row0_idx].findall(w("tc"))
+        r0_col = 0
+        r0_spans = []
+        for idx, tc in enumerate(row0_tcs):
+            span = 1
+            tcPr = tc.find(w("tcPr"))
+            if tcPr is not None:
+                gs = tcPr.find(w("gridSpan"))
+                if gs is not None:
+                    try:
+                        span = int(gs.attrib.get(w("val"), "1"))
+                    except ValueError:
+                        span = 1
+            r0_spans.append((idx, r0_col, r0_col + span))
+            r0_col += span
+
+        first_sum_col = summary_cols_sorted[0] if summary_cols_sorted else (date_columns_start + template_session_capacity)
+        summary_header0_cell_col = len(row0_tcs) - 1
+        for tc_idx, sc, ec in r0_spans:
+            if sc <= first_sum_col < ec:
+                summary_header0_cell_col = tc_idx
+                break
+            elif sc >= first_sum_col and tc_idx > 0:
+                summary_header0_cell_col = tc_idx
+                break
+
+        week_template_cell_col = date_columns_start if date_columns_start < len(row0_tcs) else (len(row0_tcs) - 1)
+        r1_tcs = rows[header_row1_idx].findall(w("tc")) if header_row1_idx is not None else row0_tcs
+        date_template_cell_col = date_columns_start if date_columns_start < len(r1_tcs) else 0
+
+        st_tcs = rows[student_template_row_idx].findall(w("tc")) if student_template_row_idx < len(rows) else r1_tcs
+        student_date_template_cell_col = date_columns_start if date_columns_start < len(st_tcs) else 0
+
         return {
             "table_index": tbl_idx,
             "header_row0_index": header_row0_idx,
@@ -1191,6 +1231,13 @@ class AttendanceTemplateInspector:
             "summary_columns_count": summary_count,
             "summary_column_names": tuple(summary_names),
             "template_session_capacity": template_session_capacity,
-            "template_student_row_capacity": max(student_rows_count, 40),
+            "template_student_row_capacity": max(student_rows_count, 1),
+            "week_template_cell_col": week_template_cell_col,
+            "summary_header0_cell_col": summary_header0_cell_col,
+            "date_template_cell_col": date_template_cell_col,
+            "summary_column_indices": summary_column_indices,
+            "summary_header1_cell_cols": summary_column_indices,
+            "student_date_template_cell_col": student_date_template_cell_col,
+            "student_summary_cell_cols": summary_column_indices,
         }
 

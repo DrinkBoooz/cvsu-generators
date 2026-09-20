@@ -294,7 +294,7 @@ def test_template_recipe_resolver_caching_and_stale_invalidation(tmp_path):
             )
 
     mock_insp = MockInspector()
-    resolver.register_inspector(".docx", mock_insp)
+    resolver.register_profile_inspector(".docx", "academic_docx", mock_insp)
 
     # 1. First resolution: inspection & validation occur
     r1 = resolver.resolve_recipe(str(tmpl_file), profile_id="academic_docx")

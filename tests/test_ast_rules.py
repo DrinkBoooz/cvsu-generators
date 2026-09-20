@@ -148,3 +148,100 @@ def test_ast_construction_token_never_in_to_dict():
             for subnode in ast.walk(node):
                 if isinstance(subnode, ast.Constant) and subnode.value == "_construction_token":
                     pytest.fail(f"Found '_construction_token' serialized in to_dict() at line {subnode.lineno}")
+
+
+def test_ast_no_positional_template_assumptions_in_generators():
+    """Rule 6: Production generators (especially attendance_gen.py) must not use
+    unexplained positional assumptions to select semantic template cells or rows:
+    - [-1] on row_cells, cells, or summary cells
+    - Direct fixed row constants (e.g. rows[2]) for student template extraction
+    - Direct selection of summary cells by last position or negative slicing (e.g. [:-3], [-3:])
+    - Direct selection of date template cells without recipe authority
+    """
+    attendance_gen_path = os.path.join(REPO_ROOT, "modules", "generators", "attendance_gen.py")
+    with open(attendance_gen_path, "r", encoding="utf-8") as f:
+        tree = ast.parse(f.read(), filename=attendance_gen_path)
+
+    violations = []
+    for node in ast.walk(tree):
+        # 1. Check for [-1] subscript on cell/row collections
+        if isinstance(node, ast.Subscript):
+            if isinstance(node.slice, ast.UnaryOp) and isinstance(node.slice.op, ast.USub):
+                if isinstance(node.slice.operand, ast.Constant):
+                    target_name = ""
+                    if isinstance(node.value, ast.Name):
+                        target_name = node.value.id
+                    elif isinstance(node.value, ast.Attribute):
+                        target_name = node.value.attr
+
+                    if any(kw in target_name.lower() for kw in ("cell", "row", "summary", "orig")):
+                        violations.append(
+                            f"Prohibited negative subscript '[ -{node.slice.operand.value} ]' on '{target_name}' at line {node.lineno}"
+                        )
+
+            # Check for negative slice like [:-3] or [-3:] on row/cells
+            if isinstance(node.slice, ast.Slice):
+                for bound in (node.slice.lower, node.slice.upper):
+                    if isinstance(bound, ast.UnaryOp) and isinstance(bound.op, ast.USub):
+                        target_name = ""
+                        if isinstance(node.value, ast.Name):
+                            target_name = node.value.id
+                        elif isinstance(node.value, ast.Attribute):
+                            target_name = node.value.attr
+                        if any(kw in target_name.lower() for kw in ("cell", "row", "summary")):
+                            violations.append(
+                                f"Prohibited negative slice on '{target_name}' at line {node.lineno}"
+                            )
+
+            # 2. Check for hardcoded student prototype row index rows[2] on tables
+            if isinstance(node.slice, ast.Constant) and node.slice.value == 2:
+                if isinstance(node.value, ast.Attribute) and node.value.attr == "rows":
+                    violations.append(
+                        f"Hardcoded row subscript 'rows[2]' for student prototype row at line {node.lineno}; must use recipe.matrix_binding.student_template_row_index"
+                    )
+
+    assert not violations, (
+        f"Found prohibited positional template assumptions in attendance_gen.py:\n"
+        + "\n".join(violations)
+    )
+
+
+def test_ast_rule_6_detector_catches_violations():
+    """Verify that Rule 6 AST detector correctly flags offending positional patterns."""
+    bad_code = """
+def bad_generator(matrix_tbl, row_cells):
+    summary_cell = row_cells[-1]
+    prototype_row = matrix_tbl.rows[2]
+    date_cells = row_cells[:-3]
+"""
+    tree = ast.parse(bad_code)
+    detected = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Subscript):
+            if isinstance(node.slice, ast.UnaryOp) and isinstance(node.slice.op, ast.USub):
+                if isinstance(node.slice.operand, ast.Constant):
+                    target_name = ""
+                    if isinstance(node.value, ast.Name):
+                        target_name = node.value.id
+                    elif isinstance(node.value, ast.Attribute):
+                        target_name = node.value.attr
+                    if any(kw in target_name.lower() for kw in ("cell", "row", "summary", "orig")):
+                        detected.append("negative_subscript")
+            if isinstance(node.slice, ast.Slice):
+                for bound in (node.slice.lower, node.slice.upper):
+                    if isinstance(bound, ast.UnaryOp) and isinstance(bound.op, ast.USub):
+                        target_name = ""
+                        if isinstance(node.value, ast.Name):
+                            target_name = node.value.id
+                        elif isinstance(node.value, ast.Attribute):
+                            target_name = node.value.attr
+                        if any(kw in target_name.lower() for kw in ("cell", "row", "summary")):
+                            detected.append("negative_slice")
+            if isinstance(node.slice, ast.Constant) and node.slice.value == 2:
+                if isinstance(node.value, ast.Attribute) and node.value.attr == "rows":
+                    detected.append("rows_2")
+
+    assert "negative_subscript" in detected
+    assert "negative_slice" in detected
+    assert "rows_2" in detected
+
