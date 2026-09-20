@@ -518,8 +518,7 @@ class AttendanceGenerator:
         R_W = 133
         WEEK_W = date_w * session_count
 
-        sum_w_map = {"lb": LB_W, "lc": LC_W, "r": R_W}
-        summary_widths = [sum_w_map.get(sn.lower(), 180) for sn in matrix_binding.summary_column_names]
+        summary_widths = list(matrix_binding.summary_column_widths)
         SUM_W = sum(summary_widths)
 
         lead_widths = [NO_W, NAME_W, STNUM_W]
@@ -549,22 +548,29 @@ class AttendanceGenerator:
             gc = etree.SubElement(tblgrid, w("gridCol"))
             gc.set(w("w"), str(cw))
 
-        # Reconstruct header row 0 (weeks)
+        # Reconstruct header row 0 (weeks) explicitly by region
         orig_header0_cells = orig_header0.findall(w("tc"))
         week_cell_template = orig_header0_cells[matrix_binding.week_template_cell_col]
         summary_header0_template = orig_header0_cells[matrix_binding.summary_header0_cell_col]
 
         row0 = copy.deepcopy(orig_header0)
-        row0_cells = row0.findall(w("tc"))
-
-        set_cell_width(row0_cells[matrix_binding.no_col], NO_W)
-        set_cell_width(row0_cells[matrix_binding.name_col], NAME_W)
-        set_cell_width(row0_cells[matrix_binding.id_col], STNUM_W)
-
-        # Remove dynamic columns (from date_columns_start onward)
-        for tc in row0_cells[matrix_binding.date_columns_start:]:
+        for tc in row0.findall(w("tc")):
             row0.remove(tc)
 
+        # Region 1: Lead / extra columns
+        for c in range(matrix_binding.date_columns_start):
+            lead_tc = copy.deepcopy(orig_header0_cells[c])
+            if c == matrix_binding.no_col:
+                set_cell_width(lead_tc, NO_W)
+            elif c == matrix_binding.name_col:
+                set_cell_width(lead_tc, NAME_W)
+            elif c == matrix_binding.id_col:
+                set_cell_width(lead_tc, STNUM_W)
+            else:
+                set_cell_width(lead_tc, 200)
+            row0.append(lead_tc)
+
+        # Region 2: Date / session region (weeks)
         for wi, wg in enumerate(week_groups, 1):
             tc = copy.deepcopy(week_cell_template)
             set_cell_width(tc, WEEK_W)
@@ -574,6 +580,7 @@ class AttendanceGenerator:
                 set_para_text(p, f"WEEK {wi}")
             row0.append(tc)
 
+        # Region 3: Summary region
         sum_tc = copy.deepcopy(summary_header0_template)
         set_cell_width(sum_tc, SUM_W)
         set_gridspan(sum_tc, matrix_binding.summary_columns_count)
@@ -583,20 +590,28 @@ class AttendanceGenerator:
         row0.append(sum_tc)
         attn_tbl.append(row0)
 
-        # Reconstruct header row 1 (dates / session numbers / summary names)
+        # Reconstruct header row 1 (dates / session numbers / summary names) explicitly by region
         orig_header1_cells = orig_header1.findall(w("tc"))
         date_cell_template = orig_header1_cells[matrix_binding.date_template_cell_col]
 
         row1 = copy.deepcopy(orig_header1)
-        row1_cells = row1.findall(w("tc"))
-
-        set_cell_width(row1_cells[matrix_binding.no_col], NO_W)
-        set_cell_width(row1_cells[matrix_binding.name_col], NAME_W)
-        set_cell_width(row1_cells[matrix_binding.id_col], STNUM_W)
-
-        for tc in row1_cells[matrix_binding.date_columns_start:]:
+        for tc in row1.findall(w("tc")):
             row1.remove(tc)
 
+        # Region 1: Lead / extra columns
+        for c in range(matrix_binding.date_columns_start):
+            lead_tc = copy.deepcopy(orig_header1_cells[c])
+            if c == matrix_binding.no_col:
+                set_cell_width(lead_tc, NO_W)
+            elif c == matrix_binding.name_col:
+                set_cell_width(lead_tc, NAME_W)
+            elif c == matrix_binding.id_col:
+                set_cell_width(lead_tc, STNUM_W)
+            else:
+                set_cell_width(lead_tc, 200)
+            row1.append(lead_tc)
+
+        # Region 2: Date / session region
         for wg in week_groups:
             week_dates = {dt.weekday(): dt for dt in wg}
             for session_idx, (day_idx, slot_label) in enumerate(schedule_meetings, 1):
@@ -612,6 +627,7 @@ class AttendanceGenerator:
                     set_para_text(paras[0], day_num)
                 row1.append(tc)
 
+        # Region 3: Summary region
         for sum_name, sum_col, wval in zip(
             matrix_binding.summary_column_names,
             matrix_binding.summary_header1_cell_cols,
@@ -627,7 +643,7 @@ class AttendanceGenerator:
 
         attn_tbl.append(row1)
 
-        # 3. Student rows
+        # 3. Student rows explicitly constructed by region
         orig_student_cells = orig_student.findall(w("tc"))
         att_cell_template = orig_student_cells[matrix_binding.student_date_template_cell_col]
 
@@ -636,27 +652,8 @@ class AttendanceGenerator:
             name, stnum = students[row_idx] if row_idx < len(students) else ("", "")
 
             tr = copy.deepcopy(orig_student)
-            cells = tr.findall(w("tc"))
-
-            set_cell_width(cells[matrix_binding.no_col], NO_W)
-            set_cell_width(cells[matrix_binding.name_col], NAME_W)
-            set_cell_width(cells[matrix_binding.id_col], STNUM_W)
-
-            tcpr1 = cells[matrix_binding.name_col].find(w("tcPr"))
-            if tcpr1 is not None:
-                tcmar = tcpr1.find(w("tcMar"))
-                if tcmar is None:
-                    tcmar = etree.SubElement(tcpr1, w("tcMar"))
-                left = tcmar.find(w("left"))
-                if left is None:
-                    left = etree.SubElement(tcmar, w("left"))
-                left.set(w("w"), "50")
-                left.set(w("type"), "dxa")
-                right = tcmar.find(w("right"))
-                if right is None:
-                    right = etree.SubElement(tcmar, w("right"))
-                right.set(w("w"), "50")
-                right.set(w("type"), "dxa")
+            for tc in tr.findall(w("tc")):
+                tr.remove(tc)
 
             trpr = tr.find(w("trPr"))
             if trpr is None:
@@ -664,13 +661,47 @@ class AttendanceGenerator:
             if trpr.find(w("cantSplit")) is None:
                 etree.SubElement(trpr, w("cantSplit"))
 
-            set_para_text(cells[matrix_binding.no_col].find(w("p")), str(row_idx + 1))
-            set_para_text(cells[matrix_binding.name_col].find(w("p")), name, shrink_threshold=32, shrink_sz="18")
-            set_para_text(cells[matrix_binding.id_col].find(w("p")), stnum)
+            # Region 1: Lead / extra columns
+            for c in range(matrix_binding.date_columns_start):
+                lead_tc = copy.deepcopy(orig_student_cells[c])
+                if c == matrix_binding.no_col:
+                    set_cell_width(lead_tc, NO_W)
+                    p = lead_tc.find(w("p"))
+                    if p is not None:
+                        set_para_text(p, str(row_idx + 1))
+                elif c == matrix_binding.name_col:
+                    set_cell_width(lead_tc, NAME_W)
+                    tcpr1 = lead_tc.find(w("tcPr"))
+                    if tcpr1 is not None:
+                        tcmar = tcpr1.find(w("tcMar"))
+                        if tcmar is None:
+                            tcmar = etree.SubElement(tcpr1, w("tcMar"))
+                        left = tcmar.find(w("left"))
+                        if left is None:
+                            left = etree.SubElement(tcmar, w("left"))
+                        left.set(w("w"), "50")
+                        left.set(w("type"), "dxa")
+                        right = tcmar.find(w("right"))
+                        if right is None:
+                            right = etree.SubElement(tcmar, w("right"))
+                        right.set(w("w"), "50")
+                        right.set(w("type"), "dxa")
+                    p = lead_tc.find(w("p"))
+                    if p is not None:
+                        set_para_text(p, name, shrink_threshold=32, shrink_sz="18")
+                elif c == matrix_binding.id_col:
+                    set_cell_width(lead_tc, STNUM_W)
+                    p = lead_tc.find(w("p"))
+                    if p is not None:
+                        set_para_text(p, stnum)
+                else:
+                    set_cell_width(lead_tc, 200)
+                    p = lead_tc.find(w("p"))
+                    if p is not None:
+                        set_para_text(p, "")
+                tr.append(lead_tc)
 
-            for tc in cells[matrix_binding.date_columns_start:]:
-                tr.remove(tc)
-
+            # Region 2: Date / session region
             for _ in range(n_date_cols):
                 tc = copy.deepcopy(att_cell_template)
                 set_cell_width(tc, date_w)
@@ -679,6 +710,7 @@ class AttendanceGenerator:
                     set_para_text(p, "")
                 tr.append(tc)
 
+            # Region 3: Summary region
             for sum_name, sum_col, wval in zip(
                 matrix_binding.summary_column_names,
                 matrix_binding.student_summary_cell_cols,

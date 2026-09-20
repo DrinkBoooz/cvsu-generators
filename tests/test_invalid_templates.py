@@ -1006,3 +1006,58 @@ def test_attendance_student_count_above_template_capacity(tmp_path):
     # 2 header rows + 45 student rows = 47 rows
     assert len(out_doc.tables[1].rows) == 47
 
+
+def test_validate_dict_attendance_summary_column_widths_validation():
+    """Verify validate_dict enforces strict validation on summary_column_widths."""
+    from modules.parsers.recipe_validator import RecipeValidator, InvalidRecipeError
+
+    valid_dict = {
+        "schema_version": 2,
+        "profile_id": "attendance_docx",
+        "template_path": "attendance/template lec.docx",
+        "template_hash": "sha256:dummy",
+        "detected_profile": "attendance_docx",
+        "info_binding": {
+            "table_index": 0,
+            "bindings": {"course_code_title": [0, 1]},
+        },
+        "matrix_binding": {
+            "table_index": 1,
+            "header_row0_index": 0,
+            "header_row1_index": 1,
+            "student_template_row_index": 2,
+            "no_col": 0,
+            "name_col": 1,
+            "id_col": 2,
+            "date_columns_start": 3,
+            "summary_columns_count": 3,
+            "summary_column_names": ["lb", "lc", "r"],
+            "template_session_capacity": 4,
+            "template_student_row_capacity": 40,
+            "summary_column_widths": [212, 208, 133],
+        },
+    }
+
+    # 1. Valid dict succeeds
+    recipe = RecipeValidator.validate_dict(valid_dict)
+    assert recipe.matrix_binding.summary_column_widths == (212, 208, 133)
+
+    # 2. Length mismatch fails
+    bad_dict = copy.deepcopy(valid_dict)
+    bad_dict["matrix_binding"]["summary_column_widths"] = [212, 208]
+    with pytest.raises(InvalidRecipeError, match="must match summary_column_names"):
+        RecipeValidator.validate_dict(bad_dict)
+
+    # 3. Non-positive width fails
+    bad_dict = copy.deepcopy(valid_dict)
+    bad_dict["matrix_binding"]["summary_column_widths"] = [212, -10, 133]
+    with pytest.raises(InvalidRecipeError, match="contains invalid width"):
+        RecipeValidator.validate_dict(bad_dict)
+
+    # 4. Non-int width fails
+    bad_dict = copy.deepcopy(valid_dict)
+    bad_dict["matrix_binding"]["summary_column_widths"] = [212, "208", 133]
+    with pytest.raises(InvalidRecipeError, match="contains invalid width"):
+        RecipeValidator.validate_dict(bad_dict)
+
+

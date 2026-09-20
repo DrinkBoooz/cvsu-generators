@@ -921,7 +921,8 @@ def test_m19_additional_unrelated_matrix_column(tmp_path):
 
 def test_m20_student_template_row_relocation(tmp_path):
     """M20: Student template row relocated.
-    Inspector distinguishes header row, decorative row, and student template row."""
+    Inspector distinguishes header row, decorative guidance row, and student template row.
+    Prototype row is relocated to index 3 and made structurally distinguishable from guidance row at index 2."""
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     src = os.path.join(repo_root, "attendance", "template lec.docx")
     mut_path = str(tmp_path / "mut_m20_reloc_student.docx")
@@ -929,13 +930,42 @@ def test_m20_student_template_row_relocation(tmp_path):
 
     doc = docx.Document(mut_path)
     attn_tbl = doc.tables[1]
-    # Add decorative guidance row before the student row with unmistakable marker text
-    guide_row = copy.deepcopy(attn_tbl.rows[2]._tr)
+
+    # Structurally distinguish prototype student row (initially at index 2, will become index 3)
+    proto_row = attn_tbl.rows[2]._tr
+    for tc in proto_row.findall(docx.oxml.ns.qn("w:tc")):
+        tcPr = tc.find(docx.oxml.ns.qn("w:tcPr"))
+        if tcPr is None:
+            tcPr = docx.oxml.OxmlElement("w:tcPr")
+            tc.insert(0, tcPr)
+        for shd in tcPr.findall(docx.oxml.ns.qn("w:shd")):
+            tcPr.remove(shd)
+        shd = docx.oxml.OxmlElement("w:shd")
+        shd.set(docx.oxml.ns.qn("w:val"), "clear")
+        shd.set(docx.oxml.ns.qn("w:color"), "auto")
+        shd.set(docx.oxml.ns.qn("w:fill"), "FFFFCC")  # Distinguishable yellow shading for prototype
+        tcPr.append(shd)
+
+    # Add decorative guidance row before the student row with unmistakable marker text and gray shading
+    guide_row = copy.deepcopy(proto_row)
     tcs = guide_row.findall(docx.oxml.ns.qn("w:tc"))
     for tc in tcs:
+        tcPr = tc.find(docx.oxml.ns.qn("w:tcPr"))
+        if tcPr is None:
+            tcPr = docx.oxml.OxmlElement("w:tcPr")
+            tc.insert(0, tcPr)
+        for shd in tcPr.findall(docx.oxml.ns.qn("w:shd")):
+            tcPr.remove(shd)
+        shd = docx.oxml.OxmlElement("w:shd")
+        shd.set(docx.oxml.ns.qn("w:val"), "clear")
+        shd.set(docx.oxml.ns.qn("w:color"), "auto")
+        shd.set(docx.oxml.ns.qn("w:fill"), "D3D3D3")  # Distinguishable gray shading for guidance row
+        tcPr.append(shd)
+
         for t in tc.iter(docx.oxml.ns.qn("w:t")):
             t.text = ""
-    # Explicitly set marker text in first cell
+
+    # Explicitly set marker text in first cell of guidance row
     p = tcs[0].find(docx.oxml.ns.qn("w:p"))
     if p is None:
         p = docx.oxml.OxmlElement("w:p")
@@ -945,13 +975,16 @@ def test_m20_student_template_row_relocation(tmp_path):
     t.text = "GUIDE ROW - DO NOT CLONE"
     r.append(t)
     p.append(r)
+
+    # Insert guide row at index 2 (after header row 1)
+    # The prototype student row is now moved to index 3
     attn_tbl.rows[1]._tr.addnext(guide_row)
     doc.save(mut_path)
 
     resolver = TemplateRecipeResolver.get_instance()
     recipe = resolver.resolve(mut_path, profile_id="attendance_docx")
     assert isinstance(recipe, ValidatedAttendanceTemplateRecipe)
-    # Real prototype student row moved to row 3 (greater than 2)
+    # Real prototype student row discovered at row 3
     assert recipe.matrix_binding.student_template_row_index == 3
 
     out_path = str(tmp_path / "out_m20.docx")
@@ -974,8 +1007,22 @@ def test_m20_student_template_row_relocation(tmp_path):
 
     # Output must populate students from the real prototype, NOT from guide row 2
     assert "ALVAREZ, MARIA A." in out_t.rows[2].cells[name_col].text
-    # Prove that the guide row was NOT cloned into any student rows
+
+    qn_tcPr = docx.oxml.ns.qn("w:tcPr")
+    qn_shd = docx.oxml.ns.qn("w:shd")
+    qn_fill = docx.oxml.ns.qn("w:fill")
+
+    # Prove that the guide row was NOT cloned, and generated rows inherit structure from prototype row 3
     for r in out_t.rows[2:]:
         for c in r.cells:
             assert "GUIDE ROW - DO NOT CLONE" not in c.text
+            tcPr = c._tc.find(qn_tcPr)
+            assert tcPr is not None, "Generated cell must retain tcPr from prototype"
+            shd = tcPr.find(qn_shd)
+            assert shd is not None, "Generated cell must retain shading from prototype row 3"
+            assert shd.get(qn_fill) == "FFFFCC", (
+                f"Generated cell must inherit 'FFFFCC' shading from recipe prototype row 3, got '{shd.get(qn_fill)}'. "
+                f"A regression to orig_rows[2] would produce 'D3D3D3'."
+            )
+            assert shd.get(qn_fill) != "D3D3D3", "Generated cell must NOT inherit shading from guide row 2."
 

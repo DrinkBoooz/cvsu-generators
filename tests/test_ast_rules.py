@@ -193,6 +193,28 @@ def test_ast_no_positional_template_assumptions_in_generators():
                                 f"Prohibited negative slice on '{target_name}' at line {node.lineno}"
                             )
 
+                # Check for positive structural slice with date_columns_start on cell/row collections
+                lower_has_date_start = False
+                if node.slice.lower is not None:
+                    for subn in ast.walk(node.slice.lower):
+                        if isinstance(subn, ast.Name) and "date_columns_start" in subn.id:
+                            lower_has_date_start = True
+                            break
+                        elif isinstance(subn, ast.Attribute) and "date_columns_start" in subn.attr:
+                            lower_has_date_start = True
+                            break
+                if lower_has_date_start:
+                    target_name = ""
+                    if isinstance(node.value, ast.Name):
+                        target_name = node.value.id
+                    elif isinstance(node.value, ast.Attribute):
+                        target_name = node.value.attr
+                    if any(kw in target_name.lower() for kw in ("cell", "row")):
+                        violations.append(
+                            f"Prohibited structural slice with 'date_columns_start' on '{target_name}' at line {node.lineno}; "
+                            f"dynamic regions must be assembled explicitly from recipe coordinates without slicing template cells."
+                        )
+
             # 2. Check for hardcoded student prototype row index rows[2] on tables
             if isinstance(node.slice, ast.Constant) and node.slice.value == 2:
                 if isinstance(node.value, ast.Attribute) and node.value.attr == "rows":
@@ -209,10 +231,11 @@ def test_ast_no_positional_template_assumptions_in_generators():
 def test_ast_rule_6_detector_catches_violations():
     """Verify that Rule 6 AST detector correctly flags offending positional patterns."""
     bad_code = """
-def bad_generator(matrix_tbl, row_cells):
+def bad_generator(matrix_tbl, row_cells, matrix_binding):
     summary_cell = row_cells[-1]
     prototype_row = matrix_tbl.rows[2]
     date_cells = row_cells[:-3]
+    disposable_cells = row_cells[matrix_binding.date_columns_start:]
 """
     tree = ast.parse(bad_code)
     detected = []
@@ -237,6 +260,25 @@ def bad_generator(matrix_tbl, row_cells):
                             target_name = node.value.attr
                         if any(kw in target_name.lower() for kw in ("cell", "row", "summary")):
                             detected.append("negative_slice")
+
+                lower_has_date_start = False
+                if node.slice.lower is not None:
+                    for subn in ast.walk(node.slice.lower):
+                        if isinstance(subn, ast.Name) and "date_columns_start" in subn.id:
+                            lower_has_date_start = True
+                            break
+                        elif isinstance(subn, ast.Attribute) and "date_columns_start" in subn.attr:
+                            lower_has_date_start = True
+                            break
+                if lower_has_date_start:
+                    target_name = ""
+                    if isinstance(node.value, ast.Name):
+                        target_name = node.value.id
+                    elif isinstance(node.value, ast.Attribute):
+                        target_name = node.value.attr
+                    if any(kw in target_name.lower() for kw in ("cell", "row")):
+                        detected.append("date_columns_start_slice")
+
             if isinstance(node.slice, ast.Constant) and node.slice.value == 2:
                 if isinstance(node.value, ast.Attribute) and node.value.attr == "rows":
                     detected.append("rows_2")
@@ -244,4 +286,5 @@ def bad_generator(matrix_tbl, row_cells):
     assert "negative_subscript" in detected
     assert "negative_slice" in detected
     assert "rows_2" in detected
+    assert "date_columns_start_slice" in detected
 

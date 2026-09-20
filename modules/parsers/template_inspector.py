@@ -1219,6 +1219,28 @@ class AttendanceTemplateInspector:
         st_tcs = rows[student_template_row_idx].findall(w("tc")) if student_template_row_idx < len(rows) else r1_tcs
         student_date_template_cell_col = date_columns_start if date_columns_start < len(st_tcs) else 0
 
+        # Discover actual/validated widths for each semantic summary column
+        semantic_w_map = {"lb": 212, "lc": 208, "r": 133}
+        summary_widths = []
+        for name, col_idx in zip(summary_names, summary_column_indices):
+            s_name = str(name).lower()
+            if s_name in semantic_w_map:
+                w_val = semantic_w_map[s_name]
+            else:
+                w_val = None
+                if col_idx < len(r1_tcs):
+                    tcPr = r1_tcs[col_idx].find(w("tcPr"))
+                    if tcPr is not None:
+                        tcW = tcPr.find(w("tcW"))
+                        if tcW is not None:
+                            try:
+                                w_val = int(tcW.attrib.get(w("w"), "0"))
+                            except (ValueError, TypeError):
+                                w_val = None
+                if w_val is None or w_val <= 0:
+                    w_val = 200
+            summary_widths.append(w_val)
+
         return {
             "table_index": tbl_idx,
             "header_row0_index": header_row0_idx,
@@ -1239,5 +1261,6 @@ class AttendanceTemplateInspector:
             "summary_header1_cell_cols": summary_column_indices,
             "student_date_template_cell_col": student_date_template_cell_col,
             "student_summary_cell_cols": summary_column_indices,
+            "summary_column_widths": tuple(summary_widths),
         }
 

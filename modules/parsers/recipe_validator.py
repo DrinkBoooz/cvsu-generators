@@ -195,6 +195,22 @@ class RecipeValidator:
         total_cols = date_start + session_capacity + matrix_cand.get("summary_columns_count", 3)
         default_summary_indices = tuple(range(date_start + session_capacity, total_cols))
 
+        summary_names = tuple(matrix_cand.get("summary_column_names", ("lb", "lc", "r")))
+        default_sum_w_map = {"lb": 212, "lc": 208, "r": 133}
+        default_widths = tuple(default_sum_w_map.get(str(sn).lower(), 200) for sn in summary_names)
+        summary_widths = tuple(matrix_cand.get("summary_column_widths", default_widths))
+
+        if len(summary_widths) != len(summary_names):
+            raise TemplateError(
+                f"Template '{os.path.basename(candidate.template_path)}' has summary column widths length "
+                f"({len(summary_widths)}) mismatch with summary names ({len(summary_names)})."
+            )
+        for wval in summary_widths:
+            if not isinstance(wval, int) or wval <= 0:
+                raise TemplateError(
+                    f"Template '{os.path.basename(candidate.template_path)}' has invalid summary column width {wval}."
+                )
+
         matrix_binding = AttendanceMatrixBinding(
             table_index=m_tbl_idx,
             header_row0_index=matrix_cand.get("header_row0_index", 0),
@@ -205,7 +221,7 @@ class RecipeValidator:
             id_col=id_col,
             date_columns_start=date_start,
             summary_columns_count=matrix_cand.get("summary_columns_count", 3),
-            summary_column_names=tuple(matrix_cand.get("summary_column_names", ("lb", "lc", "r"))),
+            summary_column_names=summary_names,
             template_session_capacity=session_capacity,
             template_student_row_capacity=matrix_cand.get("template_student_row_capacity", 40),
             week_template_cell_col=matrix_cand.get("week_template_cell_col", date_start),
@@ -215,6 +231,7 @@ class RecipeValidator:
             summary_header1_cell_cols=tuple(matrix_cand.get("summary_header1_cell_cols", default_summary_indices)),
             student_date_template_cell_col=matrix_cand.get("student_date_template_cell_col", date_start),
             student_summary_cell_cols=tuple(matrix_cand.get("student_summary_cell_cols", default_summary_indices)),
+            summary_column_widths=summary_widths,
         )
 
         metadata = dict(candidate.metadata)
@@ -375,6 +392,19 @@ class RecipeValidator:
             st_row = matrix_d.get("student_template_row_index")
             if st_row is None or not isinstance(st_row, int) or st_row < 0:
                 raise InvalidRecipeError("Attendance matrix missing or invalid student_template_row_index.")
+
+            summary_names = tuple(matrix_d.get("summary_column_names", ("lb", "lc", "r")))
+            if "summary_column_widths" in matrix_d:
+                widths = matrix_d["summary_column_widths"]
+                if not isinstance(widths, (list, tuple)):
+                    raise InvalidRecipeError("Attendance summary_column_widths must be a list or tuple of integers.")
+                if len(widths) != len(summary_names):
+                    raise InvalidRecipeError(
+                        f"Attendance summary_column_widths length ({len(widths)}) must match summary_column_names ({len(summary_names)})."
+                    )
+                for wval in widths:
+                    if not isinstance(wval, int) or wval <= 0:
+                        raise InvalidRecipeError(f"Attendance summary_column_widths contains invalid width: {wval}")
 
             info_binding = AttendanceInfoBinding.from_dict(info_d)
             matrix_binding = AttendanceMatrixBinding.from_dict(matrix_d)

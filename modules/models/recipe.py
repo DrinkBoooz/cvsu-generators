@@ -98,12 +98,14 @@ class AttendanceMatrixBinding:
     summary_header1_cell_cols: Tuple[int, ...] = (7, 8, 9)
     student_date_template_cell_col: int = 3
     student_summary_cell_cols: Tuple[int, ...] = (7, 8, 9)
+    summary_column_widths: Tuple[int, ...] = (212, 208, 133)
 
     def __post_init__(self):
         object.__setattr__(self, "summary_column_names", tuple(self.summary_column_names))
         object.__setattr__(self, "summary_column_indices", tuple(self.summary_column_indices))
         object.__setattr__(self, "summary_header1_cell_cols", tuple(self.summary_header1_cell_cols))
         object.__setattr__(self, "student_summary_cell_cols", tuple(self.student_summary_cell_cols))
+        object.__setattr__(self, "summary_column_widths", tuple(self.summary_column_widths))
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -126,6 +128,7 @@ class AttendanceMatrixBinding:
             "summary_header1_cell_cols": list(self.summary_header1_cell_cols),
             "student_date_template_cell_col": self.student_date_template_cell_col,
             "student_summary_cell_cols": list(self.student_summary_cell_cols),
+            "summary_column_widths": list(self.summary_column_widths),
         }
 
     @classmethod
@@ -136,6 +139,9 @@ class AttendanceMatrixBinding:
         summary_names = tuple(d.get("summary_column_names", ("lb", "lc", "r")))
         total_cols = date_start + session_cap + summary_count
         default_summary_indices = tuple(range(date_start + session_cap, total_cols))
+        default_sum_w_map = {"lb": 212, "lc": 208, "r": 133}
+        default_widths = tuple(default_sum_w_map.get(str(sn).lower(), 200) for sn in summary_names)
+        summary_widths = tuple(d.get("summary_column_widths", default_widths))
 
         return cls(
             table_index=d["table_index"],
@@ -157,6 +163,7 @@ class AttendanceMatrixBinding:
             summary_header1_cell_cols=tuple(d.get("summary_header1_cell_cols", default_summary_indices)),
             student_date_template_cell_col=d.get("student_date_template_cell_col", date_start),
             student_summary_cell_cols=tuple(d.get("student_summary_cell_cols", default_summary_indices)),
+            summary_column_widths=summary_widths,
         )
 
 
