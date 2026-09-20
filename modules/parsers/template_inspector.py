@@ -961,12 +961,13 @@ class AttendanceTemplateInspector:
 
         for tbl_idx, tbl in enumerate(tables):
             # 1. Evaluate for info table
-            info_score, bindings = self._evaluate_info_table(tbl, tbl_idx)
+            info_score, bindings, row_cell_counts = self._evaluate_info_table(tbl, tbl_idx)
             if info_score >= 3:
                 info_candidates.append({
                     "table_index": tbl_idx,
                     "score": info_score,
                     "bindings": bindings,
+                    "row_cell_counts": row_cell_counts,
                 })
 
             # 2. Evaluate for matrix table
@@ -1014,11 +1015,12 @@ class AttendanceTemplateInspector:
             collisions=collisions,
         )
 
-    def _evaluate_info_table(self, tbl, tbl_idx: int) -> Tuple[int, Dict[str, Tuple[int, int]]]:
+    def _evaluate_info_table(self, tbl, tbl_idx: int) -> Tuple[int, Dict[str, Tuple[int, int]], Tuple[int, ...]]:
         rows = tbl.findall(w("tr"))
         if len(rows) < 2:
-            return 0, {}
+            return 0, {}, ()
 
+        row_cell_counts = tuple(len(tr.findall(w("tc"))) for tr in rows)
         bindings: Dict[str, Tuple[int, int]] = {}
         matched_fields = set()
 
@@ -1040,7 +1042,7 @@ class AttendanceTemplateInspector:
                         bindings[field_name] = target_cell
                         matched_fields.add(field_name)
 
-        return len(matched_fields), bindings
+        return len(matched_fields), bindings, row_cell_counts
 
     def _evaluate_matrix_table(self, tbl, tbl_idx: int) -> Optional[Dict[str, Any]]:
         rows = tbl.findall(w("tr"))
@@ -1280,5 +1282,6 @@ class AttendanceTemplateInspector:
             "row0_cell_count": len(row0_tcs),
             "row1_cell_count": len(r1_tcs),
             "student_row_cell_count": len(st_tcs),
+            "matrix_row_count": len(rows),
         }
 

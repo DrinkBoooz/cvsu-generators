@@ -124,6 +124,38 @@ class RecipeValidator:
             _construction_token=_PRIVATE_CONSTRUCTION_SENTINEL,
         )
 
+    @staticmethod
+    def _validate_info_bindings(
+        bindings: Dict[str, Any],
+        row_cell_counts: Tuple[int, ...],
+        context: str,
+    ) -> None:
+        """Validates that every info table coordinate is within the row and cell counts."""
+        if not isinstance(bindings, dict) or not bindings:
+            raise TemplateError(f"{context}: information table bindings are empty or invalid.")
+        for field, target in bindings.items():
+            if not isinstance(target, (list, tuple)) or len(target) != 2:
+                raise InvalidRecipeError(
+                    f"{context}: binding for field '{field}' must be a (row, col) coordinate pair, got {target}."
+                )
+            r, c = target[0], target[1]
+            if not isinstance(r, int) or r < 0:
+                raise InvalidRecipeError(
+                    f"{context}: invalid row index {r} for field '{field}' (must be non-negative integer)."
+                )
+            if not isinstance(c, int) or c < 0:
+                raise InvalidRecipeError(
+                    f"{context}: invalid col index {c} for field '{field}' (must be non-negative integer)."
+                )
+            if r >= len(row_cell_counts):
+                raise InvalidRecipeError(
+                    f"{context}: row index {r} for field '{field}' out of range (info table has {len(row_cell_counts)} rows)."
+                )
+            if c >= row_cell_counts[r]:
+                raise InvalidRecipeError(
+                    f"{context}: column index {c} for field '{field}' out of range (row {r} has {row_cell_counts[r]} cells)."
+                )
+
     @classmethod
     def _validate_attendance(
         cls,
@@ -311,79 +343,160 @@ class RecipeValidator:
         if any(c in lead_cols_set for c in student_summary_cell_cols):
             raise InvalidRecipeError("Student summary cell columns overlap with lead columns.")
 
-        # 11. Enforce indices within their respective prototype-row cell counts
-        row0_cell_count = matrix_cand.get("row0_cell_count")
-        row1_cell_count = matrix_cand.get("row1_cell_count")
-        student_row_cell_count = matrix_cand.get("student_row_cell_count")
+        # 11. Enforce indices within their respective prototype-row cell counts and matrix row count
+        matrix_row_count = None
+        row0_cell_count = None
+        row1_cell_count = None
+        student_row_cell_count = None
+        info_row_cell_counts = None
 
         if candidate.template_path and os.path.exists(candidate.template_path):
             try:
                 zin, root, body = load_docx(candidate.template_path)
                 zin.close()
-                t_tables = body.findall(w("tbl"))
-                if m_tbl_idx < len(t_tables):
-                    m_tr = t_tables[m_tbl_idx].findall(w("tr"))
-                    if h0_idx < len(m_tr):
-                        row0_cell_count = len(m_tr[h0_idx].findall(w("tc")))
-                    if h1_idx < len(m_tr):
-                        row1_cell_count = len(m_tr[h1_idx].findall(w("tc")))
-                    if student_row_idx < len(m_tr):
-                        student_row_cell_count = len(m_tr[student_row_idx].findall(w("tc")))
-            except Exception:
-                pass
-
-        if row0_cell_count is not None:
-            if week_template_cell_col >= row0_cell_count:
-                raise InvalidRecipeError(
-                    f"week_template_cell_col ({week_template_cell_col}) out of range for header row 0 cell count ({row0_cell_count})."
-                )
-            if summary_header0_cell_col >= row0_cell_count:
-                raise InvalidRecipeError(
-                    f"summary_header0_cell_col ({summary_header0_cell_col}) out of range for header row 0 cell count ({row0_cell_count})."
-                )
-
-        if row1_cell_count is not None:
-            if date_template_cell_col >= row1_cell_count:
-                raise InvalidRecipeError(
-                    f"date_template_cell_col ({date_template_cell_col}) out of range for header row 1 cell count ({row1_cell_count})."
-                )
-            for c in summary_header1_cell_cols:
-                if c >= row1_cell_count:
+                tables = body.findall(w("tbl"))
+                if tbl_idx < 0 or tbl_idx >= len(tables):
                     raise InvalidRecipeError(
-                        f"summary_header1_cell_cols index ({c}) out of range for header row 1 cell count ({row1_cell_count})."
+                        f"Info table index {tbl_idx} out of range for template '{os.path.basename(candidate.template_path)}' (found {len(tables)} tables)."
                     )
-            for c in summary_column_indices:
-                if c >= row1_cell_count:
+                if m_tbl_idx < 0 or m_tbl_idx >= len(tables):
                     raise InvalidRecipeError(
-                        f"summary_column_indices index ({c}) out of range for header row 1 cell count ({row1_cell_count})."
+                        f"Matrix table index {m_tbl_idx} out of range for template '{os.path.basename(candidate.template_path)}' (found {len(tables)} tables)."
                     )
 
-        if student_row_cell_count is not None:
-            if student_date_template_cell_col >= student_row_cell_count:
-                raise InvalidRecipeError(
-                    f"student_date_template_cell_col ({student_date_template_cell_col}) out of range for student row cell count ({student_row_cell_count})."
+                info_rows = tables[tbl_idx].findall(w("tr"))
+                info_row_cell_counts = tuple(len(tr.findall(w("tc"))) for tr in info_rows)
+                cls._validate_info_bindings(
+                    bindings,
+                    info_row_cell_counts,
+                    f"Physical template '{os.path.basename(candidate.template_path)}'",
                 )
-            for c in student_summary_cell_cols:
-                if c >= student_row_cell_count:
+
+                matrix_rows = tables[m_tbl_idx].findall(w("tr"))
+                matrix_row_count = len(matrix_rows)
+                if h0_idx >= matrix_row_count:
                     raise InvalidRecipeError(
-                        f"student_summary_cell_cols index ({c}) out of range for student row cell count ({student_row_cell_count})."
+                        f"header_row0_index ({h0_idx}) out of range for template table {m_tbl_idx} (found {matrix_row_count} rows)."
                     )
-            if no_col >= student_row_cell_count:
+                if h1_idx >= matrix_row_count:
+                    raise InvalidRecipeError(
+                        f"header_row1_index ({h1_idx}) out of range for template table {m_tbl_idx} (found {matrix_row_count} rows)."
+                    )
+                if student_row_idx >= matrix_row_count:
+                    raise InvalidRecipeError(
+                        f"student_template_row_index ({student_row_idx}) out of range for template table {m_tbl_idx} (found {matrix_row_count} rows)."
+                    )
+
+                row0_cell_count = len(matrix_rows[h0_idx].findall(w("tc")))
+                row1_cell_count = len(matrix_rows[h1_idx].findall(w("tc")))
+                student_row_cell_count = len(matrix_rows[student_row_idx].findall(w("tc")))
+            except (TemplateError, InvalidRecipeError):
+                raise
+            except Exception as e:
+                raise TemplateError(
+                    f"Physical template inspection failed for '{candidate.template_path}': {e}"
+                ) from e
+        else:
+            # Physical template is unavailable: must have candidate-supplied row-count metadata
+            matrix_row_count = matrix_cand.get("matrix_row_count")
+            row0_cell_count = matrix_cand.get("row0_cell_count")
+            row1_cell_count = matrix_cand.get("row1_cell_count")
+            student_row_cell_count = matrix_cand.get("student_row_cell_count")
+            raw_info_counts = info_cand.get("row_cell_counts")
+
+            if (
+                matrix_row_count is None or not isinstance(matrix_row_count, int) or matrix_row_count <= 0
+                or row0_cell_count is None or not isinstance(row0_cell_count, int) or row0_cell_count <= 0
+                or row1_cell_count is None or not isinstance(row1_cell_count, int) or row1_cell_count <= 0
+                or student_row_cell_count is None or not isinstance(student_row_cell_count, int) or student_row_cell_count <= 0
+            ):
                 raise InvalidRecipeError(
-                    f"no_col ({no_col}) out of range for student row cell count ({student_row_cell_count})."
+                    f"Serialized attendance recipe for '{os.path.basename(candidate.template_path or 'template')}' "
+                    f"is missing required structural row-count metadata (matrix_row_count, row0_cell_count, "
+                    f"row1_cell_count, student_row_cell_count) when physical template is unavailable."
                 )
-            if name_col >= student_row_cell_count:
+
+            if (
+                raw_info_counts is None
+                or not isinstance(raw_info_counts, (list, tuple))
+                or len(raw_info_counts) == 0
+                or not all(isinstance(c, int) and c >= 0 for c in raw_info_counts)
+            ):
                 raise InvalidRecipeError(
-                    f"name_col ({name_col}) out of range for student row cell count ({student_row_cell_count})."
+                    f"Serialized attendance recipe for '{os.path.basename(candidate.template_path or 'template')}' "
+                    f"is missing required 'row_cell_counts' in info_binding when physical template is unavailable."
                 )
-            if id_col >= student_row_cell_count:
+            info_row_cell_counts = tuple(raw_info_counts)
+
+            if h0_idx >= matrix_row_count:
                 raise InvalidRecipeError(
-                    f"id_col ({id_col}) out of range for student row cell count ({student_row_cell_count})."
+                    f"header_row0_index ({h0_idx}) out of range for matrix_row_count ({matrix_row_count})."
                 )
+            if h1_idx >= matrix_row_count:
+                raise InvalidRecipeError(
+                    f"header_row1_index ({h1_idx}) out of range for matrix_row_count ({matrix_row_count})."
+                )
+            if student_row_idx >= matrix_row_count:
+                raise InvalidRecipeError(
+                    f"student_template_row_index ({student_row_idx}) out of range for matrix_row_count ({matrix_row_count})."
+                )
+
+            cls._validate_info_bindings(
+                bindings,
+                info_row_cell_counts,
+                f"Serialized recipe '{os.path.basename(candidate.template_path or 'template')}'",
+            )
+
+        if week_template_cell_col >= row0_cell_count:
+            raise InvalidRecipeError(
+                f"week_template_cell_col ({week_template_cell_col}) out of range for header row 0 cell count ({row0_cell_count})."
+            )
+        if summary_header0_cell_col >= row0_cell_count:
+            raise InvalidRecipeError(
+                f"summary_header0_cell_col ({summary_header0_cell_col}) out of range for header row 0 cell count ({row0_cell_count})."
+            )
+
+        if date_template_cell_col >= row1_cell_count:
+            raise InvalidRecipeError(
+                f"date_template_cell_col ({date_template_cell_col}) out of range for header row 1 cell count ({row1_cell_count})."
+            )
+        for c in summary_header1_cell_cols:
+            if c >= row1_cell_count:
+                raise InvalidRecipeError(
+                    f"summary_header1_cell_cols index ({c}) out of range for header row 1 cell count ({row1_cell_count})."
+                )
+        for c in summary_column_indices:
+            if c >= row1_cell_count:
+                raise InvalidRecipeError(
+                    f"summary_column_indices index ({c}) out of range for header row 1 cell count ({row1_cell_count})."
+                )
+
+        if student_date_template_cell_col >= student_row_cell_count:
+            raise InvalidRecipeError(
+                f"student_date_template_cell_col ({student_date_template_cell_col}) out of range for student row cell count ({student_row_cell_count})."
+            )
+        for c in student_summary_cell_cols:
+            if c >= student_row_cell_count:
+                raise InvalidRecipeError(
+                    f"student_summary_cell_cols index ({c}) out of range for student row cell count ({student_row_cell_count})."
+                )
+        if no_col >= student_row_cell_count:
+            raise InvalidRecipeError(
+                f"no_col ({no_col}) out of range for student row cell count ({student_row_cell_count})."
+            )
+        if name_col >= student_row_cell_count:
+            raise InvalidRecipeError(
+                f"name_col ({name_col}) out of range for student row cell count ({student_row_cell_count})."
+            )
+        if id_col >= student_row_cell_count:
+            raise InvalidRecipeError(
+                f"id_col ({id_col}) out of range for student row cell count ({student_row_cell_count})."
+            )
 
         info_binding = AttendanceInfoBinding(
             table_index=tbl_idx,
             bindings=bindings,
+            row_cell_counts=info_row_cell_counts,
         )
 
         matrix_binding = AttendanceMatrixBinding(
@@ -410,6 +523,7 @@ class RecipeValidator:
             row0_cell_count=row0_cell_count,
             row1_cell_count=row1_cell_count,
             student_row_cell_count=student_row_cell_count,
+            matrix_row_count=matrix_row_count,
         )
 
         metadata = dict(candidate.metadata)
@@ -499,25 +613,72 @@ class RecipeValidator:
             raise InvalidRecipeError("Externally supplied '_construction_token' is prohibited.")
         clean_data = dict(data)
 
-        requested_prof = profile if profile is not None else clean_data.get("profile_id", "academic_docx")
-        if isinstance(requested_prof, GeneratorProfile):
-            profile = requested_prof
-        elif isinstance(requested_prof, str):
-            prof_key = requested_prof.strip().lower()
-            if prof_key not in PROFILE_REGISTRY:
-                raise TemplateError(f"Unknown generator profile ID '{requested_prof}'")
-            profile = PROFILE_REGISTRY[prof_key]
-        else:
-            raise InvalidRecipeError(f"Invalid profile specification: {profile}")
+        # 1. Determine requested profile if passed
+        requested_profile = None
+        if profile is not None:
+            if isinstance(profile, GeneratorProfile):
+                requested_profile = profile
+            elif isinstance(profile, str):
+                prof_key = profile.strip().lower()
+                if prof_key not in PROFILE_REGISTRY:
+                    raise TemplateError(f"Unknown generator profile ID '{profile}'")
+                requested_profile = PROFILE_REGISTRY[prof_key]
+            else:
+                raise InvalidRecipeError(f"Invalid profile specification: {profile}")
 
-        # Attendance deserialization & profile compatibility enforcement
-        is_attendance_profile = profile.profile_id in ("attendance_docx", "attendance") or profile.document_family == "attendance_docx"
+        # 2. Process serialized profile_id
+        serialized_profile_id = clean_data.get("profile_id")
+        if serialized_profile_id is not None and not isinstance(serialized_profile_id, str):
+            raise InvalidRecipeError("Serialized recipe profile_id must be a string.")
+
+        serialized_profile = None
+        if serialized_profile_id is not None:
+            norm_serialized_profile_id = serialized_profile_id.strip().lower()
+            serialized_profile = PROFILE_REGISTRY.get(norm_serialized_profile_id)
+            if serialized_profile is None:
+                raise InvalidRecipeError(f"Unknown serialized profile ID '{serialized_profile_id}'.")
+
+        # 3. Compare canonical profile identity if both are present
+        if requested_profile is not None and serialized_profile is not None:
+            if serialized_profile.profile_id != requested_profile.profile_id:
+                has_attendance_bindings = (
+                    "info_binding" in clean_data
+                    or "matrix_binding" in clean_data
+                    or "info_candidate" in clean_data
+                    or "matrix_candidate" in clean_data
+                )
+                details = ""
+                if has_attendance_bindings and requested_profile.profile_id != "attendance_docx":
+                    details = f" Attendance data supplied with non-attendance profile '{requested_profile.profile_id}'."
+                elif not has_attendance_bindings and requested_profile.profile_id == "attendance_docx":
+                    details = f" Academic data supplied with attendance profile '{requested_profile.profile_id}'."
+                raise InvalidRecipeError(
+                    f"Profile mismatch: serialized profile '{serialized_profile_id}' (canonical '{serialized_profile.profile_id}') "
+                    f"conflicts with requested profile '{requested_profile.profile_id}'.{details}"
+                )
+
+        if requested_profile is not None:
+            profile = requested_profile
+        elif serialized_profile is not None:
+            profile = serialized_profile
+        else:
+            profile = PROFILE_ACADEMIC_DOCX
+
+        # 4. Attendance deserialization & profile compatibility enforcement
+        is_attendance_profile = (
+            profile.profile_id in ("attendance_docx", "attendance")
+            or profile.document_family == "attendance_docx"
+        )
         has_attendance_bindings = (
             "info_binding" in clean_data
             or "matrix_binding" in clean_data
             or "info_candidate" in clean_data
             or "matrix_candidate" in clean_data
         )
+
+        if is_attendance_profile or has_attendance_bindings:
+            if serialized_profile_id is None or not serialized_profile_id.strip():
+                raise InvalidRecipeError("Schema v2 attendance recipe requires 'profile_id'.")
 
         if not is_attendance_profile and has_attendance_bindings:
             raise InvalidRecipeError(
@@ -533,7 +694,8 @@ class RecipeValidator:
             # Bidirectional profile compatibility check
             if "detected_profile" in clean_data:
                 det = clean_data["detected_profile"]
-                if det != profile.profile_id and PROFILE_REGISTRY.get(det) != profile:
+                det_prof = PROFILE_REGISTRY.get(str(det).strip().lower())
+                if det_prof is None or det_prof.profile_id != profile.profile_id:
                     raise InvalidRecipeError(
                         f"Profile mismatch: dictionary specifies '{det}', but validation requested '{profile.profile_id}'."
                     )
@@ -551,7 +713,7 @@ class RecipeValidator:
 
             candidate = RawAttendanceTemplateRecipeCandidate(
                 template_path=clean_data.get("template_path", ""),
-                profile_id=clean_data.get("profile_id", profile.profile_id),
+                profile_id=profile.profile_id,
                 fingerprint=clean_data.get("fingerprint", clean_data.get("template_hash", "")),
                 info_candidate=info_d,
                 matrix_candidate=matrix_d,

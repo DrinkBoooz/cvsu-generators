@@ -58,21 +58,30 @@ class AttendanceInfoBinding:
     """Encapsulates discovered information table coordinates and field targets."""
     table_index: int
     bindings: Dict[str, Tuple[int, int]]  # field_name -> (row_idx, col_idx)
+    row_cell_counts: Optional[Tuple[int, ...]] = None
 
     def __post_init__(self):
         object.__setattr__(self, "bindings", freeze_value(dict(self.bindings)))
+        if self.row_cell_counts is not None:
+            object.__setattr__(self, "row_cell_counts", tuple(self.row_cell_counts))
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        d: Dict[str, Any] = {
             "table_index": self.table_index,
             "bindings": {k: list(v) for k, v in self.bindings.items()},
         }
+        if self.row_cell_counts is not None:
+            d["row_cell_counts"] = list(self.row_cell_counts)
+        return d
 
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> "AttendanceInfoBinding":
+        raw_counts = d.get("row_cell_counts")
+        counts = tuple(raw_counts) if raw_counts is not None else None
         return cls(
             table_index=d["table_index"],
             bindings={k: tuple(v) for k, v in d.get("bindings", {}).items()},
+            row_cell_counts=counts,
         )
 
 
@@ -102,6 +111,7 @@ class AttendanceMatrixBinding:
     row0_cell_count: Optional[int] = None
     row1_cell_count: Optional[int] = None
     student_row_cell_count: Optional[int] = None
+    matrix_row_count: Optional[int] = None
 
     def __post_init__(self):
         object.__setattr__(self, "summary_column_names", tuple(self.summary_column_names))
@@ -139,6 +149,8 @@ class AttendanceMatrixBinding:
             d["row1_cell_count"] = self.row1_cell_count
         if self.student_row_cell_count is not None:
             d["student_row_cell_count"] = self.student_row_cell_count
+        if self.matrix_row_count is not None:
+            d["matrix_row_count"] = self.matrix_row_count
         return d
 
     @classmethod
@@ -177,6 +189,7 @@ class AttendanceMatrixBinding:
             row0_cell_count=d.get("row0_cell_count"),
             row1_cell_count=d.get("row1_cell_count"),
             student_row_cell_count=d.get("student_row_cell_count"),
+            matrix_row_count=d.get("matrix_row_count"),
         )
 
 

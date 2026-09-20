@@ -726,6 +726,7 @@ VALID_ATTENDANCE_DICT = {
     "template_path": "test.docx",
     "info_binding": {
         "table_index": 0,
+        "row_cell_counts": [2, 2],
         "bindings": {"course_code_title": [0, 1], "instructor": [1, 1]},
     },
     "matrix_binding": {
@@ -741,6 +742,10 @@ VALID_ATTENDANCE_DICT = {
         "summary_column_names": ["lb", "lc", "r"],
         "template_session_capacity": 4,
         "template_student_row_capacity": 40,
+        "matrix_row_count": 5,
+        "row0_cell_count": 8,
+        "row1_cell_count": 10,
+        "student_row_cell_count": 10,
     },
     "metadata": {"output_folder": "Attendance"},
 }
@@ -1069,6 +1074,7 @@ def test_serialized_attendance_out_of_range_week_template_cell_col_fails():
         "template_path": "dummy_nonexistent.docx",
         "info_binding": {
             "table_index": 0,
+            "row_cell_counts": [2, 2],
             "bindings": {"course_code_title": [0, 1]},
         },
         "matrix_binding": {
@@ -1084,6 +1090,7 @@ def test_serialized_attendance_out_of_range_week_template_cell_col_fails():
             "summary_column_names": ["lb", "lc", "r"],
             "template_session_capacity": 4,
             "template_student_row_capacity": 40,
+            "matrix_row_count": 5,
             "row0_cell_count": 5,
             "row1_cell_count": 10,
             "student_row_cell_count": 10,
@@ -1108,6 +1115,7 @@ def test_serialized_attendance_out_of_range_summary_header0_cell_col_fails():
         "template_path": "dummy_nonexistent.docx",
         "info_binding": {
             "table_index": 0,
+            "row_cell_counts": [2, 2],
             "bindings": {"course_code_title": [0, 1]},
         },
         "matrix_binding": {
@@ -1123,6 +1131,7 @@ def test_serialized_attendance_out_of_range_summary_header0_cell_col_fails():
             "summary_column_names": ["lb", "lc", "r"],
             "template_session_capacity": 4,
             "template_student_row_capacity": 40,
+            "matrix_row_count": 5,
             "row0_cell_count": 5,
             "row1_cell_count": 10,
             "student_row_cell_count": 10,
@@ -1141,6 +1150,7 @@ def test_serialized_attendance_out_of_range_date_template_cell_col_fails():
         "template_path": "dummy_nonexistent.docx",
         "info_binding": {
             "table_index": 0,
+            "row_cell_counts": [2, 2],
             "bindings": {"course_code_title": [0, 1]},
         },
         "matrix_binding": {
@@ -1156,6 +1166,7 @@ def test_serialized_attendance_out_of_range_date_template_cell_col_fails():
             "summary_column_names": ["lb", "lc", "r"],
             "template_session_capacity": 4,
             "template_student_row_capacity": 40,
+            "matrix_row_count": 5,
             "row0_cell_count": 5,
             "row1_cell_count": 10,
             "student_row_cell_count": 10,
@@ -1176,6 +1187,7 @@ def test_serialized_attendance_invalid_summary_source_indices_fail():
         "template_path": "dummy_nonexistent.docx",
         "info_binding": {
             "table_index": 0,
+            "row_cell_counts": [2, 2],
             "bindings": {"course_code_title": [0, 1]},
         },
         "matrix_binding": {
@@ -1191,6 +1203,7 @@ def test_serialized_attendance_invalid_summary_source_indices_fail():
             "summary_column_names": ["lb", "lc", "r"],
             "template_session_capacity": 4,
             "template_student_row_capacity": 40,
+            "matrix_row_count": 5,
             "row0_cell_count": 5,
             "row1_cell_count": 10,
             "student_row_cell_count": 10,
@@ -1234,6 +1247,7 @@ def test_serialized_attendance_invalid_student_prototype_source_indices_fail():
         "template_path": "dummy_nonexistent.docx",
         "info_binding": {
             "table_index": 0,
+            "row_cell_counts": [2, 2],
             "bindings": {"course_code_title": [0, 1]},
         },
         "matrix_binding": {
@@ -1249,6 +1263,7 @@ def test_serialized_attendance_invalid_student_prototype_source_indices_fail():
             "summary_column_names": ["lb", "lc", "r"],
             "template_session_capacity": 4,
             "template_student_row_capacity": 40,
+            "matrix_row_count": 5,
             "row0_cell_count": 5,
             "row1_cell_count": 10,
             "student_row_cell_count": 10,
@@ -1287,6 +1302,7 @@ def test_serialized_attendance_mismatched_summary_array_lengths_fail():
         "template_path": "dummy_nonexistent.docx",
         "info_binding": {
             "table_index": 0,
+            "row_cell_counts": [2, 2],
             "bindings": {"course_code_title": [0, 1]},
         },
         "matrix_binding": {
@@ -1302,6 +1318,10 @@ def test_serialized_attendance_mismatched_summary_array_lengths_fail():
             "summary_column_names": ["lb", "lc", "r"],
             "template_session_capacity": 4,
             "template_student_row_capacity": 40,
+            "matrix_row_count": 5,
+            "row0_cell_count": 5,
+            "row1_cell_count": 10,
+            "student_row_cell_count": 10,
             "summary_column_indices": [7, 8, 9],
             "summary_header1_cell_cols": [7, 8, 9],
             "student_summary_cell_cols": [7, 8, 9],
@@ -1389,5 +1409,183 @@ def test_attendance_generator_never_performs_fallback_substitution(tmp_path):
 
     # Output file must NOT have been generated
     assert not os.path.exists(out_path)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# AMENDMENT 1 & 2: Structural Geometry & Serialized Profile Integrity Tests
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def test_validate_attendance_physical_info_table_index_out_of_range(tmp_path):
+    """Amendment 1: Physical info table index out of range fails closed with InvalidRecipeError."""
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = os.path.join(repo_root, "attendance", "template lec.docx")
+    mut_path = str(tmp_path / "template.docx")
+    shutil.copy2(src, mut_path)
+
+    raw_cand = AttendanceTemplateInspector().inspect(mut_path, PROFILE_ATTENDANCE_DOCX)
+    raw_cand.info_candidate["table_index"] = 99
+
+    with pytest.raises(InvalidRecipeError, match="Info table index 99 out of range"):
+        RecipeValidator.validate(raw_cand, profile=PROFILE_ATTENDANCE_DOCX)
+
+
+def test_validate_attendance_physical_info_binding_row_out_of_range(tmp_path):
+    """Amendment 1: Physical info binding row index out of range fails closed with InvalidRecipeError."""
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = os.path.join(repo_root, "attendance", "template lec.docx")
+    mut_path = str(tmp_path / "template.docx")
+    shutil.copy2(src, mut_path)
+
+    raw_cand = AttendanceTemplateInspector().inspect(mut_path, PROFILE_ATTENDANCE_DOCX)
+    raw_cand.info_candidate["bindings"]["course_code_title"] = [999, 0]
+
+    with pytest.raises(InvalidRecipeError, match=r"row index 999.*out of range"):
+        RecipeValidator.validate(raw_cand, profile=PROFILE_ATTENDANCE_DOCX)
+
+
+def test_validate_attendance_physical_info_binding_column_out_of_range(tmp_path):
+    """Amendment 1: Physical info binding column index out of range fails closed with InvalidRecipeError."""
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = os.path.join(repo_root, "attendance", "template lec.docx")
+    mut_path = str(tmp_path / "template.docx")
+    shutil.copy2(src, mut_path)
+
+    raw_cand = AttendanceTemplateInspector().inspect(mut_path, PROFILE_ATTENDANCE_DOCX)
+    raw_cand.info_candidate["bindings"]["course_code_title"] = [0, 999]
+
+    with pytest.raises(InvalidRecipeError, match=r"column index 999.*out of range"):
+        RecipeValidator.validate(raw_cand, profile=PROFILE_ATTENDANCE_DOCX)
+
+
+def test_serialized_attendance_info_binding_row_out_of_range():
+    """Amendment 1: Serialized info binding row index out of range fails closed with InvalidRecipeError."""
+    d = copy.deepcopy(VALID_ATTENDANCE_DICT)
+    d["template_path"] = "dummy_nonexistent.docx"
+    d["info_binding"]["row_cell_counts"] = [2, 2]
+    d["info_binding"]["bindings"]["course_code_title"] = [5, 0]
+    with pytest.raises(InvalidRecipeError, match=r"row index 5.*out of range"):
+        RecipeValidator.validate_dict(d)
+
+
+def test_serialized_attendance_info_binding_column_out_of_range():
+    """Amendment 1: Serialized info binding column index out of range fails closed with InvalidRecipeError."""
+    d = copy.deepcopy(VALID_ATTENDANCE_DICT)
+    d["template_path"] = "dummy_nonexistent.docx"
+    d["info_binding"]["row_cell_counts"] = [2, 2]
+    d["info_binding"]["bindings"]["course_code_title"] = [0, 5]
+    with pytest.raises(InvalidRecipeError, match=r"column index 5.*out of range"):
+        RecipeValidator.validate_dict(d)
+
+
+def test_serialized_attendance_missing_info_geometry_fails():
+    """Amendment 1: Serialized attendance recipe missing row_cell_counts fails closed with InvalidRecipeError."""
+    d = copy.deepcopy(VALID_ATTENDANCE_DICT)
+    d["template_path"] = "dummy_nonexistent.docx"
+    d["info_binding"].pop("row_cell_counts", None)
+    with pytest.raises(InvalidRecipeError, match="missing required 'row_cell_counts' in info_binding"):
+        RecipeValidator.validate_dict(d)
+
+
+def test_validate_dict_attendance_conflicting_profile_id():
+    """Amendment 2: Conflicting serialized profile_id raises InvalidRecipeError."""
+    d = copy.deepcopy(VALID_ATTENDANCE_DICT)
+    d["profile_id"] = "academic_docx"
+    with pytest.raises(InvalidRecipeError, match="Profile mismatch.*conflicts with requested profile"):
+        RecipeValidator.validate_dict(d, profile=PROFILE_ATTENDANCE_DOCX)
+
+
+def test_validate_dict_attendance_alias_accepted():
+    """Amendment 2: Valid serialized profile alias 'attendance' resolves to canonical profile."""
+    d = copy.deepcopy(VALID_ATTENDANCE_DICT)
+    d["profile_id"] = "attendance"
+    recipe = RecipeValidator.validate_dict(d, profile=PROFILE_ATTENDANCE_DOCX)
+    assert isinstance(recipe, ValidatedAttendanceTemplateRecipe)
+    assert recipe.profile_id == "attendance_docx"
+
+
+def test_validate_dict_attendance_alias_canonicalized():
+    """Amendment 2: Serialized profile alias with case/whitespace is accepted and canonicalized."""
+    d = copy.deepcopy(VALID_ATTENDANCE_DICT)
+    d["profile_id"] = "  ATTENDANCE  "
+    recipe = RecipeValidator.validate_dict(d, profile=PROFILE_ATTENDANCE_DOCX)
+    assert recipe.profile_id == "attendance_docx"
+
+
+def test_validate_dict_unknown_serialized_profile_id_fails():
+    """Amendment 2: Unknown serialized profile_id raises InvalidRecipeError."""
+    d = copy.deepcopy(VALID_ATTENDANCE_DICT)
+    d["profile_id"] = "unknown_profile_xyz"
+    with pytest.raises(InvalidRecipeError, match="Unknown serialized profile ID"):
+        RecipeValidator.validate_dict(d, profile=PROFILE_ATTENDANCE_DOCX)
+
+
+def test_validate_dict_non_string_serialized_profile_id_fails():
+    """Amendment 2: Non-string serialized profile_id raises InvalidRecipeError."""
+    d = copy.deepcopy(VALID_ATTENDANCE_DICT)
+    d["profile_id"] = 12345
+    with pytest.raises(InvalidRecipeError, match="Serialized recipe profile_id must be a string"):
+        RecipeValidator.validate_dict(d, profile=PROFILE_ATTENDANCE_DOCX)
+
+
+def test_validate_attendance_corrupt_physical_docx_fails(tmp_path):
+    """Test A: Physical inspection fails closed on a corrupt physical file."""
+    corrupt_docx = tmp_path / "corrupt.docx"
+    corrupt_docx.write_bytes(b"NOT_A_VALID_DOCX_OR_ZIP")
+
+    candidate = RawAttendanceTemplateRecipeCandidate(
+        template_path=str(corrupt_docx),
+        profile_id="attendance_docx",
+        fingerprint="dummy_fp",
+        info_candidate={
+            "table_index": 0,
+            "bindings": {"course_code_title": [0, 1]},
+            "row_cell_counts": (2, 2),
+        },
+        matrix_candidate={
+            "table_index": 1,
+            "header_row0_index": 0,
+            "header_row1_index": 1,
+            "student_template_row_index": 2,
+            "no_col": 0,
+            "name_col": 1,
+            "id_col": 2,
+            "date_columns_start": 3,
+            "summary_columns_count": 3,
+            "summary_column_names": ["lb", "lc", "r"],
+            "template_session_capacity": 4,
+            "template_student_row_capacity": 40,
+            "summary_column_widths": [212, 208, 133],
+            "matrix_row_count": 5,
+            "row0_cell_count": 8,
+            "row1_cell_count": 10,
+            "student_row_cell_count": 10,
+        },
+    )
+
+    with pytest.raises((TemplateError, InvalidRecipeError)):
+        RecipeValidator.validate(candidate, profile=PROFILE_ATTENDANCE_DOCX)
+
+
+def test_validate_attendance_physical_geometry_out_of_bounds_fails(tmp_path):
+    """Test B: Valid physical DOCX with out-of-bounds structural matrix geometry fails closed."""
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = os.path.join(repo_root, "attendance", "template lec.docx")
+    mut_path = str(tmp_path / "valid_template.docx")
+    shutil.copy2(src, mut_path)
+
+    raw_cand = AttendanceTemplateInspector().inspect(mut_path, PROFILE_ATTENDANCE_DOCX)
+    raw_cand.matrix_candidate["header_row0_index"] = 999
+
+    recipe = None
+    with pytest.raises(InvalidRecipeError, match="header_row0_index .* out of range"):
+        recipe = RecipeValidator.validate(raw_cand, profile=PROFILE_ATTENDANCE_DOCX)
+
+    # Invariant: NO ValidatedAttendanceTemplateRecipe returned
+    assert recipe is None
+
+    # NO generator execution possible with invalid physical structure
+    out_path = str(tmp_path / "should_not_exist.docx")
+    assert not os.path.exists(out_path)
+
 
 

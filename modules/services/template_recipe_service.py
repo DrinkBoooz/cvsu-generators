@@ -3,7 +3,7 @@
 modules/services/template_recipe_service.py
 
 Shared Template Recipe Resolution Service for Authoritative Dynamic Template Discovery.
-Manages absolute path resolution, SHA-256 fingerprinting, 3-tuple caching,
+Manages absolute path resolution, SHA-256 fingerprinting, 4-tuple caching,
 stale cache invalidation, inspector dispatch, and validation execution.
 """
 
@@ -147,15 +147,15 @@ class TemplateRecipeResolver:
         profile = PROFILE_REGISTRY[prof]
 
         current_fp = self.compute_fingerprint(abs_path)
-        cache_key = (abs_path, profile_id, current_fp, RECIPE_SCHEMA_VERSION)
-        path_key = (abs_path, profile_id, RECIPE_SCHEMA_VERSION)
+        cache_key = (abs_path, prof, current_fp, RECIPE_SCHEMA_VERSION)
+        path_key = (abs_path, prof, RECIPE_SCHEMA_VERSION)
 
         # Check for stale cache entry (fingerprint mismatch)
         if path_key in self._fingerprint_index:
             last_fp = self._fingerprint_index[path_key]
             if last_fp != current_fp:
                 # Invalidate old cached recipe
-                old_key = (abs_path, profile_id, last_fp, RECIPE_SCHEMA_VERSION)
+                old_key = (abs_path, prof, last_fp, RECIPE_SCHEMA_VERSION)
                 self._cache.pop(old_key, None)
 
         if not force_reinspect and cache_key in self._cache:
@@ -168,7 +168,7 @@ class TemplateRecipeResolver:
         candidate = inspector.inspect(abs_path, profile_id=profile_id)
         candidate.template_path = abs_path
         candidate.fingerprint = current_fp
-        candidate.profile_id = profile_id
+        candidate.profile_id = profile.profile_id
 
         # 2. RecipeValidator produces authoritative ValidatedRecipeBase
         validated_recipe = RecipeValidator.validate(candidate, profile)
@@ -187,16 +187,17 @@ class TemplateRecipeResolver:
             return
 
         abs_path = os.path.abspath(template_path)
+        norm_prof = str(profile_id).strip().lower() if profile_id is not None else None
         keys_to_remove = [
             k for k in self._cache.keys()
-            if k[0] == abs_path and (profile_id is None or k[1] == profile_id)
+            if k[0] == abs_path and (norm_prof is None or k[1] == norm_prof)
         ]
         for k in keys_to_remove:
             self._cache.pop(k, None)
 
         idx_keys = [
             k for k in self._fingerprint_index.keys()
-            if k[0] == abs_path and (profile_id is None or k[1] == profile_id)
+            if k[0] == abs_path and (norm_prof is None or k[1] == norm_prof)
         ]
         for k in idx_keys:
             self._fingerprint_index.pop(k, None)
