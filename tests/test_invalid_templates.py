@@ -1061,3 +1061,333 @@ def test_validate_dict_attendance_summary_column_widths_validation():
         RecipeValidator.validate_dict(bad_dict)
 
 
+def test_serialized_attendance_out_of_range_week_template_cell_col_fails():
+    """Verify out-of-range week_template_cell_col fails validation."""
+    valid_dict = {
+        "schema_version": 2,
+        "profile_id": "attendance_docx",
+        "template_path": "dummy_nonexistent.docx",
+        "info_binding": {
+            "table_index": 0,
+            "bindings": {"course_code_title": [0, 1]},
+        },
+        "matrix_binding": {
+            "table_index": 1,
+            "header_row0_index": 0,
+            "header_row1_index": 1,
+            "student_template_row_index": 2,
+            "no_col": 0,
+            "name_col": 1,
+            "id_col": 2,
+            "date_columns_start": 3,
+            "summary_columns_count": 3,
+            "summary_column_names": ["lb", "lc", "r"],
+            "template_session_capacity": 4,
+            "template_student_row_capacity": 40,
+            "row0_cell_count": 5,
+            "row1_cell_count": 10,
+            "student_row_cell_count": 10,
+            "week_template_cell_col": 8,  # > row0_cell_count (5)
+        },
+    }
+    with pytest.raises(InvalidRecipeError, match="week_template_cell_col .* out of range"):
+        RecipeValidator.validate_dict(valid_dict)
+
+    # Negative index fails
+    neg_dict = copy.deepcopy(valid_dict)
+    neg_dict["matrix_binding"]["week_template_cell_col"] = -1
+    with pytest.raises(InvalidRecipeError, match="Invalid week_template_cell_col"):
+        RecipeValidator.validate_dict(neg_dict)
+
+
+def test_serialized_attendance_out_of_range_summary_header0_cell_col_fails():
+    """Verify out-of-range summary_header0_cell_col fails validation."""
+    valid_dict = {
+        "schema_version": 2,
+        "profile_id": "attendance_docx",
+        "template_path": "dummy_nonexistent.docx",
+        "info_binding": {
+            "table_index": 0,
+            "bindings": {"course_code_title": [0, 1]},
+        },
+        "matrix_binding": {
+            "table_index": 1,
+            "header_row0_index": 0,
+            "header_row1_index": 1,
+            "student_template_row_index": 2,
+            "no_col": 0,
+            "name_col": 1,
+            "id_col": 2,
+            "date_columns_start": 3,
+            "summary_columns_count": 3,
+            "summary_column_names": ["lb", "lc", "r"],
+            "template_session_capacity": 4,
+            "template_student_row_capacity": 40,
+            "row0_cell_count": 5,
+            "row1_cell_count": 10,
+            "student_row_cell_count": 10,
+            "summary_header0_cell_col": 9,  # > row0_cell_count (5)
+        },
+    }
+    with pytest.raises(InvalidRecipeError, match="summary_header0_cell_col .* out of range"):
+        RecipeValidator.validate_dict(valid_dict)
+
+
+def test_serialized_attendance_out_of_range_date_template_cell_col_fails():
+    """Verify out-of-range date_template_cell_col fails validation."""
+    valid_dict = {
+        "schema_version": 2,
+        "profile_id": "attendance_docx",
+        "template_path": "dummy_nonexistent.docx",
+        "info_binding": {
+            "table_index": 0,
+            "bindings": {"course_code_title": [0, 1]},
+        },
+        "matrix_binding": {
+            "table_index": 1,
+            "header_row0_index": 0,
+            "header_row1_index": 1,
+            "student_template_row_index": 2,
+            "no_col": 0,
+            "name_col": 1,
+            "id_col": 2,
+            "date_columns_start": 3,
+            "summary_columns_count": 3,
+            "summary_column_names": ["lb", "lc", "r"],
+            "template_session_capacity": 4,
+            "template_student_row_capacity": 40,
+            "row0_cell_count": 5,
+            "row1_cell_count": 10,
+            "student_row_cell_count": 10,
+            "week_template_cell_col": 3,
+            "summary_header0_cell_col": 4,
+            "date_template_cell_col": 15,  # > row1_cell_count (10)
+        },
+    }
+    with pytest.raises(InvalidRecipeError, match="date_template_cell_col .* out of range"):
+        RecipeValidator.validate_dict(valid_dict)
+
+
+def test_serialized_attendance_invalid_summary_source_indices_fail():
+    """Verify invalid summary source indices fail validation (bounds, negative, duplicate, overlap)."""
+    base_dict = {
+        "schema_version": 2,
+        "profile_id": "attendance_docx",
+        "template_path": "dummy_nonexistent.docx",
+        "info_binding": {
+            "table_index": 0,
+            "bindings": {"course_code_title": [0, 1]},
+        },
+        "matrix_binding": {
+            "table_index": 1,
+            "header_row0_index": 0,
+            "header_row1_index": 1,
+            "student_template_row_index": 2,
+            "no_col": 0,
+            "name_col": 1,
+            "id_col": 2,
+            "date_columns_start": 3,
+            "summary_columns_count": 3,
+            "summary_column_names": ["lb", "lc", "r"],
+            "template_session_capacity": 4,
+            "template_student_row_capacity": 40,
+            "row0_cell_count": 5,
+            "row1_cell_count": 10,
+            "student_row_cell_count": 10,
+            "week_template_cell_col": 3,
+            "summary_header0_cell_col": 4,
+            "date_template_cell_col": 3,
+            "student_date_template_cell_col": 3,
+        },
+    }
+
+    # 1. Out of range of row1
+    d1 = copy.deepcopy(base_dict)
+    d1["matrix_binding"]["summary_header1_cell_cols"] = [7, 8, 99]
+    with pytest.raises(InvalidRecipeError, match="summary_header1_cell_cols index .* out of range"):
+        RecipeValidator.validate_dict(d1)
+
+    # 2. Negative index
+    d2 = copy.deepcopy(base_dict)
+    d2["matrix_binding"]["summary_header1_cell_cols"] = [7, -2, 9]
+    with pytest.raises(InvalidRecipeError, match="Invalid non-negative summary_header1_cell_cols"):
+        RecipeValidator.validate_dict(d2)
+
+    # 3. Duplicate columns in summary
+    d3 = copy.deepcopy(base_dict)
+    d3["matrix_binding"]["summary_header1_cell_cols"] = [7, 8, 8]
+    with pytest.raises(InvalidRecipeError, match="contain duplicate columns"):
+        RecipeValidator.validate_dict(d3)
+
+    # 4. Overlap with date columns (date cols are 3..6: 3, 4, 5, 6)
+    d4 = copy.deepcopy(base_dict)
+    d4["matrix_binding"]["summary_header1_cell_cols"] = [5, 7, 8]
+    with pytest.raises(InvalidRecipeError, match="overlap with date columns"):
+        RecipeValidator.validate_dict(d4)
+
+
+def test_serialized_attendance_invalid_student_prototype_source_indices_fail():
+    """Verify invalid student prototype source indices fail validation."""
+    base_dict = {
+        "schema_version": 2,
+        "profile_id": "attendance_docx",
+        "template_path": "dummy_nonexistent.docx",
+        "info_binding": {
+            "table_index": 0,
+            "bindings": {"course_code_title": [0, 1]},
+        },
+        "matrix_binding": {
+            "table_index": 1,
+            "header_row0_index": 0,
+            "header_row1_index": 1,
+            "student_template_row_index": 2,
+            "no_col": 0,
+            "name_col": 1,
+            "id_col": 2,
+            "date_columns_start": 3,
+            "summary_columns_count": 3,
+            "summary_column_names": ["lb", "lc", "r"],
+            "template_session_capacity": 4,
+            "template_student_row_capacity": 40,
+            "row0_cell_count": 5,
+            "row1_cell_count": 10,
+            "student_row_cell_count": 10,
+            "week_template_cell_col": 3,
+            "summary_header0_cell_col": 4,
+            "date_template_cell_col": 3,
+            "student_date_template_cell_col": 3,
+            "summary_header1_cell_cols": [7, 8, 9],
+        },
+    }
+
+    # 1. Out of range student_summary_cell_cols
+    d1 = copy.deepcopy(base_dict)
+    d1["matrix_binding"]["student_summary_cell_cols"] = [7, 8, 42]
+    with pytest.raises(InvalidRecipeError, match="student_summary_cell_cols index .* out of range"):
+        RecipeValidator.validate_dict(d1)
+
+    # 2. Out of range student_date_template_cell_col
+    d2 = copy.deepcopy(base_dict)
+    d2["matrix_binding"]["student_date_template_cell_col"] = 15
+    with pytest.raises(InvalidRecipeError, match="student_date_template_cell_col .* out of range"):
+        RecipeValidator.validate_dict(d2)
+
+    # 3. Out of range name_col
+    d3 = copy.deepcopy(base_dict)
+    d3["matrix_binding"]["name_col"] = 25
+    with pytest.raises(InvalidRecipeError, match="name_col .* out of range"):
+        RecipeValidator.validate_dict(d3)
+
+
+def test_serialized_attendance_mismatched_summary_array_lengths_fail():
+    """Verify mismatched summary array lengths fail validation."""
+    base_dict = {
+        "schema_version": 2,
+        "profile_id": "attendance_docx",
+        "template_path": "dummy_nonexistent.docx",
+        "info_binding": {
+            "table_index": 0,
+            "bindings": {"course_code_title": [0, 1]},
+        },
+        "matrix_binding": {
+            "table_index": 1,
+            "header_row0_index": 0,
+            "header_row1_index": 1,
+            "student_template_row_index": 2,
+            "no_col": 0,
+            "name_col": 1,
+            "id_col": 2,
+            "date_columns_start": 3,
+            "summary_columns_count": 3,
+            "summary_column_names": ["lb", "lc", "r"],
+            "template_session_capacity": 4,
+            "template_student_row_capacity": 40,
+            "summary_column_indices": [7, 8, 9],
+            "summary_header1_cell_cols": [7, 8, 9],
+            "student_summary_cell_cols": [7, 8, 9],
+            "summary_column_widths": [212, 208, 133],
+        },
+    }
+
+    # 1. summary_header1_cell_cols length mismatch
+    d1 = copy.deepcopy(base_dict)
+    d1["matrix_binding"]["summary_header1_cell_cols"] = [7, 8]
+    with pytest.raises(InvalidRecipeError, match="Summary header1 cell cols length"):
+        RecipeValidator.validate_dict(d1)
+
+    # 2. student_summary_cell_cols length mismatch
+    d2 = copy.deepcopy(base_dict)
+    d2["matrix_binding"]["student_summary_cell_cols"] = [7, 8, 9, 10]
+    with pytest.raises(InvalidRecipeError, match="Student summary cell cols length"):
+        RecipeValidator.validate_dict(d2)
+
+    # 3. summary_column_indices length mismatch
+    d3 = copy.deepcopy(base_dict)
+    d3["matrix_binding"]["summary_column_indices"] = [7]
+    with pytest.raises(InvalidRecipeError, match="Summary column indices length"):
+        RecipeValidator.validate_dict(d3)
+
+
+def test_attendance_generator_never_performs_fallback_substitution(tmp_path):
+    """Verify AttendanceGenerator raises TemplateError on invalid coordinates and NEVER substitutes date template."""
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = os.path.join(repo_root, "attendance", "template lec.docx")
+    mut_path = str(tmp_path / "template.docx")
+    shutil.copy2(src, mut_path)
+
+    resolver = TemplateRecipeResolver.get_instance()
+    valid_recipe = resolver.resolve(mut_path, profile_id="attendance_docx")
+
+    # Construct invalid recipe dictionary with out-of-bounds summary_header1_cell_cols
+    recipe_dict = valid_recipe.to_dict()
+    recipe_dict["matrix_binding"]["summary_header1_cell_cols"] = [7, 8, 99]
+
+    # If bypassed or constructed with out-of-range coordinate directly:
+    from modules.models.recipe import _PRIVATE_CONSTRUCTION_SENTINEL
+    invalid_mb = AttendanceMatrixBinding(
+        table_index=valid_recipe.matrix_binding.table_index,
+        header_row0_index=valid_recipe.matrix_binding.header_row0_index,
+        header_row1_index=valid_recipe.matrix_binding.header_row1_index,
+        student_template_row_index=valid_recipe.matrix_binding.student_template_row_index,
+        no_col=valid_recipe.matrix_binding.no_col,
+        name_col=valid_recipe.matrix_binding.name_col,
+        id_col=valid_recipe.matrix_binding.id_col,
+        date_columns_start=valid_recipe.matrix_binding.date_columns_start,
+        summary_columns_count=valid_recipe.matrix_binding.summary_columns_count,
+        summary_column_names=valid_recipe.matrix_binding.summary_column_names,
+        template_session_capacity=valid_recipe.matrix_binding.template_session_capacity,
+        template_student_row_capacity=valid_recipe.matrix_binding.template_student_row_capacity,
+        summary_header1_cell_cols=(7, 8, 99),  # Out of range of header row 1!
+    )
+    crafted_recipe = ValidatedAttendanceTemplateRecipe(
+        schema_version=RECIPE_SCHEMA_VERSION,
+        profile_id="attendance_docx",
+        fingerprint=valid_recipe.fingerprint,
+        template_path=valid_recipe.template_path,
+        info_binding=valid_recipe.info_binding,
+        matrix_binding=invalid_mb,
+        metadata=dict(valid_recipe.metadata),
+        verified_safe=True,
+        _construction_token=_PRIVATE_CONSTRUCTION_SENTINEL,
+    )
+
+    out_path = str(tmp_path / "out_should_fail.docx")
+    gen = AttendanceGenerator(mut_path, crafted_recipe)
+    with pytest.raises(TemplateError, match="Invalid summary_header1_cell_cols index 99 out of range"):
+        gen.generate(
+            output_path=out_path,
+            course_code_title="COSC 101",
+            class_schedule="08:00AM-11:00AM / Mon",
+            semester_ay="1st Sem",
+            room_assignment="CL3",
+            instructor="DR. DELA CRUZ",
+            months=[12],
+            year=2026,
+            weekdays=[0],
+            students=[("STUDENT 1", "20230001")],
+        )
+
+    # Output file must NOT have been generated
+    assert not os.path.exists(out_path)
+
+

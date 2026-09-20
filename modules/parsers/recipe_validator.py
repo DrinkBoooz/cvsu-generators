@@ -37,6 +37,7 @@ from modules.parsers.semantic_registry import (
     FIELD_INSTRUCTOR,
 )
 from modules.common.path_utils import validate_output_folder
+from modules.common.docx_utils import load_docx, w
 
 
 class RecipeValidator:
@@ -148,95 +149,275 @@ class RecipeValidator:
         info_cand = candidate.info_candidate
         tbl_idx = info_cand.get("table_index")
         bindings = info_cand.get("bindings", {})
-        if tbl_idx is None or not bindings:
+        if tbl_idx is None or not isinstance(tbl_idx, int) or tbl_idx < 0 or not bindings:
             raise TemplateError(
                 f"Template '{os.path.basename(candidate.template_path)}' information table bindings are invalid."
             )
 
         matrix_cand = candidate.matrix_candidate
         m_tbl_idx = matrix_cand.get("table_index")
-        if m_tbl_idx is None:
+        if m_tbl_idx is None or not isinstance(m_tbl_idx, int) or m_tbl_idx < 0:
             raise TemplateError(
-                f"Template '{os.path.basename(candidate.template_path)}' matrix table index is missing."
+                f"Template '{os.path.basename(candidate.template_path)}' matrix table index is missing or invalid."
             )
 
-        # E12: check student name and student number columns
+        # 1. Info and matrix tables must remain distinct
+        if tbl_idx == m_tbl_idx:
+            raise AmbiguousTemplateError(
+                f"Table identity collision: info table and matrix table target identical index {tbl_idx}."
+            )
+
+        # 2. Check student columns (no, name, id)
+        no_col = matrix_cand.get("no_col", 0)
         name_col = matrix_cand.get("name_col")
         id_col = matrix_cand.get("id_col")
-        if name_col is None or id_col is None:
+        if not isinstance(no_col, int) or no_col < 0:
+            raise InvalidRecipeError(f"Template '{os.path.basename(candidate.template_path)}' invalid no_col.")
+        if name_col is None or not isinstance(name_col, int) or name_col < 0:
+            raise TemplateError(
+                f"Template '{os.path.basename(candidate.template_path)}' missing student name or student number column (E12)."
+            )
+        if id_col is None or not isinstance(id_col, int) or id_col < 0:
             raise TemplateError(
                 f"Template '{os.path.basename(candidate.template_path)}' missing student name or student number column (E12)."
             )
 
-        # Check geometry
+        # 3. Check row indices
+        h0_idx = matrix_cand.get("header_row0_index", 0)
+        h1_idx = matrix_cand.get("header_row1_index", 1)
+        student_row_idx = matrix_cand.get("student_template_row_index")
+        if not isinstance(h0_idx, int) or h0_idx < 0 or not isinstance(h1_idx, int) or h1_idx < 0:
+            raise InvalidRecipeError(f"Template '{os.path.basename(candidate.template_path)}' invalid header row indices.")
+        if student_row_idx is None or not isinstance(student_row_idx, int) or student_row_idx < 0:
+            raise InvalidRecipeError(
+                f"Template '{os.path.basename(candidate.template_path)}' has invalid student_template_row_index / invalid student template row (E16)."
+            )
+
+        # 4. Check date columns geometry
         date_start = matrix_cand.get("date_columns_start")
-        if date_start is None or date_start < 0:
-            raise TemplateError(
-                f"Template '{os.path.basename(candidate.template_path)}' has invalid date columns start (E16)."
+        if date_start is None or not isinstance(date_start, int) or date_start < 0:
+            raise InvalidRecipeError(
+                f"Template '{os.path.basename(candidate.template_path)}' has invalid date_columns_start / invalid date columns start (E16)."
             )
 
         session_capacity = matrix_cand.get("template_session_capacity", 0)
-        if session_capacity <= 0:
-            raise TemplateError(
-                f"Template '{os.path.basename(candidate.template_path)}' has invalid session capacity (E16)."
+        if not isinstance(session_capacity, int) or session_capacity <= 0:
+            raise InvalidRecipeError(
+                f"Template '{os.path.basename(candidate.template_path)}' template_session_capacity must be an integer > 0 / invalid session capacity (E16)."
             )
 
-        student_row_idx = matrix_cand.get("student_template_row_index")
-        if student_row_idx is None or student_row_idx < 0:
-            raise TemplateError(
-                f"Template '{os.path.basename(candidate.template_path)}' has invalid student template row (E16)."
+        # 5. Check summary columns count and names
+        summary_columns_count = matrix_cand.get("summary_columns_count", 3)
+        if not isinstance(summary_columns_count, int) or summary_columns_count <= 0:
+            raise InvalidRecipeError("Attendance summary_columns_count must be an integer > 0.")
+
+        summary_names = tuple(matrix_cand.get("summary_column_names", ("lb", "lc", "r")))
+        if len(summary_names) != summary_columns_count:
+            raise InvalidRecipeError(
+                f"Summary column names count ({len(summary_names)}) does not match summary_columns_count ({summary_columns_count})."
             )
+
+        total_cols = date_start + session_capacity + summary_columns_count
+        default_summary_indices = tuple(range(date_start + session_capacity, total_cols))
+
+        summary_column_indices = tuple(matrix_cand.get("summary_column_indices", default_summary_indices))
+        summary_header1_cell_cols = tuple(matrix_cand.get("summary_header1_cell_cols", default_summary_indices))
+        student_summary_cell_cols = tuple(matrix_cand.get("student_summary_cell_cols", default_summary_indices))
+
+        default_sum_w_map = {"lb": 212, "lc": 208, "r": 133}
+        default_widths = tuple(default_sum_w_map.get(str(sn).lower(), 200) for sn in summary_names)
+        raw_widths = matrix_cand.get("summary_column_widths", default_widths)
+        if not isinstance(raw_widths, (list, tuple)):
+            raise InvalidRecipeError("Attendance summary_column_widths must be a list or tuple of integers.")
+        summary_widths = tuple(raw_widths)
+
+        # 6. Validate summary arrays lengths match
+        if len(summary_column_indices) != summary_columns_count:
+            raise InvalidRecipeError(
+                f"Summary column indices length ({len(summary_column_indices)}) does not match summary_columns_count ({summary_columns_count})."
+            )
+        if len(summary_header1_cell_cols) != summary_columns_count:
+            raise InvalidRecipeError(
+                f"Summary header1 cell cols length ({len(summary_header1_cell_cols)}) does not match summary_columns_count ({summary_columns_count})."
+            )
+        if len(student_summary_cell_cols) != summary_columns_count:
+            raise InvalidRecipeError(
+                f"Student summary cell cols length ({len(student_summary_cell_cols)}) does not match summary_columns_count ({summary_columns_count})."
+            )
+        if len(summary_widths) != summary_columns_count:
+            raise InvalidRecipeError(
+                f"Attendance summary_column_widths length ({len(summary_widths)}) must match summary_column_names ({summary_columns_count})."
+            )
+
+        # 7. Validate non-negativity and positive widths
+        for wval in summary_widths:
+            if not isinstance(wval, int) or wval <= 0:
+                raise InvalidRecipeError(
+                    f"Attendance summary_column_widths contains invalid width: {wval}"
+                )
+
+        for c in summary_column_indices:
+            if not isinstance(c, int) or c < 0:
+                raise InvalidRecipeError(f"Invalid non-negative summary_column_indices column: {c}")
+        for c in summary_header1_cell_cols:
+            if not isinstance(c, int) or c < 0:
+                raise InvalidRecipeError(f"Invalid non-negative summary_header1_cell_cols column: {c}")
+        for c in student_summary_cell_cols:
+            if not isinstance(c, int) or c < 0:
+                raise InvalidRecipeError(f"Invalid non-negative student_summary_cell_cols column: {c}")
+
+        # 8. Validate summary columns do not contain duplicates
+        if len(set(summary_column_indices)) != len(summary_column_indices):
+            raise InvalidRecipeError("Summary column indices contain duplicate columns.")
+        if len(set(summary_header1_cell_cols)) != len(summary_header1_cell_cols):
+            raise InvalidRecipeError("Summary header1 cell columns contain duplicate columns.")
+        if len(set(student_summary_cell_cols)) != len(student_summary_cell_cols):
+            raise InvalidRecipeError("Student summary cell columns contain duplicate columns.")
+
+        # 9. Validate single structural coordinate cells
+        week_template_cell_col = matrix_cand.get("week_template_cell_col", date_start)
+        if not isinstance(week_template_cell_col, int) or week_template_cell_col < 0:
+            raise InvalidRecipeError(f"Invalid week_template_cell_col: {week_template_cell_col}")
+
+        default_h0_sum = default_summary_indices[0] if default_summary_indices else date_start + session_capacity
+        summary_header0_cell_col = matrix_cand.get("summary_header0_cell_col", default_h0_sum)
+        if not isinstance(summary_header0_cell_col, int) or summary_header0_cell_col < 0:
+            raise InvalidRecipeError(f"Invalid summary_header0_cell_col: {summary_header0_cell_col}")
+
+        date_template_cell_col = matrix_cand.get("date_template_cell_col", date_start)
+        if not isinstance(date_template_cell_col, int) or date_template_cell_col < 0:
+            raise InvalidRecipeError(f"Invalid date_template_cell_col: {date_template_cell_col}")
+
+        student_date_template_cell_col = matrix_cand.get("student_date_template_cell_col", date_start)
+        if not isinstance(student_date_template_cell_col, int) or student_date_template_cell_col < 0:
+            raise InvalidRecipeError(f"Invalid student_date_template_cell_col: {student_date_template_cell_col}")
+
+        # 10. Date and summary regions do not overlap
+        date_cols_set = set(range(date_start, date_start + session_capacity))
+        lead_cols_set = {no_col, name_col, id_col}
+
+        if any(c in date_cols_set for c in lead_cols_set):
+            raise InvalidRecipeError("Date columns overlap with lead student info columns.")
+        if any(c in date_cols_set for c in summary_column_indices):
+            raise InvalidRecipeError("Summary columns overlap with date columns region.")
+        if any(c in date_cols_set for c in summary_header1_cell_cols):
+            raise InvalidRecipeError("Summary header1 cell columns overlap with date columns region.")
+        if any(c in date_cols_set for c in student_summary_cell_cols):
+            raise InvalidRecipeError("Student summary cell columns overlap with date columns region.")
+        if any(c in lead_cols_set for c in summary_column_indices):
+            raise InvalidRecipeError("Summary columns overlap with lead columns.")
+        if any(c in lead_cols_set for c in summary_header1_cell_cols):
+            raise InvalidRecipeError("Summary header1 cell columns overlap with lead columns.")
+        if any(c in lead_cols_set for c in student_summary_cell_cols):
+            raise InvalidRecipeError("Student summary cell columns overlap with lead columns.")
+
+        # 11. Enforce indices within their respective prototype-row cell counts
+        row0_cell_count = matrix_cand.get("row0_cell_count")
+        row1_cell_count = matrix_cand.get("row1_cell_count")
+        student_row_cell_count = matrix_cand.get("student_row_cell_count")
+
+        if candidate.template_path and os.path.exists(candidate.template_path):
+            try:
+                zin, root, body = load_docx(candidate.template_path)
+                zin.close()
+                t_tables = body.findall(w("tbl"))
+                if m_tbl_idx < len(t_tables):
+                    m_tr = t_tables[m_tbl_idx].findall(w("tr"))
+                    if h0_idx < len(m_tr):
+                        row0_cell_count = len(m_tr[h0_idx].findall(w("tc")))
+                    if h1_idx < len(m_tr):
+                        row1_cell_count = len(m_tr[h1_idx].findall(w("tc")))
+                    if student_row_idx < len(m_tr):
+                        student_row_cell_count = len(m_tr[student_row_idx].findall(w("tc")))
+            except Exception:
+                pass
+
+        if row0_cell_count is not None:
+            if week_template_cell_col >= row0_cell_count:
+                raise InvalidRecipeError(
+                    f"week_template_cell_col ({week_template_cell_col}) out of range for header row 0 cell count ({row0_cell_count})."
+                )
+            if summary_header0_cell_col >= row0_cell_count:
+                raise InvalidRecipeError(
+                    f"summary_header0_cell_col ({summary_header0_cell_col}) out of range for header row 0 cell count ({row0_cell_count})."
+                )
+
+        if row1_cell_count is not None:
+            if date_template_cell_col >= row1_cell_count:
+                raise InvalidRecipeError(
+                    f"date_template_cell_col ({date_template_cell_col}) out of range for header row 1 cell count ({row1_cell_count})."
+                )
+            for c in summary_header1_cell_cols:
+                if c >= row1_cell_count:
+                    raise InvalidRecipeError(
+                        f"summary_header1_cell_cols index ({c}) out of range for header row 1 cell count ({row1_cell_count})."
+                    )
+            for c in summary_column_indices:
+                if c >= row1_cell_count:
+                    raise InvalidRecipeError(
+                        f"summary_column_indices index ({c}) out of range for header row 1 cell count ({row1_cell_count})."
+                    )
+
+        if student_row_cell_count is not None:
+            if student_date_template_cell_col >= student_row_cell_count:
+                raise InvalidRecipeError(
+                    f"student_date_template_cell_col ({student_date_template_cell_col}) out of range for student row cell count ({student_row_cell_count})."
+                )
+            for c in student_summary_cell_cols:
+                if c >= student_row_cell_count:
+                    raise InvalidRecipeError(
+                        f"student_summary_cell_cols index ({c}) out of range for student row cell count ({student_row_cell_count})."
+                    )
+            if no_col >= student_row_cell_count:
+                raise InvalidRecipeError(
+                    f"no_col ({no_col}) out of range for student row cell count ({student_row_cell_count})."
+                )
+            if name_col >= student_row_cell_count:
+                raise InvalidRecipeError(
+                    f"name_col ({name_col}) out of range for student row cell count ({student_row_cell_count})."
+                )
+            if id_col >= student_row_cell_count:
+                raise InvalidRecipeError(
+                    f"id_col ({id_col}) out of range for student row cell count ({student_row_cell_count})."
+                )
 
         info_binding = AttendanceInfoBinding(
             table_index=tbl_idx,
             bindings=bindings,
         )
 
-        total_cols = date_start + session_capacity + matrix_cand.get("summary_columns_count", 3)
-        default_summary_indices = tuple(range(date_start + session_capacity, total_cols))
-
-        summary_names = tuple(matrix_cand.get("summary_column_names", ("lb", "lc", "r")))
-        default_sum_w_map = {"lb": 212, "lc": 208, "r": 133}
-        default_widths = tuple(default_sum_w_map.get(str(sn).lower(), 200) for sn in summary_names)
-        summary_widths = tuple(matrix_cand.get("summary_column_widths", default_widths))
-
-        if len(summary_widths) != len(summary_names):
-            raise TemplateError(
-                f"Template '{os.path.basename(candidate.template_path)}' has summary column widths length "
-                f"({len(summary_widths)}) mismatch with summary names ({len(summary_names)})."
-            )
-        for wval in summary_widths:
-            if not isinstance(wval, int) or wval <= 0:
-                raise TemplateError(
-                    f"Template '{os.path.basename(candidate.template_path)}' has invalid summary column width {wval}."
-                )
-
         matrix_binding = AttendanceMatrixBinding(
             table_index=m_tbl_idx,
-            header_row0_index=matrix_cand.get("header_row0_index", 0),
-            header_row1_index=matrix_cand.get("header_row1_index", 1),
+            header_row0_index=h0_idx,
+            header_row1_index=h1_idx,
             student_template_row_index=student_row_idx,
-            no_col=matrix_cand.get("no_col", 0),
+            no_col=no_col,
             name_col=name_col,
             id_col=id_col,
             date_columns_start=date_start,
-            summary_columns_count=matrix_cand.get("summary_columns_count", 3),
+            summary_columns_count=summary_columns_count,
             summary_column_names=summary_names,
             template_session_capacity=session_capacity,
             template_student_row_capacity=matrix_cand.get("template_student_row_capacity", 40),
-            week_template_cell_col=matrix_cand.get("week_template_cell_col", date_start),
-            summary_header0_cell_col=matrix_cand.get("summary_header0_cell_col", default_summary_indices[0] if default_summary_indices else date_start + session_capacity),
-            date_template_cell_col=matrix_cand.get("date_template_cell_col", date_start),
-            summary_column_indices=tuple(matrix_cand.get("summary_column_indices", default_summary_indices)),
-            summary_header1_cell_cols=tuple(matrix_cand.get("summary_header1_cell_cols", default_summary_indices)),
-            student_date_template_cell_col=matrix_cand.get("student_date_template_cell_col", date_start),
-            student_summary_cell_cols=tuple(matrix_cand.get("student_summary_cell_cols", default_summary_indices)),
+            week_template_cell_col=week_template_cell_col,
+            summary_header0_cell_col=summary_header0_cell_col,
+            date_template_cell_col=date_template_cell_col,
+            summary_column_indices=summary_column_indices,
+            summary_header1_cell_cols=summary_header1_cell_cols,
+            student_date_template_cell_col=student_date_template_cell_col,
+            student_summary_cell_cols=student_summary_cell_cols,
             summary_column_widths=summary_widths,
+            row0_cell_count=row0_cell_count,
+            row1_cell_count=row1_cell_count,
+            student_row_cell_count=student_row_cell_count,
         )
 
         metadata = dict(candidate.metadata)
         if "output_folder" not in metadata:
             metadata["output_folder"] = "Attendance"
+        metadata["output_folder"] = validate_output_folder(metadata.get("output_folder", "Attendance"), default="Attendance")
+
+        verified_safe = bool(metadata.pop("verified_safe", True))
 
         return ValidatedAttendanceTemplateRecipe(
             schema_version=RECIPE_SCHEMA_VERSION,
@@ -246,7 +427,7 @@ class RecipeValidator:
             info_binding=info_binding,
             matrix_binding=matrix_binding,
             metadata=metadata,
-            verified_safe=True,
+            verified_safe=verified_safe,
             _construction_token=_PRIVATE_CONSTRUCTION_SENTINEL,
         )
 
@@ -330,8 +511,13 @@ class RecipeValidator:
             raise InvalidRecipeError(f"Invalid profile specification: {profile}")
 
         # Attendance deserialization & profile compatibility enforcement
-        is_attendance_profile = profile.profile_id in ("attendance_docx", "attendance")
-        has_attendance_bindings = "info_binding" in clean_data or "matrix_binding" in clean_data
+        is_attendance_profile = profile.profile_id in ("attendance_docx", "attendance") or profile.document_family == "attendance_docx"
+        has_attendance_bindings = (
+            "info_binding" in clean_data
+            or "matrix_binding" in clean_data
+            or "info_candidate" in clean_data
+            or "matrix_candidate" in clean_data
+        )
 
         if not is_attendance_profile and has_attendance_bindings:
             raise InvalidRecipeError(
@@ -344,86 +530,35 @@ class RecipeValidator:
                     f"Academic data supplied with attendance profile '{profile.profile_id}'."
                 )
 
-            info_d = clean_data.get("info_binding")
-            matrix_d = clean_data.get("matrix_binding")
+            # Bidirectional profile compatibility check
+            if "detected_profile" in clean_data:
+                det = clean_data["detected_profile"]
+                if det != profile.profile_id and PROFILE_REGISTRY.get(det) != profile:
+                    raise InvalidRecipeError(
+                        f"Profile mismatch: dictionary specifies '{det}', but validation requested '{profile.profile_id}'."
+                    )
+
+            info_d = clean_data.get("info_binding") or clean_data.get("info_candidate")
+            matrix_d = clean_data.get("matrix_binding") or clean_data.get("matrix_candidate")
             if not isinstance(info_d, dict):
                 raise InvalidRecipeError("Attendance recipe requires dictionary 'info_binding'.")
             if not isinstance(matrix_d, dict):
                 raise InvalidRecipeError("Attendance recipe requires dictionary 'matrix_binding'.")
 
-            # Check collisions
-            if clean_data.get("collisions"):
-                raise AmbiguousTemplateError(
-                    f"Serialized recipe contains unresolved collisions: {clean_data['collisions']}"
-                )
+            candidate_metadata = dict(clean_data.get("metadata", {}))
+            if "verified_safe" in clean_data:
+                candidate_metadata["verified_safe"] = clean_data["verified_safe"]
 
-            tbl_idx = info_d.get("table_index")
-            if tbl_idx is None or not isinstance(tbl_idx, int) or tbl_idx < 0:
-                raise InvalidRecipeError("Attendance info_binding missing or invalid non-negative table_index.")
-
-            bindings = info_d.get("bindings")
-            if not bindings or not isinstance(bindings, dict):
-                raise InvalidRecipeError("Attendance info_binding missing or empty bindings dictionary.")
-
-            m_tbl_idx = matrix_d.get("table_index")
-            if m_tbl_idx is None or not isinstance(m_tbl_idx, int) or m_tbl_idx < 0:
-                raise InvalidRecipeError("Attendance matrix_binding missing or invalid non-negative table_index.")
-
-            if tbl_idx == m_tbl_idx:
-                raise AmbiguousTemplateError(
-                    f"Table identity collision: info table and matrix table target identical index {tbl_idx}."
-                )
-
-            name_col = matrix_d.get("name_col")
-            id_col = matrix_d.get("id_col")
-            if name_col is None or not isinstance(name_col, int) or name_col < 0:
-                raise InvalidRecipeError("Attendance matrix missing or invalid name_col.")
-            if id_col is None or not isinstance(id_col, int) or id_col < 0:
-                raise InvalidRecipeError("Attendance matrix missing or invalid id_col.")
-
-            date_start = matrix_d.get("date_columns_start")
-            if date_start is None or not isinstance(date_start, int) or date_start < 0:
-                raise InvalidRecipeError("Attendance matrix missing or invalid date_columns_start.")
-
-            session_cap = matrix_d.get("template_session_capacity", 0)
-            if not isinstance(session_cap, int) or session_cap <= 0:
-                raise InvalidRecipeError("Attendance matrix template_session_capacity must be an integer > 0.")
-
-            st_row = matrix_d.get("student_template_row_index")
-            if st_row is None or not isinstance(st_row, int) or st_row < 0:
-                raise InvalidRecipeError("Attendance matrix missing or invalid student_template_row_index.")
-
-            summary_names = tuple(matrix_d.get("summary_column_names", ("lb", "lc", "r")))
-            if "summary_column_widths" in matrix_d:
-                widths = matrix_d["summary_column_widths"]
-                if not isinstance(widths, (list, tuple)):
-                    raise InvalidRecipeError("Attendance summary_column_widths must be a list or tuple of integers.")
-                if len(widths) != len(summary_names):
-                    raise InvalidRecipeError(
-                        f"Attendance summary_column_widths length ({len(widths)}) must match summary_column_names ({len(summary_names)})."
-                    )
-                for wval in widths:
-                    if not isinstance(wval, int) or wval <= 0:
-                        raise InvalidRecipeError(f"Attendance summary_column_widths contains invalid width: {wval}")
-
-            info_binding = AttendanceInfoBinding.from_dict(info_d)
-            matrix_binding = AttendanceMatrixBinding.from_dict(matrix_d)
-            metadata = dict(clean_data.get("metadata", {}))
-            if "output_folder" not in metadata:
-                metadata["output_folder"] = "Attendance"
-            metadata["output_folder"] = validate_output_folder(metadata["output_folder"], default="Attendance")
-
-            return ValidatedAttendanceTemplateRecipe(
-                schema_version=RECIPE_SCHEMA_VERSION,
-                profile_id=profile.profile_id,
-                fingerprint=clean_data.get("fingerprint", ""),
+            candidate = RawAttendanceTemplateRecipeCandidate(
                 template_path=clean_data.get("template_path", ""),
-                info_binding=info_binding,
-                matrix_binding=matrix_binding,
-                metadata=metadata,
-                verified_safe=clean_data.get("verified_safe", True),
-                _construction_token=_PRIVATE_CONSTRUCTION_SENTINEL,
+                profile_id=clean_data.get("profile_id", profile.profile_id),
+                fingerprint=clean_data.get("fingerprint", clean_data.get("template_hash", "")),
+                info_candidate=info_d,
+                matrix_candidate=matrix_d,
+                metadata=candidate_metadata,
+                collisions=clean_data.get("collisions", []),
             )
+            return cls._validate_attendance(candidate, profile)
 
         # Reconstruct components
         roster_data = clean_data.get("roster_binding") or clean_data.get("roster_table")

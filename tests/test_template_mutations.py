@@ -828,14 +828,18 @@ def test_m18_summary_region_reordering(tmp_path):
     attn_tbl = doc.tables[1]
     # In row 1: cells[-3], cells[-2], cells[-1] are lb, lc, r
     attn_tbl.rows[1].cells[-3].text = "r"
+    attn_tbl.rows[1].cells[-3]._tc.get_or_add_tcPr().get_or_add_tcW().w = 133
     attn_tbl.rows[1].cells[-2].text = "lc"
+    attn_tbl.rows[1].cells[-2]._tc.get_or_add_tcPr().get_or_add_tcW().w = 208
     attn_tbl.rows[1].cells[-1].text = "lb"
+    attn_tbl.rows[1].cells[-1]._tc.get_or_add_tcPr().get_or_add_tcW().w = 212
     doc.save(mut_path)
 
     resolver = TemplateRecipeResolver.get_instance()
     recipe = resolver.resolve(mut_path, profile_id="attendance_docx")
     assert isinstance(recipe, ValidatedAttendanceTemplateRecipe)
     assert recipe.matrix_binding.summary_column_names == ("r", "lc", "lb")
+    assert recipe.matrix_binding.summary_column_widths == (133, 208, 212)
 
     out_path = str(tmp_path / "out_m18.docx")
     AttendanceGenerator(mut_path, recipe).generate(

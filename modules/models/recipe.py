@@ -99,6 +99,9 @@ class AttendanceMatrixBinding:
     student_date_template_cell_col: int = 3
     student_summary_cell_cols: Tuple[int, ...] = (7, 8, 9)
     summary_column_widths: Tuple[int, ...] = (212, 208, 133)
+    row0_cell_count: Optional[int] = None
+    row1_cell_count: Optional[int] = None
+    student_row_cell_count: Optional[int] = None
 
     def __post_init__(self):
         object.__setattr__(self, "summary_column_names", tuple(self.summary_column_names))
@@ -108,7 +111,7 @@ class AttendanceMatrixBinding:
         object.__setattr__(self, "summary_column_widths", tuple(self.summary_column_widths))
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        d: Dict[str, Any] = {
             "table_index": self.table_index,
             "header_row0_index": self.header_row0_index,
             "header_row1_index": self.header_row1_index,
@@ -130,6 +133,13 @@ class AttendanceMatrixBinding:
             "student_summary_cell_cols": list(self.student_summary_cell_cols),
             "summary_column_widths": list(self.summary_column_widths),
         }
+        if self.row0_cell_count is not None:
+            d["row0_cell_count"] = self.row0_cell_count
+        if self.row1_cell_count is not None:
+            d["row1_cell_count"] = self.row1_cell_count
+        if self.student_row_cell_count is not None:
+            d["student_row_cell_count"] = self.student_row_cell_count
+        return d
 
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> "AttendanceMatrixBinding":
@@ -164,6 +174,9 @@ class AttendanceMatrixBinding:
             student_date_template_cell_col=d.get("student_date_template_cell_col", date_start),
             student_summary_cell_cols=tuple(d.get("student_summary_cell_cols", default_summary_indices)),
             summary_column_widths=summary_widths,
+            row0_cell_count=d.get("row0_cell_count"),
+            row1_cell_count=d.get("row1_cell_count"),
+            student_row_cell_count=d.get("student_row_cell_count"),
         )
 
 

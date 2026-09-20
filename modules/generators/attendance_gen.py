@@ -550,6 +550,27 @@ class AttendanceGenerator:
 
         # Reconstruct header row 0 (weeks) explicitly by region
         orig_header0_cells = orig_header0.findall(w("tc"))
+        if (
+            matrix_binding.week_template_cell_col < 0
+            or matrix_binding.week_template_cell_col >= len(orig_header0_cells)
+        ):
+            raise TemplateError(
+                f"Invalid week_template_cell_col {matrix_binding.week_template_cell_col} "
+                f"out of range [0, {len(orig_header0_cells)})."
+            )
+        if (
+            matrix_binding.summary_header0_cell_col < 0
+            or matrix_binding.summary_header0_cell_col >= len(orig_header0_cells)
+        ):
+            raise TemplateError(
+                f"Invalid summary_header0_cell_col {matrix_binding.summary_header0_cell_col} "
+                f"out of range [0, {len(orig_header0_cells)})."
+            )
+        if matrix_binding.date_columns_start > len(orig_header0_cells):
+            raise TemplateError(
+                f"date_columns_start {matrix_binding.date_columns_start} exceeds header row 0 cell count {len(orig_header0_cells)}."
+            )
+
         week_cell_template = orig_header0_cells[matrix_binding.week_template_cell_col]
         summary_header0_template = orig_header0_cells[matrix_binding.summary_header0_cell_col]
 
@@ -592,6 +613,18 @@ class AttendanceGenerator:
 
         # Reconstruct header row 1 (dates / session numbers / summary names) explicitly by region
         orig_header1_cells = orig_header1.findall(w("tc"))
+        if (
+            matrix_binding.date_template_cell_col < 0
+            or matrix_binding.date_template_cell_col >= len(orig_header1_cells)
+        ):
+            raise TemplateError(
+                f"Invalid date_template_cell_col {matrix_binding.date_template_cell_col} "
+                f"out of range [0, {len(orig_header1_cells)})."
+            )
+        if matrix_binding.date_columns_start > len(orig_header1_cells):
+            raise TemplateError(
+                f"date_columns_start {matrix_binding.date_columns_start} exceeds header row 1 cell count {len(orig_header1_cells)}."
+            )
         date_cell_template = orig_header1_cells[matrix_binding.date_template_cell_col]
 
         row1 = copy.deepcopy(orig_header1)
@@ -633,7 +666,11 @@ class AttendanceGenerator:
             matrix_binding.summary_header1_cell_cols,
             summary_widths,
         ):
-            source_tc = orig_header1_cells[sum_col] if sum_col < len(orig_header1_cells) else date_cell_template
+            if sum_col < 0 or sum_col >= len(orig_header1_cells):
+                raise TemplateError(
+                    f"Invalid summary_header1_cell_cols index {sum_col} out of range [0, {len(orig_header1_cells)})."
+                )
+            source_tc = orig_header1_cells[sum_col]
             tc = copy.deepcopy(source_tc)
             set_cell_width(tc, wval)
             p = tc.find(w("p"))
@@ -645,6 +682,25 @@ class AttendanceGenerator:
 
         # 3. Student rows explicitly constructed by region
         orig_student_cells = orig_student.findall(w("tc"))
+        if (
+            matrix_binding.student_date_template_cell_col < 0
+            or matrix_binding.student_date_template_cell_col >= len(orig_student_cells)
+        ):
+            raise TemplateError(
+                f"Invalid student_date_template_cell_col {matrix_binding.student_date_template_cell_col} "
+                f"out of range [0, {len(orig_student_cells)})."
+            )
+        if matrix_binding.date_columns_start > len(orig_student_cells):
+            raise TemplateError(
+                f"date_columns_start {matrix_binding.date_columns_start} exceeds student row cell count {len(orig_student_cells)}."
+            )
+        if (
+            matrix_binding.no_col >= len(orig_student_cells)
+            or matrix_binding.name_col >= len(orig_student_cells)
+            or matrix_binding.id_col >= len(orig_student_cells)
+        ):
+            raise TemplateError("Lead student column indices exceed student row cell count.")
+
         att_cell_template = orig_student_cells[matrix_binding.student_date_template_cell_col]
 
         target_rows = max(matrix_binding.template_student_row_capacity, GENERATOR_MIN_STUDENT_ROWS, len(students))
@@ -716,7 +772,11 @@ class AttendanceGenerator:
                 matrix_binding.student_summary_cell_cols,
                 summary_widths,
             ):
-                source_tc = orig_student_cells[sum_col] if sum_col < len(orig_student_cells) else att_cell_template
+                if sum_col < 0 or sum_col >= len(orig_student_cells):
+                    raise TemplateError(
+                        f"Invalid student_summary_cell_cols index {sum_col} out of range [0, {len(orig_student_cells)})."
+                    )
+                source_tc = orig_student_cells[sum_col]
                 tc = copy.deepcopy(source_tc)
                 set_cell_width(tc, wval)
                 p = tc.find(w("p"))

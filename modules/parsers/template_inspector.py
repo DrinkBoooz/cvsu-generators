@@ -1220,25 +1220,40 @@ class AttendanceTemplateInspector:
         student_date_template_cell_col = date_columns_start if date_columns_start < len(st_tcs) else 0
 
         # Discover actual/validated widths for each semantic summary column
-        semantic_w_map = {"lb": 212, "lc": 208, "r": 133}
+        # Priority 1: Authoritative discovery - inspect actual prototype summary cell width from XML (<w:tcW>)
+        # Priority 2: Documented legacy compatibility fallback - only used if cell lacks explicit XML width
+        legacy_semantic_fallback_w_map = {"lb": 212, "lc": 208, "r": 133}
         summary_widths = []
         for name, col_idx in zip(summary_names, summary_column_indices):
-            s_name = str(name).lower()
-            if s_name in semantic_w_map:
-                w_val = semantic_w_map[s_name]
-            else:
-                w_val = None
-                if col_idx < len(r1_tcs):
-                    tcPr = r1_tcs[col_idx].find(w("tcPr"))
-                    if tcPr is not None:
-                        tcW = tcPr.find(w("tcW"))
-                        if tcW is not None:
-                            try:
-                                w_val = int(tcW.attrib.get(w("w"), "0"))
-                            except (ValueError, TypeError):
-                                w_val = None
-                if w_val is None or w_val <= 0:
-                    w_val = 200
+            w_val = None
+            # 1. Authoritative: Inspect header row 1 prototype cell
+            if col_idx < len(r1_tcs):
+                tcPr = r1_tcs[col_idx].find(w("tcPr"))
+                if tcPr is not None:
+                    tcW = tcPr.find(w("tcW"))
+                    if tcW is not None:
+                        try:
+                            val = int(tcW.attrib.get(w("w"), "0"))
+                            if val > 0:
+                                w_val = val
+                        except (ValueError, TypeError):
+                            w_val = None
+            # 2. Authoritative: If missing in row 1, check student row prototype cell
+            if w_val is None and col_idx < len(st_tcs):
+                tcPr = st_tcs[col_idx].find(w("tcPr"))
+                if tcPr is not None:
+                    tcW = tcPr.find(w("tcW"))
+                    if tcW is not None:
+                        try:
+                            val = int(tcW.attrib.get(w("w"), "0"))
+                            if val > 0:
+                                w_val = val
+                        except (ValueError, TypeError):
+                            w_val = None
+            # 3. Documented legacy compatibility fallback: only if cell lacks explicit XML width
+            if w_val is None:
+                s_name = str(name).lower()
+                w_val = legacy_semantic_fallback_w_map.get(s_name, 200)
             summary_widths.append(w_val)
 
         return {
@@ -1262,5 +1277,8 @@ class AttendanceTemplateInspector:
             "student_date_template_cell_col": student_date_template_cell_col,
             "student_summary_cell_cols": summary_column_indices,
             "summary_column_widths": tuple(summary_widths),
+            "row0_cell_count": len(row0_tcs),
+            "row1_cell_count": len(r1_tcs),
+            "student_row_cell_count": len(st_tcs),
         }
 
