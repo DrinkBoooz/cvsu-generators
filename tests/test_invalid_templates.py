@@ -1494,6 +1494,21 @@ def test_validate_dict_attendance_conflicting_profile_id():
         RecipeValidator.validate_dict(d, profile=PROFILE_ATTENDANCE_DOCX)
 
 
+def test_validate_dict_attendance_rejects_grade_sheet_profile_id():
+    """Amendment 2: Attendance serialized recipe declaring grade_sheet_xlsx raises InvalidRecipeError."""
+    d = copy.deepcopy(VALID_ATTENDANCE_DICT)
+    d["profile_id"] = "grade_sheet_xlsx"
+
+    with pytest.raises(
+        InvalidRecipeError,
+        match="Profile mismatch.*conflicts with requested profile",
+    ):
+        RecipeValidator.validate_dict(
+            d,
+            profile=PROFILE_ATTENDANCE_DOCX,
+        )
+
+
 def test_validate_dict_attendance_alias_accepted():
     """Amendment 2: Valid serialized profile alias 'attendance' resolves to canonical profile."""
     d = copy.deepcopy(VALID_ATTENDANCE_DICT)
@@ -1577,14 +1592,35 @@ def test_validate_attendance_physical_geometry_out_of_bounds_fails(tmp_path):
     raw_cand.matrix_candidate["header_row0_index"] = 999
 
     recipe = None
-    with pytest.raises(InvalidRecipeError, match="header_row0_index .* out of range"):
-        recipe = RecipeValidator.validate(raw_cand, profile=PROFILE_ATTENDANCE_DOCX)
+    with pytest.raises(
+        InvalidRecipeError,
+        match="header_row0_index .* out of range",
+    ):
+        recipe = RecipeValidator.validate(
+            raw_cand,
+            profile=PROFILE_ATTENDANCE_DOCX,
+        )
 
     # Invariant: NO ValidatedAttendanceTemplateRecipe returned
     assert recipe is None
 
-    # NO generator execution possible with invalid physical structure
+    # Upstream authority boundary: no validated recipe exists, so generator is never entered
     out_path = str(tmp_path / "should_not_exist.docx")
+    with pytest.raises(TypeError, match="AttendanceGenerator requires a ValidatedAttendanceTemplateRecipe"):
+        AttendanceGenerator(mut_path, recipe).generate(
+            output_path=out_path,
+            course_code_title="COSC 101",
+            class_schedule="08:00AM-11:00AM / Mon",
+            semester_ay="1st Sem",
+            room_assignment="CL3",
+            instructor="DR. DELA CRUZ",
+            months=[12],
+            year=2026,
+            weekdays=[0],
+            students=[("STUDENT 1", "20230001")],
+        )
+
+    # Invariant: no output file can be produced from this failed validation path
     assert not os.path.exists(out_path)
 
 
