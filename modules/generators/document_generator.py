@@ -197,7 +197,10 @@ class DocumentGenerator(ABC):
                 raise TemplateError(
                     f"Roster name_col {rb.name_col} out of range ({len(cells)} cells present)."
                 )
-            set_cell_text(cells[rb.name_col], name, shrink_threshold=32, shrink_sz="18")
+            if self._recipe.profile_id == "custom_docx":
+                set_cell_text(cells[rb.name_col], name, shrink_threshold=32, shrink_sz="18")
+            else:
+                set_cell_text(cells[rb.name_col], name, is_student_name=True)
         if rb.id_col is not None:
             if rb.id_col < 0 or rb.id_col >= len(cells):
                 raise TemplateError(

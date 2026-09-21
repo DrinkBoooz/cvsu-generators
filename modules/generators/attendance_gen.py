@@ -490,12 +490,12 @@ class AttendanceGenerator:
 
         # Populate discovered header fields driven purely by recipe bindings
         field_values = {
-            "course_code_title": (course_code_title, 40, "18"),
+            "course_code_title": (course_code_title, 40, "16"),
             "month_year": (month_year_label, 0, "18"),
-            "class_schedule": (schedule_label, 45, "18"),
+            "class_schedule": (schedule_label, 45, "16"),
             "semester_ay": (semester_ay, 0, "18"),
             "room_assignment": (room_assignment, 0, "18"),
-            "instructor": (instructor, 35, "18"),
+            "instructor": (instructor, 35, "16"),
         }
 
         for field_name, (val, shrink_thresh, shrink_sz) in field_values.items():
@@ -744,7 +744,7 @@ class AttendanceGenerator:
                         right.set(w("type"), "dxa")
                     p = lead_tc.find(w("p"))
                     if p is not None:
-                        set_para_text(p, name, shrink_threshold=32, shrink_sz="18")
+                        set_para_text(p, name, is_attendance_student=True)
                 elif c == matrix_binding.id_col:
                     set_cell_width(lead_tc, STNUM_W)
                     p = lead_tc.find(w("p"))
