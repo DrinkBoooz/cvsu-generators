@@ -8,7 +8,10 @@ Enforces schema version 2, profile constraints, structural rules, and 5-point sa
 """
 
 import os
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, List, Optional, Any, Union, Tuple
+
+import openpyxl
+from openpyxl.utils import coordinate_to_tuple
 
 from modules.models.recipe import (
     RECIPE_SCHEMA_VERSION,
@@ -84,16 +87,16 @@ class RecipeValidator:
         roster_binding = cls._validate_roster(candidate.roster_candidate, profile)
 
         # 3. Validate Header Bindings
-        header_bindings = cls._validate_headers(candidate.header_candidates, profile)
+        header_bindings = cls._validate_headers(candidate.header_candidates, profile, candidate.template_path)
 
         # 4. Validate Signatures
-        signature_bindings = cls._validate_signatures(candidate.signature_candidates, profile)
+        signature_bindings = cls._validate_signatures(candidate.signature_candidates, profile, candidate.template_path)
 
         # 5. Check Required Fields
         for req_field in profile.required_fields:
             if req_field not in header_bindings and req_field not in candidate.metadata:
                 raise TemplateError(
-                    f"Template '{os.path.basename(candidate.template_path)}' fails profile '{profile.profile_id}': "
+                    f"Template '{os.path.basename(candidate.template_path or 'template')}' fails profile '{profile.profile_id}': "
                     f"Missing required field '{req_field}'."
                 )
 
@@ -101,16 +104,27 @@ class RecipeValidator:
         for pro_field in profile.prohibited_fields:
             if pro_field in header_bindings:
                 raise TemplateError(
-                    f"Template '{os.path.basename(candidate.template_path)}' violates profile '{profile.profile_id}': "
+                    f"Template '{os.path.basename(candidate.template_path or 'template')}' violates profile '{profile.profile_id}': "
                     f"Contains prohibited field '{pro_field}'."
                 )
 
-        # 7. Ensure output_folder is validated in metadata
+        # 7. Fail-Closed Physical & Serialized Geometry Validation (DOCX / XLSX)
+        is_xlsx = (
+            profile.document_family == "grade_sheet_xlsx"
+            or profile.profile_id == "grade_sheet_xlsx"
+            or (bool(candidate.template_path) and candidate.template_path.lower().endswith((".xlsx", ".xls")))
+        )
+        if is_xlsx:
+            cls._validate_xlsx_geometry(candidate, roster_binding, header_bindings, signature_bindings)
+        else:
+            cls._validate_docx_geometry(candidate, roster_binding, header_bindings, signature_bindings)
+
+        # 8. Ensure output_folder is validated in metadata
         metadata = dict(candidate.metadata)
         output_folder = metadata.get("output_folder", "CEIT_Forms")
         metadata["output_folder"] = validate_output_folder(output_folder, default="CEIT_Forms")
 
-        # 8. Construct Authoritative ValidatedTemplateRecipe
+        # 9. Construct Authoritative ValidatedTemplateRecipe
         return ValidatedTemplateRecipe(
             schema_version=RECIPE_SCHEMA_VERSION,
             profile_id=profile.profile_id,
@@ -773,6 +787,11 @@ class RecipeValidator:
             if "output_folder" not in meta and "output_folder" in clean_data:
                 meta["output_folder"] = clean_data["output_folder"]
 
+        if "docx_geometry" in clean_data and "docx_geometry" not in meta:
+            meta["docx_geometry"] = clean_data["docx_geometry"]
+        if "xlsx_geometry" in clean_data and "xlsx_geometry" not in meta:
+            meta["xlsx_geometry"] = clean_data["xlsx_geometry"]
+
         # Construct candidate to run full validation checks
         candidate = RawTemplateRecipeCandidate(
             template_path=clean_data.get("template_path", ""),
@@ -795,16 +814,53 @@ class RecipeValidator:
     ) -> None:
         """
         Checks for ambiguity and collisions among candidates.
+        Rejects structural ambiguity when multiple distinct physical targets
+        satisfy the same semantic field without a unique structural discriminator.
         """
         for collision in candidate.collisions:
             field = collision.get("field")
-            c_list = collision.get("candidates", [])
-            # If colliding candidates have identical confidence and neither is clearly authoritative, raise
-            confidences = [c.get("confidence", 0.5) for c in c_list]
-            if len(confidences) > 1 and confidences[0] == confidences[1]:
+            c_type = collision.get("type")
+            if c_type in ("ambiguous_roster_table", "ambiguous_signature_binding"):
                 raise AmbiguousTemplateError(
-                    f"Ambiguous template binding for field '{field}' in '{os.path.basename(candidate.template_path)}': "
-                    f"Found {len(c_list)} equally confident candidate locations."
+                    f"Ambiguous template structure in '{os.path.basename(candidate.template_path or 'template')}': {c_type}."
+                )
+
+            c_list = collision.get("candidates", [])
+            if not c_list:
+                continue
+
+            viable = []
+            for c in c_list:
+                conf = float(c.get("confidence", 0.5))
+                if conf < 0.70:
+                    continue
+                if profile.allowed_fields is not None and field and field not in profile.allowed_fields:
+                    continue
+                if field == FIELD_INSTRUCTOR and c.get("is_signature_region"):
+                    continue
+                viable.append(c)
+
+            targets = set()
+            for c in viable:
+                t = c.get("target")
+                t_key = (c.get("cell_type"), tuple(t) if isinstance(t, (list, tuple)) else t)
+                targets.add(t_key)
+
+            if len(targets) > 1:
+                # Check for unique structural dominance
+                ph_cands = [c for c in viable if c.get("derivation_evidence") == "explicit_placeholder" or c.get("has_placeholder")]
+                ph_targets = {(c.get("cell_type"), tuple(c.get("target")) if isinstance(c.get("target"), (list, tuple)) else c.get("target")) for c in ph_cands}
+                if len(ph_targets) == 1:
+                    continue
+
+                tbl_cands = [c for c in viable if c.get("cell_type") == "docx_table"]
+                tbl_targets = {(c.get("cell_type"), tuple(c.get("target")) if isinstance(c.get("target"), (list, tuple)) else c.get("target")) for c in tbl_cands}
+                if len(tbl_targets) == 1 and all(c.get("cell_type") == "docx_paragraph" for c in viable if c not in tbl_cands):
+                    continue
+
+                raise AmbiguousTemplateError(
+                    f"Ambiguous template binding for field '{field}' in '{os.path.basename(candidate.template_path or 'template')}': "
+                    f"Found {len(targets)} distinct candidate locations without structural dominance."
                 )
 
     @classmethod
@@ -818,7 +874,6 @@ class RecipeValidator:
         """
         if not roster_data:
             if profile.requires_capacity or profile.document_family in ("academic_docx", "grade_sheet_xlsx"):
-                # Custom docx may omit roster, but native academic docx and grade sheet require it
                 if profile.profile_id != "custom_docx":
                     raise TemplateError(
                         f"Profile '{profile.profile_id}' strictly requires a student roster table, but none was detected."
@@ -844,13 +899,21 @@ class RecipeValidator:
         if id_col is None:
             raise TemplateError("Roster binding requires id_col")
 
-        # Grade sheet capacity requirement
+        # Grade sheet capacity and structural requirements
         capacity = roster_data.get("capacity_limit")
         if profile.requires_capacity or profile.document_family == "grade_sheet_xlsx":
             if capacity is None or capacity <= 0:
                 raise TemplateError(
                     f"grade_sheet profile '{profile.profile_id}' requires capacity_limit > 0, "
                     f"got {capacity}."
+                )
+            if roster_data.get("index_col") is None:
+                raise TemplateError(
+                    f"grade_sheet profile '{profile.profile_id}' requires roster 'index_col' coordinate."
+                )
+            if not worksheet_name:
+                raise TemplateError(
+                    f"grade_sheet profile '{profile.profile_id}' requires roster 'worksheet_name'."
                 )
 
         # Validate multi-row header structure if specified
@@ -871,51 +934,73 @@ class RecipeValidator:
         cls,
         header_candidates: List[Dict[str, Any]],
         profile: GeneratorProfile,
+        template_path: Optional[str] = None,
     ) -> Dict[str, HeaderCellBinding]:
         """
         Validates header candidates into validated bindings.
-        Ensures instructor metadata does not bind signature regions.
+        Rejects structural ambiguity when multiple distinct physical targets satisfy
+        the same semantic field without a unique structural discriminator.
         """
+        by_field: Dict[str, List[Dict[str, Any]]] = {}
+        for c in header_candidates:
+            f = c.get("field")
+            if f:
+                by_field.setdefault(f, []).append(c)
+
         bindings: Dict[str, HeaderCellBinding] = {}
-
-        # Sort by confidence descending
-        sorted_candidates = sorted(
-            header_candidates,
-            key=lambda c: c.get("confidence", 0.0),
-            reverse=True,
-        )
-
         used_targets = set()
-        for c in sorted_candidates:
-            field = c.get("field")
-            if not field:
-                continue
 
-            # Respect profile allowed_fields restriction if defined
+        for field, c_list in by_field.items():
             if profile.allowed_fields is not None and field not in profile.allowed_fields:
                 continue
 
-            # Skip if higher confidence candidate already bound this field
-            if field in bindings:
+            viable = []
+            for c in c_list:
+                conf = float(c.get("confidence", 0.5))
+                if conf < 0.70:
+                    continue
+                if field == FIELD_INSTRUCTOR and c.get("is_signature_region"):
+                    continue
+                viable.append(c)
+
+            if not viable:
                 continue
 
-            target = c.get("target")
-            target_key = (c.get("cell_type"), str(target))
-            if target_key in used_targets:
-                continue
+            target_to_candidates: Dict[Any, List[Dict[str, Any]]] = {}
+            for c in viable:
+                t = c.get("target")
+                t_key = (c.get("cell_type"), tuple(t) if isinstance(t, (list, tuple)) else t)
+                target_to_candidates.setdefault(t_key, []).append(c)
 
-            conf = float(c.get("confidence", 0.5))
-            if conf < 0.70:
-                # Discard candidates failing minimum confidence threshold
-                continue
+            if len(target_to_candidates) > 1:
+                chosen_candidate = None
 
-            # Prevent ordinary instructor metadata discovery from binding signature roles
-            if field == FIELD_INSTRUCTOR and c.get("is_signature_region"):
-                continue
+                ph_cands = [c for c in viable if c.get("derivation_evidence") == "explicit_placeholder" or c.get("has_placeholder")]
+                ph_targets = {(c.get("cell_type"), tuple(c.get("target")) if isinstance(c.get("target"), (list, tuple)) else c.get("target")) for c in ph_cands}
+                if len(ph_targets) == 1:
+                    chosen_candidate = ph_cands[0]
+                elif len(ph_targets) > 1:
+                    raise AmbiguousTemplateError(
+                        f"Ambiguous template binding for field '{field}' in '{os.path.basename(template_path or 'template')}': "
+                        f"Multiple explicit placeholder targets detected for '{field}'."
+                    )
+                else:
+                    tbl_cands = [c for c in viable if c.get("cell_type") == "docx_table"]
+                    tbl_targets = {(c.get("cell_type"), tuple(c.get("target")) if isinstance(c.get("target"), (list, tuple)) else c.get("target")) for c in tbl_cands}
+                    if len(tbl_targets) == 1 and all(c.get("cell_type") == "docx_paragraph" for c in viable if c not in tbl_cands):
+                        chosen_candidate = tbl_cands[0]
+                    else:
+                        raise AmbiguousTemplateError(
+                            f"Ambiguous template binding for field '{field}' in '{os.path.basename(template_path or 'template')}': "
+                            f"Multiple distinct physical targets satisfy '{field}' without structural dominance."
+                        )
+            else:
+                chosen_candidate = max(viable, key=lambda c: float(c.get("confidence", 0.5)))
 
-            binding = HeaderCellBinding.from_dict(c)
-            bindings[field] = binding
-            used_targets.add(target_key)
+            target_key = (chosen_candidate.get("cell_type"), tuple(chosen_candidate.get("target")) if isinstance(chosen_candidate.get("target"), (list, tuple)) else chosen_candidate.get("target"))
+            if target_key not in used_targets:
+                bindings[field] = HeaderCellBinding.from_dict(chosen_candidate)
+                used_targets.add(target_key)
 
         return bindings
 
@@ -924,19 +1009,346 @@ class RecipeValidator:
         cls,
         signature_candidates: List[Dict[str, Any]],
         profile: GeneratorProfile,
+        template_path: Optional[str] = None,
     ) -> Dict[str, SignatureBinding]:
         """
         Validates signature candidates into validated signature bindings.
+        Rejects multiple distinct physical targets for the same role without structural dominance.
         """
+        by_role: Dict[str, List[Dict[str, Any]]] = {}
+        for c in signature_candidates:
+            r = c.get("role")
+            if r:
+                by_role.setdefault(r, []).append(c)
+
         bindings: Dict[str, SignatureBinding] = {}
 
-        for c in signature_candidates:
-            role = c.get("role")
-            if not role:
+        for role, c_list in by_role.items():
+            viable = [c for c in c_list if float(c.get("confidence", 0.5)) >= 0.60]
+            if not viable:
                 continue
-            if role in bindings:
-                continue
-            binding = SignatureBinding.from_dict(c)
-            bindings[role] = binding
+
+            target_to_candidates: Dict[Any, List[Dict[str, Any]]] = {}
+            for c in viable:
+                t = c.get("target")
+                t_key = tuple(t) if isinstance(t, (list, tuple)) else t
+                target_to_candidates.setdefault(t_key, []).append(c)
+
+            if len(target_to_candidates) > 1:
+                dom = [c for c in viable if c.get("derivation_evidence") == "structural_merged_box_above_label"]
+                dom_targets = {tuple(c.get("target")) if isinstance(c.get("target"), (list, tuple)) else c.get("target") for c in dom}
+                if len(dom_targets) == 1:
+                    chosen = dom[0]
+                else:
+                    raise AmbiguousTemplateError(
+                        f"Ambiguous signature binding for role '{role}' in '{os.path.basename(template_path or 'template')}': "
+                        f"Found {len(target_to_candidates)} distinct signature candidate locations without structural dominance."
+                    )
+            else:
+                chosen = max(viable, key=lambda c: float(c.get("confidence", 0.5)))
+
+            bindings[role] = SignatureBinding.from_dict(chosen)
 
         return bindings
+
+    @classmethod
+    def _validate_docx_geometry(
+        cls,
+        candidate: RawTemplateRecipeCandidate,
+        roster_binding: Optional[RosterBinding],
+        header_bindings: Dict[str, HeaderCellBinding],
+        signature_bindings: Dict[str, SignatureBinding],
+    ) -> None:
+        """
+        Validates every physical DOCX coordinate (headers, roster, signatures)
+        against actual template geometry (or serialized docx_geometry metadata if template file is absent).
+        Raises InvalidRecipeError on any out-of-bounds or invalid coordinate.
+        """
+        table_row_cell_counts = None
+        paragraph_count = None
+
+        if candidate.template_path and os.path.exists(candidate.template_path):
+            try:
+                zin, root, body = load_docx(candidate.template_path)
+                zin.close()
+                tables = body.findall(w("tbl"))
+                paragraphs = body.findall(w("p"))
+                paragraph_count = len(paragraphs)
+                table_row_cell_counts = []
+                for tbl in tables:
+                    rows = tbl.findall(w("tr"))
+                    row_counts = [len(tr.findall(w("tc"))) for tr in rows]
+                    table_row_cell_counts.append(row_counts)
+            except (TemplateError, InvalidRecipeError):
+                raise
+            except Exception as e:
+                raise TemplateError(
+                    f"Physical template inspection failed for '{candidate.template_path}': {e}"
+                ) from e
+        else:
+            geom = (candidate.metadata or {}).get("docx_geometry")
+            has_coords = bool(header_bindings or roster_binding or signature_bindings)
+            if not isinstance(geom, dict):
+                if has_coords:
+                    raise InvalidRecipeError(
+                        f"Serialized DOCX recipe for '{os.path.basename(candidate.template_path or 'template')}' "
+                        f"is missing required 'docx_geometry' metadata when physical template is unavailable."
+                    )
+                return
+            table_row_cell_counts = geom.get("table_row_cell_counts")
+            paragraph_count = geom.get("paragraph_count")
+            if table_row_cell_counts is None or paragraph_count is None:
+                if has_coords:
+                    raise InvalidRecipeError(
+                        f"Serialized DOCX recipe for '{os.path.basename(candidate.template_path or 'template')}' "
+                        f"has invalid 'docx_geometry' metadata."
+                    )
+                return
+
+        num_tables = len(table_row_cell_counts)
+
+        # 1. Validate Header Bindings
+        for field, binding in header_bindings.items():
+            if binding.cell_type == "docx_table":
+                target = binding.target
+                if not isinstance(target, (list, tuple)) or len(target) != 3:
+                    raise InvalidRecipeError(
+                        f"Header binding for '{field}' has invalid table target {target} (must be (tbl, row, cell))."
+                    )
+                t_idx, r_idx, c_idx = target[0], target[1], target[2]
+                if not isinstance(t_idx, int) or t_idx < 0 or t_idx >= num_tables:
+                    raise InvalidRecipeError(
+                        f"Header binding for '{field}' table index {t_idx} out of range (document has {num_tables} tables)."
+                    )
+                tbl_rows = table_row_cell_counts[t_idx]
+                if not isinstance(r_idx, int) or r_idx < 0 or r_idx >= len(tbl_rows):
+                    raise InvalidRecipeError(
+                        f"Header binding for '{field}' row index {r_idx} out of range for table {t_idx} (has {len(tbl_rows)} rows)."
+                    )
+                row_cells = tbl_rows[r_idx]
+                if not isinstance(c_idx, int) or c_idx < 0 or c_idx >= row_cells:
+                    raise InvalidRecipeError(
+                        f"Header binding for '{field}' cell index {c_idx} out of range for table {t_idx}, row {r_idx} (has {row_cells} cells)."
+                    )
+            elif binding.cell_type == "docx_paragraph":
+                target = binding.target
+                p_idx = target[0] if isinstance(target, (list, tuple)) and len(target) == 1 else target
+                if not isinstance(p_idx, int) or p_idx < 0 or p_idx >= paragraph_count:
+                    raise InvalidRecipeError(
+                        f"Header binding for '{field}' paragraph index {p_idx} out of range (document has {paragraph_count} paragraphs)."
+                    )
+
+        # 2. Validate Roster Binding
+        if roster_binding:
+            t_idx = roster_binding.table_index
+            if not isinstance(t_idx, int) or t_idx < 0 or t_idx >= num_tables:
+                raise InvalidRecipeError(
+                    f"Roster binding table index {t_idx} out of range (document has {num_tables} tables)."
+                )
+            tbl_rows = table_row_cell_counts[t_idx]
+            num_rows = len(tbl_rows)
+            h_idx = roster_binding.header_row_index
+            h_count = roster_binding.header_row_count
+            f_idx = roster_binding.first_data_row_index
+
+            if not isinstance(h_idx, int) or h_idx < 0 or h_idx >= num_rows:
+                raise InvalidRecipeError(
+                    f"Roster header_row_index {h_idx} out of range for table {t_idx} (has {num_rows} rows)."
+                )
+            if h_idx + h_count > num_rows:
+                raise InvalidRecipeError(
+                    f"Roster header_row_index ({h_idx}) + header_row_count ({h_count}) exceeds table {t_idx} rows ({num_rows})."
+                )
+            if not isinstance(f_idx, int) or f_idx < 0 or f_idx >= num_rows:
+                raise InvalidRecipeError(
+                    f"Roster first_data_row_index {f_idx} out of range for table {t_idx} (has {num_rows} rows)."
+                )
+
+            data_row_cells = tbl_rows[f_idx]
+            cols_to_check = [("name_col", roster_binding.name_col), ("id_col", roster_binding.id_col)]
+            if roster_binding.index_col is not None:
+                cols_to_check.append(("index_col", roster_binding.index_col))
+            if roster_binding.signature_col is not None:
+                cols_to_check.append(("signature_col", roster_binding.signature_col))
+            if roster_binding.has_split_names:
+                for col_name, c_val in [
+                    ("last_name_col", roster_binding.last_name_col),
+                    ("first_name_col", roster_binding.first_name_col),
+                    ("middle_name_col", roster_binding.middle_name_col),
+                ]:
+                    if c_val is not None:
+                        cols_to_check.append((col_name, c_val))
+
+            for col_name, col_val in cols_to_check:
+                if not isinstance(col_val, int) or col_val < 0 or col_val >= data_row_cells:
+                    raise InvalidRecipeError(
+                        f"Roster {col_name} ({col_val}) out of range for table {t_idx} row {f_idx} (has {data_row_cells} cells)."
+                    )
+
+        # 3. Validate Signature Bindings
+        for role, sig in signature_bindings.items():
+            target = sig.target
+            if isinstance(target, (list, tuple)) and len(target) == 3:
+                t_idx, r_idx, c_idx = target[0], target[1], target[2]
+                if not isinstance(t_idx, int) or t_idx < 0 or t_idx >= num_tables:
+                    raise InvalidRecipeError(
+                        f"Signature binding for '{role}' table index {t_idx} out of range (document has {num_tables} tables)."
+                    )
+                tbl_rows = table_row_cell_counts[t_idx]
+                if not isinstance(r_idx, int) or r_idx < 0 or r_idx >= len(tbl_rows):
+                    raise InvalidRecipeError(
+                        f"Signature binding for '{role}' row index {r_idx} out of range for table {t_idx} (has {len(tbl_rows)} rows)."
+                    )
+                row_cells = tbl_rows[r_idx]
+                if not isinstance(c_idx, int) or c_idx < 0 or c_idx >= row_cells:
+                    raise InvalidRecipeError(
+                        f"Signature binding for '{role}' cell index {c_idx} out of range for table {t_idx}, row {r_idx} (has {row_cells} cells)."
+                    )
+            elif isinstance(target, int) or (isinstance(target, (list, tuple)) and len(target) == 1):
+                p_idx = target[0] if isinstance(target, (list, tuple)) else target
+                if not isinstance(p_idx, int) or p_idx < 0 or p_idx >= paragraph_count:
+                    raise InvalidRecipeError(
+                        f"Signature binding for '{role}' paragraph index {p_idx} out of range (document has {paragraph_count} paragraphs)."
+                    )
+
+    @classmethod
+    def _validate_xlsx_geometry(
+        cls,
+        candidate: RawTemplateRecipeCandidate,
+        roster_binding: Optional[RosterBinding],
+        header_bindings: Dict[str, HeaderCellBinding],
+        signature_bindings: Dict[str, SignatureBinding],
+    ) -> None:
+        """
+        Validates every physical XLSX coordinate (headers, roster, signatures)
+        against actual workbook geometry (or serialized xlsx_geometry metadata if workbook is absent).
+        Raises InvalidRecipeError on any out-of-bounds or invalid coordinate.
+        """
+        worksheets_geom: Dict[str, Dict[str, int]] = {}
+
+        if candidate.template_path and os.path.exists(candidate.template_path):
+            try:
+                wb = openpyxl.load_workbook(candidate.template_path, data_only=True)
+                for s_name in wb.sheetnames:
+                    ws = wb[s_name]
+                    worksheets_geom[s_name] = {
+                        "max_row": ws.max_row,
+                        "max_column": ws.max_column,
+                    }
+                wb.close()
+            except (TemplateError, InvalidRecipeError):
+                raise
+            except Exception as e:
+                raise TemplateError(
+                    f"Physical template inspection failed for '{candidate.template_path}': {e}"
+                ) from e
+        else:
+            geom = (candidate.metadata or {}).get("xlsx_geometry")
+            has_coords = bool(header_bindings or roster_binding or signature_bindings)
+            if not isinstance(geom, dict) or "worksheets" not in geom:
+                if has_coords:
+                    raise InvalidRecipeError(
+                        f"Serialized XLSX recipe for '{os.path.basename(candidate.template_path or 'template')}' "
+                        f"is missing required 'xlsx_geometry' metadata when physical workbook is unavailable."
+                    )
+                return
+            worksheets_geom = geom["worksheets"]
+
+        def get_ws_bounds(sheet_name: Optional[str]) -> Tuple[str, int, int]:
+            if not sheet_name:
+                if not worksheets_geom:
+                    raise InvalidRecipeError("Workbook has no worksheets.")
+                first_name = next(iter(worksheets_geom.keys()))
+                return first_name, worksheets_geom[first_name]["max_row"], worksheets_geom[first_name]["max_column"]
+            for k, v in worksheets_geom.items():
+                if k.lower() == sheet_name.lower():
+                    return k, v["max_row"], v["max_column"]
+            raise InvalidRecipeError(
+                f"Worksheet '{sheet_name}' not found in workbook (available: {list(worksheets_geom.keys())})."
+            )
+
+        def parse_xlsx_cell(coord_str: str, default_sheet: Optional[str] = None) -> Tuple[str, int, int]:
+            target_sheet = default_sheet
+            target_cell = coord_str
+            if "!" in coord_str:
+                target_sheet, target_cell = coord_str.split("!", 1)
+            actual_sheet, max_r, max_c = get_ws_bounds(target_sheet)
+            try:
+                row, col = coordinate_to_tuple(target_cell)
+            except Exception as e:
+                raise InvalidRecipeError(f"Invalid cell coordinate '{coord_str}': {e}") from e
+            return actual_sheet, row, col
+
+        default_roster_sheet = roster_binding.worksheet_name if roster_binding else None
+
+        # 1. Validate Header Bindings
+        for field, binding in header_bindings.items():
+            if binding.cell_type == "xlsx_cell" or isinstance(binding.target, str):
+                coord = str(binding.target)
+                actual_sheet, r, c = parse_xlsx_cell(coord, default_sheet=default_roster_sheet)
+                _, max_r, max_c = get_ws_bounds(actual_sheet)
+                if r < 1 or r > max_r or c < 1 or c > max_c:
+                    raise InvalidRecipeError(
+                        f"Header binding for '{field}' coordinate '{coord}' out of bounds for sheet '{actual_sheet}' "
+                        f"(row {r} not in [1, {max_r}] or col {c} not in [1, {max_c}])."
+                    )
+
+        # 2. Validate Roster Binding
+        if roster_binding:
+            r_sheet = roster_binding.worksheet_name
+            if not r_sheet:
+                raise InvalidRecipeError("Grade sheet roster binding is missing worksheet_name.")
+            actual_sheet, max_r, max_c = get_ws_bounds(r_sheet)
+
+            f_row = roster_binding.first_data_row_index
+            if f_row < 1 or f_row > max_r:
+                raise InvalidRecipeError(
+                    f"Roster first_data_row_index {f_row} out of bounds for sheet '{actual_sheet}' (max_row {max_r})."
+                )
+
+            name_col = roster_binding.name_col
+            id_col = roster_binding.id_col
+            if name_col < 1 or name_col > max_c:
+                raise InvalidRecipeError(
+                    f"Roster name_col {name_col} out of bounds for sheet '{actual_sheet}' (max_column {max_c})."
+                )
+            if id_col < 1 or id_col > max_c:
+                raise InvalidRecipeError(
+                    f"Roster id_col {id_col} out of bounds for sheet '{actual_sheet}' (max_column {max_c})."
+                )
+
+            if roster_binding.index_col is not None:
+                idx_col = roster_binding.index_col
+                if idx_col < 1 or idx_col > max_c:
+                    raise InvalidRecipeError(
+                        f"Roster index_col {idx_col} out of bounds for sheet '{actual_sheet}' (max_column {max_c})."
+                    )
+
+            if roster_binding.capacity_limit is not None:
+                cap = roster_binding.capacity_limit
+                if cap <= 0:
+                    raise InvalidRecipeError(f"Roster capacity_limit must be > 0, got {cap}.")
+                if f_row + cap - 1 > max_r:
+                    raise InvalidRecipeError(
+                        f"Roster capacity range [{f_row}, {f_row + cap - 1}] exceeds sheet '{actual_sheet}' max_row ({max_r})."
+                    )
+
+        # 3. Validate Signatures
+        for role, sig in signature_bindings.items():
+            if isinstance(sig.target, str):
+                coord = sig.target
+                default_sheet = default_roster_sheet
+                if "!" not in coord:
+                    r_lower = role.lower()
+                    if "laboratory" in r_lower:
+                        default_sheet = "laboratory"
+                    elif "consolidated" in r_lower:
+                        default_sheet = "consolidated"
+
+                actual_sheet, r, c = parse_xlsx_cell(coord, default_sheet=default_sheet)
+                _, max_r, max_c = get_ws_bounds(actual_sheet)
+                if r < 1 or r > max_r or c < 1 or c > max_c:
+                    raise InvalidRecipeError(
+                        f"Signature binding for '{role}' coordinate '{coord}' out of bounds for sheet '{actual_sheet}' "
+                        f"(row {r} not in [1, {max_r}] or col {c} not in [1, {max_c}])."
+                    )

@@ -25,7 +25,7 @@ A high-performance, institutional desktop application and automation engine engi
 5. [End-to-End Processing Logic &amp; Data Pipelines](#end-to-end-processing-logic--data-pipelines)
    - [1. Schedule Ingestion &amp; Async Filtering](#1-schedule-ingestion--async-filtering)
    - [2. Roster Parsing &amp; Fuzzy Schedule Pairing](#2-roster-parsing--fuzzy-schedule-pairing)
-   - [3. Deterministic Heuristic Template Inspection](#3-deterministic-heuristic-template-inspection)
+   - [3. Deterministic Structural Template Inspection](#3-deterministic-structural-template-inspection)
    - [4. Dynamic Document Generation &amp; OpenXML AST Injection](#4-dynamic-document-generation--openxml-ast-injection)
    - [5. Grading Sheet OpenXML Formula Preservation](#5-grading-sheet-openxml-formula-preservation)
 6. [User Configuration &amp; Custom Templates Store](#user-configuration--custom-templates-store)
@@ -138,7 +138,7 @@ CVSU GENERATORS/
 │   │   ├── ceit_directory.py           # Department mapping, subject prefixes, lab detectors
 │   │   ├── roster_parser.py            # Roster file parser (.xlsx, .xls, .csv)
 │   │   ├── schedule_parser.py          # Master schedule parser (.xls, .xlsx)
-│   │   └── template_inspector.py       # Deterministic Heuristic Template Analyzer (Zero-AI)
+│   │   └── template_inspector.py       # Deterministic Structural Template Inspector (Zero-AI)
 │   ├── generators/                     # Document generation engines
 │   │   ├── attendance_gen.py           # Monthly attendance sheet generator (.docx)
 │   │   ├── ceit_gen.py                 # 7 CEIT departmental forms & GeneratorFactory
@@ -414,15 +414,21 @@ Each roster file is parsed and paired with a schedule entry using a 3-tier match
 2. **Normalized Section & Subject Match**: Matches section (`BSCS 1-4` &rarr; `BSCS1-4`) and subject code (`DCIT 21`).
 3. **Program Alias Match**: Resolves informal abbreviations (e.g. `CS 1-4` &rarr; `BSCS 1-4`) via `ceit_directory.py`.
 
-### 3. Deterministic Heuristic Template Inspection
+### 3. Deterministic Structural Template Inspection
 
-When any Word `.docx` file is analyzed by `TemplateInspector`:
+CvSU Document Generator enforces a strict architectural invariant across all template generation:
+```text
+INSPECTOR DETERMINES WHERE.
+GENERATOR DETERMINES WHAT.
+VALIDATOR DETERMINES WHETHER THE WHERE IS SAFE.
+```
 
-1. **Roster Detection**: Examines all tables with $\ge 2$ rows. Scans the first 5 rows for header cells matching index, id, name, or signature tokens. Scores and selects the highest-ranking candidate.
-2. **Column Disambiguation**: Identifies ID tokens (`Student Number`, `ID`, `LRN`, `Numero`) first, ensuring they are never misassigned as Name columns.
-3. **Metadata Mapping**: Scans non-roster tables for known labels (`Instructor:`, `Course:`, `Subject:`), binding target value cells. Scans paragraphs for colon bindings.
-4. **Placeholder Extraction**: Scans all `<w:t>` text runs for `{{INSTRUCTOR}}`, `{{COURSE_SECTION}}`, `{{SCHEDULE_CODE}}`, `{{SUBJECT}}`, etc.
-5. **Confidence Rating**: Computes overall quality percentage and suggests an official file suffix (e.g. `CONSULTATION_LOG`).
+When templates (`.docx` or `.xlsx`) are inspected and processed:
+
+1. **Deterministic Structural Discovery**: Examines physical geometry (tables, rows, cells, merged ranges, and paragraphs). Uses structural evidence (merged boxes, direct adjacency, and unambiguous token mapping) rather than arbitrary positional offsets or positional defaults.
+2. **Ambiguity Rejection**: If multiple distinct physical targets satisfy a semantic field or roster without a unique structural discriminator, discovery fails closed and raises `AmbiguousTemplateError` instead of arbitrarily picking a candidate by confidence score.
+3. **Fail-Closed Physical Geometry Validation**: `RecipeValidator` enforces strict bounds checks against physical OpenXML/DOCX and openpyxl structures. Every table, row, cell, column, paragraph, and worksheet index must be verified within physical limits before a `ValidatedTemplateRecipe` is issued.
+4. **Zero Generator-Side Structural Invention**: Production generators consume only immutable validated recipes and fail closed with `TemplateError` if an invalid or out-of-bounds coordinate reaches execution. Generators never invent coordinates, assume positions, or attempt positional fallbacks.
 
 ### 4. Dynamic Document Generation & OpenXML AST Injection
 

@@ -288,3 +288,133 @@ def bad_generator(matrix_tbl, row_cells, matrix_binding):
     assert "rows_2" in detected
     assert "date_columns_start_slice" in detected
 
+
+def check_structural_coordinate_literals(tree: ast.AST, filename: str = "<unknown>") -> list:
+    """Detects prohibited structural template-coordinate literals in production code:
+    - tables[0], tables[1]
+    - cells[2]
+    - start_row = 10, index_col = 1
+    - ws["C1"]
+    - ws.cell(row=12, column=3) or ws.cell(12, 3)
+    - row - 3
+    """
+    import re
+    violations = []
+    coord_pattern = re.compile(r"^[A-Z]{1,3}\d+$")
+    structural_coord_vars = {
+        "start_row", "first_row", "index_col", "name_col", "id_col",
+        "first_data_row", "first_data_row_index", "capacity_limit",
+    }
+
+    for node in ast.walk(tree):
+        # 1. tables[0], tables[1]
+        if isinstance(node, ast.Subscript):
+            target_name = ""
+            if isinstance(node.value, ast.Name):
+                target_name = node.value.id
+            elif isinstance(node.value, ast.Attribute):
+                target_name = node.value.attr
+
+            if target_name in ("tables", "doc_tables") and isinstance(node.slice, ast.Constant) and isinstance(node.slice.value, int):
+                violations.append(f"{filename}:{node.lineno} Prohibited table subscript '{target_name}[{node.slice.value}]'")
+
+            # 2. cells[2] (direct integer literal subscript on template cells)
+            if target_name in ("cells", "row_cells", "doc_cells", "info_cells") and isinstance(node.slice, ast.Constant) and isinstance(node.slice.value, int):
+                violations.append(f"{filename}:{node.lineno} Prohibited cell subscript '{target_name}[{node.slice.value}]'")
+
+            # 3. ws["C1"] (worksheet cell coordinate string literal)
+            if any(ws_name in target_name.lower() for ws_name in ("ws", "sheet", "worksheet")):
+                if isinstance(node.slice, ast.Constant) and isinstance(node.slice.value, str):
+                    val = node.slice.value.strip().upper()
+                    if "!" in val:
+                        val = val.split("!", 1)[1].strip()
+                    if coord_pattern.match(val):
+                        violations.append(f"{filename}:{node.lineno} Prohibited hardcoded worksheet coordinate '{target_name}[\"{node.slice.value}\"]'")
+
+        # 4. start_row = 10, index_col = 1
+        if isinstance(node, ast.Assign):
+            for t in node.targets:
+                if isinstance(t, ast.Name) and t.id in structural_coord_vars:
+                    if isinstance(node.value, ast.Constant) and isinstance(node.value.value, int):
+                        violations.append(f"{filename}:{node.lineno} Prohibited template coordinate literal assignment '{t.id} = {node.value.value}'")
+
+        # 5. ws.cell(row=12, column=3) or ws.cell(12, 3)
+        if isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Attribute) and node.func.attr == "cell":
+                caller_name = ""
+                if isinstance(node.func.value, ast.Name):
+                    caller_name = node.func.value.id
+                elif isinstance(node.func.value, ast.Attribute):
+                    caller_name = node.func.value.attr
+                if any(ws_name in caller_name.lower() for ws_name in ("ws", "sheet", "worksheet")):
+                    has_literal_coords = False
+                    if len(node.args) >= 2:
+                        if all(isinstance(a, ast.Constant) and isinstance(a.value, int) for a in node.args[:2]):
+                            has_literal_coords = True
+                    kw_map = {kw.arg: kw.value for kw in node.keywords}
+                    if "row" in kw_map and "column" in kw_map:
+                        if isinstance(kw_map["row"], ast.Constant) and isinstance(kw_map["column"], ast.Constant):
+                            has_literal_coords = True
+                    if has_literal_coords:
+                        violations.append(f"{filename}:{node.lineno} Prohibited literal coordinate call to '{caller_name}.cell()'")
+
+        # 6. row - 3 or r - 3 when used on template coordinate variable
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Sub):
+            if isinstance(node.left, ast.Name) and node.left.id in ("row", "r", "label_row", "min_row"):
+                if isinstance(node.right, ast.Constant) and isinstance(node.right.value, int) and node.right.value > 0:
+                    violations.append(f"{filename}:{node.lineno} Prohibited positional offset '{node.left.id} - {node.right.value}'")
+
+    return violations
+
+
+def test_ast_no_structural_template_coordinate_literals_in_generators():
+    """Rule 7: Prohibit all structural template-coordinate literals in production generators:
+    - tables[0], tables[1]
+    - cells[2]
+    - start_row = 10, index_col = 1
+    - ws["C1"]
+    - ws.cell(row=12, column=3)
+    - row - 3
+    """
+    generators_dir = os.path.join(REPO_ROOT, "modules", "generators")
+    violations = []
+    for fpath in get_python_files(generators_dir):
+        with open(fpath, "r", encoding="utf-8") as f:
+            tree = ast.parse(f.read(), filename=fpath)
+        v = check_structural_coordinate_literals(tree, filename=os.path.relpath(fpath, REPO_ROOT))
+        violations.extend(v)
+
+    assert not violations, (
+        f"Found prohibited structural template-coordinate literals in production generators:\n"
+        + "\n".join(violations)
+    )
+
+
+def test_ast_structural_literal_detector_catches_all_violations():
+    """Verify that Rule 7 detector catches every prohibited structural literal pattern."""
+    bad_code = """
+def bad_func(tables, cells, ws, row):
+    tbl0 = tables[0]
+    tbl1 = tables[1]
+    c2 = cells[2]
+    start_row = 10
+    index_col = 1
+    val = ws["C1"]
+    ws.cell(row=12, column=3).value = "foo"
+    ws.cell(12, 3).value = "bar"
+    offset_coord = row - 3
+"""
+    tree = ast.parse(bad_code)
+    violations = check_structural_coordinate_literals(tree, "bad_code.py")
+    assert len(violations) >= 8, f"Expected at least 8 violations, got {len(violations)}: {violations}"
+    v_text = "\n".join(violations)
+    assert "tables[0]" in v_text
+    assert "tables[1]" in v_text
+    assert "cells[2]" in v_text
+    assert "start_row = 10" in v_text
+    assert "index_col = 1" in v_text
+    assert 'ws["C1"]' in v_text
+    assert "cell()" in v_text
+    assert "row - 3" in v_text
+
+

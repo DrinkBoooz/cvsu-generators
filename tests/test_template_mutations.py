@@ -400,18 +400,11 @@ def test_m8_xlsx_structural_signature_geometry(tmp_path):
     assert out_ws["BI57"].value is None
 
 
-def test_m10_xlsx_signature_offset_fallback_is_compatibility_behavior(tmp_path):
-        """M10: Preserve the documented legacy signature offset fallback.
+def test_m10_xlsx_signature_offset_fallback_is_eliminated(tmp_path):
+        """M10: Verify elimination of arbitrary row - 3 signature offset fallback.
 
-        Evidence record:
-        - Pre-change assumption: a plain INSTRUCTOR label without merged geometry
-            may derive its target three rows above within the legacy scan window.
-        - Current authority: XlsxTemplateInspector emits the fallback candidate;
-            GradeGenerator consumes its validated signature binding.
-        - Demonstrated boundary: no merged signature box exists, so structural
-            geometry cannot provide a target; the compatibility fallback is used.
-        - Phase 4 rationale: this is existing template-discovery compatibility,
-            not Phase 3 field resolution or business/data transformation.
+        When merged signature box geometry is absent, the inspector must not invent
+        an arbitrary fallback coordinate (row - 3). Instead, no signature target is emitted.
         """
         repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         src = os.path.join(repo_root, "templates", "GRADING_LECTURE_TEMPLATE.xlsx")
@@ -430,13 +423,8 @@ def test_m10_xlsx_signature_offset_fallback_is_compatibility_behavior(tmp_path):
 
         recipe = TemplateRecipeResolver.get_instance().resolve(mut_path, "grade_sheet_xlsx")
         lecture_signature = recipe.signature_bindings.get("instructor")
-        assert lecture_signature is not None
-        assert lecture_signature.target == "E67"
-
-        out_path = str(tmp_path / "out_m10.xlsx")
-        GradeGenerator(mut_path, recipe).generate(SAMPLE_GRADE_INFO, SAMPLE_GRADE_STUDENTS, out_path)
-        out_wb = openpyxl.load_workbook(out_path)
-        assert out_wb["Lecture"]["E67"].value == "DR. JUAN DELA CRUZ"
+        # No arbitrary fallback coordinate (e.g. E67) is invented
+        assert lecture_signature is None
 
 
 def test_m9_xlsx_roster_outside_legacy_scan_window(tmp_path):

@@ -102,14 +102,19 @@ class DocxTemplateInspector:
                 candidate_roster_tables.append(r_info)
 
         if len(candidate_roster_tables) > 1:
-            best_score = max(c.get("score", 0) for c in candidate_roster_tables)
-            top_candidates = [c for c in candidate_roster_tables if c.get("score", 0) == best_score]
-            if len(top_candidates) > 1:
-                raise TemplateError(
+            # Check for structural dominance:
+            # Table with repeated student rows and Word header markup structurally dominates a table without
+            dom = [
+                c for c in candidate_roster_tables
+                if c.get("total_rows", 0) > c.get("first_data_row_index", 0) + 1
+            ]
+            if len(dom) == 1:
+                roster_candidate = dom[0]
+            else:
+                raise AmbiguousTemplateError(
                     f"Multiple candidate roster tables detected in '{os.path.basename(template_path)}': "
-                    f"tables {[c['table_index'] for c in top_candidates]}. Ambiguous roster tables detected."
+                    f"tables {[c['table_index'] for c in candidate_roster_tables]}. Ambiguous roster tables detected."
                 )
-            roster_candidate = top_candidates[0]
         elif candidate_roster_tables:
             roster_candidate = candidate_roster_tables[0]
         else:
@@ -216,11 +221,34 @@ class DocxTemplateInspector:
         placeholders = self._detect_placeholders(body)
 
         # 4. Observe collisions
-        collisions = SemanticRegistry.observe_collisions(header_candidates)
+        collisions = []
+        collisions.extend(SemanticRegistry.observe_collisions(header_candidates))
+
+        # Observe signature collisions
+        sig_map: Dict[str, List[Dict[str, Any]]] = {}
+        for s in signature_candidates:
+            r = s.get("role")
+            if r:
+                sig_map.setdefault(r, []).append(s)
+        for r, sc_list in sig_map.items():
+            targets = {s.get("target") if not isinstance(s.get("target"), list) else tuple(s.get("target")) for s in sc_list}
+            if len(targets) > 1:
+                dom = [s for s in sc_list if s.get("derivation_evidence") == "structural_merged_box_above_label"]
+                if len(dom) != 1:
+                    collisions.append({
+                        "type": "ambiguous_signature_binding",
+                        "role": r,
+                        "candidates": sc_list,
+                    })
 
         # 5. Generate title, suffix, and confidence
         title, suffix = self._suggest_title_and_suffix(template_path, paragraphs)
         confidence_score = self._compute_confidence(roster_candidate, header_candidates, placeholders=placeholders)
+
+        table_row_cell_counts = [
+            tuple(len(r.findall(w("tc"))) for r in tbl.findall(w("tr")))
+            for tbl in tables
+        ]
 
         metadata = {
             "title": title,
@@ -229,6 +257,10 @@ class DocxTemplateInspector:
             "total_tables": total_tables,
             "total_paragraphs": len(paragraphs),
             "placeholders": placeholders,
+            "docx_geometry": {
+                "table_row_cell_counts": table_row_cell_counts,
+                "paragraph_count": len(paragraphs),
+            },
         }
 
         return RawTemplateRecipeCandidate(
@@ -693,7 +725,7 @@ class XlsxTemplateInspector:
                     "has_split_names": False,
                 }
 
-        # 4. Scope-Aware Signature Box Discovery (Structural geometry, Mutation M8 compliant)
+        # 4. Scope-Aware Signature Box Discovery (Structural merged geometry only)
         def find_signature_target(ws, sheet_display_name: str, scope_name: str) -> Optional[Dict[str, Any]]:
             label_rng = None
             for rng in ws.merged_cells.ranges:
@@ -703,17 +735,7 @@ class XlsxTemplateInspector:
                     break
 
             if not label_rng:
-                for r in range(40, min(ws.max_row + 1, 100)):
-                    for c in range(1, min(ws.max_column + 1, 80)):
-                        v = ws.cell(r, c).value
-                        if v and isinstance(v, str) and "INSTRUCTOR" in v.upper():
-                            return {
-                                "role": "instructor" if scope_name == "lecture" else f"instructor:{scope_name}",
-                                "scope": scope_name,
-                                "target": f"{get_column_letter(c)}{r - 3}",
-                                "confidence": 0.85,
-                                "derivation_evidence": "proximity_above",
-                            }
+                # No structural merged label found; do NOT invent a target
                 return None
 
             for rng in ws.merged_cells.ranges:
@@ -728,14 +750,8 @@ class XlsxTemplateInspector:
                             "derivation_evidence": "structural_merged_box_above_label",
                         }
 
-            fallback_cell = f"{get_column_letter(label_rng.min_col)}{label_rng.min_row - 3}"
-            return {
-                "role": "instructor" if scope_name == "lecture" else f"instructor:{scope_name}",
-                "scope": scope_name,
-                "target": fallback_cell,
-                "confidence": 0.90,
-                "derivation_evidence": "offset_above_label",
-            }
+            # If no structural merged target box directly above label, fail discovery rather than guessing an offset
+            return None
 
         lec_sig = find_signature_target(ws_lec, sheet_map["lecture"], "lecture")
         if lec_sig:
@@ -758,6 +774,16 @@ class XlsxTemplateInspector:
             if con_sig:
                 signature_candidates.append(con_sig)
 
+        xlsx_geometry = {
+            "worksheets": {
+                s: {
+                    "max_row": wb[s].max_row,
+                    "max_column": wb[s].max_column,
+                }
+                for s in wb.sheetnames
+            }
+        }
+
         return RawTemplateRecipeCandidate(
             template_path=template_path,
             profile_id=profile_id,
@@ -770,6 +796,7 @@ class XlsxTemplateInspector:
                 "sheet_names": sheet_names,
                 "has_lab": "laboratory" in sheet_map,
                 "has_consolidated": "consolidated" in sheet_map,
+                "xlsx_geometry": xlsx_geometry,
             },
         )
 

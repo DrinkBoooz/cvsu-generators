@@ -172,9 +172,11 @@ def test_grade_sheet_capacity_limit_mandatory():
         fingerprint="fp1",
         roster_candidate={
             "table_index": 0,
+            "worksheet_name": "Lecture",
             "first_data_row_index": 7,
             "name_col": 3,
             "id_col": 1,
+            "index_col": 1,
             "capacity_limit": 50,
         },
         header_candidates=[
@@ -182,6 +184,13 @@ def test_grade_sheet_capacity_limit_mandatory():
             {"cell_type": "xlsx_cell", "target": "M1", "field": "course_section", "confidence": 1.0},
             {"cell_type": "xlsx_cell", "target": "C1", "field": "schedule_code", "confidence": 1.0},
         ],
+        metadata={
+            "xlsx_geometry": {
+                "worksheets": {
+                    "Lecture": {"max_row": 100, "max_column": 30},
+                }
+            }
+        },
     )
     recipe = RecipeValidator.validate(candidate_valid, PROFILE_GRADE_SHEET_XLSX)
     assert recipe.roster_binding.capacity_limit == 50
@@ -263,8 +272,11 @@ def test_collision_and_ambiguity_rejection():
 
 def test_template_recipe_resolver_caching_and_stale_invalidation(tmp_path):
     """Verify TemplateRecipeResolver 3-tuple caching and stale fingerprint invalidation."""
+    import docx
     tmpl_file = tmp_path / "test_template.docx"
-    tmpl_file.write_text("initial content v1")
+    doc = docx.Document()
+    doc.add_table(rows=3, cols=4)
+    doc.save(str(tmpl_file))
 
     resolver = TemplateRecipeResolver()
 
@@ -308,7 +320,9 @@ def test_template_recipe_resolver_caching_and_stale_invalidation(tmp_path):
     assert mock_insp.inspect_count == 1
 
     # 3. Modify template file: changes fingerprint, triggers stale cache eviction
-    tmpl_file.write_text("updated content v2 with different bytes")
+    doc2 = docx.Document(str(tmpl_file))
+    doc2.add_paragraph("updated content v2 with different bytes")
+    doc2.save(str(tmpl_file))
     r3 = resolver.resolve_recipe(str(tmpl_file), profile_id="academic_docx")
     assert r3 is not None
     assert r3.fingerprint != fp1

@@ -68,18 +68,31 @@ class DocumentGenerator(ABC):
 
             if b.cell_type == "docx_table":
                 t = b.target
-                if isinstance(t, (tuple, list)) and len(t) == 3:
-                    tbl_idx, r_idx, c_idx = t
-                    if tbl_idx < len(tables):
-                        rows = tables[tbl_idx].findall(w("tr"))
-                        if r_idx < len(rows):
-                            cells = rows[r_idx].findall(w("tc"))
-                            if c_idx < len(cells):
-                                set_cell_text(cells[c_idx], val, shrink_threshold=thresh, shrink_sz=sz)
+                if not (isinstance(t, (tuple, list)) and len(t) == 3):
+                    raise TemplateError(f"Invalid docx_table target: {t}")
+                tbl_idx, r_idx, c_idx = t
+                if tbl_idx < 0 or tbl_idx >= len(tables):
+                    raise TemplateError(
+                        f"Header table index {tbl_idx} out of range for field '{field_name}' ({len(tables)} tables present)."
+                    )
+                rows = tables[tbl_idx].findall(w("tr"))
+                if r_idx < 0 or r_idx >= len(rows):
+                    raise TemplateError(
+                        f"Header row index {r_idx} out of range for field '{field_name}' in table {tbl_idx} ({len(rows)} rows present)."
+                    )
+                cells = rows[r_idx].findall(w("tc"))
+                if c_idx < 0 or c_idx >= len(cells):
+                    raise TemplateError(
+                        f"Header cell index {c_idx} out of range for field '{field_name}' in table {tbl_idx}, row {r_idx} ({len(cells)} cells present)."
+                    )
+                set_cell_text(cells[c_idx], val, shrink_threshold=thresh, shrink_sz=sz)
             elif b.cell_type == "docx_paragraph":
                 p_idx = b.target
-                if isinstance(p_idx, int) and p_idx < len(paras):
-                    replace_after_colon(paras[p_idx], val, shrink_threshold=thresh, shrink_sz=sz)
+                if not isinstance(p_idx, int) or p_idx < 0 or p_idx >= len(paras):
+                    raise TemplateError(
+                        f"Header paragraph index {p_idx} out of range for field '{field_name}' ({len(paras)} paragraphs present)."
+                    )
+                replace_after_colon(paras[p_idx], val, shrink_threshold=thresh, shrink_sz=sz)
 
         # Placeholders if present in metadata
         placeholders = self._recipe.metadata.get("placeholders", [])
@@ -140,7 +153,7 @@ class DocumentGenerator(ABC):
             return
 
         tables = body.findall(w("tbl"))
-        if rb.table_index >= len(tables):
+        if rb.table_index < 0 or rb.table_index >= len(tables):
             raise TemplateError(
                 f"Roster table index {rb.table_index} not found in template ({len(tables)} tables present)."
             )
@@ -165,10 +178,6 @@ class DocumentGenerator(ABC):
                         for t in r.findall(w("t")):
                             t.text = ""
             cells = tr.findall(w("tc"))
-            while len(cells) < 3:
-                new_tc = etree.Element(w("tc"))
-                tr.append(new_tc)
-                cells = tr.findall(w("tc"))
             self._fill_student_row(cells, idx, name, stnum)
             target.append(tr)
 
@@ -177,11 +186,23 @@ class DocumentGenerator(ABC):
         rb = self._recipe.roster_binding
         if rb is None:
             return
-        if self._recipe.profile_id == "custom_docx" and rb.index_col is not None and rb.index_col < len(cells):
+        if self._recipe.profile_id == "custom_docx" and rb.index_col is not None:
+            if rb.index_col < 0 or rb.index_col >= len(cells):
+                raise TemplateError(
+                    f"Roster index_col {rb.index_col} out of range ({len(cells)} cells present)."
+                )
             set_cell_text(cells[rb.index_col], str(idx + 1))
-        if rb.name_col is not None and rb.name_col < len(cells):
+        if rb.name_col is not None:
+            if rb.name_col < 0 or rb.name_col >= len(cells):
+                raise TemplateError(
+                    f"Roster name_col {rb.name_col} out of range ({len(cells)} cells present)."
+                )
             set_cell_text(cells[rb.name_col], name, shrink_threshold=32, shrink_sz="18")
-        if rb.id_col is not None and rb.id_col < len(cells):
+        if rb.id_col is not None:
+            if rb.id_col < 0 or rb.id_col >= len(cells):
+                raise TemplateError(
+                    f"Roster id_col {rb.id_col} out of range ({len(cells)} cells present)."
+                )
             set_cell_text(cells[rb.id_col], stnum)
 
     def generate(self, info: ClassInfo, output_path: str) -> None:
