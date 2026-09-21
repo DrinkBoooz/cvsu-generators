@@ -100,13 +100,13 @@ class AttendanceMatrixBinding:
     summary_column_names: Tuple[str, ...]
     template_session_capacity: int
     template_student_row_capacity: int
-    week_template_cell_col: int = 3
-    summary_header0_cell_col: int = 7
-    date_template_cell_col: int = 3
-    summary_column_indices: Tuple[int, ...] = (7, 8, 9)
-    summary_header1_cell_cols: Tuple[int, ...] = (7, 8, 9)
-    student_date_template_cell_col: int = 3
-    student_summary_cell_cols: Tuple[int, ...] = (7, 8, 9)
+    week_template_cell_col: int
+    summary_header0_cell_col: int
+    date_template_cell_col: int
+    summary_column_indices: Tuple[int, ...]
+    summary_header1_cell_cols: Tuple[int, ...]
+    student_date_template_cell_col: int
+    student_summary_cell_cols: Tuple[int, ...]
     summary_column_widths: Tuple[int, ...] = (212, 208, 133)
     row0_cell_count: Optional[int] = None
     row1_cell_count: Optional[int] = None
@@ -155,36 +155,85 @@ class AttendanceMatrixBinding:
 
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> "AttendanceMatrixBinding":
-        date_start = d.get("date_columns_start", 3)
-        session_cap = d.get("template_session_capacity", 4)
-        summary_count = d.get("summary_columns_count", 3)
-        summary_names = tuple(d.get("summary_column_names", ("lb", "lc", "r")))
-        total_cols = date_start + session_cap + summary_count
-        default_summary_indices = tuple(range(date_start + session_cap, total_cols))
+        if not isinstance(d, dict):
+            raise InvalidRecipeError("AttendanceMatrixBinding.from_dict requires a dictionary.")
+
+        # Invariant: Inspector discovers WHERE; Validator verifies WHERE; Generator consumes WHERE.
+        # Serialized attendance recipes must NOT synthesize missing structural coordinates.
+        required_structural_ints = [
+            ("table_index", 0),
+            ("header_row0_index", 0),
+            ("header_row1_index", 0),
+            ("student_template_row_index", 0),
+            ("no_col", 0),
+            ("name_col", 0),
+            ("id_col", 0),
+            ("date_columns_start", 0),
+            ("template_session_capacity", 1),
+            ("template_student_row_capacity", 1),
+            ("summary_columns_count", 1),
+            ("week_template_cell_col", 0),
+            ("summary_header0_cell_col", 0),
+            ("date_template_cell_col", 0),
+            ("student_date_template_cell_col", 0),
+        ]
+        for field, min_val in required_structural_ints:
+            val = d.get(field)
+            if val is None or not isinstance(val, int) or isinstance(val, bool) or val < min_val:
+                raise InvalidRecipeError(
+                    f"AttendanceMatrixBinding requires explicit '{field}' (integer >= {min_val})."
+                )
+
+        required_structural_tuples = [
+            "summary_column_indices",
+            "summary_header1_cell_cols",
+            "student_summary_cell_cols",
+        ]
+        for field in required_structural_tuples:
+            val = d.get(field)
+            if val is None or not isinstance(val, (list, tuple)):
+                raise InvalidRecipeError(
+                    f"AttendanceMatrixBinding requires explicit '{field}' (list or tuple)."
+                )
+            for item in val:
+                if not isinstance(item, int) or isinstance(item, bool) or item < 0:
+                    raise InvalidRecipeError(
+                        f"AttendanceMatrixBinding '{field}' contains invalid column coordinate: {item}."
+                    )
+
+        summary_names = d.get("summary_column_names")
+        if summary_names is None or not isinstance(summary_names, (list, tuple)):
+            raise InvalidRecipeError("AttendanceMatrixBinding requires explicit 'summary_column_names'.")
+        summary_names = tuple(summary_names)
+
+        # summary_column_widths is formatting-only (cell dxas width)
         default_sum_w_map = {"lb": 212, "lc": 208, "r": 133}
         default_widths = tuple(default_sum_w_map.get(str(sn).lower(), 200) for sn in summary_names)
-        summary_widths = tuple(d.get("summary_column_widths", default_widths))
+        raw_widths = d.get("summary_column_widths", default_widths)
+        if not isinstance(raw_widths, (list, tuple)):
+            raise InvalidRecipeError("Attendance summary_column_widths must be a list or tuple of integers.")
+        summary_widths = tuple(raw_widths)
 
         return cls(
             table_index=d["table_index"],
-            header_row0_index=d.get("header_row0_index", 0),
-            header_row1_index=d.get("header_row1_index", 1),
-            student_template_row_index=d.get("student_template_row_index", 2),
-            no_col=d.get("no_col", 0),
-            name_col=d.get("name_col", 1),
-            id_col=d.get("id_col", 2),
-            date_columns_start=date_start,
-            summary_columns_count=summary_count,
+            header_row0_index=d["header_row0_index"],
+            header_row1_index=d["header_row1_index"],
+            student_template_row_index=d["student_template_row_index"],
+            no_col=d["no_col"],
+            name_col=d["name_col"],
+            id_col=d["id_col"],
+            date_columns_start=d["date_columns_start"],
+            summary_columns_count=d["summary_columns_count"],
             summary_column_names=summary_names,
-            template_session_capacity=session_cap,
-            template_student_row_capacity=d.get("template_student_row_capacity") if d.get("template_student_row_capacity") is not None and d.get("template_student_row_capacity") > 0 else (_ for _ in ()).throw(InvalidRecipeError("AttendanceMatrixBinding requires valid template_student_row_capacity > 0")),
-            week_template_cell_col=d.get("week_template_cell_col", date_start),
-            summary_header0_cell_col=d.get("summary_header0_cell_col", default_summary_indices[0] if default_summary_indices else date_start + session_cap),
-            date_template_cell_col=d.get("date_template_cell_col", date_start),
-            summary_column_indices=tuple(d.get("summary_column_indices", default_summary_indices)),
-            summary_header1_cell_cols=tuple(d.get("summary_header1_cell_cols", default_summary_indices)),
-            student_date_template_cell_col=d.get("student_date_template_cell_col", date_start),
-            student_summary_cell_cols=tuple(d.get("student_summary_cell_cols", default_summary_indices)),
+            template_session_capacity=d["template_session_capacity"],
+            template_student_row_capacity=d["template_student_row_capacity"],
+            week_template_cell_col=d["week_template_cell_col"],
+            summary_header0_cell_col=d["summary_header0_cell_col"],
+            date_template_cell_col=d["date_template_cell_col"],
+            summary_column_indices=tuple(d["summary_column_indices"]),
+            summary_header1_cell_cols=tuple(d["summary_header1_cell_cols"]),
+            student_date_template_cell_col=d["student_date_template_cell_col"],
+            student_summary_cell_cols=tuple(d["student_summary_cell_cols"]),
             summary_column_widths=summary_widths,
             row0_cell_count=d.get("row0_cell_count"),
             row1_cell_count=d.get("row1_cell_count"),

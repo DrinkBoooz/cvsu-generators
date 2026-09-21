@@ -403,7 +403,7 @@ def test_e10_legacy_and_unsupported_schema_rejection():
             fingerprint="fake_fp",
             template_path="fake.docx",
             info_binding=AttendanceInfoBinding(0, {}),
-            matrix_binding=AttendanceMatrixBinding(1, 0, 1, 2, 0, 1, 2, 3, 3, ("lb", "lc", "r"), 4, 40),
+            matrix_binding=AttendanceMatrixBinding(1, 0, 1, 2, 0, 1, 2, 3, 3, ("lb", "lc", "r"), 4, 40, 3, 7, 3, (7, 8, 9), (7, 8, 9), 3, (7, 8, 9)),
             metadata={},
             verified_safe=True,
             _construction_token="unauthorized_sentinel",
@@ -446,6 +446,7 @@ def test_e12_missing_student_name_or_number(tmp_path):
         },
         matrix_candidate={
             "table_index": 1,
+            "no_col": 0,
             "name_col": 1,
             "id_col": None,  # Missing student number column
             "date_columns_start": 3,
@@ -541,6 +542,9 @@ def test_e16_invalid_attendance_geometry(tmp_path):
         info_candidate={"table_index": 0, "bindings": {"course_code_title": (0, 1)}},
         matrix_candidate={
             "table_index": 1,
+            "no_col": 0,
+            "header_row0_index": 0,
+            "header_row1_index": 1,
             "name_col": 1,
             "id_col": 2,
             "date_columns_start": -1,  # Invalid
@@ -738,9 +742,17 @@ VALID_ATTENDANCE_DICT = {
         "name_col": 1,
         "id_col": 2,
         "date_columns_start": 3,
+        "template_session_capacity": 4,
         "summary_columns_count": 3,
         "summary_column_names": ["lb", "lc", "r"],
-        "template_session_capacity": 4,
+        "summary_column_indices": [7, 8, 9],
+        "summary_header1_cell_cols": [7, 8, 9],
+        "student_summary_cell_cols": [7, 8, 9],
+        "week_template_cell_col": 3,
+        "summary_header0_cell_col": 7,
+        "date_template_cell_col": 3,
+        "student_date_template_cell_col": 3,
+        "summary_column_widths": [212, 208, 133],
         "template_student_row_capacity": 40,
         "matrix_row_count": 5,
         "row0_cell_count": 8,
@@ -1039,7 +1051,18 @@ def test_validate_dict_attendance_summary_column_widths_validation():
             "summary_column_names": ["lb", "lc", "r"],
             "template_session_capacity": 4,
             "template_student_row_capacity": 40,
+            "summary_column_indices": [7, 8, 9],
+            "summary_header1_cell_cols": [7, 8, 9],
+            "student_summary_cell_cols": [7, 8, 9],
+            "week_template_cell_col": 3,
+            "summary_header0_cell_col": 7,
+            "date_template_cell_col": 3,
+            "student_date_template_cell_col": 3,
             "summary_column_widths": [212, 208, 133],
+            "matrix_row_count": 5,
+            "row0_cell_count": 8,
+            "row1_cell_count": 10,
+            "student_row_cell_count": 10,
         },
     }
 
@@ -1094,6 +1117,12 @@ def test_serialized_attendance_out_of_range_week_template_cell_col_fails():
             "row0_cell_count": 5,
             "row1_cell_count": 10,
             "student_row_cell_count": 10,
+            "summary_column_indices": [7, 8, 9],
+            "summary_header1_cell_cols": [7, 8, 9],
+            "student_summary_cell_cols": [7, 8, 9],
+            "summary_header0_cell_col": 4,
+            "date_template_cell_col": 3,
+            "student_date_template_cell_col": 3,
             "week_template_cell_col": 8,  # > row0_cell_count (5)
         },
     }
@@ -1135,6 +1164,12 @@ def test_serialized_attendance_out_of_range_summary_header0_cell_col_fails():
             "row0_cell_count": 5,
             "row1_cell_count": 10,
             "student_row_cell_count": 10,
+            "summary_column_indices": [7, 8, 9],
+            "summary_header1_cell_cols": [7, 8, 9],
+            "student_summary_cell_cols": [7, 8, 9],
+            "week_template_cell_col": 3,
+            "date_template_cell_col": 3,
+            "student_date_template_cell_col": 3,
             "summary_header0_cell_col": 9,  # > row0_cell_count (5)
         },
     }
@@ -1170,8 +1205,12 @@ def test_serialized_attendance_out_of_range_date_template_cell_col_fails():
             "row0_cell_count": 5,
             "row1_cell_count": 10,
             "student_row_cell_count": 10,
+            "summary_column_indices": [7, 8, 9],
+            "summary_header1_cell_cols": [7, 8, 9],
+            "student_summary_cell_cols": [7, 8, 9],
             "week_template_cell_col": 3,
             "summary_header0_cell_col": 4,
+            "student_date_template_cell_col": 3,
             "date_template_cell_col": 15,  # > row1_cell_count (10)
         },
     }
@@ -1207,6 +1246,8 @@ def test_serialized_attendance_invalid_summary_source_indices_fail():
             "row0_cell_count": 5,
             "row1_cell_count": 10,
             "student_row_cell_count": 10,
+            "summary_column_indices": [7, 8, 9],
+            "student_summary_cell_cols": [7, 8, 9],
             "week_template_cell_col": 3,
             "summary_header0_cell_col": 4,
             "date_template_cell_col": 3,
@@ -1271,7 +1312,9 @@ def test_serialized_attendance_invalid_student_prototype_source_indices_fail():
             "summary_header0_cell_col": 4,
             "date_template_cell_col": 3,
             "student_date_template_cell_col": 3,
+            "summary_column_indices": [7, 8, 9],
             "summary_header1_cell_cols": [7, 8, 9],
+            "student_summary_cell_cols": [7, 8, 9],
         },
     }
 
@@ -1322,6 +1365,10 @@ def test_serialized_attendance_mismatched_summary_array_lengths_fail():
             "row0_cell_count": 5,
             "row1_cell_count": 10,
             "student_row_cell_count": 10,
+            "week_template_cell_col": 3,
+            "summary_header0_cell_col": 4,
+            "date_template_cell_col": 3,
+            "student_date_template_cell_col": 3,
             "summary_column_indices": [7, 8, 9],
             "summary_header1_cell_cols": [7, 8, 9],
             "student_summary_cell_cols": [7, 8, 9],
@@ -1377,7 +1424,13 @@ def test_attendance_generator_never_performs_fallback_substitution(tmp_path):
         summary_column_names=valid_recipe.matrix_binding.summary_column_names,
         template_session_capacity=valid_recipe.matrix_binding.template_session_capacity,
         template_student_row_capacity=valid_recipe.matrix_binding.template_student_row_capacity,
+        week_template_cell_col=valid_recipe.matrix_binding.week_template_cell_col,
+        summary_header0_cell_col=valid_recipe.matrix_binding.summary_header0_cell_col,
+        date_template_cell_col=valid_recipe.matrix_binding.date_template_cell_col,
+        summary_column_indices=valid_recipe.matrix_binding.summary_column_indices,
         summary_header1_cell_cols=(7, 8, 99),  # Out of range of header row 1!
+        student_date_template_cell_col=valid_recipe.matrix_binding.student_date_template_cell_col,
+        student_summary_cell_cols=valid_recipe.matrix_binding.student_summary_cell_cols,
     )
     crafted_recipe = ValidatedAttendanceTemplateRecipe(
         schema_version=RECIPE_SCHEMA_VERSION,

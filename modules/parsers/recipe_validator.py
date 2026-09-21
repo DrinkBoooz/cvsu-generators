@@ -214,61 +214,81 @@ class RecipeValidator:
             )
 
         # 2. Check student columns (no, name, id)
-        no_col = matrix_cand.get("no_col", 0)
         name_col = matrix_cand.get("name_col")
         id_col = matrix_cand.get("id_col")
-        if not isinstance(no_col, int) or no_col < 0:
+        no_col = matrix_cand.get("no_col")
+        if name_col is None or not isinstance(name_col, int) or isinstance(name_col, bool) or name_col < 0:
+            raise TemplateError(
+                f"Template '{os.path.basename(candidate.template_path)}' missing student name or student number column (E12)."
+            )
+        if id_col is None or not isinstance(id_col, int) or isinstance(id_col, bool) or id_col < 0:
+            raise TemplateError(
+                f"Template '{os.path.basename(candidate.template_path)}' missing student name or student number column (E12)."
+            )
+        if no_col is None or not isinstance(no_col, int) or isinstance(no_col, bool) or no_col < 0:
             raise InvalidRecipeError(f"Template '{os.path.basename(candidate.template_path)}' invalid no_col.")
-        if name_col is None or not isinstance(name_col, int) or name_col < 0:
-            raise TemplateError(
-                f"Template '{os.path.basename(candidate.template_path)}' missing student name or student number column (E12)."
-            )
-        if id_col is None or not isinstance(id_col, int) or id_col < 0:
-            raise TemplateError(
-                f"Template '{os.path.basename(candidate.template_path)}' missing student name or student number column (E12)."
-            )
 
         # 3. Check row indices
-        h0_idx = matrix_cand.get("header_row0_index", 0)
-        h1_idx = matrix_cand.get("header_row1_index", 1)
+        h0_idx = matrix_cand.get("header_row0_index")
+        h1_idx = matrix_cand.get("header_row1_index")
         student_row_idx = matrix_cand.get("student_template_row_index")
-        if not isinstance(h0_idx, int) or h0_idx < 0 or not isinstance(h1_idx, int) or h1_idx < 0:
+        if (
+            h0_idx is None
+            or not isinstance(h0_idx, int)
+            or isinstance(h0_idx, bool)
+            or h0_idx < 0
+            or h1_idx is None
+            or not isinstance(h1_idx, int)
+            or isinstance(h1_idx, bool)
+            or h1_idx < 0
+        ):
             raise InvalidRecipeError(f"Template '{os.path.basename(candidate.template_path)}' invalid header row indices.")
-        if student_row_idx is None or not isinstance(student_row_idx, int) or student_row_idx < 0:
+        if student_row_idx is None or not isinstance(student_row_idx, int) or isinstance(student_row_idx, bool) or student_row_idx < 0:
             raise InvalidRecipeError(
                 f"Template '{os.path.basename(candidate.template_path)}' has invalid student_template_row_index / invalid student template row (E16)."
             )
 
         # 4. Check date columns geometry
         date_start = matrix_cand.get("date_columns_start")
-        if date_start is None or not isinstance(date_start, int) or date_start < 0:
+        if date_start is None or not isinstance(date_start, int) or isinstance(date_start, bool) or date_start < 0:
             raise InvalidRecipeError(
                 f"Template '{os.path.basename(candidate.template_path)}' has invalid date_columns_start / invalid date columns start (E16)."
             )
 
-        session_capacity = matrix_cand.get("template_session_capacity", 0)
-        if not isinstance(session_capacity, int) or session_capacity <= 0:
+        session_capacity = matrix_cand.get("template_session_capacity")
+        if session_capacity is None or not isinstance(session_capacity, int) or isinstance(session_capacity, bool) or session_capacity <= 0:
             raise InvalidRecipeError(
                 f"Template '{os.path.basename(candidate.template_path)}' template_session_capacity must be an integer > 0 / invalid session capacity (E16)."
             )
 
         # 5. Check summary columns count and names
-        summary_columns_count = matrix_cand.get("summary_columns_count", 3)
-        if not isinstance(summary_columns_count, int) or summary_columns_count <= 0:
+        summary_columns_count = matrix_cand.get("summary_columns_count")
+        if summary_columns_count is None or not isinstance(summary_columns_count, int) or isinstance(summary_columns_count, bool) or summary_columns_count <= 0:
             raise InvalidRecipeError("Attendance summary_columns_count must be an integer > 0.")
 
-        summary_names = tuple(matrix_cand.get("summary_column_names", ("lb", "lc", "r")))
+        raw_summary_names = matrix_cand.get("summary_column_names")
+        if raw_summary_names is None or not isinstance(raw_summary_names, (list, tuple)):
+            raise InvalidRecipeError("Attendance summary_column_names must be a list or tuple.")
+        summary_names = tuple(raw_summary_names)
         if len(summary_names) != summary_columns_count:
             raise InvalidRecipeError(
                 f"Summary column names count ({len(summary_names)}) does not match summary_columns_count ({summary_columns_count})."
             )
 
-        total_cols = date_start + session_capacity + summary_columns_count
-        default_summary_indices = tuple(range(date_start + session_capacity, total_cols))
+        raw_sci = matrix_cand.get("summary_column_indices")
+        if raw_sci is None or not isinstance(raw_sci, (list, tuple)):
+            raise InvalidRecipeError("Attendance summary_column_indices must be a list or tuple of integers.")
+        summary_column_indices = tuple(raw_sci)
 
-        summary_column_indices = tuple(matrix_cand.get("summary_column_indices", default_summary_indices))
-        summary_header1_cell_cols = tuple(matrix_cand.get("summary_header1_cell_cols", default_summary_indices))
-        student_summary_cell_cols = tuple(matrix_cand.get("student_summary_cell_cols", default_summary_indices))
+        raw_sh1 = matrix_cand.get("summary_header1_cell_cols")
+        if raw_sh1 is None or not isinstance(raw_sh1, (list, tuple)):
+            raise InvalidRecipeError("Attendance summary_header1_cell_cols must be a list or tuple of integers.")
+        summary_header1_cell_cols = tuple(raw_sh1)
+
+        raw_ssc = matrix_cand.get("student_summary_cell_cols")
+        if raw_ssc is None or not isinstance(raw_ssc, (list, tuple)):
+            raise InvalidRecipeError("Attendance student_summary_cell_cols must be a list or tuple of integers.")
+        student_summary_cell_cols = tuple(raw_ssc)
 
         default_sum_w_map = {"lb": 212, "lc": 208, "r": 133}
         default_widths = tuple(default_sum_w_map.get(str(sn).lower(), 200) for sn in summary_names)
@@ -321,21 +341,20 @@ class RecipeValidator:
             raise InvalidRecipeError("Student summary cell columns contain duplicate columns.")
 
         # 9. Validate single structural coordinate cells
-        week_template_cell_col = matrix_cand.get("week_template_cell_col", date_start)
-        if not isinstance(week_template_cell_col, int) or week_template_cell_col < 0:
+        week_template_cell_col = matrix_cand.get("week_template_cell_col")
+        if week_template_cell_col is None or not isinstance(week_template_cell_col, int) or isinstance(week_template_cell_col, bool) or week_template_cell_col < 0:
             raise InvalidRecipeError(f"Invalid week_template_cell_col: {week_template_cell_col}")
 
-        default_h0_sum = default_summary_indices[0] if default_summary_indices else date_start + session_capacity
-        summary_header0_cell_col = matrix_cand.get("summary_header0_cell_col", default_h0_sum)
-        if not isinstance(summary_header0_cell_col, int) or summary_header0_cell_col < 0:
+        summary_header0_cell_col = matrix_cand.get("summary_header0_cell_col")
+        if summary_header0_cell_col is None or not isinstance(summary_header0_cell_col, int) or isinstance(summary_header0_cell_col, bool) or summary_header0_cell_col < 0:
             raise InvalidRecipeError(f"Invalid summary_header0_cell_col: {summary_header0_cell_col}")
 
-        date_template_cell_col = matrix_cand.get("date_template_cell_col", date_start)
-        if not isinstance(date_template_cell_col, int) or date_template_cell_col < 0:
+        date_template_cell_col = matrix_cand.get("date_template_cell_col")
+        if date_template_cell_col is None or not isinstance(date_template_cell_col, int) or isinstance(date_template_cell_col, bool) or date_template_cell_col < 0:
             raise InvalidRecipeError(f"Invalid date_template_cell_col: {date_template_cell_col}")
 
-        student_date_template_cell_col = matrix_cand.get("student_date_template_cell_col", date_start)
-        if not isinstance(student_date_template_cell_col, int) or student_date_template_cell_col < 0:
+        student_date_template_cell_col = matrix_cand.get("student_date_template_cell_col")
+        if student_date_template_cell_col is None or not isinstance(student_date_template_cell_col, int) or isinstance(student_date_template_cell_col, bool) or student_date_template_cell_col < 0:
             raise InvalidRecipeError(f"Invalid student_date_template_cell_col: {student_date_template_cell_col}")
 
         # 10. Date and summary regions do not overlap

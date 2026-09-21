@@ -23,6 +23,8 @@ from modules.models.recipe import (
     RosterBinding,
     HeaderCellBinding,
     SignatureBinding,
+    AttendanceMatrixBinding,
+    AttendanceInfoBinding,
     RawTemplateRecipeCandidate,
     ValidatedTemplateRecipe,
     PROFILE_ACADEMIC_DOCX,
@@ -946,6 +948,14 @@ def test_missing_serialized_geometry_fails_closed():
             "id_col": 2,
             "date_columns_start": 3,
             "summary_columns_count": 3,
+            "summary_column_names": ["lb", "lc", "r"],
+            "summary_column_indices": [7, 8, 9],
+            "summary_header1_cell_cols": [7, 8, 9],
+            "student_summary_cell_cols": [7, 8, 9],
+            "week_template_cell_col": 3,
+            "summary_header0_cell_col": 7,
+            "date_template_cell_col": 3,
+            "student_date_template_cell_col": 3,
             "template_session_capacity": 4,
             "matrix_row_count": 5,
             "row0_cell_count": 8,
@@ -1043,4 +1053,172 @@ def test_real_academic_attendance_and_grade_templates_continue_to_generate_succe
         assert recipe_grade.verified_safe is True
         assert recipe_grade.roster_binding.capacity_limit > 0
         assert recipe_grade.roster_binding.index_col is not None
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Attendance Structural Coordinate Authority Closure Tests (Commit 157)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _make_valid_attendance_serialized_dict():
+    return {
+        "schema_version": RECIPE_SCHEMA_VERSION,
+        "profile_id": "attendance_docx",
+        "fingerprint": "att_fp_valid",
+        "template_path": "test.docx",
+        "info_binding": {
+            "table_index": 0,
+            "row_cell_counts": [2, 2],
+            "bindings": {"course_code_title": [0, 1], "instructor": [1, 1]},
+        },
+        "matrix_binding": {
+            "table_index": 1,
+            "header_row0_index": 0,
+            "header_row1_index": 1,
+            "student_template_row_index": 2,
+            "no_col": 0,
+            "name_col": 1,
+            "id_col": 2,
+            "date_columns_start": 3,
+            "template_session_capacity": 4,
+            "summary_columns_count": 3,
+            "summary_column_names": ["lb", "lc", "r"],
+            "summary_column_indices": [7, 8, 9],
+            "summary_header1_cell_cols": [7, 8, 9],
+            "student_summary_cell_cols": [7, 8, 9],
+            "week_template_cell_col": 3,
+            "summary_header0_cell_col": 7,
+            "date_template_cell_col": 3,
+            "student_date_template_cell_col": 3,
+            "template_student_row_capacity": 40,
+            "summary_column_widths": [212, 208, 133],
+            "matrix_row_count": 5,
+            "row0_cell_count": 8,
+            "row1_cell_count": 10,
+            "student_row_cell_count": 10,
+        },
+        "metadata": {"output_folder": "Attendance"},
+    }
+
+
+@pytest.mark.parametrize(
+    "missing_field,expected_exc",
+    [
+        ("header_row0_index", InvalidRecipeError),
+        ("header_row1_index", InvalidRecipeError),
+        ("student_template_row_index", InvalidRecipeError),
+        ("no_col", InvalidRecipeError),
+        ("name_col", TemplateError),
+        ("id_col", TemplateError),
+        ("date_columns_start", InvalidRecipeError),
+        ("template_session_capacity", InvalidRecipeError),
+        ("summary_columns_count", InvalidRecipeError),
+        ("summary_column_names", InvalidRecipeError),
+        ("summary_column_indices", InvalidRecipeError),
+        ("summary_header1_cell_cols", InvalidRecipeError),
+        ("student_summary_cell_cols", InvalidRecipeError),
+        ("week_template_cell_col", InvalidRecipeError),
+        ("summary_header0_cell_col", InvalidRecipeError),
+        ("date_template_cell_col", InvalidRecipeError),
+        ("student_date_template_cell_col", InvalidRecipeError),
+    ],
+)
+def test_attendance_serialized_recipe_missing_structural_field_fails_closed(tmp_path, missing_field, expected_exc):
+    """
+    Every required attendance structural coordinate must be explicit in serialized recipes.
+    Omitting any coordinate MUST raise InvalidRecipeError (or TemplateError for name/id),
+    yielding NO validated recipe, preventing generator instantiation/execution, and producing NO output file.
+    """
+    data = _make_valid_attendance_serialized_dict()
+    data["matrix_binding"].pop(missing_field)
+
+    out_file = str(tmp_path / f"output_never_created_{missing_field}.docx")
+    assert not os.path.exists(out_file)
+
+    validated_recipe = None
+    with pytest.raises(expected_exc):
+        validated_recipe = RecipeValidator.validate_dict(data, profile="attendance_docx")
+
+    assert validated_recipe is None
+    assert not os.path.exists(out_file)
+
+    # Invariant: AttendanceGenerator cannot run without a ValidatedAttendanceTemplateRecipe
+    from modules.generators.attendance_gen import AttendanceGenerator
+    with pytest.raises(TypeError, match="AttendanceGenerator requires a ValidatedAttendanceTemplateRecipe"):
+        AttendanceGenerator("dummy.docx", validated_recipe)  # type: ignore
+
+    assert not os.path.exists(out_file)
+
+
+@pytest.mark.parametrize(
+    "omitted_field",
+    [
+        "table_index",
+        "header_row0_index",
+        "header_row1_index",
+        "student_template_row_index",
+        "no_col",
+        "name_col",
+        "id_col",
+        "date_columns_start",
+        "template_session_capacity",
+        "template_student_row_capacity",
+        "summary_columns_count",
+        "summary_column_names",
+        "summary_column_indices",
+        "summary_header1_cell_cols",
+        "student_summary_cell_cols",
+        "week_template_cell_col",
+        "summary_header0_cell_col",
+        "date_template_cell_col",
+        "student_date_template_cell_col",
+    ],
+)
+def test_attendance_matrix_binding_from_dict_strictly_forbids_omitted_coordinates(omitted_field):
+    """AttendanceMatrixBinding.from_dict must NOT synthesize missing coordinates with defaults."""
+    valid_mb_dict = dict(_make_valid_attendance_serialized_dict()["matrix_binding"])
+    valid_mb_dict.pop(omitted_field)
+
+    with pytest.raises(InvalidRecipeError) as exc_info:
+        AttendanceMatrixBinding.from_dict(valid_mb_dict)
+    assert omitted_field in str(exc_info.value) or "requires explicit" in str(exc_info.value)
+
+
+def test_attendance_matrix_binding_dataclass_forbids_omitted_coordinates():
+    """Direct AttendanceMatrixBinding constructor must require all structural coordinates without defaults."""
+    with pytest.raises(TypeError) as exc_info:
+        # Omitting week_template_cell_col, summary_header0_cell_col, date_template_cell_col, etc.
+        AttendanceMatrixBinding(
+            table_index=1,
+            header_row0_index=0,
+            header_row1_index=1,
+            student_template_row_index=2,
+            no_col=0,
+            name_col=1,
+            id_col=2,
+            date_columns_start=3,
+            summary_columns_count=3,
+            summary_column_names=("lb", "lc", "r"),
+            template_session_capacity=4,
+            template_student_row_capacity=40,
+        )
+    assert "missing" in str(exc_info.value) and "required positional argument" in str(exc_info.value)
+
+
+def test_serialized_attendance_recipe_with_geometry_missing_structural_coordinate_fails_closed(tmp_path):
+    """Even when full geometric counts are present, missing any structural coordinate fails closed."""
+    data = _make_valid_attendance_serialized_dict()
+    assert "row0_cell_count" in data["matrix_binding"]
+    assert "row1_cell_count" in data["matrix_binding"]
+    assert "student_row_cell_count" in data["matrix_binding"]
+    assert "matrix_row_count" in data["matrix_binding"]
+
+    # Remove student_date_template_cell_col
+    data["matrix_binding"].pop("student_date_template_cell_col")
+
+    out_file = str(tmp_path / "never_created_geom_test.docx")
+    with pytest.raises(InvalidRecipeError) as exc_info:
+        RecipeValidator.validate_dict(data, profile="attendance_docx")
+    assert "student_date_template_cell_col" in str(exc_info.value)
+    assert not os.path.exists(out_file)
+
 
