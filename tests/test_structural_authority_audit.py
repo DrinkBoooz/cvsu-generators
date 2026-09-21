@@ -812,3 +812,235 @@ def test_grade_generator_rejects_missing_worksheet_name(tmp_path):
     with pytest.raises(TemplateError) as exc:
         gen.generate(info, [("Student", "123")], str(tmp_path / "out.xlsx"))
     assert "missing mandatory worksheet_name" in str(exc.value)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 7. Forensic Elimination of Fabricated Structural Defaults
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def test_zero_or_negative_roster_capacity_fails_closed(tmp_path):
+    """Zero or negative roster capacity must fail closed with InvalidRecipeError rather than defaulting to 50."""
+    doc_path = str(tmp_path / "zero_cap_template.docx")
+    # Table with 1 row: only header row, 0 data rows
+    _create_minimal_docx(doc_path, num_tables=1, rows=1, cols=3)
+
+    cand = RawTemplateRecipeCandidate(
+        template_path=doc_path,
+        profile_id="academic_docx",
+        fingerprint="fp_zero_cap",
+        roster_candidate={
+            "table_index": 0,
+            "first_data_row_index": 1,  # Out of bounds for 1-row table!
+            "name_col": 0,
+            "id_col": 1,
+            "capacity_limit": 0,  # Zero capacity
+        },
+        header_candidates=[
+            {"cell_type": "docx_table", "target": (0, 0, 0), "field": "instructor", "confidence": 1.0},
+            {"cell_type": "docx_table", "target": (0, 0, 1), "field": "course_section", "confidence": 1.0},
+            {"cell_type": "docx_table", "target": (0, 0, 2), "field": "schedule_code", "confidence": 1.0},
+            {"cell_type": "docx_table", "target": (0, 0, 0), "field": "subject", "confidence": 1.0},
+        ],
+    )
+    with pytest.raises((InvalidRecipeError, TemplateError)) as exc:
+        RecipeValidator.validate(cand, PROFILE_ACADEMIC_DOCX)
+    assert "requires capacity_limit > 0" in str(exc.value) or "capacity_limit must be > 0" in str(exc.value) or "out of range" in str(exc.value)
+
+
+def test_negative_roster_capacity_in_serialized_recipe_fails_closed():
+    """Serialized recipe with negative capacity fails closed with InvalidRecipeError."""
+    cand = RawTemplateRecipeCandidate(
+        template_path="",  # Serialized
+        profile_id="academic_docx",
+        fingerprint="fp_ser",
+        roster_candidate={
+            "table_index": 0,
+            "first_data_row_index": 1,
+            "name_col": 0,
+            "id_col": 1,
+            "capacity_limit": -10,  # Explicitly negative!
+        },
+        header_candidates=[
+            {"cell_type": "docx_table", "target": (0, 0, 0), "field": "instructor", "confidence": 1.0},
+        ],
+        metadata={
+            "docx_geometry": {
+                "table_row_cell_counts": [(3, 3)],
+                "paragraph_count": 5,
+            }
+        },
+    )
+    with pytest.raises(InvalidRecipeError) as exc:
+        RecipeValidator.validate(cand, PROFILE_ACADEMIC_DOCX)
+    assert "requires capacity_limit > 0" in str(exc.value) or "capacity_limit must be > 0" in str(exc.value)
+
+
+def test_missing_serialized_geometry_fails_closed():
+    """Missing serialized geometry metadata fails closed with InvalidRecipeError when physical file is unavailable."""
+    # 1. DOCX missing docx_geometry
+    cand_docx = RawTemplateRecipeCandidate(
+        template_path="",
+        profile_id="academic_docx",
+        fingerprint="fp_missing_geom",
+        roster_candidate={
+            "table_index": 0,
+            "first_data_row_index": 1,
+            "name_col": 0,
+            "id_col": 1,
+        },
+        header_candidates=[
+            {"cell_type": "docx_table", "target": (0, 0, 0), "field": "instructor", "confidence": 1.0},
+            {"cell_type": "docx_table", "target": (0, 0, 1), "field": "course_section", "confidence": 1.0},
+            {"cell_type": "docx_table", "target": (0, 0, 2), "field": "schedule_code", "confidence": 1.0},
+            {"cell_type": "docx_table", "target": (0, 1, 0), "field": "subject", "confidence": 1.0},
+        ],
+        metadata={},  # No docx_geometry!
+    )
+    with pytest.raises(InvalidRecipeError) as exc_docx:
+        RecipeValidator.validate(cand_docx, PROFILE_ACADEMIC_DOCX)
+    assert "missing required 'docx_geometry' metadata" in str(exc_docx.value)
+
+    # 2. XLSX missing xlsx_geometry
+    cand_xlsx = RawTemplateRecipeCandidate(
+        template_path="",
+        profile_id="grade_sheet_xlsx",
+        fingerprint="fp_missing_geom_xlsx",
+        roster_candidate={
+            "table_index": 0,
+            "worksheet_name": "Lecture",
+            "first_data_row_index": 7,
+            "name_col": 3,
+            "id_col": 1,
+            "index_col": 1,
+            "capacity_limit": 50,
+        },
+        header_candidates=[
+            {"cell_type": "xlsx_cell", "target": "Lecture!B2", "field": "instructor", "confidence": 1.0},
+            {"cell_type": "xlsx_cell", "target": "Lecture!B3", "field": "course_section", "confidence": 1.0},
+            {"cell_type": "xlsx_cell", "target": "Lecture!B4", "field": "schedule_code", "confidence": 1.0},
+        ],
+        metadata={},  # No xlsx_geometry!
+    )
+    with pytest.raises(InvalidRecipeError) as exc_xlsx:
+        RecipeValidator.validate(cand_xlsx, PROFILE_GRADE_SHEET_XLSX)
+    assert "missing required 'xlsx_geometry' metadata" in str(exc_xlsx.value)
+
+    # 3. Attendance missing template_student_row_capacity
+    from modules.models.recipe import RawAttendanceTemplateRecipeCandidate, PROFILE_ATTENDANCE_DOCX
+    cand_att = RawAttendanceTemplateRecipeCandidate(
+        template_path="",
+        profile_id="attendance_docx",
+        fingerprint="fp_att",
+        info_candidate={
+            "table_index": 0,
+            "row_cell_counts": [2, 2],
+            "bindings": {"instructor": [0, 1]},
+        },
+        matrix_candidate={
+            "table_index": 1,
+            "header_row0_index": 0,
+            "header_row1_index": 1,
+            "student_template_row_index": 2,
+            "no_col": 0,
+            "name_col": 1,
+            "id_col": 2,
+            "date_columns_start": 3,
+            "summary_columns_count": 3,
+            "template_session_capacity": 4,
+            "matrix_row_count": 5,
+            "row0_cell_count": 8,
+            "row1_cell_count": 10,
+            "student_row_cell_count": 10,
+            # Missing template_student_row_capacity!
+        },
+    )
+    with pytest.raises(InvalidRecipeError) as exc_att:
+        RecipeValidator.validate(cand_att, PROFILE_ATTENDANCE_DOCX)
+    assert "template_student_row_capacity" in str(exc_att.value)
+
+
+def test_legacy_compatibility_output_cannot_introduce_fabricated_coordinates(tmp_path):
+    """Legacy compatibility dicts cannot fabricate missing coordinates or defaults."""
+    # 1. Missing table_cell coordinates in legacy dict must raise InvalidRecipeError
+    bad_legacy_dict = {
+        "schema_version": RECIPE_SCHEMA_VERSION,
+        "profile_id": "academic_docx",
+        "fingerprint": "fp_leg",
+        "header_bindings": [
+            {
+                "field": "instructor",
+                "type": "table_cell",
+                # Missing table_index, row_index, cell_index!
+            }
+        ],
+        "roster_table": {
+            "table_index": 0,
+            "first_data_row_index": 1,
+            "name_col": 0,
+            "id_col": 1,
+        },
+        "docx_geometry": {
+            "table_row_cell_counts": [(3, 3)],
+            "paragraph_count": 5,
+        },
+    }
+    with pytest.raises(InvalidRecipeError) as exc:
+        RecipeValidator.validate_dict(bad_legacy_dict, profile="academic_docx")
+    assert "missing required coordinates" in str(exc.value)
+
+    # 2. Missing paragraph_colon coordinate in legacy dict must raise InvalidRecipeError
+    bad_para_dict = {
+        "schema_version": RECIPE_SCHEMA_VERSION,
+        "profile_id": "academic_docx",
+        "fingerprint": "fp_leg",
+        "header_bindings": [
+            {
+                "field": "instructor",
+                "type": "paragraph_colon",
+                # Missing para_index!
+            }
+        ],
+        "roster_table": {
+            "table_index": 0,
+            "first_data_row_index": 1,
+            "name_col": 0,
+            "id_col": 1,
+        },
+        "docx_geometry": {
+            "table_row_cell_counts": [(3, 3)],
+            "paragraph_count": 5,
+        },
+    }
+    with pytest.raises(InvalidRecipeError) as exc_para:
+        RecipeValidator.validate_dict(bad_para_dict, profile="academic_docx")
+    assert "missing required 'para_index'" in str(exc_para.value)
+
+
+def test_real_academic_attendance_and_grade_templates_continue_to_generate_successfully():
+    """Verify all real production template families continue to validate and generate without fallbacks."""
+    from modules.services.template_recipe_service import TemplateRecipeResolver
+    resolver = TemplateRecipeResolver.get_instance()
+
+    # 1. Real Academic Template
+    academic_tmpl = os.path.join(os.path.dirname(os.path.dirname(__file__)), "templates", "template_syllabus.docx")
+    if os.path.exists(academic_tmpl):
+        recipe_acad = resolver.resolve(academic_tmpl, "academic_docx")
+        assert recipe_acad.verified_safe is True
+        assert recipe_acad.roster_binding.capacity_limit is not None
+        assert recipe_acad.roster_binding.capacity_limit > 0
+
+    # 2. Real Attendance Template
+    attendance_tmpl = os.path.join(os.path.dirname(os.path.dirname(__file__)), "attendance", "template lec.docx")
+    if os.path.exists(attendance_tmpl):
+        recipe_att = resolver.resolve(attendance_tmpl, "attendance_docx")
+        assert recipe_att.verified_safe is True
+        assert recipe_att.matrix_binding.template_student_row_capacity > 0
+
+    # 3. Real Grade Template
+    grade_tmpl = os.path.join(os.path.dirname(os.path.dirname(__file__)), "templates", "GRADING_LECTURE_TEMPLATE.xlsx")
+    if os.path.exists(grade_tmpl):
+        recipe_grade = resolver.resolve(grade_tmpl, "grade_sheet_xlsx")
+        assert recipe_grade.verified_safe is True
+        assert recipe_grade.roster_binding.capacity_limit > 0
+        assert recipe_grade.roster_binding.index_col is not None
+

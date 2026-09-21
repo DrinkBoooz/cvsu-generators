@@ -177,7 +177,7 @@ class AttendanceMatrixBinding:
             summary_columns_count=summary_count,
             summary_column_names=summary_names,
             template_session_capacity=session_cap,
-            template_student_row_capacity=d.get("template_student_row_capacity", 40),
+            template_student_row_capacity=d.get("template_student_row_capacity") if d.get("template_student_row_capacity") is not None and d.get("template_student_row_capacity") > 0 else (_ for _ in ()).throw(InvalidRecipeError("AttendanceMatrixBinding requires valid template_student_row_capacity > 0")),
             week_template_cell_col=d.get("week_template_cell_col", date_start),
             summary_header0_cell_col=d.get("summary_header0_cell_col", default_summary_indices[0] if default_summary_indices else date_start + session_cap),
             date_template_cell_col=d.get("date_template_cell_col", date_start),
@@ -239,9 +239,12 @@ class RosterBinding:
 
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> "RosterBinding":
+        f_row = d.get("first_data_row_index") if d.get("first_data_row_index") is not None else d.get("first_data_row")
+        if f_row is None:
+            raise InvalidRecipeError("RosterBinding requires 'first_data_row_index'.")
         return cls(
             table_index=d["table_index"],
-            first_data_row_index=d.get("first_data_row_index", d.get("first_data_row", 1)),
+            first_data_row_index=f_row,
             name_col=d["name_col"],
             id_col=d["id_col"],
             worksheet_name=d.get("worksheet_name"),

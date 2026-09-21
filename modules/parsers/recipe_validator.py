@@ -507,6 +507,16 @@ class RecipeValidator:
                 f"id_col ({id_col}) out of range for student row cell count ({student_row_cell_count})."
             )
 
+        if candidate.template_path and os.path.exists(candidate.template_path):
+            student_row_cap = max(matrix_row_count - student_row_idx, 1)
+        else:
+            student_row_cap = matrix_cand.get("template_student_row_capacity")
+            if student_row_cap is None or not isinstance(student_row_cap, int) or student_row_cap <= 0:
+                raise InvalidRecipeError(
+                    f"Serialized attendance recipe for '{os.path.basename(candidate.template_path or 'template')}' "
+                    f"is missing valid 'template_student_row_capacity' (must be integer > 0, got {student_row_cap})."
+                )
+
         info_binding = AttendanceInfoBinding(
             table_index=tbl_idx,
             bindings=bindings,
@@ -525,7 +535,7 @@ class RecipeValidator:
             summary_columns_count=summary_columns_count,
             summary_column_names=summary_names,
             template_session_capacity=session_capacity,
-            template_student_row_capacity=matrix_cand.get("template_student_row_capacity", 40),
+            template_student_row_capacity=student_row_cap,
             week_template_cell_col=week_template_cell_col,
             summary_header0_cell_col=summary_header0_cell_col,
             date_template_cell_col=date_template_cell_col,
@@ -747,18 +757,30 @@ class RecipeValidator:
             for item in raw_headers:
                 if isinstance(item, dict):
                     if item.get("type") == "table_cell":
+                        t_idx = item.get("table_index")
+                        r_idx = item.get("row_index")
+                        c_idx = item.get("cell_index")
+                        if t_idx is None or r_idx is None or c_idx is None:
+                            raise InvalidRecipeError(
+                                f"Legacy table_cell header binding for '{item.get('field')}' is missing required coordinates (table_index, row_index, cell_index)."
+                            )
                         header_candidates.append({
                             "cell_type": "docx_table",
-                            "target": (item.get("table_index", 0), item.get("row_index", 0), item.get("cell_index", 1)),
+                            "target": (t_idx, r_idx, c_idx),
                             "field": item.get("field"),
                             "shrink_threshold": item.get("shrink_threshold", 0),
                             "shrink_sz": item.get("shrink_sz", "18"),
                             "confidence": float(item.get("confidence", 1.0)),
                         })
                     elif item.get("type") == "paragraph_colon":
+                        p_idx = item.get("para_index")
+                        if p_idx is None:
+                            raise InvalidRecipeError(
+                                f"Legacy paragraph_colon header binding for '{item.get('field')}' is missing required 'para_index'."
+                            )
                         header_candidates.append({
                             "cell_type": "docx_paragraph",
-                            "target": item.get("para_index", 0),
+                            "target": p_idx,
                             "field": item.get("field"),
                             "shrink_threshold": item.get("shrink_threshold", 0),
                             "shrink_sz": item.get("shrink_sz", "18"),
@@ -901,6 +923,10 @@ class RecipeValidator:
 
         # Grade sheet capacity and structural requirements
         capacity = roster_data.get("capacity_limit")
+        if capacity is not None and (not isinstance(capacity, int) or capacity <= 0):
+            raise InvalidRecipeError(
+                f"Roster requires capacity_limit > 0, got {capacity}."
+            )
         if profile.requires_capacity or profile.document_family == "grade_sheet_xlsx":
             if capacity is None or capacity <= 0:
                 raise TemplateError(
@@ -1183,6 +1209,12 @@ class RecipeValidator:
                 if not isinstance(col_val, int) or col_val < 0 or col_val >= data_row_cells:
                     raise InvalidRecipeError(
                         f"Roster {col_name} ({col_val}) out of range for table {t_idx} row {f_idx} (has {data_row_cells} cells)."
+                    )
+
+            if roster_binding.capacity_limit is not None:
+                if not isinstance(roster_binding.capacity_limit, int) or roster_binding.capacity_limit <= 0:
+                    raise InvalidRecipeError(
+                        f"Roster capacity_limit must be > 0, got {roster_binding.capacity_limit}."
                     )
 
         # 3. Validate Signature Bindings

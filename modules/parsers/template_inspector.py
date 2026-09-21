@@ -383,7 +383,10 @@ class DocxTemplateInspector:
                         break
 
                 first_data_row = r_idx + header_row_count
-                total_cols = len(rows[first_data_row].findall(w("tc"))) if first_data_row < len(rows) else len(cells)
+                if first_data_row >= len(rows):
+                    # Table has no physical data rows after headers; cannot serve as a roster table
+                    continue
+                total_cols = len(rows[first_data_row].findall(w("tc")))
                 capacity_limit = len(rows) - first_data_row
 
                 if score > best_score:
@@ -401,7 +404,7 @@ class DocxTemplateInspector:
                         "signature_col": sig_col,
                         "total_cols": total_cols,
                         "total_rows": len(rows),
-                        "capacity_limit": capacity_limit if capacity_limit > 0 else 50,
+                        "capacity_limit": capacity_limit,
                         "has_split_names": False,
                         "score": best_score,
                     }
@@ -690,11 +693,11 @@ class XlsxTemplateInspector:
             if header_row is not None and name_col is not None and id_col is not None:
                 break
 
-        if header_row is not None and name_col is not None and id_col is not None:
+        if header_row is not None and name_col is not None and id_col is not None and index_col is not None:
             first_data_row = None
             capacity_limit = 0
 
-            check_col = index_col if index_col is not None else 1
+            check_col = index_col
             for r in range(header_row + 1, ws_lec.max_row + 1):
                 v = ws_lec.cell(r, check_col).value
                 if v == 1 or str(v).strip() == "1":
@@ -873,9 +876,9 @@ class TemplateInspector:
                 "id_col": rb.id_col,
                 "index_col": candidate.roster_candidate.get("index_col") if candidate.roster_candidate else None,
                 "signature_col": candidate.roster_candidate.get("signature_col") if candidate.roster_candidate else None,
-                "total_cols": candidate.roster_candidate.get("total_cols", 4) if candidate.roster_candidate else 4,
-                "total_rows": candidate.roster_candidate.get("total_rows", 50) if candidate.roster_candidate else 50,
-                "capacity_limit": rb.capacity_limit or 50,
+                "total_cols": candidate.roster_candidate.get("total_cols") if candidate.roster_candidate else None,
+                "total_rows": candidate.roster_candidate.get("total_rows") if candidate.roster_candidate else None,
+                "capacity_limit": rb.capacity_limit,
                 "has_split_names": rb.has_split_names,
             }
 
@@ -924,6 +927,7 @@ class TemplateInspector:
             "placeholders": placeholders,
             "schema_version": validated_recipe.schema_version,
             "fingerprint": validated_recipe.fingerprint,
+            "docx_geometry": candidate.metadata.get("docx_geometry"),
         }
 
     def inspect_docx_recipe(
@@ -1202,11 +1206,14 @@ class AttendanceTemplateInspector:
         else:
             summary_column_indices = tuple(summary_cols)
 
-        target_row_for_len = (
-            rows[student_template_row_idx]
-            if student_template_row_idx < len(rows)
-            else rows[header_row1_idx or 0]
-        )
+        if student_template_row_idx < len(rows):
+            target_row_for_len = rows[student_template_row_idx]
+        elif header_row1_idx is not None and header_row1_idx < len(rows):
+            target_row_for_len = rows[header_row1_idx]
+        elif header_row0_idx < len(rows):
+            target_row_for_len = rows[header_row0_idx]
+        else:
+            raise TemplateError("Matrix table has no rows to determine column count.")
         num_cols = len(target_row_for_len.findall(w("tc")))
         if summary_cols_sorted:
             first_summary_col = summary_cols_sorted[0]
