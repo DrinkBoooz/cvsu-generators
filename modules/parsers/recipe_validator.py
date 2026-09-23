@@ -1392,9 +1392,9 @@ class RecipeValidator:
                 if "!" not in coord:
                     r_lower = role.lower()
                     if "laboratory" in r_lower:
-                        default_sheet = "laboratory"
+                        default_sheet = geom.get("lab_sheet") or "laboratory"
                     elif "consolidated" in r_lower:
-                        default_sheet = "consolidated"
+                        default_sheet = geom.get("con_sheet") or "consolidated"
 
                 actual_sheet, r, c = parse_xlsx_cell(coord, default_sheet=default_sheet)
                 _, max_r, max_c = get_ws_bounds(actual_sheet)

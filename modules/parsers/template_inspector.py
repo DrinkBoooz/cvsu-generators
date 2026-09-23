@@ -598,21 +598,156 @@ class XlsxTemplateInspector:
         sheet_names = wb.sheetnames
         sheet_map = {s.lower().strip(): s for s in sheet_names}
 
-        if "lecture" not in sheet_map:
+        # ── 1. Structural Worksheet Analysis ──────────────────────────────
+        def inspect_sheet_roster(ws) -> Optional[Dict[str, Any]]:
+            header_row = None
+            index_col = None
+            name_col = None
+            id_col = None
+
+            for r in range(1, min(ws.max_row + 1, 25)):
+                for c in range(1, min(ws.max_column + 1, 30)):
+                    c_val = ws.cell(r, c).value
+                    if not c_val or not isinstance(c_val, str):
+                        continue
+                    norm_c = c_val.strip().lower()
+                    if norm_c in ("#", "no.", "no", "item", "bilang"):
+                        index_col = c
+                        header_row = r
+                    elif "student name" in norm_c or "name of student" in norm_c or "surname" in norm_c or norm_c in ("name", "pangalan", "full name", "names of students"):
+                        name_col = c
+                    elif "student number" in norm_c or "student no" in norm_c or "id number" in norm_c or "id no" in norm_c or norm_c in ("id", "student id", "lrn", "id no."):
+                        id_col = c
+
+                if header_row is not None and name_col is not None and id_col is not None and index_col is not None:
+                    break
+
+            if header_row is not None and name_col is not None and id_col is not None and index_col is not None:
+                first_data_row = None
+                capacity_limit = 0
+                check_col = index_col
+                for r in range(header_row + 1, ws.max_row + 1):
+                    v = ws.cell(r, check_col).value
+                    if v == 1 or str(v).strip() == "1":
+                        first_data_row = r
+                        break
+
+                if first_data_row is not None:
+                    expected_num = 1
+                    curr_r = first_data_row
+                    while curr_r <= ws.max_row:
+                        v = ws.cell(curr_r, check_col).value
+                        if v == expected_num or str(v).strip() == str(expected_num):
+                            capacity_limit += 1
+                            expected_num += 1
+                            curr_r += 1
+                        else:
+                            break
+
+                if first_data_row is not None and capacity_limit > 0:
+                    return {
+                        "table_index": 0,
+                        "worksheet_name": ws.title,
+                        "first_data_row_index": first_data_row,
+                        "name_col": name_col,
+                        "id_col": id_col,
+                        "index_col": index_col,
+                        "capacity_limit": capacity_limit,
+                        "has_split_names": False,
+                    }
+            return None
+
+        # Discover all candidate roster sheets
+        roster_candidates_by_sheet: Dict[str, Dict[str, Any]] = {}
+        for s_name in sheet_names:
+            r_cand = inspect_sheet_roster(wb[s_name])
+            if r_cand is not None:
+                roster_candidates_by_sheet[s_name] = r_cand
+
+        # Select primary roster sheet (prefer literal 'lecture' if present for CvSU compatibility)
+        primary_roster_sheet: Optional[str] = None
+        if "lecture" in sheet_map and sheet_map["lecture"] in roster_candidates_by_sheet:
+            primary_roster_sheet = sheet_map["lecture"]
+        elif roster_candidates_by_sheet:
+            primary_roster_sheet = next(iter(roster_candidates_by_sheet.keys()))
+
+        if not primary_roster_sheet:
             raise TemplateError(
-                f"Grade sheet template '{os.path.basename(template_path)}' is missing required 'Lecture' worksheet."
-            )
-        if "grading sheet" not in sheet_map:
-            raise TemplateError(
-                f"Grade sheet template '{os.path.basename(template_path)}' is missing required 'Grading Sheet' worksheet."
+                f"Grade sheet template '{os.path.basename(template_path)}' is missing required 'Lecture' worksheet or structural student roster sheet."
             )
 
-        ws_lec = wb[sheet_map["lecture"]]
+        # Select summary rating sheet (prefer literal 'grading sheet' if present for CvSU compatibility)
+        summary_sheet: Optional[str] = None
+        if "grading sheet" in sheet_map:
+            summary_sheet = sheet_map["grading sheet"]
+        else:
+            # Structurally discover summary sheet by scanning non-roster sheets for summary rating table or banner
+            for s_name in sheet_names:
+                if s_name == primary_roster_sheet or s_name.lower().strip() in ("notes", "instructions", "guide", "readme"):
+                    continue
+                ws_s = wb[s_name]
+                has_banner = False
+                has_rating_table = False
+                for r in range(1, min(ws_s.max_row + 1, 25)):
+                    row_txt = [str(ws_s.cell(r, c).value or "").strip().lower() for c in range(1, min(ws_s.max_column + 1, 15))]
+                    if any("college of" in t for t in row_txt):
+                        has_banner = True
+                    if any("grade" in t or "rating" in t or "mark" in t for t in row_txt) and any("name" in t or "student" in t for t in row_txt):
+                        has_rating_table = True
+                    if has_banner or has_rating_table:
+                        break
+                if has_banner or has_rating_table:
+                    summary_sheet = s_name
+                    break
+
+        if not summary_sheet:
+            raise TemplateError(
+                f"Grade sheet template '{os.path.basename(template_path)}' is missing required 'Grading Sheet' worksheet or structural summary rating sheet."
+            )
+
+        # Detect secondary / laboratory component structurally
+        has_lab = False
+        lab_sheet: Optional[str] = None
+        if "laboratory" in sheet_map:
+            has_lab = True
+            lab_sheet = sheet_map["laboratory"]
+        elif "lab" in sheet_map:
+            has_lab = True
+            lab_sheet = sheet_map["lab"]
+        else:
+            for s_name in sheet_names:
+                if s_name in (primary_roster_sheet, summary_sheet):
+                    continue
+                norm_sn = s_name.lower().strip()
+                if "lab" in norm_sn or "practical" in norm_sn:
+                    has_lab = True
+                    lab_sheet = s_name
+                    break
+                elif s_name in roster_candidates_by_sheet and s_name != primary_roster_sheet:
+                    # Distinct second student assessment grid
+                    has_lab = True
+                    lab_sheet = s_name
+                    break
+
+        # Detect consolidated component
+        has_consolidated = False
+        con_sheet: Optional[str] = None
+        if "consolidated" in sheet_map:
+            has_consolidated = True
+            con_sheet = sheet_map["consolidated"]
+        else:
+            for s_name in sheet_names:
+                if "consolidat" in s_name.lower():
+                    has_consolidated = True
+                    con_sheet = s_name
+                    break
+
+        ws_lec = wb[primary_roster_sheet]
         header_candidates: List[Dict[str, Any]] = []
         signature_candidates: List[Dict[str, Any]] = []
-        roster_candidate: Optional[Dict[str, Any]] = None
+        roster_candidate: Optional[Dict[str, Any]] = roster_candidates_by_sheet.get(primary_roster_sheet)
 
-        # 1. Header Metadata Discovery in Lecture sheet
+        # ── 2. Header Metadata Discovery in Primary Roster Sheet ──────────
         lec_merges = list(ws_lec.merged_cells.ranges)
 
         def find_target_for_label(row_idx: int, col_idx: int) -> str:
@@ -652,16 +787,16 @@ class XlsxTemplateInspector:
                         "is_signature_region": False,
                     })
 
-        # 2. Institutional College Banner Discovery (Grading Sheet!A9)
-        if "grading sheet" in sheet_map:
-            ws_grd = wb[sheet_map["grading sheet"]]
+        # ── 3. Institutional College Banner Discovery ─────────────────────
+        if summary_sheet and summary_sheet in wb.sheetnames:
+            ws_grd = wb[summary_sheet]
             for r in range(1, ws_grd.max_row + 1):
                 for c in range(1, ws_grd.max_column + 1):
                     val = ws_grd.cell(r, c).value
                     if val and isinstance(val, str) and "COLLEGE OF" in val.upper():
                         header_candidates.append({
                             "cell_type": "xlsx_cell",
-                            "target": f"{sheet_map['grading sheet']}!{ws_grd.cell(r, c).coordinate}",
+                            "target": f"{summary_sheet}!{ws_grd.cell(r, c).coordinate}",
                             "field": "college",
                             "confidence": 1.0,
                             "pattern": val.strip(),
@@ -670,70 +805,12 @@ class XlsxTemplateInspector:
                         })
                         break
 
-        # 3. Roster Table Discovery in Lecture sheet
-        header_row = None
-        index_col = None
-        name_col = None
-        id_col = None
-
-        for r in range(1, ws_lec.max_row + 1):
-            for c in range(1, ws_lec.max_column + 1):
-                c_val = ws_lec.cell(r, c).value
-                if not c_val or not isinstance(c_val, str):
-                    continue
-                norm_c = c_val.strip().lower()
-                if norm_c in ("#", "no.", "no", "item"):
-                    index_col = c
-                    header_row = r
-                elif "student name" in norm_c or "name of student" in norm_c or "surname" in norm_c:
-                    name_col = c
-                elif "student number" in norm_c or "student no" in norm_c or "id number" in norm_c or "id no" in norm_c:
-                    id_col = c
-
-            if header_row is not None and name_col is not None and id_col is not None:
-                break
-
-        if header_row is not None and name_col is not None and id_col is not None and index_col is not None:
-            first_data_row = None
-            capacity_limit = 0
-
-            check_col = index_col
-            for r in range(header_row + 1, ws_lec.max_row + 1):
-                v = ws_lec.cell(r, check_col).value
-                if v == 1 or str(v).strip() == "1":
-                    first_data_row = r
-                    break
-
-            if first_data_row is not None:
-                expected_num = 1
-                curr_r = first_data_row
-                while True:
-                    v = ws_lec.cell(curr_r, check_col).value
-                    if v == expected_num or str(v).strip() == str(expected_num):
-                        capacity_limit += 1
-                        expected_num += 1
-                        curr_r += 1
-                    else:
-                        break
-
-            if first_data_row is not None and capacity_limit > 0:
-                roster_candidate = {
-                    "table_index": 0,
-                    "worksheet_name": sheet_map["lecture"],
-                    "first_data_row_index": first_data_row,
-                    "name_col": name_col,
-                    "id_col": id_col,
-                    "index_col": index_col,
-                    "capacity_limit": capacity_limit,
-                    "has_split_names": False,
-                }
-
-        # 4. Scope-Aware Signature Box Discovery (Structural merged geometry only)
+        # ── 4. Scope-Aware Signature Box Discovery ────────────────────────
         def find_signature_target(ws, sheet_display_name: str, scope_name: str) -> Optional[Dict[str, Any]]:
             label_rng = None
             for rng in ws.merged_cells.ranges:
                 top_val = ws.cell(rng.min_row, rng.min_col).value
-                if top_val and isinstance(top_val, str) and "INSTRUCTOR" in top_val.upper():
+                if top_val and isinstance(top_val, str) and any(k in top_val.upper() for k in ("INSTRUCTOR", "PROFESSOR", "FACULTY", "TEACHER")):
                     label_rng = rng
                     break
 
@@ -745,10 +822,11 @@ class XlsxTemplateInspector:
                 if rng.min_col == label_rng.min_col and rng.max_col == label_rng.max_col:
                     if rng.max_row == label_rng.min_row - 1:
                         target_cell = f"{get_column_letter(rng.min_col)}{rng.min_row}"
+                        target_coord = target_cell if sheet_display_name == primary_roster_sheet else f"{sheet_display_name}!{target_cell}"
                         return {
                             "role": "instructor" if scope_name == "lecture" else f"instructor:{scope_name}",
                             "scope": scope_name,
-                            "target": target_cell,
+                            "target": target_coord,
                             "confidence": 1.0,
                             "derivation_evidence": "structural_merged_box_above_label",
                         }
@@ -756,7 +834,7 @@ class XlsxTemplateInspector:
             # If no structural merged target box directly above label, fail discovery rather than guessing an offset
             return None
 
-        lec_sig = find_signature_target(ws_lec, sheet_map["lecture"], "lecture")
+        lec_sig = find_signature_target(ws_lec, primary_roster_sheet, "lecture")
         if lec_sig:
             signature_candidates.append(lec_sig)
             signature_candidates.append({
@@ -767,13 +845,13 @@ class XlsxTemplateInspector:
                 "derivation_evidence": lec_sig["derivation_evidence"],
             })
 
-        if "laboratory" in sheet_map:
-            lab_sig = find_signature_target(wb[sheet_map["laboratory"]], sheet_map["laboratory"], "laboratory")
+        if lab_sheet and lab_sheet in wb.sheetnames:
+            lab_sig = find_signature_target(wb[lab_sheet], lab_sheet, "laboratory")
             if lab_sig:
                 signature_candidates.append(lab_sig)
 
-        if "consolidated" in sheet_map:
-            con_sig = find_signature_target(wb[sheet_map["consolidated"]], sheet_map["consolidated"], "consolidated")
+        if con_sheet and con_sheet in wb.sheetnames:
+            con_sig = find_signature_target(wb[con_sheet], con_sheet, "consolidated")
             if con_sig:
                 signature_candidates.append(con_sig)
 
@@ -784,7 +862,11 @@ class XlsxTemplateInspector:
                     "max_column": wb[s].max_column,
                 }
                 for s in wb.sheetnames
-            }
+            },
+            "roster_sheet": primary_roster_sheet,
+            "summary_sheet": summary_sheet,
+            "lab_sheet": lab_sheet,
+            "con_sheet": con_sheet,
         }
 
         return RawTemplateRecipeCandidate(
@@ -797,8 +879,10 @@ class XlsxTemplateInspector:
             collisions=[],
             metadata={
                 "sheet_names": sheet_names,
-                "has_lab": "laboratory" in sheet_map,
-                "has_consolidated": "consolidated" in sheet_map,
+                "roster_sheet": primary_roster_sheet,
+                "summary_sheet": summary_sheet,
+                "has_lab": has_lab,
+                "has_consolidated": has_consolidated,
                 "xlsx_geometry": xlsx_geometry,
             },
         )

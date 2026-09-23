@@ -34,6 +34,9 @@ ROLE_ATTENDANCE_LECTURE_LAB = "attendance_lecture_lab"
 ROLE_GRADE_SHEET_LECTURE = "grade_sheet_lecture"
 ROLE_GRADE_SHEET_LECTURE_LAB = "grade_sheet_lecture_lab"
 
+# Built-in template set identifier
+BUILTIN_SET_ID = "builtin_cvsu"
+
 CANONICAL_ROLES: Tuple[str, ...] = (
     ROLE_SYLLABUS,
     ROLE_EXAM_RETURNS_MIDTERM,
