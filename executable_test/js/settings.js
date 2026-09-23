@@ -107,6 +107,7 @@
           "Degrees",
           "Keywords",
           "Schedule",
+          "TemplateSets",
           "CustomTemplates",
         ];
         tabs.forEach((t) => {
@@ -115,6 +116,9 @@
           if (tabBtn) tabBtn.classList.toggle("active", t === tabName);
           if (pane) pane.classList.toggle("d-none", t !== tabName);
         });
+        if (tabName === "TemplateSets" && typeof loadTemplateSetsUI === "function") {
+          loadTemplateSetsUI();
+        }
         if (tabName === "CustomTemplates") {
           loadCustomTemplatesUI();
         }

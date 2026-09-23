@@ -124,7 +124,7 @@ def test_settings_modal_responsive_mobile():
         cols = info["gridTemplateColumns"].strip().split()
         assert len(cols) == 2, f"Expected 2 columns on mobile, got {len(cols)}"
         assert info["tabsScrollWidth"] <= info["tabsClientWidth"] + 1, "Tabs must not overflow horizontally on mobile"
-        assert len(info["buttons"]) == 6, "All 6 tabs must be present"
+        assert len(info["buttons"]) == 7, "All 7 tabs must be present"
         for btn in info["buttons"]:
             assert btn["height"] >= 20, f"Tab '{btn['text']}' height too small: {btn['height']}px"
             assert btn["width"] >= 70, f"Tab '{btn['text']}' width too small: {btn['width']}px"

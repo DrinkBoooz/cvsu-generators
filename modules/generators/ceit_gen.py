@@ -181,10 +181,29 @@ class GeneratorFactory:
         "grade_finals":   "grade_discussion",
     }
 
-    def __init__(self, templates_dir: str, config_manager=None, resolver: Optional[TemplateRecipeResolver] = None):
+    ROLE_KEY_MAPPING = {
+        "syllabus":       "syllabus",
+        "exam_midterm":   "exam_returns_midterm",
+        "exam_finals":    "exam_returns_final",
+        "tos_midterm":    "tos_midterm",
+        "tos_finals":     "tos_final",
+        "grade_midterm":  "grade_discussion_midterm",
+        "grade_finals":   "grade_discussion_final",
+    }
+
+    def __init__(
+        self,
+        templates_dir: str,
+        config_manager=None,
+        resolver: Optional[TemplateRecipeResolver] = None,
+        template_set_manager=None,
+        active_set=None,
+    ):
         self._dir = templates_dir
         self._config_manager = config_manager
         self._resolver = resolver or TemplateRecipeResolver.get_instance()
+        self._set_manager = template_set_manager
+        self._active_set = active_set
 
     def _path(self, key: str) -> str:
         p = os.path.join(self._dir, self.TEMPLATE_FILES[key])
@@ -195,6 +214,38 @@ class GeneratorFactory:
             )
         return p
 
+    def _resolve_template(self, key: str) -> Tuple[str, str]:
+        role = self.ROLE_KEY_MAPPING.get(key, key)
+        # 1. If explicit active_set was provided
+        if self._active_set is not None:
+            entry = self._active_set.resolve(role)
+            if entry is not None:
+                return entry.file_path, entry.profile_id
+            if not self._active_set.fallback_to_default and not self._active_set.is_builtin:
+                from modules.models.template_set import MissingTemplateRoleError
+                raise MissingTemplateRoleError(
+                    f"Active template set '{self._active_set.display_name}' lacks required template for role '{role}'."
+                )
+
+        # 2. If explicit set_manager was passed or query global manager
+        try:
+            from modules.services.template_set_manager import TemplateSetManager
+            mgr = self._set_manager or TemplateSetManager.get_instance()
+            active_ts = self._active_set or mgr.get_active_template_set()
+            if not active_ts.is_builtin:
+                entry = mgr.resolve_template(role, active_set=active_ts)
+                return entry.file_path, entry.profile_id
+        except Exception as e:
+            from modules.models.template_set import MissingTemplateRoleError
+            if isinstance(e, MissingTemplateRoleError):
+                raise
+            logger.debug(f"TemplateSetManager resolution fallback: {e}")
+
+        # Fallback to direct self._dir path
+        path = self._path(key)
+        profile_id = self.PROFILE_MAPPING.get(key, "academic_docx")
+        return path, profile_id
+
     def _get_validated_recipe(self, key: str, template_path: str) -> ValidatedTemplateRecipe:
         profile_id = self.PROFILE_MAPPING.get(key, "academic_docx")
         return self._resolver.resolve(template_path, profile_id=profile_id)
@@ -202,41 +253,42 @@ class GeneratorFactory:
     def get_all(self, include_custom: bool = True) -> list:
         """Return list of (generator_factory, output_suffix) tuples.
         The factory is a callable that returns the instantiated generator."""
+        def _make_syllabus():
+            p, prof = self._resolve_template("syllabus")
+            return SyllabusGenerator(p, self._resolver.resolve(p, profile_id=prof))
+
+        def _make_exam_midterm():
+            p, prof = self._resolve_template("exam_midterm")
+            return ExamReturnsGenerator(p, self._resolver.resolve(p, profile_id=prof), "MIDTERM")
+
+        def _make_exam_finals():
+            p, prof = self._resolve_template("exam_finals")
+            return ExamReturnsGenerator(p, self._resolver.resolve(p, profile_id=prof), "FINAL")
+
+        def _make_tos_midterm():
+            p, prof = self._resolve_template("tos_midterm")
+            return TOSGenerator(p, self._resolver.resolve(p, profile_id=prof), "Midterm")
+
+        def _make_tos_finals():
+            p, prof = self._resolve_template("tos_finals")
+            return TOSGenerator(p, self._resolver.resolve(p, profile_id=prof), "Finals")
+
+        def _make_grade_midterm():
+            p, prof = self._resolve_template("grade_midterm")
+            return GradeDiscussionGenerator(p, self._resolver.resolve(p, profile_id=prof), "Midterm")
+
+        def _make_grade_finals():
+            p, prof = self._resolve_template("grade_finals")
+            return GradeDiscussionGenerator(p, self._resolver.resolve(p, profile_id=prof), "Finals")
+
         generators = [
-            (lambda: SyllabusGenerator(
-                self._path("syllabus"),
-                self._get_validated_recipe("syllabus", self._path("syllabus")),
-             ), "SYLLABUS_ACCEPTANCE"),
-            (lambda: ExamReturnsGenerator(
-                self._path("exam_midterm"),
-                self._get_validated_recipe("exam_midterm", self._path("exam_midterm")),
-                "MIDTERM",
-             ), "EXAM_RETURNS_MIDTERM"),
-            (lambda: ExamReturnsGenerator(
-                self._path("exam_finals"),
-                self._get_validated_recipe("exam_finals", self._path("exam_finals")),
-                "FINAL",
-             ), "EXAM_RETURNS_FINALS"),
-            (lambda: TOSGenerator(
-                self._path("tos_midterm"),
-                self._get_validated_recipe("tos_midterm", self._path("tos_midterm")),
-                "Midterm",
-             ), "TOS_MIDTERM"),
-            (lambda: TOSGenerator(
-                self._path("tos_finals"),
-                self._get_validated_recipe("tos_finals", self._path("tos_finals")),
-                "Finals",
-             ), "TOS_FINALS"),
-            (lambda: GradeDiscussionGenerator(
-                self._path("grade_midterm"),
-                self._get_validated_recipe("grade_midterm", self._path("grade_midterm")),
-                "Midterm",
-             ), "GRADE_DISCUSSION_MIDTERM"),
-            (lambda: GradeDiscussionGenerator(
-                self._path("grade_finals"),
-                self._get_validated_recipe("grade_finals", self._path("grade_finals")),
-                "Finals",
-             ), "GRADE_DISCUSSION_FINALS"),
+            (_make_syllabus, "SYLLABUS_ACCEPTANCE"),
+            (_make_exam_midterm, "EXAM_RETURNS_MIDTERM"),
+            (_make_exam_finals, "EXAM_RETURNS_FINALS"),
+            (_make_tos_midterm, "TOS_MIDTERM"),
+            (_make_tos_finals, "TOS_FINALS"),
+            (_make_grade_midterm, "GRADE_DISCUSSION_MIDTERM"),
+            (_make_grade_finals, "GRADE_DISCUSSION_FINALS"),
         ]
 
         if include_custom:

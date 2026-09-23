@@ -36,7 +36,8 @@ INTERNAL_MODULE_NAMES = {
     "template_recipe_service", "validator", "config_manager", "orchestrator",
     "docx_utils", "system", "config", "templates", "schedule_roster",
     "document_generator", "ceit_directory", "excel_utils", "logger",
-    "recipe_validator", "base", "generation", "dnd"
+    "recipe_validator", "base", "generation", "dnd", "template_set",
+    "template_role_detector", "field_resolver", "template_set_manager",
 }
 
 

@@ -62,12 +62,21 @@ def process_all(
         logger.error(f"Templates directory not found at {templates_dir}")
         return results
         
+    from modules.services.template_set_manager import TemplateSetManager
     from modules.generators.ceit_gen import GeneratorFactory
-    factory = GeneratorFactory(templates_dir)
+
+    set_manager = TemplateSetManager.get_instance()
+    active_set = set_manager.get_active_template_set()
+    factory = GeneratorFactory(templates_dir, template_set_manager=set_manager, active_set=active_set)
     enabled_engines = set(engine_filter) if engine_filter else {"attendance", "ceit", "grades"}
     
     # Pre-calculate exact total steps for precise progress reporting
-    num_ceit_generators = len(factory.get_all()) if "ceit" in enabled_engines else 0
+    try:
+        num_ceit_generators = len(factory.get_all()) if "ceit" in enabled_engines else 0
+    except Exception as e:
+        logger.error(f"Error initializing CEIT generators from active template set: {e}")
+        num_ceit_generators = 0
+        results["errors"]["ceit"].append(str(e))
     total_estimated_steps = 0
 
     for student_file in xlsx_files:
@@ -372,10 +381,16 @@ def process_all(
         else:
             has_lab = auto_has_lab
             
-        if has_lab:
-            attendance_template = get_long_path(os.path.join(project_dir, "attendance", "template lab and lec.docx"))
-        else:
-            attendance_template = get_long_path(os.path.join(project_dir, "attendance", "template lec.docx"))
+        attendance_role = "attendance_lecture_lab" if has_lab else "attendance_lecture"
+        attendance_template = None
+        if "attendance" in enabled_engines:
+            try:
+                att_entry = set_manager.resolve_template(attendance_role, active_set=active_set)
+                attendance_template = get_long_path(att_entry.file_path)
+            except Exception as e:
+                err_msg = f"Failed to resolve attendance template for role '{attendance_role}': {e}"
+                logger.error(err_msg)
+                results["errors"]["attendance"].append(err_msg)
         
         if course_sec not in results["by_class"]:
             results["by_class"][course_sec] = {"ceit": [], "attendance": [], "grades": []}
@@ -411,8 +426,10 @@ def process_all(
             break
 
         if "attendance" in enabled_engines:
-            logger.info("  -> Generating Attendance...")
-            if att_year is not None:
+            if not attendance_template:
+                msg = f"Skipping attendance for {course_sec} ({schedule_code}) because template role '{attendance_role}' could not be resolved."
+                logger.warning(msg)
+            elif att_year is not None:
                 grouped_blocks = defaultdict(list)
                 for b in blocks:
                     grouped_blocks[get_subject_code(b['subject_title'])].append(b)
@@ -507,11 +524,12 @@ def process_all(
                 "college": college
             }
             
+            grade_role = "grade_sheet_lecture_lab" if has_lab else "grade_sheet_lecture"
             try:
-                template_filename = "GRADING_LECTURE_LAB_TEMPLATE.xlsx" if has_lab else "GRADING_LECTURE_TEMPLATE.xlsx"
-                template_path = os.path.join(templates_dir, template_filename)
+                grade_entry = set_manager.resolve_template(grade_role, active_set=active_set)
+                template_path = get_long_path(grade_entry.file_path)
                 resolver = TemplateRecipeResolver.get_instance()
-                recipe = resolver.resolve(template_path, "grade_sheet_xlsx")
+                recipe = resolver.resolve(template_path, grade_entry.profile_id)
                 grade_gen = GradeGenerator(template_path, recipe)
                 grade_out_name = f"{course_sec_safe}_{schedule_code_safe}_GRADING_SHEET.xlsx"
                 grade_out_path = os.path.join(grade_dir, grade_out_name)

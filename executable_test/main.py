@@ -215,11 +215,17 @@ def _setup_diagnostics(window, doc_url, api=None):
             stop_event.set()
             flusher.join(timeout=1.0)
 
-        window.events.loaded += on_loaded
-        window.events.request_sent += on_request
-        window.events.response_received += on_response
-        window.events.closing += on_closing_diag
-        window.events.closed += on_closed
+        _ev = window.events
+        if hasattr(_ev, "loaded"):
+            _ev.loaded += on_loaded
+        if hasattr(_ev, "request_sent"):
+            _ev.request_sent += on_request
+        if hasattr(_ev, "response_received"):
+            _ev.response_received += on_response
+        if hasattr(_ev, "closing"):
+            _ev.closing += on_closing_diag
+        if hasattr(_ev, "closed"):
+            _ev.closed += on_closed
 
         # Expose emit function so generation.py can log milestones
         window._diag_emit = _emit

@@ -13,6 +13,7 @@ from .template_inspector import (
     AttendanceTemplateInspector,
 )
 from .recipe_validator import RecipeValidator
+from .template_role_detector import TemplateRoleDetector, DetectionResult
 
 __all__ = [
     "CEIT_PREFIX_MAP",
@@ -38,4 +39,7 @@ __all__ = [
     "XlsxTemplateInspector",
     "AttendanceTemplateInspector",
     "RecipeValidator",
+    "TemplateRoleDetector",
+    "DetectionResult",
 ]
+
