@@ -1,5 +1,6 @@
 import os
 import webview
+from modules.common.excel_utils import strip_long_path_prefix
 
 class SystemMixin:
     """Mixin handling native filesystem browsing, shell execution, and logging."""
@@ -15,7 +16,10 @@ class SystemMixin:
     def open_output_folder(self, folder_path=None):
         target = folder_path or self.output_dir
         if target:
-            norm_target = os.path.normpath(target)
+            # Part G: normalise first, then strip \\?\ prefix at the shell boundary.
+            # get_long_path() is used internally for filesystem ops but ShellExecuteW
+            # does not accept the \\?\ prefix.
+            norm_target = strip_long_path_prefix(os.path.normpath(target))
             if os.path.exists(norm_target):
                 try:
                     os.startfile(norm_target)
@@ -26,7 +30,8 @@ class SystemMixin:
 
     def open_file(self, file_path):
         if file_path:
-            norm_path = os.path.normpath(file_path)
+            # Part G: strip \\?\ before passing to ShellExecuteW
+            norm_path = strip_long_path_prefix(os.path.normpath(file_path))
             if os.path.exists(norm_path):
                 try:
                     os.startfile(norm_path)
@@ -49,7 +54,7 @@ class SystemMixin:
 
     def open_log_folder(self):
         app_data = os.getenv('APPDATA') or os.path.expanduser("~")
-        log_dir = os.path.normpath(os.path.join(app_data, "CVSU_Generators", "logs"))
+        log_dir = strip_long_path_prefix(os.path.normpath(os.path.join(app_data, "CVSU_Generators", "logs")))
         if os.path.exists(log_dir):
             try:
                 os.startfile(log_dir)

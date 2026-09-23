@@ -86,7 +86,7 @@ def test_dnd_routing_3_roster_files(dnd_setup):
         }
     }
     
-    with patch('os.path.exists', return_value=True):
+    with patch('os.path.isfile', return_value=True):
         window.rosters_element.events.drop.trigger(event_data)
         
         api.handle_dropped_rosters.assert_called_once()
@@ -106,7 +106,7 @@ def test_dnd_routing_schedule_xlsx(dnd_setup):
             ]
         }
     }
-    with patch('os.path.exists', return_value=True):
+    with patch('os.path.isfile', return_value=True):
         window.sched_element.events.drop.trigger(event_data)
         api.handle_dropped_schedule.assert_called_once_with('schedule.xlsx', original_path='C:\\temp\\schedule.xlsx')
 
@@ -120,7 +120,7 @@ def test_dnd_routing_mixed_excel_document_level(dnd_setup):
             return {'total_slots': 10}
         return {'total_slots': 0}
         
-    with patch('os.path.exists', return_value=True), patch('executable_test.native.dnd.inspect_schedule_file', side_effect=fake_inspect):
+    with patch('os.path.isfile', return_value=True), patch('executable_test.native.dnd.inspect_schedule_file', side_effect=fake_inspect):
         event_data = {
             'dataTransfer': {
                 'files': [
@@ -152,7 +152,7 @@ def test_dnd_routing_same_filename_different_dirs(dnd_setup):
         }
     }
     
-    with patch('os.path.exists', return_value=True):
+    with patch('os.path.isfile', return_value=True):
         window.rosters_element.events.drop.trigger(event_data)
         
         api.handle_dropped_rosters.assert_called_once()
@@ -175,7 +175,7 @@ def test_dnd_routing_csv_always_roster(dnd_setup):
         }
     }
     
-    with patch('os.path.exists', return_value=True):
+    with patch('os.path.isfile', return_value=True):
         window.doc_element.events.drop.trigger(event_data)
         
         api.handle_dropped_rosters.assert_called_once()
@@ -194,7 +194,7 @@ def test_dnd_routing_docx_template(dnd_setup):
         }
     }
     
-    with patch('os.path.exists', return_value=True):
+    with patch('os.path.isfile', return_value=True):
         window.template_element.events.drop.trigger(event_data)
         api.inspect_custom_template.assert_called_once_with('C:\\temp\\template.docx')
 

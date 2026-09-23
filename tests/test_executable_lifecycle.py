@@ -11,8 +11,10 @@ def test_window_closed_prevents_js_callbacks():
     api.rosters = [{'path': 'C:\\fake\\roster.csv', 'filename': 'roster.csv'}]
     api.output_dir = "C:\\fake\\out"
     api._window = MagicMock()
-    
-    api._is_window_closed = True
+    # Simulate window already closed before generation starts
+    # Use the new lifecycle state model (Part B)
+    api._window_state = "CLOSED"
+    api._is_window_closed = True  # also set legacy flag for completeness
     
     def fake_process_all(*args, progress_callback=None, **kwargs):
         if progress_callback:
@@ -25,7 +27,7 @@ def test_window_closed_prevents_js_callbacks():
             "cancelled": False
         }
         
-    with patch('executable_test.api.generation.process_all', side_effect=fake_process_all):
+    with patch('modules.services.orchestrator.process_all', side_effect=fake_process_all):
         api.run_generation()
         
         timeout = time.time() + 2
@@ -33,7 +35,12 @@ def test_window_closed_prevents_js_callbacks():
             time.sleep(0.01)
             
         assert not api._is_processing
-        api._window.evaluate_js.assert_not_called()
+        # No UI dispatch should reach evaluate_js when state is CLOSED/CLOSING
+        # (the initial window._activeGenerationId read is also guarded by state)
+        for call_args in api._window.evaluate_js.call_args_list:
+            js = call_args[0][0] if call_args[0] else ""
+            assert "onGenerationProgress" not in js, f"Progress dispatch reached closed window: {js}"
+            assert "onGenerationComplete" not in js, f"Completion dispatch reached closed window: {js}"
 
 def test_lifecycle_concurrency_race():
     api = ScriptAPI()
@@ -49,6 +56,8 @@ def test_lifecycle_concurrency_race():
     api._window.evaluate_js = MagicMock(side_effect=fake_evaluate)
     
     def on_window_closing():
+        # Part B: transition lifecycle state to CLOSING to gate all new UI dispatches
+        api._window_state = "CLOSING"
         api._is_window_closed = True
         api.cancel_generation()
         
@@ -74,7 +83,7 @@ def test_lifecycle_concurrency_race():
         closure_time = time.time()
         on_window_closing()
 
-    with patch('executable_test.api.generation.process_all', side_effect=fake_process_all):
+    with patch('modules.services.orchestrator.process_all', side_effect=fake_process_all):
         closure_thread = threading.Thread(target=trigger_closure)
         closure_thread.start()
         

@@ -74,7 +74,8 @@ class ScheduleRosterMixin:
 
     def browse_rosters(self, roster_configs=None):
         if roster_configs is not None:
-            self.roster_configs = roster_configs
+            with self._lock:
+                self.roster_configs = roster_configs
         file_types = ('Student Lists (*.csv;*.xlsx;*.xls)', 'All files (*.*)')
         result = self._window.create_file_dialog(
             webview.OPEN_DIALOG,
@@ -82,39 +83,46 @@ class ScheduleRosterMixin:
             file_types=file_types
         )
         if result:
-            # Merge while avoiding duplicate file paths
-            existing = set(self.rosters)
-            for r in result:
-                if r not in existing:
-                    self.rosters.append(r)
-            validation = validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs)
+            # Part D: acquire lock to merge new paths atomically
+            with self._lock:
+                existing = set(self.rosters)
+                for r in result:
+                    if r not in existing:
+                        self.rosters.append(r)
+                        existing.add(r)
+                current_rosters = list(self.rosters)
+            validation = validate_rosters(self.schedule_path, current_rosters, roster_configs=self.roster_configs)
             return {
                 "cancelled": False,
-                "count": len(self.rosters),
-                "rosters": self.rosters,
+                "count": len(current_rosters),
+                "rosters": current_rosters,
                 "validation": validation
             }
+        with self._lock:
+            current_rosters = list(self.rosters)
         return {
             "cancelled": True,
-            "count": len(self.rosters),
-            "rosters": self.rosters,
-            "validation": validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs) if self.rosters else []
+            "count": len(current_rosters),
+            "rosters": current_rosters,
+            "validation": validate_rosters(self.schedule_path, current_rosters, roster_configs=self.roster_configs) if current_rosters else []
         }
 
     def handle_dropped_rosters(self, files_payload, roster_configs=None):
         if roster_configs is not None:
-            self.roster_configs = roster_configs
+            with self._lock:
+                self.roster_configs = roster_configs
 
         cache_dir = os.path.join(tempfile.gettempdir(), "cvsu_cache", "rosters")
         os.makedirs(cache_dir, exist_ok=True)
 
+        # Resolve file paths OUTSIDE the lock (may involve disk I/O)
         new_paths = []
         for item in files_payload:
             original_path = item.get("path")
             base64_data = item.get("data")
             filename = sanitize_filename(item.get("filename", ""))
 
-            if original_path and os.path.exists(original_path):
+            if original_path and os.path.isfile(original_path):
                 new_paths.append(original_path)
             elif base64_data and filename:
                 target_path = os.path.join(cache_dir, filename)
@@ -125,34 +133,42 @@ class ScheduleRosterMixin:
                 except Exception as e:
                     logger.error(f"Failed to write dropped roster {filename}: {e}")
 
-        existing = set(self.rosters)
-        for p in new_paths:
-            if p not in existing:
-                self.rosters.append(p)
-                existing.add(p)
+        # Part D: acquire lock to merge resolved paths atomically
+        with self._lock:
+            existing = set(self.rosters)
+            for p in new_paths:
+                if p not in existing:
+                    self.rosters.append(p)
+                    existing.add(p)
+            current_rosters = list(self.rosters)
 
-        validation = validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs)
+        validation = validate_rosters(self.schedule_path, current_rosters, roster_configs=self.roster_configs)
         return {
-            "count": len(self.rosters),
-            "rosters": self.rosters,
+            "count": len(current_rosters),
+            "rosters": current_rosters,
             "validation": validation
         }
 
     def remove_roster(self, path_or_index, roster_configs=None):
         if roster_configs is not None:
-            self.roster_configs = roster_configs
-        if isinstance(path_or_index, int) and 0 <= path_or_index < len(self.rosters):
-            self.rosters.pop(path_or_index)
-        elif path_or_index in self.rosters:
-            self.rosters.remove(path_or_index)
+            with self._lock:
+                self.roster_configs = roster_configs
+        # Part D: lock around list mutation
+        with self._lock:
+            if isinstance(path_or_index, int) and 0 <= path_or_index < len(self.rosters):
+                self.rosters.pop(path_or_index)
+            elif path_or_index in self.rosters:
+                self.rosters.remove(path_or_index)
+            current_rosters = list(self.rosters)
         return {
-            "count": len(self.rosters),
-            "rosters": self.rosters,
-            "validation": validate_rosters(self.schedule_path, self.rosters, roster_configs=self.roster_configs) if self.rosters else []
+            "count": len(current_rosters),
+            "rosters": current_rosters,
+            "validation": validate_rosters(self.schedule_path, current_rosters, roster_configs=self.roster_configs) if current_rosters else []
         }
 
     def clear_rosters(self):
-        self.rosters = []
+        with self._lock:
+            self.rosters = []
         return {"count": 0, "rosters": [], "validation": []}
 
     def validate_rosters(self, roster_configs=None):

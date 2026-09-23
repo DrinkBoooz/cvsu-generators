@@ -7,6 +7,26 @@ import os
 import sys
 from pathlib import Path
 
+# ── Crash hooks must be installed BEFORE any other import so that import-time
+#    errors are captured in the log files.
+# ── In windowed/frozen mode sys.stderr is None; without this, unhandled
+#    exceptions in startup code are completely silent.
+if not ("pytest" in sys.modules or "PYTEST_CURRENT_TEST" in os.environ):
+    try:
+        # Ensure repository root / _MEIPASS on path first so the import works
+        if getattr(sys, "frozen", False):
+            _boot_dir = sys._MEIPASS
+        else:
+            _boot_dir = os.path.dirname(os.path.abspath(__file__))
+            _repo_root = os.path.dirname(_boot_dir)
+            for _p in (_boot_dir, _repo_root):
+                if _p not in sys.path:
+                    sys.path.insert(0, _p)
+        from modules.common.logger import install_global_hooks
+        install_global_hooks()
+    except Exception:
+        pass  # Hooks couldn't be installed — proceed; at least pywebview will log to console
+
 # Ensure repository root and package directory are on sys.path
 if getattr(sys, 'frozen', False):
     CURR_DIR = sys._MEIPASS
@@ -55,26 +75,45 @@ def create_app():
     )
     api._window = window
 
+    # ── Window Lifecycle State (Part B)
+    # Transitions: OPEN → CLOSING → CLOSED
+    # No new evaluate_js/WebView operation may start once CLOSING begins.
     def on_window_closing():
-        api._is_window_closed = True
+        """
+        Fired synchronously on the UI thread before the window is destroyed.
+        Transitions state to CLOSING so that in-flight workers stop dispatching
+        to the WebView before the COM object is torn down.
+        """
+        api._window_state = "CLOSING"
+        api._is_window_closed = True   # legacy bool kept for backwards compat
         api.cancel_generation()
 
     def on_window_closed():
-        api._is_window_closed = True
+        """
+        Fired after the window has been destroyed.
+        Transitions state to CLOSED — any attempt to call evaluate_js is now a bug.
+        """
+        api._window_state = "CLOSED"
+        api._is_window_closed = True   # legacy bool kept for backwards compat
+
+    # Set initial lifecycle state
+    api._window_state = "OPEN"
 
     window.events.closing += on_window_closing
     window.events.closed += on_window_closed
 
     if os.environ.get('CVSU_DIAGNOSTIC_MODE') == '1':
-        _setup_diagnostics(window, document_url)
+        _setup_diagnostics(window, document_url, api)
 
     return window, api
 
-def _setup_diagnostics(window, doc_url):
+def _setup_diagnostics(window, doc_url, api=None):
     """
     Activates non-perturbing telemetry listeners when CVSU_DIAGNOSTIC_MODE=1 is set.
     Uses an in-memory deque buffer and background flusher thread.
     Callbacks perform ZERO synchronous file I/O and ZERO JSON serialization.
+
+    Part H — records all required lifecycle milestones.
     """
     try:
         import datetime
@@ -92,12 +131,22 @@ def _setup_diagnostics(window, doc_url):
         buffer_lock = threading.Lock()
         stop_event = threading.Event()
 
-        # Initial startup record
-        event_buffer.append({
-            "event": "diagnostic_init",
-            "timestamp": time.time(),
-            "document_url": doc_url
-        })
+        def _emit(event_name: str, **kwargs):
+            """Zero-I/O, zero-serialization emit into the ring buffer."""
+            entry = {"event": event_name, "timestamp": time.time()}
+            entry.update(kwargs)
+            with buffer_lock:
+                event_buffer.append(entry)
+
+        # Part H milestone: startup
+        _emit("startup",
+              document_url=doc_url,
+              pid=os.getpid(),
+              frozen=getattr(sys, "frozen", False),
+              python_version=sys.version)
+
+        def on_loaded():
+            _emit("webview_initialized")
 
         def on_request(request):
             """Strictly read-only, non-mutating callback with zero synchronous I/O."""
@@ -157,13 +206,23 @@ def _setup_diagnostics(window, doc_url):
         flusher = threading.Thread(target=flush_worker, daemon=True, name="CvSUDiagnosticFlusher")
         flusher.start()
 
+        def on_closing_diag():
+            _emit("window_closing",
+                  window_state=getattr(api, "_window_state", "unknown") if api else "unknown")
+
         def on_closed():
+            _emit("window_closed")
             stop_event.set()
             flusher.join(timeout=1.0)
 
+        window.events.loaded += on_loaded
         window.events.request_sent += on_request
         window.events.response_received += on_response
+        window.events.closing += on_closing_diag
         window.events.closed += on_closed
+
+        # Expose emit function so generation.py can log milestones
+        window._diag_emit = _emit
 
         # Store state object for inspection and unit testing
         window._diag_state = {
@@ -173,7 +232,8 @@ def _setup_diagnostics(window, doc_url):
             "log_path": log_path,
             "on_request": on_request,
             "on_response": on_response,
-            "flusher": flusher
+            "flusher": flusher,
+            "emit": _emit,
         }
         return window._diag_state
     except Exception:

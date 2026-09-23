@@ -57,9 +57,14 @@ def parse_schedule(schedule_path: str) -> list:
         return []
         
     parsed_sheets = []
-    tmp_path = safe_temp_copy(schedule_path)
+    # Part F: tmp_path initialised to None so the finally block is always safe.
+    # safe_temp_copy is called INSIDE the try so that PermissionError on a locked
+    # source file is caught by the outer orchestrator worker boundary rather than
+    # propagating as an unhandled exception.
+    tmp_path = None
 
     try:
+        tmp_path = safe_temp_copy(schedule_path)
         if schedule_path.lower().endswith(".xls"):
             wb = xlrd.open_workbook(tmp_path, formatting_info=True)
             for sheet_idx in range(wb.nsheets):
@@ -102,7 +107,7 @@ def parse_schedule(schedule_path: str) -> list:
             finally:
                 wb.close()
     finally:
-        if os.path.exists(tmp_path):
+        if tmp_path and os.path.exists(tmp_path):
             try:
                 os.remove(tmp_path)
             except Exception:

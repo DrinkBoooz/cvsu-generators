@@ -9,6 +9,7 @@ Zero hardcoded coordinates or positional fallback logic.
 
 import os
 import re
+import time
 import shutil
 import tempfile
 from typing import Optional, Union, Any, List, Tuple
@@ -20,6 +21,30 @@ from modules.models.recipe import (
     TemplateError,
     ValidatedTemplateRecipe,
 )
+
+
+def _replace_with_retry(src: str, dst: str, retries: int = 3, delay: float = 0.5) -> None:
+    """
+    Atomically replace `dst` with `src`, retrying on Windows sharing violations
+    (PermissionError / WinError 32) caused by the destination file being open in
+    Excel, Word, or another process.
+
+    After exhausting retries, raises PermissionError with a user-actionable message
+    that process_all() captures as a recoverable per-file generation error.
+    """
+    last_exc: Exception | None = None
+    for attempt in range(max(1, retries)):
+        try:
+            os.replace(src, dst)
+            return
+        except PermissionError as exc:
+            last_exc = exc
+            if attempt < retries - 1:
+                time.sleep(delay)
+    raise PermissionError(
+        f"Cannot write '{os.path.basename(dst)}' \u2014 it may be open in Excel or Word. "
+        f"Please close the file and try again. ({last_exc})"
+    ) from last_exc
 
 
 class GradeGenerator:
@@ -266,7 +291,9 @@ class GradeGenerator:
 
             wb.save(tmp_path)
             wb.close()
-            os.replace(tmp_path, output_path)
+            # Part F: retry on sharing violations so a locked output file
+            # produces a user-friendly error rather than a raw WinError 32 crash.
+            _replace_with_retry(tmp_path, output_path)
             logger.info(f"Grades generated at: {output_path}")
             return True
         except Exception as e:
