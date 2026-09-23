@@ -35,7 +35,9 @@ import shutil
 import tempfile
 import pytest
 import openpyxl
+import docx
 
+from modules.parsers.recipe_validator import RecipeValidator
 from modules.models.template_set import (
     ROLE_SYLLABUS,
     ROLE_EXAM_RETURNS_MIDTERM,
@@ -55,6 +57,7 @@ from modules.services.template_set_manager import TemplateSetManager
 from modules.generators.ceit_gen import GeneratorFactory
 from modules.generators.attendance_gen import AttendanceGenerator
 from modules.generators.grade_gen import GradeGenerator
+from modules.services.template_recipe_service import TemplateRecipeResolver
 from modules.common.docx_utils import load_docx, get_full_text, set_cell_text, w
 
 
@@ -473,3 +476,421 @@ def test_real_world_renamed_templates_end_to_end_generation(repo_root, templates
         from modules.models.template_set import BUILTIN_SET_ID
         set_manager.activate_template_set(BUILTIN_SET_ID)
         set_manager.delete_template_set(ts.set_id)
+
+
+def test_attendance_info_table_reordered_away_from_zero(tmp_path):
+    """
+    Test Requirement 1 & 8: Attendance information table is moved away from table index 0
+    (Table 0 is notes table, Table 1 is info table, Table 2 is matrix table).
+    Assert detector discovers info table at index 1, validator succeeds, and generator generates.
+    """
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    src_att = os.path.join(repo_root, "attendance", "template lab and lec.docx")
+    dst_att = tmp_path / "attendance_reordered_tables.docx"
+
+    doc = docx.Document(src_att)
+    # Insert a notes table before table 0
+    notes_tbl = doc.add_table(rows=2, cols=2)
+    notes_tbl.rows[0].cells[0].text = "CAMPUS NOTICE:"
+    notes_tbl.rows[0].cells[1].text = "Submit to Dean's Office at end of month"
+    doc._body._element.insert(0, notes_tbl._element)
+    doc.save(dst_att)
+
+    # 1. Detection
+    detector = TemplateRoleDetector()
+    res = detector.detect_role(str(dst_att))
+    assert res.status == "confirmed"
+    assert res.role == ROLE_ATTENDANCE_LECTURE_LAB
+    assert any("verified at table index 1" in e for e in res.structural_evidence)
+    assert any("verified at table index 2" in e for e in res.structural_evidence)
+
+    # 2. Authoritative Validation
+    ok, err, recipe = detector.validate_role(str(dst_att), ROLE_ATTENDANCE_LECTURE_LAB)
+    assert ok is True
+    assert err is None
+    assert recipe.info_binding.table_index == 1
+    assert recipe.matrix_binding.table_index == 2
+
+    # 3. Generation
+    out_file = tmp_path / "out_reordered_attendance.docx"
+    gen = AttendanceGenerator(str(dst_att), recipe)
+    gen.generate(
+        output_path=str(out_file),
+        course_code_title="COSC 101 - ADVANCED SE",
+        class_schedule="08:00AM-11:00AM / Mon",
+        semester_ay="1st Semester 2026-2027",
+        room_assignment="CL3",
+        instructor="DR. JUAN DELA CRUZ",
+        months=[8],
+        year=2026,
+        weekdays=[0],
+        students=[("STUDENT A", "2026001"), ("STUDENT B", "2026002")],
+    )
+    assert os.path.exists(out_file)
+    assert os.path.getsize(out_file) > 1000
+
+
+def test_attendance_without_week_labels_structural_resolution(tmp_path):
+    """
+    Test Requirement 2: When week column headers are missing (sessions_per_week = None),
+    detector evaluates independent physical structure rather than inventing a 4-week constant.
+    """
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    src_lab_lec = os.path.join(repo_root, "attendance", "template lab and lec.docx")
+    src_lec = os.path.join(repo_root, "attendance", "template lec.docx")
+    detector = TemplateRoleDetector()
+
+    # Subcase A: Dual-component with no week headers -> detected as attendance_lecture_lab
+    dst_dual = tmp_path / "dual_no_weeks.docx"
+    doc_dual = docx.Document(src_lab_lec)
+    m_tbl = doc_dual.tables[1]  # Matrix table
+    # Clear row 0 week headers (cells from col 3 onward)
+    for c in m_tbl.rows[0].cells[3:]:
+        c.text = ""
+    doc_dual.save(dst_dual)
+
+    res_dual = detector.detect_role(str(dst_dual))
+    assert res_dual.status == "confirmed"
+    assert res_dual.role == ROLE_ATTENDANCE_LECTURE_LAB
+    assert any("evaluating independent physical structure" in e for e in res_dual.structural_evidence)
+
+    # Subcase B: Single-component with no week headers -> detected as attendance_lecture
+    dst_single = tmp_path / "single_no_weeks.docx"
+    doc_single = docx.Document(src_lec)
+    m_tbl_s = doc_single.tables[1]
+    for c in m_tbl_s.rows[0].cells[3:]:
+        c.text = ""
+    doc_single.save(dst_single)
+
+    res_single = detector.detect_role(str(dst_single))
+    assert res_single.status == "confirmed"
+    assert res_single.role == ROLE_ATTENDANCE_LECTURE
+
+    # Subcase C: No week headers + ambiguous structure (cap 8, but no lab schedule, no paired columns) -> ambiguous
+    dst_ambig = tmp_path / "ambig_no_weeks.docx"
+    doc_ambig = docx.Document(src_lab_lec)
+    # Clear info table schedule markers (remove LAB: / LEC:)
+    info_tbl = doc_ambig.tables[0]
+    for r in info_tbl.rows:
+        for c in r.cells:
+            if "LAB:" in c.text or "LEC:" in c.text:
+                c.text = "TIME: 08:00-11:00"
+    # Clear week headers in matrix
+    m_tbl_a = doc_ambig.tables[1]
+    for c in m_tbl_a.rows[0].cells[3:]:
+        c.text = ""
+    # Clear row 1 date pairing (make date cells distinct without pairs)
+    for idx, c in enumerate(m_tbl_a.rows[1].cells[3:11]):
+        c.text = f"Date\n{idx+1}"
+    doc_ambig.save(dst_ambig)
+
+    res_ambig = detector.detect_role(str(dst_ambig))
+    assert res_ambig.status == "ambiguous"
+    assert ROLE_ATTENDANCE_LECTURE in res_ambig.candidate_roles
+    assert ROLE_ATTENDANCE_LECTURE_LAB in res_ambig.candidate_roles
+
+
+def test_academic_docx_institution_neutral_terms(tmp_path):
+    """
+    Test Requirement 3 & 6: Generalized academic DOCX detection using institution-neutral
+    terminology (e.g. Course Outline, Assessment Results, Assessment Blueprint, Grade Consultation).
+    """
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    tmpl_dir = os.path.join(repo_root, "templates")
+    detector = TemplateRoleDetector()
+
+    # 1. Syllabus with 'Course Outline and Teaching Plan'
+    syl_src = os.path.join(tmpl_dir, "template_syllabus.docx")
+    syl_dst = tmp_path / "course_outline_and_teaching_plan.docx"
+    doc_syl = docx.Document(syl_src)
+    # Replace VPAA-QF-12 and Cavite State University with neutral institution text
+    for p in doc_syl.paragraphs:
+        if "VPAA-QF-12" in p.text:
+            p.text = "INSTITUTIONAL TEACHING PLAN & COURSE OUTLINE RECEIPT"
+        elif "CAVITE STATE UNIVERSITY" in p.text:
+            p.text = "METROPOLITAN STATE UNIVERSITY"
+    doc_syl.save(syl_dst)
+
+    res_syl = detector.detect_role(str(syl_dst))
+    assert res_syl.status == "confirmed"
+    assert res_syl.role == ROLE_SYLLABUS
+    assert res_syl.family == "syllabus"
+
+    # 2. Exam Returns with 'Assessment Results & Student Examination Report'
+    exam_src = os.path.join(tmpl_dir, "template_exam_midterm.docx")
+    exam_dst = tmp_path / "student_assessment_results_report.docx"
+    doc_exam = docx.Document(exam_src)
+    for p in doc_exam.paragraphs:
+        if "results of the examination" in p.text:
+            p.text = "This confirms that the instructor presented the Assessment Results and Student Examination Report."
+    doc_exam.save(exam_dst)
+
+    res_exam = detector.detect_role(str(exam_dst))
+    assert res_exam.status == "confirmed"
+    assert res_exam.role == ROLE_EXAM_RETURNS_MIDTERM
+    assert res_exam.family == "exam_returns"
+    assert res_exam.variant == "midterm"
+
+    # 3. TOS with 'Assessment Blueprint & Competency Distribution'
+    tos_src = os.path.join(tmpl_dir, "template_tos_finals.docx")
+    tos_dst = tmp_path / "assessment_blueprint_finals.docx"
+    doc_tos = docx.Document(tos_src)
+    for p in doc_tos.paragraphs:
+        if "table of specifications" in p.text:
+            p.text = "This serves as confirmation that the instructor presented the Assessment Blueprint and Cognitive Competency Distribution for Finals."
+    doc_tos.save(tos_dst)
+
+    res_tos = detector.detect_role(str(tos_dst))
+    assert res_tos.status == "confirmed"
+    assert res_tos.role == ROLE_TOS_FINAL
+    assert res_tos.family == "tos"
+    assert res_tos.variant == "final"
+
+    # 4. Grade Discussion with 'Grade Consultation & Marks Review'
+    disc_src = os.path.join(tmpl_dir, "Midterm-Grade-Discussion_LATEST.docx")
+    disc_dst = tmp_path / "grade_consultation_form.docx"
+    doc_disc = docx.Document(disc_src)
+    for p in doc_disc.paragraphs:
+        if "Midterm Grades" in p.text:
+            p.text = "This serves as confirmation of the Midterm Grade Consultation and Marks Review."
+    doc_disc.save(disc_dst)
+
+    res_disc = detector.detect_role(str(disc_dst))
+    assert res_disc.status == "confirmed"
+    assert res_disc.role == ROLE_GRADE_DISCUSSION_MIDTERM
+    assert res_disc.family == "grade_discussion"
+    assert res_disc.variant == "midterm"
+
+
+def test_grade_sheet_arbitrary_names_and_reordered_worksheets(tmp_path):
+    """
+    Test Requirement 7: Grade XLSX where worksheets are given arbitrary names
+    (Summary_2026, Sheet_A, Sheet_B, Results) and reordered so Summary_2026 is sheet 0.
+    Assert role detection, recipe validation, and generation work independently of sheet names and order.
+    """
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    src_grade = os.path.join(repo_root, "templates", "GRADING_LECTURE_LAB_TEMPLATE.xlsx")
+    dst_grade = tmp_path / "reordered_arbitrary_grades.xlsx"
+
+    wb = openpyxl.load_workbook(src_grade)
+    wb["Lecture"].title = "Sheet_A"
+    wb["Laboratory"].title = "Sheet_B"
+    wb["Consolidated"].title = "Results"
+    wb["Grading Sheet"].title = "Summary_2026"
+
+    # Reorder sheets so Summary_2026 is sheet 0!
+    # In openpyxl: wb._sheets is a list of Worksheet objects
+    summary_ws = wb["Summary_2026"]
+    wb._sheets.remove(summary_ws)
+    wb._sheets.insert(0, summary_ws)
+    assert wb.sheetnames[0] == "Summary_2026"
+    wb.save(dst_grade)
+
+    # 1. Detection
+    detector = TemplateRoleDetector()
+    res = detector.detect_role(str(dst_grade))
+    assert res.status == "confirmed"
+    assert res.role == ROLE_GRADE_SHEET_LECTURE_LAB
+
+    # 2. Validation
+    validator = RecipeValidator()
+    from modules.parsers.template_inspector import XlsxTemplateInspector
+    cand = XlsxTemplateInspector().inspect(str(dst_grade), profile_id="grade_sheet_xlsx")
+    recipe = validator.validate(cand, profile="grade_sheet_xlsx")
+
+    assert recipe.metadata["roster_sheet"] == "Sheet_A"
+    assert recipe.metadata["summary_sheet"] == "Summary_2026"
+    assert recipe.metadata["lab_sheet"] == "Sheet_B"
+    assert recipe.metadata["con_sheet"] == "Results"
+
+    # 3. Generation
+    dummy_info = {
+        "instructor": "DR. ALAN TURING",
+        "course": "BSCS 4-1",
+        "sched": "20269988",
+        "subject": "CS401 - THEORY OF COMPUTATION",
+        "time": "01:00PM-04:00PM",
+        "day": "Tue",
+        "room": "CL1",
+        "semester": "1st Semester AY 2026-2027",
+    }
+    dummy_students = [("LOVELACE, ADA A.", "202610099")]
+    out_grade = tmp_path / "out_reordered_grade.xlsx"
+
+    gen = GradeGenerator(str(dst_grade), recipe)
+    success = gen.generate(dummy_info, dummy_students, str(out_grade))
+    assert success is True
+    assert os.path.exists(out_grade)
+
+    # Check student written into Sheet_A
+    out_wb = openpyxl.load_workbook(out_grade, data_only=True)
+    assert out_wb.sheetnames[0] == "Summary_2026"
+    ws_a = out_wb["Sheet_A"]
+    assert ws_a.cell(recipe.roster_binding.first_data_row_index, recipe.roster_binding.name_col).value == "LOVELACE, ADA A."
+    out_wb.close()
+
+
+def test_real_world_hardened_templates_end_to_end_generation(tmp_path):
+    """
+    Test Requirement 10: Complete real-world end-to-end user template set with:
+    - Opaque filenames (a1.docx .. k11.xlsx)
+    - Arbitrary grade worksheet names (Sheet_A, Sheet_B, Results, Summary) with Summary first
+    - Alternate academic terminology (Course Outline, Assessment Results, etc.)
+    - Reordered attendance tables (notes table at index 0)
+    Inspect -> Detect -> Validate -> Save to User Template Set -> Activate -> Generate -> Verify.
+    """
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    templates_dir = os.path.join(repo_root, "templates")
+    attendance_dir = os.path.join(repo_root, "attendance")
+
+    set_manager = TemplateSetManager.get_instance()
+    ts = set_manager.create_template_set("hardened_institution_neutral_set", "Hardened Neutral Template Set")
+
+    renamed_files = {
+        ROLE_SYLLABUS: (os.path.join(templates_dir, "template_syllabus.docx"), "a1.docx"),
+        ROLE_EXAM_RETURNS_MIDTERM: (os.path.join(templates_dir, "template_exam_midterm.docx"), "b2.docx"),
+        ROLE_EXAM_RETURNS_FINAL: (os.path.join(templates_dir, "template_exam_finals.docx"), "c3.docx"),
+        ROLE_TOS_MIDTERM: (os.path.join(templates_dir, "template_tos_midterm.docx"), "d4.docx"),
+        ROLE_TOS_FINAL: (os.path.join(templates_dir, "template_tos_finals.docx"), "e5.docx"),
+        ROLE_GRADE_DISCUSSION_MIDTERM: (os.path.join(templates_dir, "Midterm-Grade-Discussion_LATEST.docx"), "f6.docx"),
+        ROLE_GRADE_DISCUSSION_FINAL: (os.path.join(templates_dir, "Final-Grade-Discussion_LATEST.docx"), "g7.docx"),
+        ROLE_ATTENDANCE_LECTURE: (os.path.join(attendance_dir, "template lec.docx"), "h8.docx"),
+        ROLE_ATTENDANCE_LECTURE_LAB: (os.path.join(attendance_dir, "template lab and lec.docx"), "i9.docx"),
+        ROLE_GRADE_SHEET_LECTURE: (os.path.join(templates_dir, "GRADING_LECTURE_TEMPLATE.xlsx"), "j10.xlsx"),
+        ROLE_GRADE_SHEET_LECTURE_LAB: (os.path.join(templates_dir, "GRADING_LECTURE_LAB_TEMPLATE.xlsx"), "k11.xlsx"),
+    }
+
+    try:
+        detector = TemplateRoleDetector()
+        for role, (src_path, opaque_fn) in renamed_files.items():
+            dst_path = tmp_path / opaque_fn
+
+            if opaque_fn.endswith(".docx"):
+                doc = docx.Document(src_path)
+                if role == ROLE_SYLLABUS:
+                    for p in doc.paragraphs:
+                        if "VPAA-QF-12" in p.text:
+                            p.text = "COURSE OUTLINE AND SPECIFICATION ACCEPTANCE"
+                elif role in (ROLE_ATTENDANCE_LECTURE, ROLE_ATTENDANCE_LECTURE_LAB):
+                    # Insert a notes table at index 0
+                    nt = doc.add_table(rows=1, cols=1)
+                    nt.rows[0].cells[0].text = "ACADEMIC YEAR 2026-2027 RECORD"
+                    doc._body._element.insert(0, nt._element)
+                doc.save(dst_path)
+
+            elif opaque_fn == "j10.xlsx":
+                wb = openpyxl.load_workbook(src_path)
+                wb["Lecture"].title = "Sheet_A"
+                wb["Grading Sheet"].title = "Summary_2026"
+                wb.save(dst_path)
+
+            elif opaque_fn == "k11.xlsx":
+                wb = openpyxl.load_workbook(src_path)
+                wb["Lecture"].title = "Sheet_A"
+                wb["Laboratory"].title = "Sheet_B"
+                wb["Consolidated"].title = "Results"
+                wb["Grading Sheet"].title = "Summary_2026"
+                # Move Summary_2026 to first position
+                s_ws = wb["Summary_2026"]
+                wb._sheets.remove(s_ws)
+                wb._sheets.insert(0, s_ws)
+                wb.save(dst_path)
+
+            # Detect role dynamically from physical structure
+            det_res = detector.detect_role(str(dst_path))
+            assert det_res.status == "confirmed", f"Detection failed for {opaque_fn}: {det_res.error}"
+            assert det_res.role == role, f"Expected role {role} for {opaque_fn}, got {det_res.role}"
+
+            # Add to template set with authoritative validation
+            set_manager.add_template_to_set(
+                set_id=ts.set_id,
+                role=role,
+                file_path=str(dst_path),
+                display_metadata={"title": f"Hardened {role}"},
+            )
+
+        # Verify completeness and activate
+        ts_refreshed = set_manager.get_template_set(ts.set_id)
+        assert ts_refreshed.is_complete() is True
+        set_manager.activate_template_set(ts.set_id)
+
+        # Test CEIT generation with active set
+        factory = GeneratorFactory(templates_dir=templates_dir, active_set=ts_refreshed)
+        all_gens = factory.get_all()
+        assert len(all_gens) >= 7
+
+        output_dir = tmp_path / "hardened_output"
+        os.makedirs(output_dir, exist_ok=True)
+
+        dummy_info = {
+            "instructor": "DR. GRACE HOPPER",
+            "course": "BSCS 2-1",
+            "sched": "20267711",
+            "subject": "CS201 - DATA STRUCTURES",
+            "time": "09:00AM-12:00PM",
+            "day": "Wed",
+            "room": "CL2",
+            "semester": "1st Semester AY 2026-2027",
+            "units": "3",
+        }
+        dummy_students = [("BOOLE, GEORGE G.", "202610011")]
+
+        from modules.models.schedule import ClassInfo
+        class_info = ClassInfo(
+            instructor=dummy_info["instructor"],
+            course_section=dummy_info["course"],
+            schedule_code=dummy_info["sched"],
+            subject=dummy_info["subject"],
+            time_days_room=f"{dummy_info['time']} {dummy_info['day']} {dummy_info['room']}",
+            semester_ay=dummy_info["semester"],
+            students=dummy_students,
+        )
+
+        for gen_fn, suffix in all_gens:
+            generator = gen_fn()
+            out_file = output_dir / f"hardened_{suffix}.docx"
+            generator.generate(class_info, str(out_file))
+            assert os.path.exists(out_file)
+            assert os.path.getsize(out_file) > 1000
+
+        # Test Attendance Generation
+        att_entry = set_manager.resolve_template(ROLE_ATTENDANCE_LECTURE_LAB, active_set=ts_refreshed)
+        resolver = TemplateRecipeResolver.get_instance()
+        att_recipe = resolver.resolve(att_entry.file_path, "attendance_docx")
+        att_gen = AttendanceGenerator(att_entry.file_path, att_recipe)
+        out_att = output_dir / "hardened_attendance.docx"
+        att_gen.generate(
+            output_path=str(out_att),
+            course_code_title=f"{dummy_info['course']} - {dummy_info['subject']}",
+            class_schedule=f"{dummy_info['time']} / {dummy_info['day']}",
+            semester_ay=dummy_info["semester"],
+            room_assignment=dummy_info["room"],
+            instructor=dummy_info["instructor"],
+            months=[8],
+            year=2026,
+            weekdays=[2],
+            students=dummy_students,
+        )
+        assert os.path.exists(out_att)
+
+        # Test Grade Generation
+        grade_entry = set_manager.resolve_template(ROLE_GRADE_SHEET_LECTURE_LAB, active_set=ts_refreshed)
+        grade_recipe = resolver.resolve(grade_entry.file_path, "grade_sheet_xlsx")
+        grade_gen = GradeGenerator(grade_entry.file_path, grade_recipe)
+        out_grade = output_dir / "hardened_grades.xlsx"
+        grade_success = grade_gen.generate(dummy_info, dummy_students, str(out_grade))
+        assert grade_success is True
+        assert os.path.exists(out_grade)
+
+        # Verify student written into Sheet_A in hardened_grades.xlsx
+        out_wb = openpyxl.load_workbook(out_grade, data_only=True)
+        assert out_wb.sheetnames[0] == "Summary_2026"
+        ws_a = out_wb["Sheet_A"]
+        assert ws_a.cell(grade_recipe.roster_binding.first_data_row_index, grade_recipe.roster_binding.name_col).value == "BOOLE, GEORGE G."
+        out_wb.close()
+
+    finally:
+        from modules.models.template_set import BUILTIN_SET_ID
+        set_manager.activate_template_set(BUILTIN_SET_ID)
+        set_manager.delete_template_set(ts.set_id)
+

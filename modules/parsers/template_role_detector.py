@@ -255,12 +255,12 @@ class TemplateRoleDetector:
                     if "WEEK" in txt or "LINGGO" in txt or re.match(r"^W\d+$", txt):
                         num_weeks += 1
 
-        sessions_per_week = (cap / num_weeks) if num_weeks > 0 else (cap / 4.0)
+        sessions_per_week = (cap / float(num_weeks)) if num_weeks > 0 else None
 
         # Check info table for explicit lecture/lab scheduling and room assignments
         info_text = ""
-        if len(tbls) > 0:
-            for tr in tbls[0].findall(w("tr")):
+        if info_t_idx is not None and info_t_idx < len(tbls):
+            for tr in tbls[info_t_idx].findall(w("tr")):
                 for tc in tr.findall(w("tc")):
                     info_text += " " + get_full_text(tc).strip().upper()
         has_lab_schedule = bool(
@@ -282,73 +282,144 @@ class TemplateRoleDetector:
         has_dual_tracking = bool("lb" in summary_names and "lc" in summary_names)
 
         # Multi-signal structural discrimination:
-        if sessions_per_week >= 1.75 or has_paired_columns or (cap >= 6 and (has_lab_schedule or has_dual_tracking)):
-            evidence.append(f"Capacity {cap} session columns reflects multi-session Lecture + Lab attendance structure ({sessions_per_week:.1f} sessions/week across {num_weeks or 4} weeks)")
-            if has_lab_schedule:
-                evidence.append("Dual instructional component (LEC/LAB) markers identified in schedule/room assignment")
-            if has_dual_tracking:
-                evidence.append("Summary columns track both lecture (LC) and laboratory (LB) absences")
+        if sessions_per_week is not None:
+            # Physical week structure verified
+            if sessions_per_week >= 1.75 or has_paired_columns or (cap >= 6 and (has_lab_schedule or has_dual_tracking)):
+                evidence.append(f"Capacity {cap} session columns reflects multi-session Lecture + Lab attendance structure ({sessions_per_week:.1f} sessions/week across {num_weeks} weeks)")
+                if has_lab_schedule:
+                    evidence.append("Dual instructional component (LEC/LAB) markers identified in schedule/room assignment")
+                if has_dual_tracking:
+                    evidence.append("Summary columns track both lecture (LC) and laboratory (LB) absences")
 
-            role_cand = RoleCandidate(
-                role=ROLE_ATTENDANCE_LECTURE_LAB,
-                evidence=list(evidence),
-                confidence=1.0,
-                structural_dominance=1.0,
-            )
-            return DetectionResult(
-                file_path=file_path,
-                file_name=file_name,
-                file_type="docx",
-                status="confirmed",
-                role=ROLE_ATTENDANCE_LECTURE_LAB,
-                candidate_roles=[ROLE_ATTENDANCE_LECTURE_LAB],
-                candidates=[role_cand],
-                structural_evidence=evidence,
-                diagnostic_hints=diag_hints,
-                profile_id="attendance_docx",
-                family="attendance",
-                variant="lecture_lab",
-            )
-        elif sessions_per_week <= 1.25 and not has_lab_schedule and not has_paired_columns:
-            evidence.append(f"Capacity {cap} session columns reflects single-session Lecture-only attendance structure (1 session/week across {num_weeks or 4} weeks)")
-            role_cand = RoleCandidate(
-                role=ROLE_ATTENDANCE_LECTURE,
-                evidence=list(evidence),
-                confidence=1.0,
-                structural_dominance=1.0,
-            )
-            return DetectionResult(
-                file_path=file_path,
-                file_name=file_name,
-                file_type="docx",
-                status="confirmed",
-                role=ROLE_ATTENDANCE_LECTURE,
-                candidate_roles=[ROLE_ATTENDANCE_LECTURE],
-                candidates=[role_cand],
-                structural_evidence=evidence,
-                diagnostic_hints=diag_hints,
-                profile_id="attendance_docx",
-                family="attendance",
-                variant="lecture",
-            )
+                role_cand = RoleCandidate(
+                    role=ROLE_ATTENDANCE_LECTURE_LAB,
+                    evidence=list(evidence),
+                    confidence=1.0,
+                    structural_dominance=1.0,
+                )
+                return DetectionResult(
+                    file_path=file_path,
+                    file_name=file_name,
+                    file_type="docx",
+                    status="confirmed",
+                    role=ROLE_ATTENDANCE_LECTURE_LAB,
+                    candidate_roles=[ROLE_ATTENDANCE_LECTURE_LAB],
+                    candidates=[role_cand],
+                    structural_evidence=evidence,
+                    diagnostic_hints=diag_hints,
+                    profile_id="attendance_docx",
+                    family="attendance",
+                    variant="lecture_lab",
+                )
+            elif sessions_per_week <= 1.25 and not has_lab_schedule and not has_paired_columns:
+                evidence.append(f"Capacity {cap} session columns reflects single-session Lecture-only attendance structure (1 session/week across {num_weeks} weeks)")
+                role_cand = RoleCandidate(
+                    role=ROLE_ATTENDANCE_LECTURE,
+                    evidence=list(evidence),
+                    confidence=1.0,
+                    structural_dominance=1.0,
+                )
+                return DetectionResult(
+                    file_path=file_path,
+                    file_name=file_name,
+                    file_type="docx",
+                    status="confirmed",
+                    role=ROLE_ATTENDANCE_LECTURE,
+                    candidate_roles=[ROLE_ATTENDANCE_LECTURE],
+                    candidates=[role_cand],
+                    structural_evidence=evidence,
+                    diagnostic_hints=diag_hints,
+                    profile_id="attendance_docx",
+                    family="attendance",
+                    variant="lecture",
+                )
+            else:
+                evidence.append(f"Session capacity {cap} ({sessions_per_week:.1f} sessions/week across {num_weeks} weeks) has non-standard or ambiguous instructional grouping")
+                cands = [
+                    RoleCandidate(role=ROLE_ATTENDANCE_LECTURE, evidence=list(evidence), confidence=0.5, structural_dominance=0.5),
+                    RoleCandidate(role=ROLE_ATTENDANCE_LECTURE_LAB, evidence=list(evidence), confidence=0.5, structural_dominance=0.5),
+                ]
+                return DetectionResult(
+                    file_path=file_path,
+                    file_name=file_name,
+                    file_type="docx",
+                    status="ambiguous",
+                    candidate_roles=[ROLE_ATTENDANCE_LECTURE, ROLE_ATTENDANCE_LECTURE_LAB],
+                    candidates=cands,
+                    structural_evidence=evidence,
+                    diagnostic_hints=diag_hints,
+                    profile_id="attendance_docx",
+                    family="attendance",
+                )
         else:
-            evidence.append(f"Session capacity {cap} ({sessions_per_week:.1f} sessions/week) has non-standard or ambiguous instructional grouping")
-            cands = [
-                RoleCandidate(role=ROLE_ATTENDANCE_LECTURE, evidence=list(evidence), confidence=0.5, structural_dominance=0.5),
-                RoleCandidate(role=ROLE_ATTENDANCE_LECTURE_LAB, evidence=list(evidence), confidence=0.5, structural_dominance=0.5),
-            ]
-            return DetectionResult(
-                file_path=file_path,
-                file_name=file_name,
-                file_type="docx",
-                status="ambiguous",
-                candidate_roles=[ROLE_ATTENDANCE_LECTURE, ROLE_ATTENDANCE_LECTURE_LAB],
-                candidates=cands,
-                structural_evidence=evidence,
-                diagnostic_hints=diag_hints,
-                profile_id="attendance_docx",
-                family="attendance",
-            )
+            # Physical week structure NOT detected: use independent structural evidence
+            evidence.append(f"No explicit week column headers detected in matrix; evaluating independent physical structure (capacity: {cap})")
+            if has_paired_columns or (has_lab_schedule and cap >= 6):
+                evidence.append("Independent structural evidence (paired columns or dual schedule) confirms Lecture + Lab attendance structure")
+                if has_lab_schedule:
+                    evidence.append("Dual instructional component (LEC/LAB) markers identified in schedule/room assignment")
+
+                role_cand = RoleCandidate(
+                    role=ROLE_ATTENDANCE_LECTURE_LAB,
+                    evidence=list(evidence),
+                    confidence=1.0,
+                    structural_dominance=1.0,
+                )
+                return DetectionResult(
+                    file_path=file_path,
+                    file_name=file_name,
+                    file_type="docx",
+                    status="confirmed",
+                    role=ROLE_ATTENDANCE_LECTURE_LAB,
+                    candidate_roles=[ROLE_ATTENDANCE_LECTURE_LAB],
+                    candidates=[role_cand],
+                    structural_evidence=evidence,
+                    diagnostic_hints=diag_hints,
+                    profile_id="attendance_docx",
+                    family="attendance",
+                    variant="lecture_lab",
+                )
+            elif not has_lab_schedule and not has_paired_columns and cap <= 5:
+                evidence.append(f"Capacity {cap} session columns without secondary component indicators confirms single-session Lecture attendance structure")
+                role_cand = RoleCandidate(
+                    role=ROLE_ATTENDANCE_LECTURE,
+                    evidence=list(evidence),
+                    confidence=1.0,
+                    structural_dominance=1.0,
+                )
+                return DetectionResult(
+                    file_path=file_path,
+                    file_name=file_name,
+                    file_type="docx",
+                    status="confirmed",
+                    role=ROLE_ATTENDANCE_LECTURE,
+                    candidate_roles=[ROLE_ATTENDANCE_LECTURE],
+                    candidates=[role_cand],
+                    structural_evidence=evidence,
+                    diagnostic_hints=diag_hints,
+                    profile_id="attendance_docx",
+                    family="attendance",
+                    variant="lecture",
+                )
+            else:
+                evidence.append(f"Session capacity {cap} without explicit week columns or conclusive dual-component structural markers is ambiguous")
+                cands = [
+                    RoleCandidate(role=ROLE_ATTENDANCE_LECTURE, evidence=list(evidence), confidence=0.5, structural_dominance=0.5),
+                    RoleCandidate(role=ROLE_ATTENDANCE_LECTURE_LAB, evidence=list(evidence), confidence=0.5, structural_dominance=0.5),
+                ]
+                return DetectionResult(
+                    file_path=file_path,
+                    file_name=file_name,
+                    file_type="docx",
+                    status="ambiguous",
+                    candidate_roles=[ROLE_ATTENDANCE_LECTURE, ROLE_ATTENDANCE_LECTURE_LAB],
+                    candidates=cands,
+                    structural_evidence=evidence,
+                    diagnostic_hints=diag_hints,
+                    profile_id="attendance_docx",
+                    family="attendance",
+                )
+
 
     def _classify_academic_docx(
         self,
@@ -387,11 +458,17 @@ class TemplateRoleDetector:
         # ── Step 1: Detect Document Family ────────────────────────────────
         is_syllabus = bool(
             "SYLLABUS" in doc_upper
-            or "VPAA-QF-12" in doc_upper
-            or "RECEIPT OF SYLLABUS" in doc_upper
-            or "ACCEPTANCE OF SYLLABUS" in doc_upper
-            or "COURSE SYLLABUS" in doc_upper
             or "SILABUS" in doc_upper
+            or "VPAA-QF-12" in doc_upper
+            or "COURSE OUTLINE" in doc_upper
+            or "COURSE SPECIFICATION" in doc_upper
+            or "TEACHING PLAN" in doc_upper
+            or "LEARNING PLAN" in doc_upper
+            or "CURRICULUM GUIDE" in doc_upper
+            or "ACCEPTANCE OF SYLLABUS" in doc_upper
+            or "RECEIPT OF SYLLABUS" in doc_upper
+            or "RECEIPT OF COURSE OUTLINE" in doc_upper
+            or (docx_cand.roster_candidate and docx_cand.roster_candidate.get("total_cols") == 4 and any(k in doc_upper for k in ("OUTLINE", "PLAN", "SYLLABUS", "SPECIFICATION", "ACCEPTANCE", "RECEIPT")))
         )
 
         is_exam = bool(
@@ -400,29 +477,46 @@ class TemplateRoleDetector:
             or "EXAM RESULTS" in doc_upper
             or "RESULTS OF EXAMINATION" in doc_upper
             or "RETURN OF EXAMINATION" in doc_upper
-            or ("EXAMINATION" in doc_upper and any(k in doc_upper for k in ("RESULTS", "RETURN", "RECEIVE", "REVIEW", "BUNGA")))
+            or "ASSESSMENT RESULTS" in doc_upper
+            or "STUDENT EXAMINATION REPORT" in doc_upper
+            or "EXAMINATION REPORT" in doc_upper
+            or "TEST RESULTS" in doc_upper
+            or "EVALUATION RESULTS" in doc_upper
+            or ("EXAMINATION" in doc_upper and any(k in doc_upper for k in ("RESULTS", "RETURN", "RECEIVE", "REVIEW", "BUNGA", "PAPER", "REPORT")))
+            or ("EXAM" in doc_upper and any(k in doc_upper for k in ("RESULTS", "RETURN", "REVIEW", "PAPER", "REPORT")))
         )
 
         is_tos = bool(
             "TABLE OF SPECIFICATIONS" in doc_upper
             or re.search(r"\bTOS\b", doc_upper)
             or "TALAHANAYAN NG ESPESIPIKASYON" in doc_upper
+            or "ASSESSMENT BLUEPRINT" in doc_upper
+            or "TEST BLUEPRINT" in doc_upper
+            or ("SPECIFICATION" in doc_upper and any(k in doc_upper for k in ("TABLE", "ITEM", "COGNITIVE", "OBJECTIVE", "COMPETENC", "DISTRIBUTION", "BLUEPRINT")))
+            or ("COMPETENC" in doc_upper and "ITEM" in doc_upper and "COGNITIVE" in doc_upper)
+            or ("COGNITIVE LEVEL" in doc_upper or "ITEM DISTRIBUTION" in doc_upper)
         )
 
         is_discussion = bool(
             "GRADE DISCUSSION" in doc_upper
             or "DISCUSSION OF GRADES" in doc_upper
-            or ("PRESENTED" in doc_upper and "DISCUSSED" in doc_upper and "GRADES" in doc_upper)
+            or "GRADE CONSULTATION" in doc_upper
+            or "GRADE PRESENTATION" in doc_upper
+            or "ACKNOWLEDGEMENT OF GRADES" in doc_upper
+            or "CONSULTATION OF MARKS" in doc_upper
+            or "REVIEW OF GRADES" in doc_upper
             or "PAGTALAKAY NG MARKA" in doc_upper
+            or ("PRESENTED" in doc_upper and "DISCUSSED" in doc_upper and ("GRADE" in doc_upper or "MARKA" in doc_upper))
+            or ("GRADE" in doc_upper and any(k in doc_upper for k in ("DISCUSS", "CONSULT", "ACKNOWLEDG", "PRESENT")))
         )
 
         # ── Step 2: Detect Period Variant ─────────────────────────────────
-        has_midterm = bool("MIDTERM" in doc_upper or "GITNANG PANAHON" in doc_upper or "PRELIM" in doc_upper)
-        has_final = bool("FINAL" in doc_upper or "FINALS" in doc_upper or "HULING PANAHON" in doc_upper or "END TERM" in doc_upper)
+        has_midterm = bool("MIDTERM" in doc_upper or "GITNANG PANAHON" in doc_upper or "PRELIM" in doc_upper or "FIRST TERM" in doc_upper)
+        has_final = bool("FINAL" in doc_upper or "FINALS" in doc_upper or "HULING PANAHON" in doc_upper or "END TERM" in doc_upper or "LAST TERM" in doc_upper)
 
         # 1. Syllabus Acceptance (Single variant)
         if is_syllabus and not (is_exam or is_tos or is_discussion):
-            evidence.append("Syllabus receipt/acceptance declarations identified in document text")
+            evidence.append("Syllabus / course outline declarations identified in document text")
             role_cand = RoleCandidate(role=ROLE_SYLLABUS, evidence=list(evidence), confidence=1.0)
             return DetectionResult(
                 file_path=file_path,
@@ -498,28 +592,7 @@ class TemplateRoleDetector:
         # 3. Table of Specifications
         if is_tos and not (is_syllabus or is_exam or is_discussion):
             evidence.append("Table of Specifications declaration identified in document body")
-            fn_indicates_final = any("final" in h.lower() for h in diag_hints)
-            fn_indicates_midterm = any("midterm" in h.lower() for h in diag_hints)
-
-            if (fn_indicates_final and has_midterm and not has_final) or (fn_indicates_midterm and has_final and not has_midterm):
-                evidence.append("Document body text indicates one term but file hint suggests another; flagged as ambiguous for user confirmation")
-                cands = [
-                    RoleCandidate(role=ROLE_TOS_MIDTERM, evidence=list(evidence), confidence=0.5),
-                    RoleCandidate(role=ROLE_TOS_FINAL, evidence=list(evidence), confidence=0.5),
-                ]
-                return DetectionResult(
-                    file_path=file_path,
-                    file_name=file_name,
-                    file_type="docx",
-                    status="ambiguous",
-                    candidate_roles=[ROLE_TOS_MIDTERM, ROLE_TOS_FINAL],
-                    candidates=cands,
-                    structural_evidence=evidence,
-                    diagnostic_hints=diag_hints,
-                    profile_id="tos",
-                    family="tos",
-                )
-            elif has_midterm and not has_final:
+            if has_midterm and not has_final:
                 evidence.append("Period term 'Midterm' verified in document body")
                 role_cand = RoleCandidate(role=ROLE_TOS_MIDTERM, evidence=list(evidence), confidence=1.0)
                 return DetectionResult(
@@ -818,13 +891,13 @@ class TemplateRoleDetector:
                             if txt:
                                 doc_text += " " + txt.upper()
 
-                if role == ROLE_SYLLABUS and not ("SYLLABUS" in doc_text or "SILABUS" in doc_text or "VPAA-QF-12" in doc_text):
+                if role == ROLE_SYLLABUS and not any(k in doc_text for k in ("SYLLABUS", "SILABUS", "VPAA-QF-12", "COURSE OUTLINE", "COURSE SPECIFICATION", "TEACHING PLAN", "LEARNING PLAN", "CURRICULUM GUIDE", "ACCEPTANCE OF SYLLABUS", "RECEIPT OF COURSE OUTLINE")):
                     return False, f"Template lacks syllabus receipt declarations required for role '{role}'", None
-                elif role in (ROLE_EXAM_RETURNS_MIDTERM, ROLE_EXAM_RETURNS_FINAL) and not ("EXAMINATION" in doc_text or "EXAM" in doc_text):
+                elif role in (ROLE_EXAM_RETURNS_MIDTERM, ROLE_EXAM_RETURNS_FINAL) and not any(k in doc_text for k in ("EXAMINATION", "EXAM", "ASSESSMENT RESULTS", "EXAMINATION REPORT", "TEST RESULTS", "EVALUATION RESULTS", "STUDENT EXAMINATION REPORT")):
                     return False, f"Template lacks examination results declarations required for role '{role}'", None
-                elif role in (ROLE_TOS_MIDTERM, ROLE_TOS_FINAL) and not ("TABLE OF SPECIFICATIONS" in doc_text or re.search(r"\bTOS\b", doc_text)):
+                elif role in (ROLE_TOS_MIDTERM, ROLE_TOS_FINAL) and not (any(k in doc_text for k in ("TABLE OF SPECIFICATIONS", "SPECIFICATION", "ITEM DISTRIBUTION", "COGNITIVE LEVEL", "ASSESSMENT BLUEPRINT", "TEST BLUEPRINT", "COMPETENC", "TALAHANAYAN NG ESPESIPIKASYON")) or bool(re.search(r"\bTOS\b", doc_text))):
                     return False, f"Template lacks Table of Specifications declarations required for role '{role}'", None
-                elif role in (ROLE_GRADE_DISCUSSION_MIDTERM, ROLE_GRADE_DISCUSSION_FINAL) and not ("GRADE" in doc_text and "DISCUSS" in doc_text):
+                elif role in (ROLE_GRADE_DISCUSSION_MIDTERM, ROLE_GRADE_DISCUSSION_FINAL) and not (("GRADE" in doc_text or "MARK" in doc_text) and any(k in doc_text for k in ("DISCUSS", "CONSULT", "ACKNOWLEDG", "PRESENT", "PAGTALAKAY"))):
                     return False, f"Template lacks grade discussion declarations required for role '{role}'", None
 
                 validated = self._validator.validate(raw_cand, profile=profile_id)

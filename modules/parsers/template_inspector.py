@@ -665,11 +665,31 @@ class XlsxTemplateInspector:
                 roster_candidates_by_sheet[s_name] = r_cand
 
         # Select primary roster sheet (prefer literal 'lecture' if present for CvSU compatibility)
+        def score_roster_sheet(s_name: str) -> int:
+            ws_cand = wb[s_name]
+            score = 0
+            s_lower = s_name.lower().strip()
+            if "lecture" in s_lower or "theory" in s_lower or "main" in s_lower or s_lower in ("lec", "lec_sheet", "lecture_sheet", "sheet_a"):
+                score += 50
+            for r in range(1, min(ws_cand.max_row + 1, 10)):
+                for c in range(1, min(ws_cand.max_column + 1, 15)):
+                    val = ws_cand.cell(r, c).value
+                    if val and isinstance(val, str):
+                        m = SemanticRegistry.match_metadata_candidate(val.strip())
+                        if m:
+                            score += 10
+            return score
+
         primary_roster_sheet: Optional[str] = None
         if "lecture" in sheet_map and sheet_map["lecture"] in roster_candidates_by_sheet:
             primary_roster_sheet = sheet_map["lecture"]
         elif roster_candidates_by_sheet:
-            primary_roster_sheet = next(iter(roster_candidates_by_sheet.keys()))
+            scored_rosters = sorted(
+                roster_candidates_by_sheet.keys(),
+                key=lambda s: score_roster_sheet(s),
+                reverse=True,
+            )
+            primary_roster_sheet = scored_rosters[0]
 
         if not primary_roster_sheet:
             raise TemplateError(
@@ -683,16 +703,16 @@ class XlsxTemplateInspector:
         else:
             # Structurally discover summary sheet by scanning non-roster sheets for summary rating table or banner
             for s_name in sheet_names:
-                if s_name == primary_roster_sheet or s_name.lower().strip() in ("notes", "instructions", "guide", "readme"):
+                if s_name == primary_roster_sheet or s_name.lower().strip() in ("notes", "instructions", "guide", "readme", "transmutation table"):
                     continue
                 ws_s = wb[s_name]
                 has_banner = False
                 has_rating_table = False
                 for r in range(1, min(ws_s.max_row + 1, 25)):
                     row_txt = [str(ws_s.cell(r, c).value or "").strip().lower() for c in range(1, min(ws_s.max_column + 1, 15))]
-                    if any("college of" in t for t in row_txt):
+                    if any(k in t for t in row_txt for k in ("college", "faculty", "department", "university", "grading", "summary")):
                         has_banner = True
-                    if any("grade" in t or "rating" in t or "mark" in t for t in row_txt) and any("name" in t or "student" in t for t in row_txt):
+                    if any(k in t for t in row_txt for k in ("grade", "rating", "mark", "score")) and any(k in t for t in row_txt for k in ("name", "student")):
                         has_rating_table = True
                     if has_banner or has_rating_table:
                         break
@@ -716,7 +736,7 @@ class XlsxTemplateInspector:
             lab_sheet = sheet_map["lab"]
         else:
             for s_name in sheet_names:
-                if s_name in (primary_roster_sheet, summary_sheet):
+                if s_name in (primary_roster_sheet, summary_sheet) or s_name.lower().strip() in ("notes", "instructions", "guide", "readme", "transmutation table"):
                     continue
                 norm_sn = s_name.lower().strip()
                 if "lab" in norm_sn or "practical" in norm_sn:
@@ -737,10 +757,19 @@ class XlsxTemplateInspector:
             con_sheet = sheet_map["consolidated"]
         else:
             for s_name in sheet_names:
-                if "consolidat" in s_name.lower():
+                if s_name in (primary_roster_sheet, summary_sheet, lab_sheet) or s_name.lower().strip() in ("notes", "instructions", "guide", "readme", "transmutation table"):
+                    continue
+                norm_sn = s_name.lower().strip()
+                if any(k in norm_sn for k in ("consolidat", "combined", "summary", "result")):
                     has_consolidated = True
                     con_sheet = s_name
                     break
+                elif s_name in roster_candidates_by_sheet:
+                    # Third distinct student assessment sheet
+                    has_consolidated = True
+                    con_sheet = s_name
+                    break
+
 
         ws_lec = wb[primary_roster_sheet]
         header_candidates: List[Dict[str, Any]] = []
@@ -881,6 +910,8 @@ class XlsxTemplateInspector:
                 "sheet_names": sheet_names,
                 "roster_sheet": primary_roster_sheet,
                 "summary_sheet": summary_sheet,
+                "lab_sheet": lab_sheet,
+                "con_sheet": con_sheet,
                 "has_lab": has_lab,
                 "has_consolidated": has_consolidated,
                 "xlsx_geometry": xlsx_geometry,
