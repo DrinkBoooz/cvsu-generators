@@ -63,7 +63,7 @@ AUDIT_RULES: List[Tuple[str, str, str]] = [
     (r"if\s+(?:is_aggregation_formula|is_consolidation_formula)\([^)]*\)\s*:\s*(?:con_sheet|lab_sheet|role)", "aggregation-formula-role-authority", "Single formula consolidation/aggregation predicate used as direct role authority"),
     (r"non_summary_sheets\s*=", "non-summary-sheet-broad-set", "Overly broad non-summary sheet set without roster verification"),
     (r"if\s+has_operators\s*:\s*return\s+True", "single-source-operator-consolidation", "Single-source operator treated as multi-source consolidation"),
-    (r"student_component_sheets\s*=\s*set\([^)]*roster_candidates_by_sheet\.keys\(\)\)", "summary-in-component-sheets", "Inclusion of summary_sheet in student_component_sheets without exclusion"),
+    (r"student_component_sheets\s*=\s*(?:set\([^)]*roster_candidates_by_sheet|\{\s*s\s*for\s*s\s*in\s*roster_candidates_by_sheet)", "summary-in-component-sheets", "Direct treatment of roster candidates as semantic component authority without bounding to verified candidate components"),
     (r"student_component_sheets\s*=\s*(?:set\()?(?:sheet_names|wb\.sheetnames|all_sheets)\)?", "broad-workbook-sheets-as-components", "Broad workbook sheet set treated as student components"),
     (r"for\s+row\s+in\s+ws\.iter_rows\(values_only=True\):", "whole-sheet-consolidation-scan", "Whole-sheet row iteration used for consolidation authority without student data region bounding"),
     (r"(?:first_row\s*\+\s*10|max_column\s*\+\s*1,\s*50)", "arbitrary-sampling-bounds", "Arbitrary row or column sampling boundary used as authoritative role evidence"),
@@ -94,10 +94,10 @@ def classify_finding(rel_path: str, line_num: int, label: str, snippet: str) -> 
             return "E", "Prohibited single-source operator treated as multi-source consolidation"
         return "D", "Legitimate operator logic"
 
-    # Category E: Inclusion of summary_sheet in student_component_sheets without exclusion
+    # Category E: Direct treatment of roster candidates as semantic component authority
     if label == "summary-in-component-sheets":
         if "template_inspector.py" in rel_path or "template_role_detector.py" in rel_path or "detector" in rel_path:
-            return "E", "Prohibited inclusion of summary_sheet in student_component_sheets without exclusion"
+            return "E", "Prohibited direct treatment of roster candidates as semantic component authority"
         return "D", "Legitimate sheet grouping"
 
     # Category E: Broad workbook sheet sets treated as student components

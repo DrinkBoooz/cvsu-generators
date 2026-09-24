@@ -1095,11 +1095,15 @@ class XlsxTemplateInspector:
                     f"Grade sheet template '{os.path.basename(template_path)}' contains secondary assessment worksheets with unparseable or indeterminate formula lineage: {unreliable}"
                 )
 
-            # Exclude already-resolved non-component roles (summary_sheet) from student components.
-            # Only legitimate primary roster and secondary candidate sheets belong in student components.
+            # Establish the component universe strictly from verified instructional roles:
+            # 1. The uniquely identified primary instructional component (primary_roster_sheet)
+            # 2. The uniquely identified secondary assessment/component candidates (s1, s2)
+            # Auxiliary/reference/master/helper sheets that merely resemble rosters are excluded
+            # from instructional component authority.
+            candidate_components = {primary_roster_sheet, s1, s2}
             student_component_sheets = {
-                s for s in roster_candidates_by_sheet
-                if s != summary_sheet
+                s for s in candidate_components
+                if s in roster_candidates_by_sheet and s != summary_sheet
             }
             s1_component_refs = {
                 r.lower() for r in s1_referenced
