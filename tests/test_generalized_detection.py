@@ -3618,6 +3618,9 @@ def test_structural_audit_catches_prohibited_assumptions():
         ("modules/parsers/template_role_detector.py", "res = scored_rosters[0]", "workbook-order-role-selection"),
         ("modules/parsers/template_role_detector.py", "cap = cap / 4 # four-week assumption", "constant-4-week-assumption"),
         ("modules/parsers/template_role_detector.py", "if fn_indicates_role(filename): return", "filename-role-classification"),
+        ("modules/parsers/template_inspector.py", "if is_aggregation_formula(val, s2, all_sheets): con_sheet = s1", "aggregation-formula-role-authority"),
+        ("modules/parsers/template_inspector.py", "non_summary_sheets = {s for s in sheet_names}", "non-summary-sheet-broad-set"),
+        ("modules/parsers/template_inspector.py", "if has_operators: return True", "single-source-operator-consolidation"),
     ]
 
     for rel_path, snippet, expected_label in violations:
@@ -3626,6 +3629,263 @@ def test_structural_audit_catches_prohibited_assumptions():
         item, cat, just = findings[0]
         assert item["label"] == expected_label, f"Expected {expected_label}, got {item['label']}"
         assert cat == "E", f"Expected Category E violation for {expected_label}, got {cat} ({just})"
+
+
+# ── 17. Adversarial False-Positive Regressions: Consolidation vs Transformation ──
+
+def _build_adversarial_base_workbook():
+    wb = openpyxl.Workbook()
+    # 1. Primary Roster (Student_Master)
+    ws_r = wb.active
+    ws_r.title = "Student_Master"
+    ws_r.cell(1, 1, "Course: BSCS")
+    ws_r.cell(2, 1, "Instructor: Dr. Turing")
+    ws_r.cell(4, 1, "#")
+    ws_r.cell(4, 2, "Name of Student")
+    ws_r.cell(4, 3, "Student Number")
+    for r in range(5, 10):
+        ws_r.cell(r, 1, r - 4)
+        ws_r.cell(r, 2, f"Student {r - 4}")
+        ws_r.cell(r, 3, f"2026-000{r - 4}")
+        ws_r.cell(r, 4, 80)
+
+    # 2. Summary
+    ws_s = wb.create_sheet(title="Summary")
+    ws_s.cell(1, 1, "OFFICIAL GRADES")
+    ws_s.cell(4, 1, "#")
+    ws_s.cell(4, 2, "Student Number")
+    ws_s.cell(4, 3, "Final Grade")
+    for r in range(5, 10):
+        ws_s.cell(r, 1, r - 4)
+        ws_s.cell(r, 2, f"2026-000{r - 4}")
+        ws_s.cell(r, 3, "2.00")
+
+    # 3. Component_A
+    ws_a = wb.create_sheet(title="Component_A")
+    ws_a.cell(4, 1, "#")
+    ws_a.cell(4, 2, "Name of Student")
+    ws_a.cell(4, 3, "Student Number")
+    for c in range(4, 10):
+        ws_a.cell(4, c, f"A_{c}")
+    for r in range(5, 10):
+        ws_a.cell(r, 1, r - 4)
+        ws_a.cell(r, 2, f"Student {r - 4}")
+        ws_a.cell(r, 3, f"2026-000{r - 4}")
+        for c in range(4, 10):
+            ws_a.cell(r, c, 75)
+
+    # 4. Component_B
+    ws_b = wb.create_sheet(title="Component_B")
+    ws_b.cell(4, 1, "#")
+    ws_b.cell(4, 2, "Name of Student")
+    ws_b.cell(4, 3, "Student Number")
+    for c in range(4, 10):
+        ws_b.cell(4, c, f"B_{c}")
+    for r in range(5, 10):
+        ws_b.cell(r, 1, r - 4)
+        ws_b.cell(r, 2, f"Student {r - 4}")
+        ws_b.cell(r, 3, f"2026-000{r - 4}")
+        for c in range(4, 10):
+            ws_b.cell(r, c, 85)
+
+    return wb, ws_r, ws_s, ws_a, ws_b
+
+
+def test_xlsx_adversarial_case_a_arithmetic_transformation_no_consolidation(detector, tmp_path):
+    """
+    Adversarial Case A:
+    A -> B with arithmetic transformation (=Component_B!D5 * 1 or + 0) but no multi-source consolidation.
+    Must fail closed as ambiguous.
+    """
+    wb, _, _, ws_a, _ = _build_adversarial_base_workbook()
+    ws_a.cell(5, 4, "=Component_B!D5 * 1")
+    p = tmp_path / "adv_case_a.xlsx"
+    wb.save(str(p))
+
+    res = detector.detect_role(str(p))
+    assert res.status == "ambiguous"
+    assert res.role is None
+
+
+def test_xlsx_adversarial_case_b_sum_over_one_cell_only(detector, tmp_path):
+    """
+    Adversarial Case B:
+    A -> B with SUM() over one cell only (=SUM(Component_B!D5)).
+    Single-source aggregation is not multi-component consolidation.
+    Must fail closed as ambiguous.
+    """
+    wb, _, _, ws_a, _ = _build_adversarial_base_workbook()
+    ws_a.cell(5, 4, "=SUM(Component_B!D5)")
+    p = tmp_path / "adv_case_b.xlsx"
+    wb.save(str(p))
+
+    res = detector.detect_role(str(p))
+    assert res.status == "ambiguous"
+    assert res.role is None
+
+
+def test_xlsx_adversarial_case_c_weighted_arithmetic_single_component(detector, tmp_path):
+    """
+    Adversarial Case C:
+    A -> B with weighted arithmetic affecting only one component (=Component_B!D5 * 0.4 or ROUND).
+    Single-source weighting/function does not prove consolidation.
+    Must fail closed as ambiguous.
+    """
+    wb, _, _, ws_a, _ = _build_adversarial_base_workbook()
+    ws_a.cell(5, 4, "=Component_B!D5 * 0.4")
+    p = tmp_path / "adv_case_c.xlsx"
+    wb.save(str(p))
+
+    res = detector.detect_role(str(p))
+    assert res.status == "ambiguous"
+    assert res.role is None
+
+
+def test_xlsx_adversarial_case_d_references_helper_sheet_without_combining_instructional_structures(detector, tmp_path):
+    """
+    Adversarial Case D:
+    A references two sheets (Component_B and Notes), but Notes is a non-instructional helper sheet.
+    References to non-student sheets must not satisfy the multi-component requirement.
+    Must fail closed as ambiguous.
+    """
+    wb, _, _, ws_a, _ = _build_adversarial_base_workbook()
+    ws_notes = wb.create_sheet(title="Notes")
+    ws_notes.cell(1, 1, "Grading Scale: Passing >= 75")
+    ws_a.cell(5, 4, "=Component_B!D5")
+    ws_a.cell(5, 5, "=Notes!A1")
+    p = tmp_path / "adv_case_d.xlsx"
+    wb.save(str(p))
+
+    res = detector.detect_role(str(p))
+    assert res.status == "ambiguous"
+    assert res.role is None
+
+
+def test_xlsx_adversarial_case_e_has_internal_aggregation_but_is_secondary_component(detector, tmp_path):
+    """
+    Adversarial Case E:
+    A has an internal aggregation formula (=SUM(A_6:A_9)) across its own row, but is
+    structurally a secondary component and does not combine multiple student components.
+    Must fail closed as ambiguous.
+    """
+    wb, _, _, ws_a, _ = _build_adversarial_base_workbook()
+    ws_a.cell(5, 4, "=Component_B!D5")
+    ws_a.cell(5, 5, "=SUM(A_6:A_9)")
+    p = tmp_path / "adv_case_e.xlsx"
+    wb.save(str(p))
+
+    res = detector.detect_role(str(p))
+    assert res.status == "ambiguous"
+    assert res.role is None
+
+
+def test_xlsx_adversarial_case_f_both_satisfy_aggregation_predicates_competing(detector, tmp_path):
+    """
+    Adversarial Case F:
+    Both A and B satisfy aggregation predicates referencing each other, creating competing/cyclic lineage.
+    Must fail closed as ambiguous.
+    """
+    wb, _, _, ws_a, ws_b = _build_adversarial_base_workbook()
+    ws_a.cell(5, 4, "=Component_B!D5*0.4 + Student_Master!D5*0.6")
+    ws_b.cell(5, 4, "=Component_A!D5*0.4 + Student_Master!D5*0.6")
+    p = tmp_path / "adv_case_f.xlsx"
+    wb.save(str(p))
+
+    res = detector.detect_role(str(p))
+    assert res.status == "ambiguous"
+    assert res.role is None
+
+
+def test_xlsx_adversarial_case_g_symmetrical_aggregation_topology(detector, tmp_path):
+    """
+    Adversarial Case G:
+    A and B have symmetrical aggregation topology (both reference Student_Master identically).
+    Neither can be uniquely identified as Consolidated.
+    Must fail closed as ambiguous.
+    """
+    wb, _, _, ws_a, ws_b = _build_adversarial_base_workbook()
+    ws_a.cell(5, 4, "=Student_Master!D5*0.5")
+    ws_b.cell(5, 4, "=Student_Master!D5*0.5")
+    p = tmp_path / "adv_case_g.xlsx"
+    wb.save(str(p))
+
+    res = detector.detect_role(str(p))
+    assert res.status == "ambiguous"
+    assert res.role is None
+
+
+def test_xlsx_adversarial_case_h_references_helper_and_master_metadata_but_no_assessment_combination(detector, tmp_path):
+    """
+    Adversarial Case H:
+    A -> B plus helper/master references, but A remains structurally a secondary component:
+    A references Component_B, references a lookup table (Transmutation_Table), and references
+    title metadata (Student_Master!A1), but does not combine student assessment rows.
+    Must fail closed as ambiguous.
+    """
+    wb, _, _, ws_a, _ = _build_adversarial_base_workbook()
+    ws_tt = wb.create_sheet(title="Transmutation_Table")
+    ws_tt.cell(1, 1, "Scale")
+    ws_a.cell(1, 1, "=Student_Master!A1")
+    ws_a.cell(5, 4, "=Component_B!D5*0.5")
+    ws_a.cell(5, 5, "=Transmutation_Table!A1")
+    p = tmp_path / "adv_case_h.xlsx"
+    wb.save(str(p))
+
+    res = detector.detect_role(str(p))
+    assert res.status == "ambiguous"
+    assert res.role is None
+
+
+def test_xlsx_positive_synthesized_column_combination_resolves_consolidated(detector, tmp_path):
+    """
+    Requirement 4:
+    Synthesized column combination on student rows:
+    In Component_A, Col 4 imports Component_B (=Component_B!D5), Col 5 imports Student_Master
+    (=Student_Master!D5), and Col 6 combines Col 4 and Col 5 (=D5*0.4 + E5*0.6).
+    The resolver must identify Component_A as Consolidated and Component_B as Laboratory.
+    """
+    from modules.parsers.template_inspector import XlsxTemplateInspector
+
+    wb, _, _, ws_a, _ = _build_adversarial_base_workbook()
+    ws_a.cell(5, 4, "=Component_B!D5")
+    ws_a.cell(5, 5, "=Student_Master!D5")
+    ws_a.cell(5, 6, "=D5*0.4 + E5*0.6")
+    p = tmp_path / "pos_synthesized.xlsx"
+    wb.save(str(p))
+
+    cand = XlsxTemplateInspector().inspect(str(p), profile_id="grade_sheet_xlsx")
+    assert cand.metadata["con_sheet"] == "Component_A"
+    assert cand.metadata["lab_sheet"] == "Component_B"
+
+    res = detector.detect_role(str(p))
+    assert res.status == "confirmed"
+    assert res.role == ROLE_GRADE_SHEET_LECTURE_LAB
+
+
+def test_xlsx_indirect_on_unrelated_sheet_does_not_invalidate_candidates(detector, tmp_path):
+    """
+    Requirement 6:
+    Verify that an INDIRECT() formula on an unrelated sheet (such as Notes) does NOT
+    invalidate the template or candidate secondary worksheets when the candidate sheets
+    have reliable formula lineages.
+    """
+    from modules.parsers.template_inspector import XlsxTemplateInspector
+
+    wb, _, _, ws_a, _ = _build_adversarial_base_workbook()
+    ws_notes = wb.create_sheet(title="Notes")
+    ws_notes.cell(1, 1, '=INDIRECT("A1")')
+    ws_a.cell(5, 4, "=Component_B!D5*0.4 + Student_Master!D5*0.6")
+    p = tmp_path / "indirect_notes.xlsx"
+    wb.save(str(p))
+
+    cand = XlsxTemplateInspector().inspect(str(p), profile_id="grade_sheet_xlsx")
+    assert cand.metadata["con_sheet"] == "Component_A"
+    assert cand.metadata["lab_sheet"] == "Component_B"
+
+    res = detector.detect_role(str(p))
+    assert res.status == "confirmed"
+    assert res.role == ROLE_GRADE_SHEET_LECTURE_LAB
+
 
 
 

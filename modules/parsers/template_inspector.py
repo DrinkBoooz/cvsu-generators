@@ -195,14 +195,21 @@ def extract_referenced_sheets(formula_str: str) -> SheetReferenceSet:
     return SheetReferenceSet(referenced, is_reliable=True)
 
 
-def is_aggregation_formula(val: str, other_sheet: str, all_sheets: set) -> bool:
+def is_consolidation_formula(
+    val: str,
+    other_sheet: str,
+    student_component_sheets: set,
+) -> bool:
     """
-    Checks if a formula string physically represents an aggregation formula.
-    An aggregation formula:
-      - References multiple distinct worksheets (e.g. '=SheetA!A1 + SheetB!B1'), OR
-      - References other_sheet and combines it mathematically using arithmetic operators
-        (+ - * / ^) or aggregation functions (SUM, AVERAGE, PRODUCT, etc.),
-        rather than being a pure single-cell mirror/passthrough (e.g. '=SheetB!A1').
+    Checks if a formula string physically represents a true multi-source consolidation formula.
+
+    Distinguishes:
+      - Mathematical transformation: single-source arithmetic (=B!D5*1, =B!D5+0, =B!D5-0) -> False
+      - Single-source aggregation: single-source function (=SUM(B!D5), =ROUND(B!D5,2), =IF(B!D5>0,...)) -> False
+      - Single-source scaling: single-source weighting (=B!D5*0.4) -> False
+      - Helper/master reference: referencing non-instructional sheets (Notes, Settings, etc.) -> False
+      - Multi-source combination: simultaneously references other_sheet AND >= 1 other
+        instructional student component sheet (e.g. primary roster sheet), physically combining them -> True.
     """
     if not isinstance(val, str) or not val.startswith("="):
         return False
@@ -211,45 +218,108 @@ def is_aggregation_formula(val: str, other_sheet: str, all_sheets: set) -> bool:
     if not getattr(refs, "is_reliable", True):
         return False
 
-    # 1. Multi-source formula: references multiple distinct worksheets in the workbook
-    valid_refs = {r for r in refs if any(r.lower() == s.lower() for s in all_sheets)}
-    if len(valid_refs) >= 2:
-        return True
+    # Extract references that belong to physical student component worksheets
+    valid_component_refs = {
+        r for r in refs
+        if any(r.lower() == s.lower() for s in student_component_sheets)
+    }
 
-    # 2. Mathematical combination / aggregation of other_sheet:
-    if any(r.lower() == other_sheet.lower() for r in refs):
-        try:
-            tok = Tokenizer(val)
-            meaningful_tokens = [
-                item for item in tok.items
-                if item.type not in ("WHITE-SPACE",)
-            ]
-            if len(meaningful_tokens) == 1 and meaningful_tokens[0].type == "OPERAND" and meaningful_tokens[0].subtype == "RANGE":
-                # Single-cell passthrough mirror: not an aggregation
-                return False
+    # Must reference other_sheet (the other secondary assessment candidate)
+    if not any(r.lower() == other_sheet.lower() for r in valid_component_refs):
+        return False
 
-            has_operators = any(item.type in ("OPERATOR-INFIX", "OPERATOR-PREFIX", "OPERATOR-POSTFIX") for item in meaningful_tokens)
-            has_functions = any(item.type == "FUNC" for item in meaningful_tokens)
-            if has_operators or has_functions:
-                return True
-        except Exception:
-            pass
+    # Must simultaneously reference at least one OTHER physical student component sheet
+    other_comp_refs = {
+        r for r in valid_component_refs
+        if r.lower() != other_sheet.lower()
+    }
+    if not other_comp_refs:
+        # Single-source formula (even with arithmetic operators, weights, or functions):
+        # This is a mathematical transformation or single-source aggregation, NOT multi-source consolidation.
+        return False
+
+    # Genuine multi-source combination: combines other_sheet with >= 1 other student component sheet!
+    return True
+
+
+def is_aggregation_formula(val: str, other_sheet: str, all_sheets: set) -> bool:
+    """
+    Backwards-compatible alias for is_consolidation_formula.
+    """
+    return is_consolidation_formula(val, other_sheet, all_sheets)
+
+
+def has_consolidation_structure(
+    ws,
+    other_sheet: str,
+    student_component_sheets: set,
+    roster_info: Optional[Dict[str, Any]] = None,
+) -> bool:
+    """
+    Scans a worksheet to verify whether it physically demonstrates a true multi-source
+    consolidation structure combining other_sheet with another student component sheet.
+
+    Checks:
+      1. Direct multi-source formulas: any cell formula that simultaneously combines
+         other_sheet and at least one other student component sheet.
+      2. Synthesized multi-source combination: on student data rows, the sheet imports
+         a column from other_sheet, imports a column from another student component sheet,
+         and combines those imported columns in an assessment formula.
+    """
+    # 1. Direct multi-source formulas
+    for row in ws.iter_rows(values_only=True):
+        for val in row:
+            if isinstance(val, str) and val.startswith("="):
+                if is_consolidation_formula(val, other_sheet, student_component_sheets):
+                    return True
+
+    # 2. Synthesized column combination across student rows (if roster_info available)
+    if roster_info and "first_data_row_index" in roster_info:
+        first_row = roster_info["first_data_row_index"]
+        other_sheet_cols = set()
+        partner_comp_cols = set()
+        partner_sheets = {s.lower() for s in student_component_sheets if s.lower() != other_sheet.lower()}
+
+        sample_rows = range(first_row, min(ws.max_row + 1, first_row + 10))
+        for r in sample_rows:
+            for c in range(1, min(ws.max_column + 1, 50)):
+                v = ws.cell(r, c).value
+                if isinstance(v, str) and v.startswith("="):
+                    refs = extract_referenced_sheets(v)
+                    if any(ref.lower() == other_sheet.lower() for ref in refs):
+                        other_sheet_cols.add(c)
+                    elif any(ref.lower() in partner_sheets for ref in refs):
+                        partner_comp_cols.add(c)
+
+        if other_sheet_cols and partner_comp_cols:
+            for r in sample_rows:
+                for c in range(1, min(ws.max_column + 1, 50)):
+                    if c in other_sheet_cols or c in partner_comp_cols:
+                        continue
+                    v = ws.cell(r, c).value
+                    if isinstance(v, str) and v.startswith("="):
+                        try:
+                            tok = Tokenizer(v)
+                            cell_col_refs = set()
+                            for item in tok.items:
+                                if item.type == "OPERAND" and item.subtype == "RANGE":
+                                    col_letter = re.match(r"^\$?([A-Za-z]+)\$?\d+", item.value)
+                                    if col_letter:
+                                        from openpyxl.utils import column_index_from_string
+                                        cell_col_refs.add(column_index_from_string(col_letter.group(1)))
+                            if any(c_idx in other_sheet_cols for c_idx in cell_col_refs) and any(c_idx in partner_comp_cols for c_idx in cell_col_refs):
+                                return True
+                        except Exception:
+                            pass
 
     return False
 
 
 def has_aggregation_structure(ws, other_sheet: str, all_sheets: set) -> bool:
     """
-    Scans a worksheet to verify whether it physically demonstrates an aggregation
-    structure combining the other candidate assessment sheet with broader instructional
-    or student components.
+    Backwards-compatible alias for has_consolidation_structure.
     """
-    for row in ws.iter_rows(values_only=True):
-        for val in row:
-            if isinstance(val, str) and val.startswith("="):
-                if is_aggregation_formula(val, other_sheet, all_sheets):
-                    return True
-    return False
+    return has_consolidation_structure(ws, other_sheet, all_sheets)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1001,15 +1071,25 @@ class XlsxTemplateInspector:
                     f"Grade sheet template '{os.path.basename(template_path)}' contains secondary assessment worksheets with unparseable or indeterminate formula lineage: {unreliable}"
                 )
 
-            non_summary_sheets = {s.lower() for s in sheet_names if s.lower() != summary_sheet.lower()}
-            s1_non_summary_refs = {r.lower() for r in s1_referenced if r.lower() in non_summary_sheets and r.lower() != s1.lower()}
-            s2_non_summary_refs = {r.lower() for r in s2_referenced if r.lower() in non_summary_sheets and r.lower() != s2.lower()}
+            student_component_sheets = set(roster_candidates_by_sheet.keys())
+            s1_component_refs = {
+                r.lower() for r in s1_referenced
+                if any(r.lower() == s.lower() for s in student_component_sheets) and r.lower() != s1.lower()
+            }
+            s2_component_refs = {
+                r.lower() for r in s2_referenced
+                if any(r.lower() == s.lower() for s in student_component_sheets) and r.lower() != s2.lower()
+            }
 
             s1_refs_s2 = any(r.lower() == s2.lower() for r in s1_referenced)
             s2_refs_s1 = any(r.lower() == s1.lower() for r in s2_referenced)
 
-            s1_has_agg = has_aggregation_structure(ws1, s2, set(sheet_names))
-            s2_has_agg = has_aggregation_structure(ws2, s1, set(sheet_names))
+            s1_has_agg = has_consolidation_structure(
+                ws1, s2, student_component_sheets, roster_info=roster_candidates_by_sheet.get(s1)
+            )
+            s2_has_agg = has_consolidation_structure(
+                ws2, s1, student_component_sheets, roster_info=roster_candidates_by_sheet.get(s2)
+            )
 
             # Case D: s1 -> s2 and s2 -> s1 (competing/cyclic lineage)
             if s1_refs_s2 and s2_refs_s1:
@@ -1020,10 +1100,10 @@ class XlsxTemplateInspector:
             elif s1_refs_s2 and not s2_refs_s1:
                 # Directed lineage alone is not automatic semantic truth:
                 # To resolve s1 as Consolidated, s1 must exhibit role-consistent
-                # physical aggregation topology:
-                # 1. It must reference multiple instructional/student components (>= 2 non-summary sheets)
+                # physical consolidation topology:
+                # 1. It must reference multiple instructional/student components (>= 2 student component sheets)
                 # 2. It must physically demonstrate an aggregation structure combining components
-                if len(s1_non_summary_refs) < 2 or not s1_has_agg:
+                if len(s1_component_refs) < 2 or not s1_has_agg:
                     raise AmbiguousTemplateError(
                         f"Grade sheet template '{os.path.basename(template_path)}' contains secondary assessment worksheets with directed lineage ({s1} -> {s2}) but lacking role-consistent physical aggregation topology: {[s1, s2]}"
                     )
@@ -1033,8 +1113,8 @@ class XlsxTemplateInspector:
                 has_consolidated = True
             # Case B: s2 -> s1 and s1 !-> s2 (s2 candidate for Consolidated)
             elif s2_refs_s1 and not s1_refs_s2:
-                # Symmetrically, s2 must exhibit role-consistent physical aggregation topology:
-                if len(s2_non_summary_refs) < 2 or not s2_has_agg:
+                # Symmetrically, s2 must exhibit role-consistent physical consolidation topology:
+                if len(s2_component_refs) < 2 or not s2_has_agg:
                     raise AmbiguousTemplateError(
                         f"Grade sheet template '{os.path.basename(template_path)}' contains secondary assessment worksheets with directed lineage ({s2} -> {s1}) but lacking role-consistent physical aggregation topology: {[s1, s2]}"
                     )

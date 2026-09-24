@@ -60,6 +60,9 @@ AUDIT_RULES: List[Tuple[str, str, str]] = [
     (r"refs1\s*(?:>|<|!=|==)\s*refs2|refs2\s*(?:>|<|!=|==)\s*refs1|(?:ref_count|formula_count)\s*(?:>|<|!=)", "reference-count-role-authority", "Reference or formula count comparison used as authoritative role discriminator"),
     (r"(?:s1_refs_primary|s2_refs_primary)\b", "primary-roster-role-authority", "Hardcoded primary-roster dependency used as mandatory role authority"),
     (r"if\s+s1_refs_s2\s*:\s*(?:con_sheet|lab_sheet|has_consolidated|return)", "direct-dependency-role-authority", "Direct dependency direction alone used as role authority without aggregation check"),
+    (r"if\s+is_aggregation_formula\([^)]*\)\s*:\s*(?:con_sheet|lab_sheet|role)", "aggregation-formula-role-authority", "Single formula aggregation predicate used as direct role authority"),
+    (r"non_summary_sheets\s*=", "non-summary-sheet-broad-set", "Overly broad non-summary sheet set without roster verification"),
+    (r"if\s+has_operators\s*:\s*return\s+True", "single-source-operator-consolidation", "Single-source operator treated as multi-source consolidation"),
 ]
 
 
@@ -68,6 +71,24 @@ def classify_finding(rel_path: str, line_num: int, label: str, snippet: str) -> 
     Classifies a raw finding into Category A, B, C, D, or E.
     Returns (Category, Justification).
     """
+    # Category E: Single formula aggregation predicate used as direct role authority
+    if label == "aggregation-formula-role-authority":
+        if "template_inspector.py" in rel_path or "template_role_detector.py" in rel_path or "detector" in rel_path:
+            return "E", "Prohibited single formula aggregation predicate used as direct role authority"
+        return "D", "Legitimate formula check"
+
+    # Category E: Overly broad non-summary sheet set without roster verification
+    if label == "non-summary-sheet-broad-set":
+        if "template_inspector.py" in rel_path or "template_role_detector.py" in rel_path or "detector" in rel_path:
+            return "E", "Prohibited overly broad non-summary sheet set without roster verification"
+        return "D", "Legitimate sheet filtering"
+
+    # Category E: Single-source operator treated as multi-source consolidation
+    if label == "single-source-operator-consolidation":
+        if "template_inspector.py" in rel_path or "template_role_detector.py" in rel_path or "detector" in rel_path:
+            return "E", "Prohibited single-source operator treated as multi-source consolidation"
+        return "D", "Legitimate operator logic"
+
     # Category E: Dimension-based role authority for secondary assessment sheets
     if label == "dimension-sorted-role-selection":
         if "template_inspector.py" in rel_path or "template_role_detector.py" in rel_path or "detector" in rel_path:
