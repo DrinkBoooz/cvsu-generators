@@ -60,7 +60,7 @@ from modules.models.template_set import (
 )
 from modules.parsers.template_role_detector import TemplateRoleDetector, RoleCandidate
 from modules.parsers.template_inspector import XlsxTemplateInspector
-from modules.models.recipe import AmbiguousTemplateError
+from modules.models.recipe import TemplateError, AmbiguousTemplateError
 from modules.services.template_set_manager import TemplateSetManager
 from modules.generators.ceit_gen import GeneratorFactory, SyllabusGenerator
 from modules.generators.attendance_gen import AttendanceGenerator
@@ -163,8 +163,8 @@ def test_grade_sheet_renamed_worksheets_lecture_only(detector, templates_dir, tm
     shutil.copy2(src, dst)
 
     wb = openpyxl.load_workbook(dst)
-    wb["Lecture"].title = "Main"
-    wb["Grading Sheet"].title = "Final Scores"
+    rename_worksheet_with_formulas(wb, "Lecture", "Main")
+    rename_worksheet_with_formulas(wb, "Grading Sheet", "Final Scores")
     wb.save(dst)
 
     res = detector.detect_role(str(dst))
@@ -1698,8 +1698,8 @@ def test_misleading_worksheet_names_do_not_affect_role(tmp_path, repo_root):
     dst = tmp_path / "deceptive_sheet_name.xlsx"
 
     wb = openpyxl.load_workbook(src_lec)
-    wb["Lecture"].title = "Laboratory"  # Deceptive!
-    wb["Grading Sheet"].title = "Final_Review"
+    rename_worksheet_with_formulas(wb, "Lecture", "Laboratory")  # Deceptive!
+    rename_worksheet_with_formulas(wb, "Grading Sheet", "Final_Review")
     wb.save(str(dst))
 
     res = detector.detect_role(str(dst))
@@ -1832,7 +1832,7 @@ def test_independently_constructed_foreign_fixtures_e2e(tmp_path):
         ws_summary.append([])
         ws_summary.append(["NO.", "STUDENT NAME", "STUDENT NUMBER", "FINAL RATING", "REMARKS"])
         for idx in range(1, 10):
-            ws_summary.append([idx, f"Student {idx}", f"2026-{idx:04d}", "", ""])
+            ws_summary.append([idx, f"Student {idx}", f"2026-{idx:04d}", f"=Omega!F{idx + 6}", "PASSED"])
 
         ws_roster = wb.create_sheet("Omega")
         ws_roster["A1"] = "Instructor:"
@@ -2340,10 +2340,12 @@ def test_xlsx_identical_secondary_matrices_is_ambiguous(detector, tmp_path):
     ws_r.cell(4, 1, "#")
     ws_r.cell(4, 2, "Name of Student")
     ws_r.cell(4, 3, "Student Number")
+    ws_r.cell(4, 4, "Score")
     for r in range(5, 10):
         ws_r.cell(r, 1, r - 4)
         ws_r.cell(r, 2, f"Student {r - 4}")
         ws_r.cell(r, 3, f"2026-000{r - 4}")
+        ws_r.cell(r, 4, 85)
 
     # Sheet 2: Summary sheet
     ws_s = wb.create_sheet(title="Component_Summary")
@@ -2355,7 +2357,7 @@ def test_xlsx_identical_secondary_matrices_is_ambiguous(detector, tmp_path):
     for r in range(5, 10):
         ws_s.cell(r, 1, r - 4)
         ws_s.cell(r, 2, f"2026-000{r - 4}")
-        ws_s.cell(r, 3, "1.75")
+        ws_s.cell(r, 3, f"='Component_Primary'!D{r}")
 
     # Sheet 3: Secondary Matrix 1 (opaque name, assessment grid)
     ws_m1 = wb.create_sheet(title="Matrix_Foo")
@@ -2418,10 +2420,12 @@ def test_xlsx_dimension_only_secondary_is_ambiguous(detector, tmp_path):
         ws_r.cell(4, 1, "#")
         ws_r.cell(4, 2, "Name of Student")
         ws_r.cell(4, 3, "Student Number")
+        ws_r.cell(4, 4, "Score")
         for r in range(5, 10):
             ws_r.cell(r, 1, r - 4)
             ws_r.cell(r, 2, f"Student {r - 4}")
             ws_r.cell(r, 3, f"2026-000{r - 4}")
+            ws_r.cell(r, 4, 85)
 
         ws_s = wb.create_sheet(title="Institutional_Summary")
         ws_s.cell(1, 1, "COLLEGE OF ENGINEERING")
@@ -2432,7 +2436,7 @@ def test_xlsx_dimension_only_secondary_is_ambiguous(detector, tmp_path):
         for r in range(5, 10):
             ws_s.cell(r, 1, r - 4)
             ws_s.cell(r, 2, f"2026-000{r - 4}")
-            ws_s.cell(r, 3, "1.75")
+            ws_s.cell(r, 3, f"='Main_Roster'!D{r}")
 
         # Wide secondary sheet: 15 columns
         def populate_wide(ws):
@@ -2523,10 +2527,12 @@ def test_xlsx_reversed_dimensions_remain_ambiguous(detector, tmp_path):
         ws_r.cell(4, 1, "#")
         ws_r.cell(4, 2, "Name of Student")
         ws_r.cell(4, 3, "Student Number")
+        ws_r.cell(4, 4, "Score")
         for r in range(5, 10):
             ws_r.cell(r, 1, r - 4)
             ws_r.cell(r, 2, f"Student {r - 4}")
             ws_r.cell(r, 3, f"2026-000{r - 4}")
+            ws_r.cell(r, 4, 85)
 
         ws_s = wb.create_sheet(title="Summary")
         ws_s.cell(1, 1, "COLLEGE OF ENGINEERING")
@@ -2537,7 +2543,7 @@ def test_xlsx_reversed_dimensions_remain_ambiguous(detector, tmp_path):
         for r in range(5, 10):
             ws_s.cell(r, 1, r - 4)
             ws_s.cell(r, 2, f"2026-000{r - 4}")
-            ws_s.cell(r, 3, "2.00")
+            ws_s.cell(r, 3, f"='Roster'!D{r}")
 
         cols_a = 18 if not swap else 7
         cols_b = 7 if not swap else 18
@@ -2631,10 +2637,12 @@ def test_xlsx_permutation_invariance(detector, tmp_path, repo_root):
     ws_r.cell(4, 1, "#")
     ws_r.cell(4, 2, "Name of Student")
     ws_r.cell(4, 3, "Student Number")
+    ws_r.cell(4, 4, "Score")
     for r in range(5, 10):
         ws_r.cell(r, 1, r - 4)
         ws_r.cell(r, 2, f"Student {r - 4}")
         ws_r.cell(r, 3, f"2026-000{r - 4}")
+        ws_r.cell(r, 4, 85)
 
     ws_s = wb_ambig.create_sheet(title="Summary")
     ws_s.cell(1, 1, "COLLEGE OF ENGINEERING")
@@ -2645,7 +2653,7 @@ def test_xlsx_permutation_invariance(detector, tmp_path, repo_root):
     for r in range(5, 10):
         ws_s.cell(r, 1, r - 4)
         ws_s.cell(r, 2, f"2026-000{r - 4}")
-        ws_s.cell(r, 3, "2.00")
+        ws_s.cell(r, 3, f"='Roster'!D{r}")
 
     ws_m1 = wb_ambig.create_sheet(title="Matrix_1")
     ws_m1.cell(4, 1, "#")
@@ -2712,10 +2720,12 @@ def test_xlsx_reference_count_trap_asymmetric_refs_remain_ambiguous(detector, tm
         ws_r.cell(4, 1, "#")
         ws_r.cell(4, 2, "Name of Student")
         ws_r.cell(4, 3, "Student Number")
+        ws_r.cell(4, 4, "Score")
         for r in range(5, 10):
             ws_r.cell(r, 1, r - 4)
             ws_r.cell(r, 2, f"Student {r - 4}")
             ws_r.cell(r, 3, f"2026-000{r - 4}")
+            ws_r.cell(r, 4, 85)
 
         ws_s = wb.create_sheet(title="Summary")
         ws_s.cell(1, 1, "COLLEGE OF ENGINEERING")
@@ -2726,7 +2736,7 @@ def test_xlsx_reference_count_trap_asymmetric_refs_remain_ambiguous(detector, tm
         for r in range(5, 10):
             ws_s.cell(r, 1, r - 4)
             ws_s.cell(r, 2, f"2026-000{r - 4}")
-            ws_s.cell(r, 3, "1.75")
+            ws_s.cell(r, 3, f"='Roster'!D{r}")
 
         # Unrelated metadata sheet
         ws_aux = wb.create_sheet(title="Notes")
@@ -2859,10 +2869,12 @@ def test_xlsx_cyclic_lineage_is_ambiguous(detector, tmp_path):
     ws_r.cell(4, 1, "#")
     ws_r.cell(4, 2, "Name of Student")
     ws_r.cell(4, 3, "Student Number")
+    ws_r.cell(4, 4, "Score")
     for r in range(5, 10):
         ws_r.cell(r, 1, r - 4)
         ws_r.cell(r, 2, f"Student {r - 4}")
         ws_r.cell(r, 3, f"2026-000{r - 4}")
+        ws_r.cell(r, 4, 85)
 
     ws_s = wb.create_sheet(title="Summary")
     ws_s.cell(1, 1, "COLLEGE OF ENGINEERING")
@@ -2873,7 +2885,7 @@ def test_xlsx_cyclic_lineage_is_ambiguous(detector, tmp_path):
     for r in range(5, 10):
         ws_s.cell(r, 1, r - 4)
         ws_s.cell(r, 2, f"2026-000{r - 4}")
-        ws_s.cell(r, 3, "2.00")
+        ws_s.cell(r, 3, f"='Roster'!D{r}")
 
     ws_a = wb.create_sheet(title="Component_A")
     ws_a.cell(4, 1, "#")
@@ -2944,10 +2956,12 @@ def test_xlsx_misleading_lineage_without_primary_aggregation_is_ambiguous(detect
     ws_r.cell(4, 1, "#")
     ws_r.cell(4, 2, "Name of Student")
     ws_r.cell(4, 3, "Student Number")
+    ws_r.cell(4, 4, "Score")
     for r in range(5, 10):
         ws_r.cell(r, 1, r - 4)
         ws_r.cell(r, 2, f"Student {r - 4}")
         ws_r.cell(r, 3, f"2026-000{r - 4}")
+        ws_r.cell(r, 4, 85)
 
     ws_s = wb.create_sheet(title="Summary")
     ws_s.cell(1, 1, "COLLEGE OF ENGINEERING")
@@ -2958,7 +2972,7 @@ def test_xlsx_misleading_lineage_without_primary_aggregation_is_ambiguous(detect
     for r in range(5, 10):
         ws_s.cell(r, 1, r - 4)
         ws_s.cell(r, 2, f"2026-000{r - 4}")
-        ws_s.cell(r, 3, "2.00")
+        ws_s.cell(r, 3, f"='Roster'!D{r}")
 
     ws_a = wb.create_sheet(title="Component_A")
     ws_a.cell(4, 1, "#")
@@ -3024,10 +3038,12 @@ def test_xlsx_unparseable_formula_fails_closed(detector, tmp_path):
     ws_r.cell(4, 1, "#")
     ws_r.cell(4, 2, "Name of Student")
     ws_r.cell(4, 3, "Student Number")
+    ws_r.cell(4, 4, "Score")
     for r in range(5, 10):
         ws_r.cell(r, 1, r - 4)
         ws_r.cell(r, 2, f"Student {r - 4}")
         ws_r.cell(r, 3, f"2026-000{r - 4}")
+        ws_r.cell(r, 4, 85)
 
     ws_s = wb.create_sheet(title="Summary")
     ws_s.cell(1, 1, "COLLEGE OF ENGINEERING")
@@ -3038,7 +3054,7 @@ def test_xlsx_unparseable_formula_fails_closed(detector, tmp_path):
     for r in range(5, 10):
         ws_s.cell(r, 1, r - 4)
         ws_s.cell(r, 2, f"2026-000{r - 4}")
-        ws_s.cell(r, 3, "2.00")
+        ws_s.cell(r, 3, f"='Roster'!D{r}")
 
     ws_a = wb.create_sheet(title="Component_A")
     ws_a.cell(4, 1, "#")
@@ -3178,7 +3194,7 @@ def test_xlsx_generic_consolidated_topology_without_primary_roster_dependency(de
     for r in range(5, 10):
         ws_s.cell(r, 1, r - 4)
         ws_s.cell(r, 2, f"2026-000{r - 4}")
-        ws_s.cell(r, 3, "2.00")
+        ws_s.cell(r, 3, f"='Student_Master'!D{r}")
 
     ws_a = wb.create_sheet(title="Component_A")
     ws_a.cell(4, 1, "#")
@@ -3255,7 +3271,7 @@ def test_xlsx_misleading_lineage_with_plain_mirror_is_ambiguous(detector, tmp_pa
     for r in range(5, 10):
         ws_s.cell(r, 1, r - 4)
         ws_s.cell(r, 2, f"2026-000{r - 4}")
-        ws_s.cell(r, 3, "2.00")
+        ws_s.cell(r, 3, f"='Student_Master'!D{r}")
 
     ws_a = wb.create_sheet(title="Component_A")
     ws_a.cell(4, 1, "#")
@@ -3318,10 +3334,12 @@ def test_xlsx_dynamic_indirect_formula_fails_closed(detector, tmp_path):
     ws_r.cell(4, 1, "#")
     ws_r.cell(4, 2, "Name of Student")
     ws_r.cell(4, 3, "Student Number")
+    ws_r.cell(4, 4, "Score")
     for r in range(5, 10):
         ws_r.cell(r, 1, r - 4)
         ws_r.cell(r, 2, f"Student {r - 4}")
         ws_r.cell(r, 3, f"2026-000{r - 4}")
+        ws_r.cell(r, 4, 85)
 
     ws_s = wb.create_sheet(title="Summary")
     ws_s.cell(1, 1, "OFFICIAL GRADES")
@@ -3331,7 +3349,7 @@ def test_xlsx_dynamic_indirect_formula_fails_closed(detector, tmp_path):
     for r in range(5, 10):
         ws_s.cell(r, 1, r - 4)
         ws_s.cell(r, 2, f"2026-000{r - 4}")
-        ws_s.cell(r, 3, "2.00")
+        ws_s.cell(r, 3, f"='Roster'!D{r}")
 
     ws_a = wb.create_sheet(title="Component_A")
     ws_a.cell(4, 1, "#")
@@ -3392,10 +3410,12 @@ def test_xlsx_external_workbook_reference_fails_closed(detector, tmp_path):
     ws_r.cell(4, 1, "#")
     ws_r.cell(4, 2, "Name of Student")
     ws_r.cell(4, 3, "Student Number")
+    ws_r.cell(4, 4, "Score")
     for r in range(5, 10):
         ws_r.cell(r, 1, r - 4)
         ws_r.cell(r, 2, f"Student {r - 4}")
         ws_r.cell(r, 3, f"2026-000{r - 4}")
+        ws_r.cell(r, 4, 85)
 
     ws_s = wb.create_sheet(title="Summary")
     ws_s.cell(1, 1, "OFFICIAL GRADES")
@@ -3405,7 +3425,7 @@ def test_xlsx_external_workbook_reference_fails_closed(detector, tmp_path):
     for r in range(5, 10):
         ws_s.cell(r, 1, r - 4)
         ws_s.cell(r, 2, f"2026-000{r - 4}")
-        ws_s.cell(r, 3, "2.00")
+        ws_s.cell(r, 3, f"='Roster'!D{r}")
 
     ws_a = wb.create_sheet(title="Component_A")
     ws_a.cell(4, 1, "#")
@@ -3465,10 +3485,12 @@ def test_xlsx_unsupported_3d_formula_fails_closed(detector, tmp_path):
     ws_r.cell(4, 1, "#")
     ws_r.cell(4, 2, "Name of Student")
     ws_r.cell(4, 3, "Student Number")
+    ws_r.cell(4, 4, "Score")
     for r in range(5, 10):
         ws_r.cell(r, 1, r - 4)
         ws_r.cell(r, 2, f"Student {r - 4}")
         ws_r.cell(r, 3, f"2026-000{r - 4}")
+        ws_r.cell(r, 4, 85)
 
     ws_s = wb.create_sheet(title="Summary")
     ws_s.cell(1, 1, "OFFICIAL GRADES")
@@ -3478,7 +3500,7 @@ def test_xlsx_unsupported_3d_formula_fails_closed(detector, tmp_path):
     for r in range(5, 10):
         ws_s.cell(r, 1, r - 4)
         ws_s.cell(r, 2, f"2026-000{r - 4}")
-        ws_s.cell(r, 3, "2.00")
+        ws_s.cell(r, 3, f"='Roster'!D{r}")
 
     ws_a = wb.create_sheet(title="Component_A")
     ws_a.cell(4, 1, "#")
@@ -3540,10 +3562,12 @@ def test_xlsx_symmetrical_topology_is_ambiguous(detector, tmp_path):
     ws_r.cell(4, 1, "#")
     ws_r.cell(4, 2, "Name of Student")
     ws_r.cell(4, 3, "Student Number")
+    ws_r.cell(4, 4, "Score")
     for r in range(5, 10):
         ws_r.cell(r, 1, r - 4)
         ws_r.cell(r, 2, f"Student {r - 4}")
         ws_r.cell(r, 3, f"2026-000{r - 4}")
+        ws_r.cell(r, 4, 85)
 
     ws_s = wb.create_sheet(title="Summary")
     ws_s.cell(1, 1, "OFFICIAL GRADES")
@@ -3553,7 +3577,7 @@ def test_xlsx_symmetrical_topology_is_ambiguous(detector, tmp_path):
     for r in range(5, 10):
         ws_s.cell(r, 1, r - 4)
         ws_s.cell(r, 2, f"2026-000{r - 4}")
-        ws_s.cell(r, 3, "2.00")
+        ws_s.cell(r, 3, f"='Student_Master'!D{r}")
 
     ws_a = wb.create_sheet(title="Component_A")
     ws_a.cell(4, 1, "#")
@@ -3665,7 +3689,7 @@ def _build_adversarial_base_workbook():
     for r in range(5, 10):
         ws_s.cell(r, 1, r - 4)
         ws_s.cell(r, 2, f"2026-000{r - 4}")
-        ws_s.cell(r, 3, "2.00")
+        ws_s.cell(r, 3, f"='Student_Master'!D{r}")
 
     # 3. Component_A
     ws_a = wb.create_sheet(title="Component_A")
@@ -3954,7 +3978,7 @@ def test_xlsx_positive_consolidation_beyond_10_row_window(detector, tmp_path):
         ws_r.cell(r, 4, 80)
         ws_s.cell(r, 1, r - 4)
         ws_s.cell(r, 2, f"2026-000{r - 4}")
-        ws_s.cell(r, 3, "2.00")
+        ws_s.cell(r, 3, f"='Student_Master'!D{r}")
         ws_a.cell(r, 1, r - 4)
         ws_a.cell(r, 2, f"Student {r - 4}")
         ws_a.cell(r, 3, f"2026-000{r - 4}")
@@ -4100,7 +4124,7 @@ def test_xlsx_permutation_renamed_and_reordered_with_helpers_and_summary_first(d
     for r in range(5, 10):
         ws_s.cell(r, 1, r - 4)
         ws_s.cell(r, 2, f"2026-000{r - 4}")
-        ws_s.cell(r, 3, "2.00")
+        ws_s.cell(r, 3, f"='Master_Component'!D{r}")
 
     # Sheet 1: Auxiliary_Guide (helper sheet)
     ws_g = wb.create_sheet(title="Auxiliary_Guide")
@@ -4523,7 +4547,7 @@ def test_xlsx_summary_roster_structure_never_satisfies_component_count(tmp_path)
         ws_sum.cell(r, 1, r - 7)
         ws_sum.cell(r, 2, f"Student {r - 7}")
         ws_sum.cell(r, 3, f"2026-300{r - 7}")
-        ws_sum.cell(r, 4, "1.75")
+        ws_sum.cell(r, 4, f"='Lecture Component'!D{r - 2}")
         ws_sum.cell(r, 5, "Passed")
 
     ws_not = wb.create_sheet(title="Notes")
@@ -5287,6 +5311,209 @@ def test_xlsx_indistinguishable_master_hard_information_boundary_is_ambiguous(tm
     res = detector.detect_role(str(p))
     assert res.status == "ambiguous"
     assert res.role is None
+
+
+def test_xlsx_no_primary_lineage_fails_closed(tmp_path):
+    """
+    Commit 176 Section 5:
+    Adversarial foreign workbook with no verified formula lineage:
+      - Primary Component (roster-shaped candidate with 3 metadata fields)
+      - Student Master (metadata-rich roster-shaped candidate with 10 metadata fields)
+      - Official Results (structurally detectable summary rating sheet, but with static values instead of grade formulas)
+
+    Summary is structurally detectable but provides NO verifiable formula lineage connecting
+    it to any candidate instructional roster.
+    The system must NOT interpret an empty upstream set or missing formula lineage as permission
+    to promote the highest metadata candidate.
+    Expected:
+      AmbiguousTemplateError
+      status = "ambiguous"
+      role = None
+      No candidate may become authoritative primary.
+    """
+    detector = TemplateRoleDetector()
+    wb = openpyxl.Workbook()
+
+    # 1. Primary Component: candidate roster with 3 metadata fields
+    ws_prim = wb.active
+    ws_prim.title = "Primary Component"
+    ws_prim.cell(1, 1, "Instructor: Dr. Marie Curie")
+    ws_prim.cell(2, 1, "Course & Section: BS-Physics-3A")
+    ws_prim.cell(3, 1, "Subject: Quantum Mechanics")
+    ws_prim.cell(6, 1, "#")
+    ws_prim.cell(6, 2, "Student Name")
+    ws_prim.cell(6, 3, "Student Number")
+    ws_prim.cell(6, 4, "Score")
+    for r in range(7, 12):
+        ws_prim.cell(r, 1, r - 6)
+        ws_prim.cell(r, 2, f"Student {r - 6}")
+        ws_prim.cell(r, 3, f"2026-PHYS-{r - 6:03d}")
+        ws_prim.cell(r, 4, 88)
+
+    # 2. Student Master: metadata-rich roster with 10 metadata fields
+    ws_mast = wb.create_sheet(title="Student Master")
+    for i, meta in enumerate([
+        "Instructor: Dr. Marie Curie", "Course: BS-Physics", "Subject: Quantum Mechanics",
+        "Section: 3A", "Term: First", "Program: Physics", "Department: Physical Sciences",
+        "College: CEIT", "Campus: Main", "Academic Year: 2026-2027"
+    ], start=1):
+        ws_mast.cell(i, 1, meta)
+    ws_mast.cell(11, 1, "#")
+    ws_mast.cell(11, 2, "Student Name")
+    ws_mast.cell(11, 3, "Student Number")
+    ws_mast.cell(11, 4, "Permanent Address")
+    for r in range(12, 17):
+        ws_mast.cell(r, 1, r - 11)
+        ws_mast.cell(r, 2, f"Student {r - 11}")
+        ws_mast.cell(r, 3, f"2026-PHYS-{r - 11:03d}")
+        ws_mast.cell(r, 4, "Cavite")
+
+    # 3. Official Results: structurally detectable summary with static ratings (no formula lineage)
+    ws_sum = wb.create_sheet(title="Official Results")
+    ws_sum.cell(1, 1, "Republic of the Philippines")
+    ws_sum.cell(2, 1, "Cavite State University")
+    ws_sum.cell(3, 1, "Official Grades Summary")
+    ws_sum.cell(6, 1, "Student Number")
+    ws_sum.cell(6, 2, "Final Rating")
+    for r in range(7, 12):
+        ws_sum.cell(r, 1, f"2026-PHYS-{r - 6:03d}")
+        ws_sum.cell(r, 2, 1.75)  # STATIC NUMERICAL VALUES: NO FORMULA LINEAGE!
+
+    p = tmp_path / "no_primary_lineage.xlsx"
+    wb.save(str(p))
+
+    with pytest.raises(AmbiguousTemplateError) as exc_info:
+        XlsxTemplateInspector().inspect(str(p), profile_id="grade_sheet_xlsx")
+    assert "lacks verified physical student-row instructional calculation lineage" in str(exc_info.value)
+
+    res = detector.detect_role(str(p))
+    assert res.status == "ambiguous"
+    assert res.role is None
+
+
+def test_xlsx_upstream_helper_without_grade_contribution_does_not_become_primary(tmp_path):
+    """
+    Commit 176 Section 6:
+    Adversarial workbook where upstream helper provides student identity/lookup but NOT grade calculations:
+      - Student Master: 10 metadata fields (highest metadata density)
+      - Primary Component: 3 metadata fields (actual instructional grade source)
+      - Official Results: summary rating sheet that references Student Master for student number
+        and student name, but derives Final Rating from Primary Component.
+
+    Student Master is technically upstream from summary (referenced for name and ID).
+    However, Student Master provides zero instructional grade calculations; the final rating
+    does NOT derive instructional grade values from Student Master.
+    Student Master must NOT become primary.
+    Because the metadata-proposed candidate (Student Master) lacks verified instructional lineage,
+    the system must fail closed without silently choosing Primary Component unless uniquely proved.
+    Expected:
+      AmbiguousTemplateError
+      status = "ambiguous"
+      role = None
+    """
+    detector = TemplateRoleDetector()
+    wb = openpyxl.Workbook()
+
+    # 1. Primary Component: actual instructional grade source (3 metadata fields)
+    ws_prim = wb.active
+    ws_prim.title = "Primary Component"
+    ws_prim.cell(1, 1, "Instructor: Dr. Richard Feynman")
+    ws_prim.cell(2, 1, "Course & Section: BS-Physics-3A")
+    ws_prim.cell(3, 1, "Subject: Quantum Mechanics")
+    ws_prim.cell(6, 1, "#")
+    ws_prim.cell(6, 2, "Student Name")
+    ws_prim.cell(6, 3, "Student Number")
+    ws_prim.cell(6, 4, "Lecture Grade")
+    for r in range(7, 12):
+        ws_prim.cell(r, 1, r - 6)
+        ws_prim.cell(r, 2, f"Student {r - 6}")
+        ws_prim.cell(r, 3, f"2026-PHYS-{r - 6:03d}")
+        ws_prim.cell(r, 4, 88)
+
+    # 2. Student Master: lookup/directory sheet with 10 metadata fields (highest metadata density)
+    ws_mast = wb.create_sheet(title="Student Master")
+    for i, meta in enumerate([
+        "Instructor: Dr. Richard Feynman", "Course: BS-Physics", "Subject: Quantum Mechanics",
+        "Section: 3A", "Term: First", "Program: Physics", "Department: Physical Sciences",
+        "College: CEIT", "Campus: Main", "Academic Year: 2026-2027"
+    ], start=1):
+        ws_mast.cell(i, 1, meta)
+    ws_mast.cell(11, 1, "#")
+    ws_mast.cell(11, 2, "Student Name")
+    ws_mast.cell(11, 3, "Student Number")
+    ws_mast.cell(11, 4, "Address")
+    for r in range(12, 17):
+        ws_mast.cell(r, 1, r - 11)
+        ws_mast.cell(r, 2, f"Student {r - 11}")
+        ws_mast.cell(r, 3, f"2026-PHYS-{r - 11:03d}")
+        ws_mast.cell(r, 4, "Cavite")
+
+    # 3. Official Results: references Student Master for ID and Name, but Primary Component for Rating!
+    ws_sum = wb.create_sheet(title="Official Results")
+    ws_sum.cell(1, 1, "Republic of the Philippines")
+    ws_sum.cell(2, 1, "Cavite State University")
+    ws_sum.cell(3, 1, "Official Grades Summary")
+    ws_sum.cell(6, 1, "Student Number")
+    ws_sum.cell(6, 2, "Student Name")
+    ws_sum.cell(6, 3, "Final Rating")
+    for r in range(7, 12):
+        # Non-instructional lookup references:
+        ws_sum.cell(r, 1, f"='Student Master'!C{r + 5}")
+        ws_sum.cell(r, 2, f"='Student Master'!B{r + 5}")
+        # Instructional grade calculation reference:
+        ws_sum.cell(r, 3, f"='Primary Component'!D{r}")
+
+    p = tmp_path / "upstream_helper_not_instructional.xlsx"
+    wb.save(str(p))
+
+    with pytest.raises(AmbiguousTemplateError) as exc_info:
+        XlsxTemplateInspector().inspect(str(p), profile_id="grade_sheet_xlsx")
+    assert "candidate primary roster 'Student Master' has highest metadata density" in str(exc_info.value)
+    assert "lacks verified student-row instructional calculation lineage" in str(exc_info.value)
+
+    res = detector.detect_role(str(p))
+    assert res.status == "ambiguous"
+    assert res.role is None
+
+
+def test_xlsx_summary_without_rating_column_fails_closed(tmp_path):
+    """
+    Commit 176 Section 9:
+    Audit summary-sheet authority:
+    A worksheet that contains institutional banners ("University", "College")
+    but lacks a physical rating column cannot become authoritative summary sheet.
+    Expected: TemplateError (missing required summary rating sheet).
+    """
+    wb = openpyxl.Workbook()
+
+    # Sheet 1: Institutional banner only (no rating column)
+    ws_banner = wb.active
+    ws_banner.title = "Institutional Banner"
+    ws_banner.cell(1, 1, "Republic of the Philippines")
+    ws_banner.cell(2, 1, "Cavite State University")
+    ws_banner.cell(3, 1, "College of Engineering and Information Technology")
+    ws_banner.cell(5, 1, "General Information and Guidelines")
+
+    # Sheet 2: Candidate roster
+    ws_roster = wb.create_sheet(title="Lecture")
+    ws_roster.cell(1, 1, "Instructor: Dr. Ada Lovelace")
+    ws_roster.cell(5, 1, "#")
+    ws_roster.cell(5, 2, "Student Name")
+    ws_roster.cell(5, 3, "Student Number")
+    ws_roster.cell(5, 4, "Score")
+    for r in range(6, 11):
+        ws_roster.cell(r, 1, r - 5)
+        ws_roster.cell(r, 2, f"Student {r - 5}")
+        ws_roster.cell(r, 3, f"2026-{r - 5:03d}")
+        ws_roster.cell(r, 4, 90)
+
+    p = tmp_path / "banner_without_rating_col.xlsx"
+    wb.save(str(p))
+
+    with pytest.raises(TemplateError) as exc_info:
+        XlsxTemplateInspector().inspect(str(p), profile_id="grade_sheet_xlsx")
+    assert "missing required 'Grading Sheet' worksheet or structural summary rating sheet" in str(exc_info.value)
+
 
 
 

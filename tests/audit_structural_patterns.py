@@ -72,6 +72,7 @@ AUDIT_RULES: List[Tuple[str, str, str]] = [
     (r"primary_roster_sheet\s*=\s*top_rosters\[0\]", "unconditional-primary-score-authority", "Metadata density score alone used as unconditional primary roster authority without topology verification"),
     (r"primary_roster_sheet\s*=\s*(?:roster_candidates_by_sheet|candidate_rosters|sheet_names)\[0\]", "workbook-order-primary-selection", "First candidate in workbook order selected as primary roster without ambiguity check"),
     (r"primary_roster_sheet\s*=\s*sorted\([^)]*\)\[0\]", "first-candidate-primary-wins", "Prohibited primary-role selection using sorted candidates without ambiguity check"),
+    (r"if\s+(?:upstream_from_summary|upstream_set|upstream_sheets|topology|lineage)\s+and\b", "optional-topology-guard-bypass", "Weak or optional topology guard permitting empty lineage to bypass validation"),
 ]
 
 
@@ -80,6 +81,12 @@ def classify_finding(rel_path: str, line_num: int, label: str, snippet: str) -> 
     Classifies a raw finding into Category A, B, C, D, or E.
     Returns (Category, Justification).
     """
+    # Category E: Weak or optional topology guard permitting empty lineage to bypass validation
+    if label == "optional-topology-guard-bypass":
+        if "template_inspector.py" in rel_path or "template_role_detector.py" in rel_path or "detector" in rel_path:
+            return "E", "Prohibited weak or optional topology guard permitting empty lineage to bypass validation"
+        return "D", "Legitimate topology check"
+
     # Category E: Metadata density score alone used as unconditional primary roster authority
     if label == "unconditional-primary-score-authority":
         if "template_inspector.py" in rel_path or "template_role_detector.py" in rel_path or "detector" in rel_path:
