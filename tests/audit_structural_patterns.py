@@ -58,6 +58,8 @@ AUDIT_RULES: List[Tuple[str, str, str]] = [
     (r"sorted\([^)]*(?:max_column|max_row)[^)]*\)\[0\]", "dimension-sorted-role-selection", "Prohibited dimension-sorted candidate selection without unique structural lineage"),
     (r"cols1\s*(?:>|<|!=|==)\s*cols2|max_column\s*(?:>|<|!=|==)\s*max_column", "dimension-role-authority", "Prohibited dimension comparison used as authoritative role discriminator"),
     (r"refs1\s*(?:>|<|!=|==)\s*refs2|refs2\s*(?:>|<|!=|==)\s*refs1|(?:ref_count|formula_count)\s*(?:>|<|!=)", "reference-count-role-authority", "Reference or formula count comparison used as authoritative role discriminator"),
+    (r"(?:s1_refs_primary|s2_refs_primary)\b", "primary-roster-role-authority", "Hardcoded primary-roster dependency used as mandatory role authority"),
+    (r"if\s+s1_refs_s2\s*:\s*(?:con_sheet|lab_sheet|has_consolidated|return)", "direct-dependency-role-authority", "Direct dependency direction alone used as role authority without aggregation check"),
 ]
 
 
@@ -86,6 +88,18 @@ def classify_finding(rel_path: str, line_num: int, label: str, snippet: str) -> 
         if "template_inspector.py" in rel_path or "template_role_detector.py" in rel_path or "detector" in rel_path:
             return "E", "Prohibited reference count comparison used as authoritative role discriminator"
         return "D", "Legitimate reference counting"
+
+    # Category E: Hardcoded primary-roster dependency used as mandatory role authority
+    if label == "primary-roster-role-authority":
+        if "template_inspector.py" in rel_path or "template_role_detector.py" in rel_path or "detector" in rel_path:
+            return "E", "Prohibited hardcoded primary-roster dependency used as mandatory secondary role authority"
+        return "D", "Legitimate reference check"
+
+    # Category E: Direct dependency direction alone used as role authority
+    if label == "direct-dependency-role-authority":
+        if "template_inspector.py" in rel_path or "template_role_detector.py" in rel_path or "detector" in rel_path:
+            return "E", "Prohibited direct dependency direction alone used as role authority without physical aggregation check"
+        return "D", "Legitimate dependency resolution"
 
     # Category E: Workbook-order role selection or first-candidate-wins without ambiguity check
     if label in ("workbook-order-role-selection", "first-candidate-wins"):

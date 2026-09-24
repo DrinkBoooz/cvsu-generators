@@ -111,30 +111,51 @@ def extract_referenced_sheets(formula_str: str) -> SheetReferenceSet:
       - Absolute refs: 'Practical Component'!$B$5
     Uses OpenXML/openpyxl formula tokenizer with conservative validation.
     Returns a SheetReferenceSet with is_reliable flag.
-    If the formula cannot be parsed reliably, lineage = unknown (is_reliable = False)
-    and no incomplete or false dependency edges are created.
+    If the formula cannot be parsed reliably (or contains dynamic/hidden/external references),
+    lineage = unknown (is_reliable = False) and no incomplete or false dependency edges are created.
     """
     if not isinstance(formula_str, str) or not formula_str.startswith("="):
         return SheetReferenceSet(set(), is_reliable=True)
+
+    # 1. Dynamic / hidden references check:
+    # Functions like INDIRECT construct references dynamically at runtime.
+    # Statically, dependency is indeterminate: UNKNOWN != NO DEPENDENCY.
+    if re.search(r"\bINDIRECT\s*\(", formula_str, re.IGNORECASE):
+        return SheetReferenceSet(set(), is_reliable=False)
+
+    # 2. External workbook references check:
+    # References containing brackets like [Book.xlsx]Sheet!A1 point to external files.
+    # They must NEVER be converted into local worksheet dependencies.
+    if "[" in formula_str or "]" in formula_str:
+        return SheetReferenceSet(set(), is_reliable=False)
 
     try:
         tok = Tokenizer(formula_str)
         referenced = set()
         for item in tok.items:
+            # Check for dynamic reference functions in tokens
+            if item.type == "FUNC" and item.value.upper().startswith("INDIRECT("):
+                return SheetReferenceSet(set(), is_reliable=False)
+
             if "!" in item.value:
                 if item.type == "OPERAND" and item.subtype == "RANGE":
+                    # External reference in range token
+                    if "[" in item.value or "]" in item.value:
+                        return SheetReferenceSet(set(), is_reliable=False)
+
                     sheet_part, cell_part = split_sheet_and_cell(item.value)
                     if not sheet_part or not cell_part:
                         return SheetReferenceSet(set(), is_reliable=False)
+                    # 3D references across multiple sheets: Sheet1:Sheet3!A1
+                    if ":" in sheet_part:
+                        return SheetReferenceSet(set(), is_reliable=False)
                     if not CELL_ADDR_PATTERN.match(cell_part):
                         return SheetReferenceSet(set(), is_reliable=False)
-                    if "]" in sheet_part:
-                        sheet_part = sheet_part.split("]", 1)[1]
                     if sheet_part.startswith("'") and sheet_part.endswith("'"):
                         sheet_name = sheet_part[1:-1].replace("''", "'")
                     else:
                         sheet_name = sheet_part
-                    if not sheet_name:
+                    if not sheet_name or "[" in sheet_name or "]" in sheet_name or ":" in sheet_name:
                         return SheetReferenceSet(set(), is_reliable=False)
                     referenced.add(sheet_name)
                 elif item.type == "OPERAND" and item.subtype == "TEXT":
@@ -168,9 +189,67 @@ def extract_referenced_sheets(formula_str: str) -> SheetReferenceSet:
     for m in matches:
         quoted, unquoted, _ = m.groups()
         name = quoted.replace("''", "'") if quoted is not None else unquoted
-        if name:
-            referenced.add(name)
+        if not name or ":" in name or "[" in name or "]" in name:
+            return SheetReferenceSet(set(), is_reliable=False)
+        referenced.add(name)
     return SheetReferenceSet(referenced, is_reliable=True)
+
+
+def is_aggregation_formula(val: str, other_sheet: str, all_sheets: set) -> bool:
+    """
+    Checks if a formula string physically represents an aggregation formula.
+    An aggregation formula:
+      - References multiple distinct worksheets (e.g. '=SheetA!A1 + SheetB!B1'), OR
+      - References other_sheet and combines it mathematically using arithmetic operators
+        (+ - * / ^) or aggregation functions (SUM, AVERAGE, PRODUCT, etc.),
+        rather than being a pure single-cell mirror/passthrough (e.g. '=SheetB!A1').
+    """
+    if not isinstance(val, str) or not val.startswith("="):
+        return False
+
+    refs = extract_referenced_sheets(val)
+    if not getattr(refs, "is_reliable", True):
+        return False
+
+    # 1. Multi-source formula: references multiple distinct worksheets in the workbook
+    valid_refs = {r for r in refs if any(r.lower() == s.lower() for s in all_sheets)}
+    if len(valid_refs) >= 2:
+        return True
+
+    # 2. Mathematical combination / aggregation of other_sheet:
+    if any(r.lower() == other_sheet.lower() for r in refs):
+        try:
+            tok = Tokenizer(val)
+            meaningful_tokens = [
+                item for item in tok.items
+                if item.type not in ("WHITE-SPACE",)
+            ]
+            if len(meaningful_tokens) == 1 and meaningful_tokens[0].type == "OPERAND" and meaningful_tokens[0].subtype == "RANGE":
+                # Single-cell passthrough mirror: not an aggregation
+                return False
+
+            has_operators = any(item.type in ("OPERATOR-INFIX", "OPERATOR-PREFIX", "OPERATOR-POSTFIX") for item in meaningful_tokens)
+            has_functions = any(item.type == "FUNC" for item in meaningful_tokens)
+            if has_operators or has_functions:
+                return True
+        except Exception:
+            pass
+
+    return False
+
+
+def has_aggregation_structure(ws, other_sheet: str, all_sheets: set) -> bool:
+    """
+    Scans a worksheet to verify whether it physically demonstrates an aggregation
+    structure combining the other candidate assessment sheet with broader instructional
+    or student components.
+    """
+    for row in ws.iter_rows(values_only=True):
+        for val in row:
+            if isinstance(val, str) and val.startswith("="):
+                if is_aggregation_formula(val, other_sheet, all_sheets):
+                    return True
+    return False
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -922,35 +1001,42 @@ class XlsxTemplateInspector:
                     f"Grade sheet template '{os.path.basename(template_path)}' contains secondary assessment worksheets with unparseable or indeterminate formula lineage: {unreliable}"
                 )
 
+            non_summary_sheets = {s.lower() for s in sheet_names if s.lower() != summary_sheet.lower()}
+            s1_non_summary_refs = {r.lower() for r in s1_referenced if r.lower() in non_summary_sheets and r.lower() != s1.lower()}
+            s2_non_summary_refs = {r.lower() for r in s2_referenced if r.lower() in non_summary_sheets and r.lower() != s2.lower()}
+
             s1_refs_s2 = any(r.lower() == s2.lower() for r in s1_referenced)
             s2_refs_s1 = any(r.lower() == s1.lower() for r in s2_referenced)
-            s1_refs_primary = any(r.lower() == primary_roster_sheet.lower() for r in s1_referenced)
-            s2_refs_primary = any(r.lower() == primary_roster_sheet.lower() for r in s2_referenced)
+
+            s1_has_agg = has_aggregation_structure(ws1, s2, set(sheet_names))
+            s2_has_agg = has_aggregation_structure(ws2, s1, set(sheet_names))
 
             # Case D: s1 -> s2 and s2 -> s1 (competing/cyclic lineage)
             if s1_refs_s2 and s2_refs_s1:
                 raise AmbiguousTemplateError(
                     f"Grade sheet template '{os.path.basename(template_path)}' contains multiple secondary assessment worksheets with competing/cyclic formula lineage referencing each other: {[s1, s2]}"
                 )
-            # Case A: s1 -> s2 and s2 !-> s1 (s1 aggregates s2)
+            # Case A: s1 -> s2 and s2 !-> s1 (s1 candidate for Consolidated)
             elif s1_refs_s2 and not s2_refs_s1:
                 # Directed lineage alone is not automatic semantic truth:
                 # To resolve s1 as Consolidated, s1 must exhibit role-consistent
-                # physical aggregation topology combining s2 and the primary lecture structure.
-                if not s1_refs_primary:
+                # physical aggregation topology:
+                # 1. It must reference multiple instructional/student components (>= 2 non-summary sheets)
+                # 2. It must physically demonstrate an aggregation structure combining components
+                if len(s1_non_summary_refs) < 2 or not s1_has_agg:
                     raise AmbiguousTemplateError(
-                        f"Grade sheet template '{os.path.basename(template_path)}' contains secondary assessment worksheets with directed lineage ({s1} -> {s2}) but lacking role-consistent aggregation of primary lecture structure: {[s1, s2]}"
+                        f"Grade sheet template '{os.path.basename(template_path)}' contains secondary assessment worksheets with directed lineage ({s1} -> {s2}) but lacking role-consistent physical aggregation topology: {[s1, s2]}"
                     )
                 con_sheet = s1
                 lab_sheet = s2
                 has_lab = True
                 has_consolidated = True
-            # Case B: s2 -> s1 and s1 !-> s2 (s2 aggregates s1)
+            # Case B: s2 -> s1 and s1 !-> s2 (s2 candidate for Consolidated)
             elif s2_refs_s1 and not s1_refs_s2:
                 # Symmetrically, s2 must exhibit role-consistent physical aggregation topology:
-                if not s2_refs_primary:
+                if len(s2_non_summary_refs) < 2 or not s2_has_agg:
                     raise AmbiguousTemplateError(
-                        f"Grade sheet template '{os.path.basename(template_path)}' contains secondary assessment worksheets with directed lineage ({s2} -> {s1}) but lacking role-consistent aggregation of primary lecture structure: {[s1, s2]}"
+                        f"Grade sheet template '{os.path.basename(template_path)}' contains secondary assessment worksheets with directed lineage ({s2} -> {s1}) but lacking role-consistent physical aggregation topology: {[s1, s2]}"
                     )
                 con_sheet = s2
                 lab_sheet = s1

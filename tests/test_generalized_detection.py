@@ -2995,7 +2995,7 @@ def test_xlsx_misleading_lineage_without_primary_aggregation_is_ambiguous(detect
 
     with pytest.raises(AmbiguousTemplateError) as exc:
         XlsxTemplateInspector().inspect(str(p), profile_id="grade_sheet_xlsx")
-    assert "role-consistent aggregation of primary lecture structure" in str(exc.value).lower()
+    assert "role-consistent physical aggregation topology" in str(exc.value).lower()
 
     res = detector.detect_role(str(p))
     assert res.status == "ambiguous"
@@ -3114,6 +3114,18 @@ def test_extract_referenced_sheets_syntax_and_conservative_coverage():
         ("='Valid Sheet'!A1:B10", {"Valid Sheet"}, True),
         ("='Sheet 1'!$A$1:$Z$100", {"Sheet 1"}, True),
         ("='Dean''s Sheet'!#REF!", {"Dean's Sheet"}, True),
+        # Dynamic / hidden formulas must return is_reliable=False (UNKNOWN != NO DEPENDENCY)
+        ('=INDIRECT("Sheet1!A1")', set(), False),
+        ('=INDIRECT(A1)', set(), False),
+        ('="Sheet1!" & A1', set(), True),
+        ('=SUM(INDIRECT("\'" & A1 & "\'!B2"))', set(), False),
+        # External workbook references must return is_reliable=False and NOT convert to local sheets
+        ("='[External.xlsx]Sheet1'!A1", set(), False),
+        ("=[External.xlsx]Sheet1!A1", set(), False),
+        ("=SUM([Budget.xlsx]Q1!A1:A10)", set(), False),
+        # Unsupported 3D syntax must return is_reliable=False
+        ("=Sheet1:Sheet3!A1", set(), False),
+        ("=SUM('Sheet1:Sheet3'!A1)", set(), False),
         # Corrupted / unparseable formulas must return is_reliable=False
         ("=SUM('Unclosed Sheet!A1)", set(), False),
         ("=Sheet1!A1 + @#$%", set(), False),
@@ -3126,6 +3138,495 @@ def test_extract_referenced_sheets_syntax_and_conservative_coverage():
         result = extract_referenced_sheets(formula_str)
         assert set(result) == expected_refs, f"Mismatch in refs for {formula_str}: got {set(result)}, expected {expected_refs}"
         assert result.is_reliable == expected_reliable, f"Mismatch in reliability for {formula_str}: got {result.is_reliable}, expected {expected_reliable}"
+
+
+# ── 16. Forensic Micro-Closure: Generic Aggregation Topology & Formula Hardening ──
+
+def test_xlsx_generic_consolidated_topology_without_primary_roster_dependency(detector, tmp_path):
+    """
+    Requirement 3 & Requirement 6 Test A & I:
+    Generic consolidated topology without direct primary-roster dependency:
+      - Legitimate Consolidated-equivalent sheet (Component_A) references a generic student/master sheet (Student_Master)
+      - It references a secondary component sheet (Component_B)
+      - It does NOT directly reference a worksheet that happens to look like a 'primary lecture roster'
+      - Its physical layout and formulas establish combined/aggregated output (mathematical combination of both)
+      - Component_B is an independent component sheet
+    Verify that the resolver does not incorrectly reject it solely because the CvSU-specific primary-roster relationship is absent.
+    """
+    from modules.parsers.template_inspector import XlsxTemplateInspector
+
+    wb = openpyxl.Workbook()
+    ws_r = wb.active
+    ws_r.title = "Student_Master"
+    ws_r.cell(1, 1, "Course: BSCS")
+    ws_r.cell(2, 1, "Instructor: Dr. Turing")
+    ws_r.cell(4, 1, "#")
+    ws_r.cell(4, 2, "Name of Student")
+    ws_r.cell(4, 3, "Student Number")
+    for r in range(5, 10):
+        ws_r.cell(r, 1, r - 4)
+        ws_r.cell(r, 2, f"Student {r - 4}")
+        ws_r.cell(r, 3, f"2026-000{r - 4}")
+        ws_r.cell(r, 4, 80)
+
+    ws_s = wb.create_sheet(title="Summary")
+    ws_s.cell(1, 1, "COLLEGE OF ENGINEERING")
+    ws_s.cell(2, 1, "OFFICIAL GRADES")
+    ws_s.cell(4, 1, "#")
+    ws_s.cell(4, 2, "Student Number")
+    ws_s.cell(4, 3, "Final Grade")
+    for r in range(5, 10):
+        ws_s.cell(r, 1, r - 4)
+        ws_s.cell(r, 2, f"2026-000{r - 4}")
+        ws_s.cell(r, 3, "2.00")
+
+    ws_a = wb.create_sheet(title="Component_A")
+    ws_a.cell(4, 1, "#")
+    ws_a.cell(4, 2, "Name of Student")
+    ws_a.cell(4, 3, "Student Number")
+    for c in range(4, 10):
+        ws_a.cell(4, c, f"A_{c}")
+    for r in range(5, 10):
+        ws_a.cell(r, 1, r - 4)
+        ws_a.cell(r, 2, f"Student {r - 4}")
+        ws_a.cell(r, 3, f"2026-000{r - 4}")
+        ws_a.cell(r, 4, 75)
+        # Combines Component_B and Student_Master with mathematical weighting
+        ws_a.cell(r, 5, f"=Component_B!D{r} * 0.4 + Student_Master!D{r} * 0.6")
+
+    ws_b = wb.create_sheet(title="Component_B")
+    ws_b.cell(4, 1, "#")
+    ws_b.cell(4, 2, "Name of Student")
+    ws_b.cell(4, 3, "Student Number")
+    for c in range(4, 10):
+        ws_b.cell(4, c, f"B_{c}")
+    for r in range(5, 10):
+        ws_b.cell(r, 1, r - 4)
+        ws_b.cell(r, 2, f"Student {r - 4}")
+        ws_b.cell(r, 3, f"2026-000{r - 4}")
+        for c in range(4, 10):
+            ws_b.cell(r, c, 85)
+
+    p = tmp_path / "generic_consolidated.xlsx"
+    wb.save(str(p))
+
+    cand = XlsxTemplateInspector().inspect(str(p), profile_id="grade_sheet_xlsx")
+    assert cand.metadata["con_sheet"] == "Component_A"
+    assert cand.metadata["lab_sheet"] == "Component_B"
+
+    res = detector.detect_role(str(p))
+    assert res.status == "confirmed"
+    assert res.role == ROLE_GRADE_SHEET_LECTURE_LAB
+    assert res.variant == "lecture_lab"
+
+
+def test_xlsx_misleading_lineage_with_plain_mirror_is_ambiguous(detector, tmp_path):
+    """
+    Requirement 3 & Requirement 6 Test B:
+    Misleading topology where:
+      - A -> B (via plain mirror: =Component_B!D5)
+      - A -> Student_Master (via plain mirror: =Student_Master!A5)
+      - but A has no physically demonstrated aggregation structure (no mathematical combination, weighting, or multi-sheet formula)
+      - and B has no uniquely identifiable secondary-component role
+    Verify that the resolver remains ambiguous.
+    """
+    from modules.parsers.template_inspector import XlsxTemplateInspector
+
+    wb = openpyxl.Workbook()
+    ws_r = wb.active
+    ws_r.title = "Student_Master"
+    ws_r.cell(1, 1, "Course: BSCS")
+    ws_r.cell(2, 1, "Instructor: Dr. Turing")
+    ws_r.cell(4, 1, "#")
+    ws_r.cell(4, 2, "Name of Student")
+    ws_r.cell(4, 3, "Student Number")
+    for r in range(5, 10):
+        ws_r.cell(r, 1, r - 4)
+        ws_r.cell(r, 2, f"Student {r - 4}")
+        ws_r.cell(r, 3, f"2026-000{r - 4}")
+        ws_r.cell(r, 4, 80)
+
+    ws_s = wb.create_sheet(title="Summary")
+    ws_s.cell(1, 1, "COLLEGE OF ENGINEERING")
+    ws_s.cell(2, 1, "OFFICIAL GRADES")
+    ws_s.cell(4, 1, "#")
+    ws_s.cell(4, 2, "Student Number")
+    ws_s.cell(4, 3, "Final Grade")
+    for r in range(5, 10):
+        ws_s.cell(r, 1, r - 4)
+        ws_s.cell(r, 2, f"2026-000{r - 4}")
+        ws_s.cell(r, 3, "2.00")
+
+    ws_a = wb.create_sheet(title="Component_A")
+    ws_a.cell(4, 1, "#")
+    ws_a.cell(4, 2, "Name of Student")
+    ws_a.cell(4, 3, "Student Number")
+    for c in range(4, 10):
+        ws_a.cell(4, c, f"A_{c}")
+    for r in range(5, 10):
+        ws_a.cell(r, 1, r - 4)
+        ws_a.cell(r, 2, f"Student {r - 4}")
+        ws_a.cell(r, 3, f"2026-000{r - 4}")
+        for c in range(4, 10):
+            ws_a.cell(r, c, 75)
+
+    # Injects plain single-cell mirrors without aggregation structure
+    ws_a.cell(5, 4, "=Component_B!D5")
+    ws_a.cell(5, 5, "=Student_Master!A5")
+
+    ws_b = wb.create_sheet(title="Component_B")
+    ws_b.cell(4, 1, "#")
+    ws_b.cell(4, 2, "Name of Student")
+    ws_b.cell(4, 3, "Student Number")
+    for c in range(4, 10):
+        ws_b.cell(4, c, f"B_{c}")
+    for r in range(5, 10):
+        ws_b.cell(r, 1, r - 4)
+        ws_b.cell(r, 2, f"Student {r - 4}")
+        ws_b.cell(r, 3, f"2026-000{r - 4}")
+        for c in range(4, 10):
+            ws_b.cell(r, c, 85)
+
+    p = tmp_path / "misleading_mirror.xlsx"
+    wb.save(str(p))
+
+    with pytest.raises(AmbiguousTemplateError) as exc:
+        XlsxTemplateInspector().inspect(str(p), profile_id="grade_sheet_xlsx")
+    assert "role-consistent physical aggregation topology" in str(exc.value).lower()
+
+    res = detector.detect_role(str(p))
+    assert res.status == "ambiguous"
+    assert res.role is None
+    assert res.candidate_roles == [ROLE_GRADE_SHEET_LECTURE_LAB]
+
+
+def test_xlsx_dynamic_indirect_formula_fails_closed(detector, tmp_path):
+    """
+    Requirement 4 & Requirement 6 Test C:
+    Dynamic INDIRECT-based hidden dependency:
+    When a candidate worksheet uses INDIRECT(...), its full dependency set cannot
+    be statically determined with confidence.
+    The resolver must treat lineage as UNKNOWN (is_reliable=False) and fail closed.
+    """
+    from modules.parsers.template_inspector import XlsxTemplateInspector
+
+    wb = openpyxl.Workbook()
+    ws_r = wb.active
+    ws_r.title = "Roster"
+    ws_r.cell(1, 1, "Course: BSCS")
+    ws_r.cell(2, 1, "Instructor: Dr. Turing")
+    ws_r.cell(4, 1, "#")
+    ws_r.cell(4, 2, "Name of Student")
+    ws_r.cell(4, 3, "Student Number")
+    for r in range(5, 10):
+        ws_r.cell(r, 1, r - 4)
+        ws_r.cell(r, 2, f"Student {r - 4}")
+        ws_r.cell(r, 3, f"2026-000{r - 4}")
+
+    ws_s = wb.create_sheet(title="Summary")
+    ws_s.cell(1, 1, "OFFICIAL GRADES")
+    ws_s.cell(4, 1, "#")
+    ws_s.cell(4, 2, "Student Number")
+    ws_s.cell(4, 3, "Final Grade")
+    for r in range(5, 10):
+        ws_s.cell(r, 1, r - 4)
+        ws_s.cell(r, 2, f"2026-000{r - 4}")
+        ws_s.cell(r, 3, "2.00")
+
+    ws_a = wb.create_sheet(title="Component_A")
+    ws_a.cell(4, 1, "#")
+    ws_a.cell(4, 2, "Name of Student")
+    ws_a.cell(4, 3, "Student Number")
+    for c in range(4, 10):
+        ws_a.cell(4, c, f"A_{c}")
+    for r in range(5, 10):
+        ws_a.cell(r, 1, r - 4)
+        ws_a.cell(r, 2, f"Student {r - 4}")
+        ws_a.cell(r, 3, f"2026-000{r - 4}")
+        for c in range(4, 10):
+            ws_a.cell(r, c, 75)
+
+    ws_b = wb.create_sheet(title="Component_B")
+    ws_b.cell(4, 1, "#")
+    ws_b.cell(4, 2, "Name of Student")
+    ws_b.cell(4, 3, "Student Number")
+    for c in range(4, 10):
+        ws_b.cell(4, c, f"B_{c}")
+    for r in range(5, 10):
+        ws_b.cell(r, 1, r - 4)
+        ws_b.cell(r, 2, f"Student {r - 4}")
+        ws_b.cell(r, 3, f"2026-000{r - 4}")
+        for c in range(4, 10):
+            ws_b.cell(r, c, 85)
+
+    # Injects dynamic INDIRECT formula on Component_A
+    ws_a.cell(5, 4, '=INDIRECT("Component_B!D5")')
+
+    p = tmp_path / "dynamic_indirect.xlsx"
+    wb.save(str(p))
+
+    with pytest.raises(AmbiguousTemplateError) as exc:
+        XlsxTemplateInspector().inspect(str(p), profile_id="grade_sheet_xlsx")
+    assert "unparseable or indeterminate formula lineage" in str(exc.value).lower()
+
+    res = detector.detect_role(str(p))
+    assert res.status == "ambiguous"
+    assert res.role is None
+    assert res.candidate_roles == [ROLE_GRADE_SHEET_LECTURE_LAB]
+
+
+def test_xlsx_external_workbook_reference_fails_closed(detector, tmp_path):
+    """
+    Requirement 4, 5 & Requirement 6 Test D:
+    External workbook reference:
+    Formulas referencing external workbooks ('[Other.xlsx]Sheet1!A1') must not be
+    converted into false local dependencies. Lineage is treated as UNKNOWN and fails closed.
+    """
+    from modules.parsers.template_inspector import XlsxTemplateInspector
+
+    wb = openpyxl.Workbook()
+    ws_r = wb.active
+    ws_r.title = "Roster"
+    ws_r.cell(1, 1, "Course: BSCS")
+    ws_r.cell(2, 1, "Instructor: Dr. Turing")
+    ws_r.cell(4, 1, "#")
+    ws_r.cell(4, 2, "Name of Student")
+    ws_r.cell(4, 3, "Student Number")
+    for r in range(5, 10):
+        ws_r.cell(r, 1, r - 4)
+        ws_r.cell(r, 2, f"Student {r - 4}")
+        ws_r.cell(r, 3, f"2026-000{r - 4}")
+
+    ws_s = wb.create_sheet(title="Summary")
+    ws_s.cell(1, 1, "OFFICIAL GRADES")
+    ws_s.cell(4, 1, "#")
+    ws_s.cell(4, 2, "Student Number")
+    ws_s.cell(4, 3, "Final Grade")
+    for r in range(5, 10):
+        ws_s.cell(r, 1, r - 4)
+        ws_s.cell(r, 2, f"2026-000{r - 4}")
+        ws_s.cell(r, 3, "2.00")
+
+    ws_a = wb.create_sheet(title="Component_A")
+    ws_a.cell(4, 1, "#")
+    ws_a.cell(4, 2, "Name of Student")
+    ws_a.cell(4, 3, "Student Number")
+    for c in range(4, 10):
+        ws_a.cell(4, c, f"A_{c}")
+    for r in range(5, 10):
+        ws_a.cell(r, 1, r - 4)
+        ws_a.cell(r, 2, f"Student {r - 4}")
+        ws_a.cell(r, 3, f"2026-000{r - 4}")
+        for c in range(4, 10):
+            ws_a.cell(r, c, 75)
+
+    ws_b = wb.create_sheet(title="Component_B")
+    ws_b.cell(4, 1, "#")
+    ws_b.cell(4, 2, "Name of Student")
+    ws_b.cell(4, 3, "Student Number")
+    for c in range(4, 10):
+        ws_b.cell(4, c, f"B_{c}")
+    for r in range(5, 10):
+        ws_b.cell(r, 1, r - 4)
+        ws_b.cell(r, 2, f"Student {r - 4}")
+        ws_b.cell(r, 3, f"2026-000{r - 4}")
+        for c in range(4, 10):
+            ws_b.cell(r, c, 85)
+
+    # Injects external workbook reference
+    ws_a.cell(5, 4, "=[External.xlsx]Sheet1!A1")
+
+    p = tmp_path / "external_ref.xlsx"
+    wb.save(str(p))
+
+    with pytest.raises(AmbiguousTemplateError) as exc:
+        XlsxTemplateInspector().inspect(str(p), profile_id="grade_sheet_xlsx")
+    assert "unparseable or indeterminate formula lineage" in str(exc.value).lower()
+
+    res = detector.detect_role(str(p))
+    assert res.status == "ambiguous"
+    assert res.role is None
+    assert res.candidate_roles == [ROLE_GRADE_SHEET_LECTURE_LAB]
+
+
+def test_xlsx_unsupported_3d_formula_fails_closed(detector, tmp_path):
+    """
+    Requirement 4 & Requirement 6 Test E:
+    Unsupported formula syntax (3D multi-sheet reference Sheet1:Sheet3!A1):
+    Lineage is treated as UNKNOWN and fails closed rather than misidentifying dependencies.
+    """
+    from modules.parsers.template_inspector import XlsxTemplateInspector
+
+    wb = openpyxl.Workbook()
+    ws_r = wb.active
+    ws_r.title = "Roster"
+    ws_r.cell(1, 1, "Course: BSCS")
+    ws_r.cell(2, 1, "Instructor: Dr. Turing")
+    ws_r.cell(4, 1, "#")
+    ws_r.cell(4, 2, "Name of Student")
+    ws_r.cell(4, 3, "Student Number")
+    for r in range(5, 10):
+        ws_r.cell(r, 1, r - 4)
+        ws_r.cell(r, 2, f"Student {r - 4}")
+        ws_r.cell(r, 3, f"2026-000{r - 4}")
+
+    ws_s = wb.create_sheet(title="Summary")
+    ws_s.cell(1, 1, "OFFICIAL GRADES")
+    ws_s.cell(4, 1, "#")
+    ws_s.cell(4, 2, "Student Number")
+    ws_s.cell(4, 3, "Final Grade")
+    for r in range(5, 10):
+        ws_s.cell(r, 1, r - 4)
+        ws_s.cell(r, 2, f"2026-000{r - 4}")
+        ws_s.cell(r, 3, "2.00")
+
+    ws_a = wb.create_sheet(title="Component_A")
+    ws_a.cell(4, 1, "#")
+    ws_a.cell(4, 2, "Name of Student")
+    ws_a.cell(4, 3, "Student Number")
+    for c in range(4, 10):
+        ws_a.cell(4, c, f"A_{c}")
+    for r in range(5, 10):
+        ws_a.cell(r, 1, r - 4)
+        ws_a.cell(r, 2, f"Student {r - 4}")
+        ws_a.cell(r, 3, f"2026-000{r - 4}")
+        for c in range(4, 10):
+            ws_a.cell(r, c, 75)
+
+    ws_b = wb.create_sheet(title="Component_B")
+    ws_b.cell(4, 1, "#")
+    ws_b.cell(4, 2, "Name of Student")
+    ws_b.cell(4, 3, "Student Number")
+    for c in range(4, 10):
+        ws_b.cell(4, c, f"B_{c}")
+    for r in range(5, 10):
+        ws_b.cell(r, 1, r - 4)
+        ws_b.cell(r, 2, f"Student {r - 4}")
+        ws_b.cell(r, 3, f"2026-000{r - 4}")
+        for c in range(4, 10):
+            ws_b.cell(r, c, 85)
+
+    # Injects 3D multi-sheet formula
+    ws_a.cell(5, 4, "=SUM(Sheet1:Sheet3!A1)")
+
+    p = tmp_path / "3d_ref.xlsx"
+    wb.save(str(p))
+
+    with pytest.raises(AmbiguousTemplateError) as exc:
+        XlsxTemplateInspector().inspect(str(p), profile_id="grade_sheet_xlsx")
+    assert "unparseable or indeterminate formula lineage" in str(exc.value).lower()
+
+    res = detector.detect_role(str(p))
+    assert res.status == "ambiguous"
+    assert res.role is None
+    assert res.candidate_roles == [ROLE_GRADE_SHEET_LECTURE_LAB]
+
+
+def test_xlsx_symmetrical_topology_is_ambiguous(detector, tmp_path):
+    """
+    Requirement 6 Test K:
+    Equal/symmetrical topology:
+    Neither candidate secondary assessment sheet aggregates the other, and both have
+    identical or symmetrical physical structure.
+    Must fail closed as ambiguous.
+    """
+    from modules.parsers.template_inspector import XlsxTemplateInspector
+
+    wb = openpyxl.Workbook()
+    ws_r = wb.active
+    ws_r.title = "Student_Master"
+    ws_r.cell(1, 1, "Course: BSCS")
+    ws_r.cell(2, 1, "Instructor: Dr. Turing")
+    ws_r.cell(4, 1, "#")
+    ws_r.cell(4, 2, "Name of Student")
+    ws_r.cell(4, 3, "Student Number")
+    for r in range(5, 10):
+        ws_r.cell(r, 1, r - 4)
+        ws_r.cell(r, 2, f"Student {r - 4}")
+        ws_r.cell(r, 3, f"2026-000{r - 4}")
+
+    ws_s = wb.create_sheet(title="Summary")
+    ws_s.cell(1, 1, "OFFICIAL GRADES")
+    ws_s.cell(4, 1, "#")
+    ws_s.cell(4, 2, "Student Number")
+    ws_s.cell(4, 3, "Final Grade")
+    for r in range(5, 10):
+        ws_s.cell(r, 1, r - 4)
+        ws_s.cell(r, 2, f"2026-000{r - 4}")
+        ws_s.cell(r, 3, "2.00")
+
+    ws_a = wb.create_sheet(title="Component_A")
+    ws_a.cell(4, 1, "#")
+    ws_a.cell(4, 2, "Name of Student")
+    ws_a.cell(4, 3, "Student Number")
+    for c in range(4, 10):
+        ws_a.cell(4, c, f"A_{c}")
+    for r in range(5, 10):
+        ws_a.cell(r, 1, r - 4)
+        ws_a.cell(r, 2, f"Student {r - 4}")
+        ws_a.cell(r, 3, f"2026-000{r - 4}")
+        for c in range(4, 10):
+            ws_a.cell(r, c, 75)
+
+    ws_b = wb.create_sheet(title="Component_B")
+    ws_b.cell(4, 1, "#")
+    ws_b.cell(4, 2, "Name of Student")
+    ws_b.cell(4, 3, "Student Number")
+    for c in range(4, 10):
+        ws_b.cell(4, c, f"B_{c}")
+    for r in range(5, 10):
+        ws_b.cell(r, 1, r - 4)
+        ws_b.cell(r, 2, f"Student {r - 4}")
+        ws_b.cell(r, 3, f"2026-000{r - 4}")
+        for c in range(4, 10):
+            ws_b.cell(r, c, 75)
+
+    p = tmp_path / "symmetric_lineage.xlsx"
+    wb.save(str(p))
+
+    with pytest.raises(AmbiguousTemplateError):
+        XlsxTemplateInspector().inspect(str(p), profile_id="grade_sheet_xlsx")
+
+    res = detector.detect_role(str(p))
+    assert res.status == "ambiguous"
+    assert res.role is None
+    assert res.candidate_roles == [ROLE_GRADE_SHEET_LECTURE_LAB]
+
+
+def test_structural_audit_catches_prohibited_assumptions():
+    """
+    Requirement 7:
+    Verify that tests/audit_structural_patterns.py strictly identifies and classifies
+    any future reintroduction of prohibited authoritative assumptions as Category E:
+      - primary-roster-role-authority
+      - direct-dependency-role-authority
+      - dimension-role-authority
+      - reference-count-role-authority
+      - worksheet-name-equality
+      - workbook-order-role-selection
+      - constant-4-week-assumption
+      - filename-role-classification
+    """
+    from tests.audit_structural_patterns import scan_source
+
+    violations = [
+        ("modules/parsers/template_inspector.py", "if s1_refs_primary: con_sheet = s1", "primary-roster-role-authority"),
+        ("modules/parsers/template_inspector.py", "if s1_refs_s2: con_sheet = s1", "direct-dependency-role-authority"),
+        ("modules/parsers/template_inspector.py", "if cols1 > cols2:\n    con_sheet = s1", "dimension-role-authority"),
+        ("modules/parsers/template_inspector.py", "if refs1 > refs2:\n    con_sheet = s1", "reference-count-role-authority"),
+        ("modules/parsers/template_role_detector.py", "if sheet_name == 'Lecture': role = ROLE_GRADE_SHEET_LECTURE_LAB", "worksheet-name-equality"),
+        ("modules/parsers/template_role_detector.py", "res = scored_rosters[0]", "workbook-order-role-selection"),
+        ("modules/parsers/template_role_detector.py", "cap = cap / 4 # four-week assumption", "constant-4-week-assumption"),
+        ("modules/parsers/template_role_detector.py", "if fn_indicates_role(filename): return", "filename-role-classification"),
+    ]
+
+    for rel_path, snippet, expected_label in violations:
+        findings = scan_source(snippet, file_name=rel_path)
+        assert len(findings) > 0, f"Audit pattern not matched for {snippet}"
+        item, cat, just = findings[0]
+        assert item["label"] == expected_label, f"Expected {expected_label}, got {item['label']}"
+        assert cat == "E", f"Expected Category E violation for {expected_label}, got {cat} ({just})"
+
 
 
 
