@@ -71,8 +71,9 @@ AUDIT_RULES: List[Tuple[str, str, str]] = [
     (r"lab_sheet\s*=\s*remaining_assessment_sheets\[0\]", "unverified-candidate-promotion", "Promoting candidate roster sheet to lab_sheet without lineage/role verification"),
     (r"primary_roster_sheet\s*=\s*top_rosters\[0\]", "unconditional-primary-score-authority", "Metadata density score alone used as unconditional primary roster authority without topology verification"),
     (r"primary_roster_sheet\s*=\s*(?:roster_candidates_by_sheet|candidate_rosters|sheet_names)\[0\]", "workbook-order-primary-selection", "First candidate in workbook order selected as primary roster without ambiguity check"),
-    (r"primary_roster_sheet\s*=\s*sorted\([^)]*\)\[0\]", "first-candidate-primary-wins", "Prohibited primary-role selection using sorted candidates without ambiguity check"),
     (r"if\s+(?:upstream_from_summary|upstream_set|upstream_sheets|topology|lineage)\s+and\b", "optional-topology-guard-bypass", "Weak or optional topology guard permitting empty lineage to bypass validation"),
+    (r"summary_sheet\s*=\s*top_summaries\[0\]", "unconditional-summary-score-authority", "Summary score alone used as authoritative summary sheet without physical final-rating topology verification"),
+    (r"summary_sheet\s*=\s*sorted\([^)]*summar[^)]*\)\[0\]", "first-candidate-summary-wins", "Prohibited summary-role selection using sorted candidates without physical final-rating topology verification"),
 ]
 
 
@@ -92,6 +93,12 @@ def classify_finding(rel_path: str, line_num: int, label: str, snippet: str) -> 
         if "template_inspector.py" in rel_path or "template_role_detector.py" in rel_path or "detector" in rel_path:
             return "E", "Prohibited metadata density score alone used as unconditional primary roster authority without topology verification"
         return "D", "Legitimate primary candidate check"
+
+    # Category E: Summary score alone used as authoritative summary sheet without physical final-rating topology verification
+    if label in ("unconditional-summary-score-authority", "first-candidate-summary-wins"):
+        if "template_inspector.py" in rel_path or "template_role_detector.py" in rel_path or "detector" in rel_path:
+            return "E", "Prohibited summary score alone used as authoritative summary sheet without physical final-rating topology verification"
+        return "D", "Legitimate summary candidate check"
 
     # Category E: Workbook-order primary selection without ambiguity check
     if label in ("workbook-order-primary-selection", "first-candidate-primary-wins"):

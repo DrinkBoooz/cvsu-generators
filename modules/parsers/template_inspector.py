@@ -240,19 +240,26 @@ def is_consolidation_formula(
         return False
 
     # If min_data_row is specified, verify that the formula does not solely reference
-    # header/metadata rows (< min_data_row) on the component sheets.
+    # header/metadata rows (< min_data_row) on the component sheets, and does NOT reference
+    # auxiliary/external sheets on student data rows.
     if min_data_row is not None and min_data_row > 1:
         try:
             tok = Tokenizer(val)
             has_student_row_ref = False
             for item in tok.items:
                 if item.type == "OPERAND" and item.subtype == "RANGE":
+                    sh_part, cell_part = split_sheet_and_cell(item.value)
                     m = re.search(r"!\$?([A-Za-z]+)\$?(\d+)", item.value)
                     if m:
                         ref_row = int(m.group(2))
                         if ref_row >= min_data_row:
                             has_student_row_ref = True
-                            break
+                        if sh_part:
+                            clean_sh = sh_part.strip("'").replace("''", "'")
+                            if not any(clean_sh.lower() == s.lower() for s in student_component_sheets):
+                                if ref_row > 2:
+                                    # Consumes per-student numeric data from an external sheet outside recognized components
+                                    return False
             if not has_student_row_ref:
                 return False
         except Exception:
@@ -1024,36 +1031,16 @@ class XlsxTemplateInspector:
                 score += 25
             return score
 
-        summary_scores = {s: score_summary_sheet(s) for s in sheet_names}
-        max_s_score = max(summary_scores.values()) if summary_scores else 0
-        summary_sheet: Optional[str] = None
-        if max_s_score > 0:
-            top_summaries = [s for s, sc in summary_scores.items() if sc == max_s_score]
-            if len(top_summaries) > 1:
-                raise AmbiguousTemplateError(
-                    f"Grade sheet template '{os.path.basename(template_path)}' contains multiple ambiguous summary rating worksheets with equal structural evidence: {top_summaries}"
-                )
-            summary_sheet = top_summaries[0]
-
-        if not summary_sheet:
+        # Discover candidate summary worksheets based on physical rating header presence
+        summary_candidates = [s for s in sheet_names if score_summary_sheet(s) > 0]
+        if not summary_candidates:
             raise TemplateError(
                 f"Grade sheet template '{os.path.basename(template_path)}' is missing required 'Grading Sheet' worksheet or structural summary rating sheet."
             )
 
-        # Candidate roster worksheets excluding summary_sheet
-        candidate_rosters = [
-            s for s in sheet_names
-            if s in roster_candidates_by_sheet and s != summary_sheet
-        ]
-
-        if not candidate_rosters:
-            raise TemplateError(
-                f"Grade sheet template '{os.path.basename(template_path)}' is missing required student roster worksheet."
-            )
-
-        # ── Authoritative Student-Row Instructional Calculation Lineage Trace ──────────
+        # ── Authoritative Physical Final-Rating Calculation Lineage Trace ──────────
         # Traces physical calculation dependencies from the official final rating cells
-        # on summary_sheet through intermediate consolidation/calculation cells back to
+        # on candidate summary sheets through intermediate consolidation/calculation cells back to
         # candidate instructional roster components.
         #
         # INVARIANTS:
@@ -1061,12 +1048,13 @@ class XlsxTemplateInspector:
         # 2. A worksheet referenced solely for student names, student IDs, lookup metadata, or
         #    administrative info must NOT qualify as an instructional component.
         # 3. Empty or unverified lineage MUST fail closed as AmbiguousTemplateError.
-        def get_instructional_grade_lineage() -> Tuple[set, bool]:
-            ws_sum = wb[summary_sheet]
+        # 4. Lexical score alone NEVER establishes summary authority; authority requires unique physical final-rating topology.
+        def get_instructional_grade_lineage_for(target_summary: str) -> Tuple[set, bool]:
+            ws_sum = wb[target_summary]
             rating_cols = []
             hdr_row = None
 
-            # Locate rating header column(s) on summary_sheet
+            # Locate rating header column(s) on target_summary
             for r in range(1, min(ws_sum.max_row + 1, 30)):
                 for c in range(1, min(ws_sum.max_column + 1, 25)):
                     raw_val = ws_sum.cell(r, c).value
@@ -1091,11 +1079,14 @@ class XlsxTemplateInspector:
             if not rating_cols or hdr_row is None:
                 return set(), True
 
+            # Candidate rosters for target_summary are all other roster candidates
+            potential_rosters = {s for s in roster_candidates_by_sheet if s != target_summary}
+
             # Gather formula rating cells in student rows
             data_start = hdr_row + 1
             data_end = min(ws_sum.max_row + 1, data_start + 100)
             formula_rating_cells = [
-                (summary_sheet, r, c)
+                (target_summary, r, c)
                 for r in range(data_start, data_end)
                 for c in rating_cols
                 if isinstance(ws_sum.cell(r, c).value, str) and ws_sum.cell(r, c).value.startswith("=")
@@ -1155,7 +1146,7 @@ class XlsxTemplateInspector:
                         max_col = max_col or min_col
                         max_row = max_row or min_row
 
-                        if target_sheet in roster_candidates_by_sheet and target_sheet != summary_sheet:
+                        if target_sheet in potential_rosters:
                             r_info = roster_candidates_by_sheet[target_sheet]
                             f_row = r_info["first_data_row_index"]
                             cap = r_info.get("capacity_limit", 0)
@@ -1179,12 +1170,53 @@ class XlsxTemplateInspector:
 
             return instructional_contributors, is_reliable
 
-        instructional_lineage_sheets, lineage_reliable = get_instructional_grade_lineage()
+        # Evaluate physical final-rating calculation topology across all summary candidates.
+        # Lexical score alone does NOT establish authority: a summary worksheet MUST exhibit
+        # role-consistent physical final-rating calculation topology connecting to candidate rosters.
+        topological_summaries: List[str] = []
+        summary_lineage_map: Dict[str, set] = {}
 
-        # Fail closed if formula parsing on summary or upstream calculation lineage was unreliable
-        if not lineage_reliable:
+        for s_cand in summary_candidates:
+            contribs, is_rel = get_instructional_grade_lineage_for(s_cand)
+            if not is_rel:
+                raise AmbiguousTemplateError(
+                    f"Grade sheet template '{os.path.basename(template_path)}' contains unparseable or indeterminate formula lineage connecting to summary candidate '{s_cand}'"
+                )
+            if contribs:
+                topological_summaries.append(s_cand)
+                summary_lineage_map[s_cand] = contribs
+
+        # A summary worksheet must be a terminal rating sheet (not an upstream contributor to another summary sheet)
+        terminal_summaries = [
+            s for s in topological_summaries
+            if not any(s.lower() in {c.lower() for c in summary_lineage_map[other]}
+                       for other in topological_summaries if other.lower() != s.lower())
+        ]
+
+        if len(terminal_summaries) == 1:
+            summary_sheet = terminal_summaries[0]
+            instructional_lineage_sheets = summary_lineage_map[summary_sheet]
+        elif len(terminal_summaries) > 1:
             raise AmbiguousTemplateError(
-                f"Grade sheet template '{os.path.basename(template_path)}' contains unparseable or indeterminate formula lineage connecting to summary sheet '{summary_sheet}'"
+                f"Grade sheet template '{os.path.basename(template_path)}' contains multiple ambiguous summary rating worksheets with equal structural evidence: {terminal_summaries}"
+            )
+        elif len(summary_candidates) > 1:
+            raise AmbiguousTemplateError(
+                f"Grade sheet template '{os.path.basename(template_path)}' contains multiple ambiguous summary rating worksheets with equal structural evidence: {summary_candidates}"
+            )
+        else:
+            summary_sheet = summary_candidates[0]
+            instructional_lineage_sheets = set()
+
+        # Candidate roster worksheets excluding summary_sheet
+        candidate_rosters = [
+            s for s in sheet_names
+            if s in roster_candidates_by_sheet and s != summary_sheet
+        ]
+
+        if not candidate_rosters:
+            raise TemplateError(
+                f"Grade sheet template '{os.path.basename(template_path)}' is missing required student roster worksheet."
             )
 
         # Score candidate rosters using metadata density in rows 1-10 (candidate evidence only)

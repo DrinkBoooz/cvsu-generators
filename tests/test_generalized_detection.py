@@ -5474,6 +5474,9 @@ def test_xlsx_upstream_helper_without_grade_contribution_does_not_become_primary
     res = detector.detect_role(str(p))
     assert res.status == "ambiguous"
     assert res.role is None
+    # Helper is strictly never promoted to primary, laboratory, or consolidated component
+    assert res.role != ROLE_GRADE_SHEET_LECTURE
+    assert res.role != ROLE_GRADE_SHEET_LECTURE_LAB
 
 
 def test_xlsx_summary_without_rating_column_fails_closed(tmp_path):
@@ -5513,6 +5516,313 @@ def test_xlsx_summary_without_rating_column_fails_closed(tmp_path):
     with pytest.raises(TemplateError) as exc_info:
         XlsxTemplateInspector().inspect(str(p), profile_id="grade_sheet_xlsx")
     assert "missing required 'Grading Sheet' worksheet or structural summary rating sheet" in str(exc_info.value)
+
+
+def test_xlsx_numeric_master_contribution_is_ambiguous_without_independent_role_evidence(tmp_path):
+    """
+    Commit 177 / Micro-closure Section 4:
+    Hard information-boundary test for numeric helper contribution:
+      - Primary Component: metadata + roster + scores
+      - Secondary Component: roster + scores
+      - Consolidated Component: physically consumes Primary, Secondary, AND Student Master Directory Score
+      - Official Results: summary rating sheet referencing Consolidated Component
+      - Student Master: Student ID and Directory Score
+    
+    Numeric contribution != necessarily instructional identity.
+    Consolidation combining references from auxiliary/external sheets on student data rows
+    exceeds supported dual-component capacity and lacks independent role evidence.
+    Expected:
+      AmbiguousTemplateError
+      status = "ambiguous"
+      role = None
+    """
+    detector = TemplateRoleDetector()
+    wb = openpyxl.Workbook()
+
+    # 1. Primary Component (Lecture)
+    ws_prim = wb.active
+    ws_prim.title = "Primary Component"
+    ws_prim.cell(1, 1, "Instructor: Dr. Richard Feynman")
+    ws_prim.cell(2, 1, "Course & Section: BS-Physics-3A")
+    ws_prim.cell(3, 1, "Subject: Quantum Mechanics")
+    ws_prim.cell(4, 1, "Schedule Code: 20268877")
+    ws_prim.cell(5, 1, "Semester & AY: First Semester 2026-2027")
+    ws_prim.cell(7, 1, "#")
+    ws_prim.cell(7, 2, "Student Name")
+    ws_prim.cell(7, 3, "Student Number")
+    ws_prim.cell(7, 4, "Score")
+    for r in range(8, 13):
+        ws_prim.cell(r, 1, r - 7)
+        ws_prim.cell(r, 2, f"Student {r - 7}")
+        ws_prim.cell(r, 3, f"2026-PHYS-{r - 7:03d}")
+        ws_prim.cell(r, 4, 85)
+
+    # 2. Secondary Component (Laboratory)
+    ws_sec = wb.create_sheet(title="Secondary Component")
+    ws_sec.cell(7, 1, "#")
+    ws_sec.cell(7, 2, "Student Name")
+    ws_sec.cell(7, 3, "Student Number")
+    ws_sec.cell(7, 4, "Score")
+    for r in range(8, 13):
+        ws_sec.cell(r, 1, r - 7)
+        ws_sec.cell(r, 2, f"Student {r - 7}")
+        ws_sec.cell(r, 3, f"2026-PHYS-{r - 7:03d}")
+        ws_sec.cell(r, 4, 90)
+
+    # 3. Consolidated Component: physically consumes Directory Score from Student Master!
+    ws_con = wb.create_sheet(title="Consolidated Component")
+    ws_con.cell(7, 1, "#")
+    ws_con.cell(7, 2, "Student Name")
+    ws_con.cell(7, 3, "Student Number")
+    ws_con.cell(7, 4, "Combined Grade")
+    for r in range(8, 13):
+        ws_con.cell(r, 1, r - 7)
+        ws_con.cell(r, 2, f"Student {r - 7}")
+        ws_con.cell(r, 3, f"2026-PHYS-{r - 7:03d}")
+        ws_con.cell(r, 4, f"='Primary Component'!D{r}*0.5 + 'Secondary Component'!D{r}*0.3 + 'Student Master'!B{r - 3}*0.2")
+
+    # 4. Student Master: contains Student ID and Directory Score
+    ws_mast = wb.create_sheet(title="Student Master")
+    ws_mast.cell(1, 1, "Student ID")
+    ws_mast.cell(1, 2, "Directory Score")
+    for r in range(5, 10):
+        ws_mast.cell(r, 1, f"2026-PHYS-{r - 4:03d}")
+        ws_mast.cell(r, 2, 80)
+
+    # 5. Official Results: summary rating sheet referencing Consolidated Component
+    ws_sum = wb.create_sheet(title="Official Results")
+    ws_sum.cell(1, 1, "Republic of the Philippines")
+    ws_sum.cell(2, 1, "Cavite State University")
+    ws_sum.cell(3, 1, "Official Grades Summary")
+    ws_sum.cell(6, 1, "Student Number")
+    ws_sum.cell(6, 2, "Student Name")
+    ws_sum.cell(6, 3, "Final Rating")
+    for r in range(7, 12):
+        ws_sum.cell(r, 1, f"2026-PHYS-{r - 6:03d}")
+        ws_sum.cell(r, 2, f"Student {r - 6}")
+        ws_sum.cell(r, 3, f"='Consolidated Component'!D{r + 1}")
+
+    p = tmp_path / "numeric_master_contribution.xlsx"
+    wb.save(str(p))
+
+    with pytest.raises(AmbiguousTemplateError) as exc_info:
+        XlsxTemplateInspector().inspect(str(p), profile_id="grade_sheet_xlsx")
+    assert "lacking role-consistent physical aggregation topology" in str(exc_info.value)
+
+    res = detector.detect_role(str(p))
+    assert res.status == "ambiguous"
+    assert res.role is None
+
+
+def test_xlsx_fake_summary_helper_with_higher_score_does_not_override_real_summary(tmp_path):
+    """
+    Commit 177 / Micro-closure Section 5:
+    Adversarial summary authority test:
+      - Fake Report Helper: contains student number, final grade column, and MORE institutional
+        banners than the real summary (higher lexical summary score), but static ratings.
+      - Official Summary: contains student number, final grade column, and fewer banner words,
+        but physically derives ratings via formulas from Lecture!
+      - Lecture: candidate roster worksheet.
+    
+    Lexical/banner score alone must NOT establish summary authority.
+    The system must identify the unique physical final-rating calculation topology.
+    Expected:
+      Official Summary is validated as summary_sheet.
+      status = "confirmed"
+      role = ROLE_GRADE_SHEET_LECTURE
+    """
+    detector = TemplateRoleDetector()
+    wb = openpyxl.Workbook()
+
+    # 1. Fake Report Helper: 5 banner fields (score 125), static ratings (no lineage)
+    ws_fake = wb.active
+    ws_fake.title = "Report Helper"
+    ws_fake.cell(1, 1, "Republic of the Philippines")
+    ws_fake.cell(2, 1, "Cavite State University")
+    ws_fake.cell(3, 1, "College of Engineering and Information Technology")
+    ws_fake.cell(4, 1, "Department of Information Technology")
+    ws_fake.cell(5, 1, "Official Grades Summary Report")
+    ws_fake.cell(7, 1, "Student Number")
+    ws_fake.cell(7, 2, "Student Name")
+    ws_fake.cell(7, 3, "Final Grade")
+    for r in range(8, 13):
+        ws_fake.cell(r, 1, f"2026-{r:03d}")
+        ws_fake.cell(r, 2, f"Student {r}")
+        ws_fake.cell(r, 3, 1.75)  # Static values
+
+    # 2. Official Summary: fewer banner words (score 100), but verified final-rating lineage!
+    ws_real = wb.create_sheet(title="Official Summary")
+    ws_real.cell(1, 1, "Instructor: Dr. Ada Lovelace")
+    ws_real.cell(4, 1, "Student Number")
+    ws_real.cell(4, 2, "Student Name")
+    ws_real.cell(4, 3, "Final Grade")
+    for r in range(5, 10):
+        ws_real.cell(r, 1, f"2026-{r:03d}")
+        ws_real.cell(r, 2, f"Student {r}")
+        ws_real.cell(r, 3, f"='Lecture'!D{r + 2}")  # Derives from Lecture!
+
+    # 3. Lecture (Primary Roster)
+    ws_lec = wb.create_sheet(title="Lecture")
+    ws_lec.cell(1, 1, "Instructor: Dr. Ada Lovelace")
+    ws_lec.cell(2, 1, "Course & Section: BSCS 3-1")
+    ws_lec.cell(3, 1, "Subject: Computer Science")
+    ws_lec.cell(4, 1, "Schedule Code: 12345")
+    ws_lec.cell(5, 1, "Semester & AY: 1st Sem 2026-2027")
+    ws_lec.cell(6, 1, "#")
+    ws_lec.cell(6, 2, "Student Name")
+    ws_lec.cell(6, 3, "Student Number")
+    ws_lec.cell(6, 4, "Score")
+    for r in range(7, 12):
+        ws_lec.cell(r, 1, r - 6)
+        ws_lec.cell(r, 2, f"Student {r - 2}")
+        ws_lec.cell(r, 3, f"2026-{r - 2:03d}")
+        ws_lec.cell(r, 4, 88)
+
+    p = tmp_path / "fake_summary_higher_score.xlsx"
+    wb.save(str(p))
+
+    recipe = XlsxTemplateInspector().inspect(str(p), profile_id="grade_sheet_xlsx")
+    assert recipe.metadata["summary_sheet"] == "Official Summary"
+    assert recipe.metadata["roster_sheet"] == "Lecture"
+
+    res = detector.detect_role(str(p))
+    assert res.status == "confirmed"
+    assert res.role == ROLE_GRADE_SHEET_LECTURE
+
+
+def test_xlsx_equal_summary_evidence_is_ambiguous(tmp_path):
+    """
+    Commit 177 / Micro-closure Section 6:
+    Two summary-like worksheets with identical rating-table structure,
+    comparable institutional evidence, and both deriving grades from candidate rosters
+    (no unique downstream/final-rating topology).
+    Workbook order must not resolve the tie.
+    Expected:
+      AmbiguousTemplateError
+      status = "ambiguous"
+      role = None
+    """
+    detector = TemplateRoleDetector()
+    wb = openpyxl.Workbook()
+
+    # 1. Lecture (Primary Roster)
+    ws_lec = wb.active
+    ws_lec.title = "Lecture"
+    ws_lec.cell(1, 1, "Instructor: Dr. Ada Lovelace")
+    ws_lec.cell(2, 1, "Course & Section: BSCS 3-1")
+    ws_lec.cell(3, 1, "Subject: Computer Science")
+    ws_lec.cell(4, 1, "Schedule Code: 12345")
+    ws_lec.cell(5, 1, "Semester & AY: 1st Sem 2026-2027")
+    ws_lec.cell(6, 1, "#")
+    ws_lec.cell(6, 2, "Student Name")
+    ws_lec.cell(6, 3, "Student Number")
+    ws_lec.cell(6, 4, "Score")
+    for r in range(7, 12):
+        ws_lec.cell(r, 1, r - 6)
+        ws_lec.cell(r, 2, f"Student {r - 6}")
+        ws_lec.cell(r, 3, f"2026-{r - 6:03d}")
+        ws_lec.cell(r, 4, 88)
+
+    # 2. Summary A: Rating column deriving from Lecture
+    ws_sa = wb.create_sheet(title="Summary A")
+    ws_sa.cell(1, 1, "Cavite State University")
+    ws_sa.cell(4, 1, "Student Number")
+    ws_sa.cell(4, 2, "Student Name")
+    ws_sa.cell(4, 3, "Final Grade")
+    for r in range(5, 10):
+        ws_sa.cell(r, 1, f"2026-{r - 4:03d}")
+        ws_sa.cell(r, 2, f"Student {r - 4}")
+        ws_sa.cell(r, 3, f"='Lecture'!D{r + 2}")
+
+    # 3. Summary B: Identical Rating column also deriving from Lecture
+    ws_sb = wb.create_sheet(title="Summary B")
+    ws_sb.cell(1, 1, "Cavite State University")
+    ws_sb.cell(4, 1, "Student Number")
+    ws_sb.cell(4, 2, "Student Name")
+    ws_sb.cell(4, 3, "Final Grade")
+    for r in range(5, 10):
+        ws_sb.cell(r, 1, f"2026-{r - 4:03d}")
+        ws_sb.cell(r, 2, f"Student {r - 4}")
+        ws_sb.cell(r, 3, f"='Lecture'!D{r + 2}")
+
+    p = tmp_path / "equal_summary_evidence.xlsx"
+    wb.save(str(p))
+
+    with pytest.raises(AmbiguousTemplateError) as exc_info:
+        XlsxTemplateInspector().inspect(str(p), profile_id="grade_sheet_xlsx")
+    assert "multiple ambiguous summary rating worksheets" in str(exc_info.value).lower()
+
+    res = detector.detect_role(str(p))
+    assert res.status == "ambiguous"
+    assert res.role is None
+
+
+def test_xlsx_summary_helper_referenced_only_for_metadata_not_selected_as_summary(tmp_path):
+    """
+    Commit 177 / Micro-closure Section 8:
+    Construct:
+      - Real Summary: derives actual final rating values from Lecture,
+        and references Header Helper!A1 for teacher/term/display metadata only.
+      - Header Helper: contains rating-looking labels ("Remarks", "Grade") but only
+        supplies header text to Real Summary!A1, with no final-rating lineage.
+    Header Helper must NOT be selected as summary authority.
+    Expected:
+      Real Summary is validated as summary_sheet.
+      status = "confirmed"
+      role = ROLE_GRADE_SHEET_LECTURE
+    """
+    detector = TemplateRoleDetector()
+    wb = openpyxl.Workbook()
+
+    # 1. Header Helper: contains header label and metadata
+    ws_help = wb.active
+    ws_help.title = "Header Helper"
+    ws_help.cell(1, 1, "Instructor: Dr. Ada Lovelace")
+    ws_help.cell(2, 1, "Remarks")
+    ws_help.cell(3, 1, "Grade Reference Notes")
+
+    # 2. Real Summary: derives final ratings from Lecture and teacher from Header Helper!A1
+    ws_real = wb.create_sheet(title="Real Summary")
+    ws_real.cell(1, 1, "='Header Helper'!A1")
+    ws_real.cell(2, 1, "Course & Section: BSCS 3-1")
+    ws_real.cell(3, 1, "Subject: Computer Science")
+    ws_real.cell(4, 1, "Schedule Code: 12345")
+    ws_real.cell(5, 1, "Semester & AY: 1st Sem 2026-2027")
+    ws_real.cell(6, 1, "Student Number")
+    ws_real.cell(6, 2, "Student Name")
+    ws_real.cell(6, 3, "Final Grade")
+    for r in range(7, 12):
+        ws_real.cell(r, 1, f"2026-{r - 6:03d}")
+        ws_real.cell(r, 2, f"Student {r - 6}")
+        ws_real.cell(r, 3, f"='Lecture'!D{r}")
+
+    # 3. Lecture (Primary Roster)
+    ws_lec = wb.create_sheet(title="Lecture")
+    ws_lec.cell(1, 1, "Instructor: Dr. Ada Lovelace")
+    ws_lec.cell(2, 1, "Course & Section: BSCS 3-1")
+    ws_lec.cell(3, 1, "Subject: Computer Science")
+    ws_lec.cell(4, 1, "Schedule Code: 12345")
+    ws_lec.cell(5, 1, "Semester & AY: 1st Sem 2026-2027")
+    ws_lec.cell(6, 1, "#")
+    ws_lec.cell(6, 2, "Student Name")
+    ws_lec.cell(6, 3, "Student Number")
+    ws_lec.cell(6, 4, "Score")
+    for r in range(7, 12):
+        ws_lec.cell(r, 1, r - 6)
+        ws_lec.cell(r, 2, f"Student {r - 6}")
+        ws_lec.cell(r, 3, f"2026-{r - 6:03d}")
+        ws_lec.cell(r, 4, 92)
+
+    p = tmp_path / "summary_helper_metadata_only.xlsx"
+    wb.save(str(p))
+
+    recipe = XlsxTemplateInspector().inspect(str(p), profile_id="grade_sheet_xlsx")
+    assert recipe.metadata["summary_sheet"] == "Real Summary"
+    assert recipe.metadata["roster_sheet"] == "Lecture"
+
+    res = detector.detect_role(str(p))
+    assert res.status == "confirmed"
+    assert res.role == ROLE_GRADE_SHEET_LECTURE
 
 
 
