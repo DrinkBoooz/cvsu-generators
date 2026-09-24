@@ -1310,17 +1310,6 @@ class AttendanceTemplateInspector:
         else:
             date_columns_start = max(student_cols) + 1
 
-        summary_cols_sorted = sorted(summary_cols)
-        summary_count = len(summary_cols_sorted) if summary_cols_sorted else 3
-        if not summary_names:
-            summary_names = ["lb", "lc", "r"]
-            if summary_cols_sorted:
-                summary_column_indices = tuple(summary_cols_sorted)
-            else:
-                summary_column_indices = tuple(range(date_columns_start + 4, date_columns_start + 4 + summary_count))
-        else:
-            summary_column_indices = tuple(summary_cols)
-
         if student_template_row_idx < len(rows):
             target_row_for_len = rows[student_template_row_idx]
         elif header_row1_idx is not None and header_row1_idx < len(rows):
@@ -1330,11 +1319,31 @@ class AttendanceTemplateInspector:
         else:
             raise TemplateError("Matrix table has no rows to determine column count.")
         num_cols = len(target_row_for_len.findall(w("tc")))
+
+        summary_cols_sorted = sorted(summary_cols)
+        summary_count = len(summary_cols_sorted) if summary_cols_sorted else 3
+
+        # An attendance matrix MUST physically contain date/session columns or summary columns
+        if first_date_col is None and not summary_cols:
+            return None
+
         if summary_cols_sorted:
             first_summary_col = summary_cols_sorted[0]
-            template_session_capacity = max(1, first_summary_col - date_columns_start)
+            template_session_capacity = first_summary_col - date_columns_start
         else:
-            template_session_capacity = max(1, num_cols - date_columns_start - summary_count)
+            template_session_capacity = num_cols - date_columns_start - summary_count
+
+        if template_session_capacity <= 0:
+            return None
+
+        if not summary_names:
+            summary_names = ["lb", "lc", "r"]
+            if summary_cols_sorted:
+                summary_column_indices = tuple(summary_cols_sorted)
+            else:
+                summary_column_indices = tuple(range(max(date_columns_start + 1, num_cols - summary_count), num_cols))
+        else:
+            summary_column_indices = tuple(summary_cols)
 
         # Discover cell column spans for header row 0 to find summary header cell
         row0_tcs = rows[header_row0_idx].findall(w("tc"))
