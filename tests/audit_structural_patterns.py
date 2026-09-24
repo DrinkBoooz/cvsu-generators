@@ -75,6 +75,7 @@ AUDIT_RULES: List[Tuple[str, str, str]] = [
     (r"summary_sheet\s*=\s*top_summaries\[0\]", "unconditional-summary-score-authority", "Summary score alone used as authoritative summary sheet without physical final-rating topology verification"),
     (r"summary_sheet\s*=\s*sorted\([^)]*summar[^)]*\)\[0\]", "first-candidate-summary-wins", "Prohibited summary-role selection using sorted candidates without physical final-rating topology verification"),
     (r"primary_roster_sheet\s*=\s*(?:primary_candidate|top_candidates\[0\]|max_metadata_cand|scored_cand)", "metadata-primary-authority-anti-pattern", "Metadata scored candidate promoted to authoritative primary role without independent structural discriminator"),
+    (r"(?:elif|if)\s+(?:b_refs_a|a_refs_b|references_primary)\b", "direct-dependency-primary-authority-anti-pattern", "Direct formula dependency alone used as primary role authority without student roster identity topology"),
 ]
 
 
@@ -83,6 +84,12 @@ def classify_finding(rel_path: str, line_num: int, label: str, snippet: str) -> 
     Classifies a raw finding into Category A, B, C, D, or E.
     Returns (Category, Justification).
     """
+    # Category E: Direct formula dependency alone used as primary role authority
+    if label == "direct-dependency-primary-authority-anti-pattern":
+        if "template_inspector.py" in rel_path or "template_role_detector.py" in rel_path or "detector" in rel_path:
+            return "E", "Prohibited direct formula dependency alone used as primary role authority without student roster identity topology"
+        return "D", "Legitimate dependency resolution"
+
     # Category E: Metadata scored candidate promoted to authoritative primary role without independent structural discriminator
     if label == "metadata-primary-authority-anti-pattern":
         if "template_inspector.py" in rel_path or "template_role_detector.py" in rel_path or "detector" in rel_path:

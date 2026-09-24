@@ -1344,7 +1344,10 @@ class XlsxTemplateInspector:
             # An independent physical structural discriminator is REQUIRED.
             primary_scores: Dict[str, int] = {s: 0 for s in raw_instructional_candidates}
 
-            # 1. Asymmetric direct dependency / formula direction between candidates:
+            # 1. Role-consistent student roster identity derivation between candidates:
+            # DIRECTED FORMULA DEPENDENCY ALONE != SEMANTIC ROLE AUTHORITY.
+            # An arbitrary cell reference does not confer primary authority.
+            # Primary authority requires physical derivation of student roster identity (name/ID) on student rows.
             for i, s_a in enumerate(raw_instructional_candidates):
                 ws_a = wb[s_a]
                 refs_a, rel_a = get_referenced_sheets(ws_a)
@@ -1352,6 +1355,9 @@ class XlsxTemplateInspector:
                     raise AmbiguousTemplateError(
                         f"Grade sheet template '{os.path.basename(template_path)}' contains candidate worksheet '{s_a}' with unparseable or indeterminate formula lineage"
                     )
+                r_info_a = roster_candidates_by_sheet.get(s_a)
+                roster_sources_a = get_roster_identity_sources(ws_a, r_info_a)
+
                 for s_b in raw_instructional_candidates[i + 1:]:
                     ws_b = wb[s_b]
                     refs_b, rel_b = get_referenced_sheets(ws_b)
@@ -1359,16 +1365,24 @@ class XlsxTemplateInspector:
                         raise AmbiguousTemplateError(
                             f"Grade sheet template '{os.path.basename(template_path)}' contains candidate worksheet '{s_b}' with unparseable or indeterminate formula lineage"
                         )
-                    b_refs_a = any(r.lower() == s_a.lower() for r in refs_b)
-                    a_refs_b = any(r.lower() == s_b.lower() for r in refs_a)
+                    r_info_b = roster_candidates_by_sheet.get(s_b)
+                    roster_sources_b = get_roster_identity_sources(ws_b, r_info_b)
 
-                    if a_refs_b and b_refs_a:
+                    # Fail closed on cyclic/competing formula dependencies anywhere between the two sheets
+                    any_b_refs_a = any(r.lower() == s_a.lower() for r in refs_b)
+                    any_a_refs_b = any(r.lower() == s_b.lower() for r in refs_a)
+                    if any_a_refs_b and any_b_refs_a:
                         raise AmbiguousTemplateError(
                             f"Grade sheet template '{os.path.basename(template_path)}' contains candidate roster worksheets with competing/cyclic formula lineage referencing each other: {[s_a, s_b]}"
                         )
-                    elif b_refs_a and not a_refs_b:
+
+                    # Physical student-row roster identity derivation:
+                    b_derives_roster_from_a = s_a.lower() in roster_sources_b
+                    a_derives_roster_from_b = s_b.lower() in roster_sources_a
+
+                    if b_derives_roster_from_a and not a_derives_roster_from_b:
                         primary_scores[s_a] += 1
-                    elif a_refs_b and not b_refs_a:
+                    elif a_derives_roster_from_b and not b_derives_roster_from_a:
                         primary_scores[s_b] += 1
 
             # 2. Student roster identity derivation from summary rating sheet:
