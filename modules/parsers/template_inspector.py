@@ -680,12 +680,15 @@ class XlsxTemplateInspector:
 
         primary_roster_sheet: Optional[str] = None
         if roster_candidates_by_sheet:
-            scored_rosters = sorted(
-                roster_candidates_by_sheet.keys(),
-                key=lambda s: score_roster_sheet(s),
-                reverse=True,
-            )
-            primary_roster_sheet = scored_rosters[0]
+            roster_scores = {s: score_roster_sheet(s) for s in roster_candidates_by_sheet}
+            max_r_score = max(roster_scores.values())
+            top_rosters = [s for s, sc in roster_scores.items() if sc == max_r_score]
+            if len(top_rosters) > 1:
+                # Multiple candidate roster worksheets with equal structural evidence
+                raise AmbiguousTemplateError(
+                    f"Grade sheet template '{os.path.basename(template_path)}' contains multiple ambiguous candidate roster worksheets with equal structural evidence: {top_rosters}"
+                )
+            primary_roster_sheet = top_rosters[0]
 
         if not primary_roster_sheet:
             raise TemplateError(
@@ -729,9 +732,15 @@ class XlsxTemplateInspector:
         candidate_summary_sheets = [s for s in sheet_names if s != primary_roster_sheet]
         summary_sheet: Optional[str] = None
         if candidate_summary_sheets:
-            scored_summaries = sorted(candidate_summary_sheets, key=score_summary_sheet, reverse=True)
-            if score_summary_sheet(scored_summaries[0]) > 0:
-                summary_sheet = scored_summaries[0]
+            summary_scores = {s: score_summary_sheet(s) for s in candidate_summary_sheets}
+            max_s_score = max(summary_scores.values()) if summary_scores else 0
+            if max_s_score > 0:
+                top_summaries = [s for s, sc in summary_scores.items() if sc == max_s_score]
+                if len(top_summaries) > 1:
+                    raise AmbiguousTemplateError(
+                        f"Grade sheet template '{os.path.basename(template_path)}' contains multiple ambiguous summary rating worksheets with equal structural evidence: {top_summaries}"
+                    )
+                summary_sheet = top_summaries[0]
 
         if not summary_sheet:
             raise TemplateError(
@@ -748,19 +757,65 @@ class XlsxTemplateInspector:
         has_consolidated = False
         con_sheet: Optional[str] = None
 
-        if remaining_assessment_sheets:
-            # Secondary assessment sheet (e.g. lab) is the raw assessment grid with more columns;
-            # Consolidated sheet aggregates lecture and lab (fewer columns)
-            sorted_remaining = sorted(
-                remaining_assessment_sheets,
-                key=lambda s: wb[s].max_column,
-                reverse=True,
-            )
-            lab_sheet = sorted_remaining[0]
+        if len(remaining_assessment_sheets) == 1:
+            lab_sheet = remaining_assessment_sheets[0]
+            has_lab = True
+            has_consolidated = False
+        elif len(remaining_assessment_sheets) == 2:
+            s1, s2 = remaining_assessment_sheets[0], remaining_assessment_sheets[1]
+            ws1, ws2 = wb[s1], wb[s2]
 
-            if len(sorted_remaining) > 1:
+            def count_cross_sheet_refs(ws) -> int:
+                refs = 0
+                for row in ws.iter_rows(values_only=True):
+                    for val in row:
+                        if isinstance(val, str) and val.startswith("=") and "!" in val:
+                            refs += 1
+                return refs
+
+            refs1 = count_cross_sheet_refs(ws1)
+            refs2 = count_cross_sheet_refs(ws2)
+            cols1 = ws1.max_column
+            cols2 = ws2.max_column
+            rows1 = ws1.max_row
+            rows2 = ws2.max_row
+
+            # If both sheets have identical dimensions and equivalent structural evidence,
+            # fail closed without relying on workbook appearance order.
+            if cols1 == cols2 and rows1 == rows2 and refs1 == refs2:
+                raise AmbiguousTemplateError(
+                    f"Grade sheet template '{os.path.basename(template_path)}' contains multiple secondary assessment worksheets with identical structural dimensions and evidence: {[s1, s2]}"
+                )
+
+            # Determine laboratory vs consolidated based on structural evidence:
+            # Consolidated aggregates lecture & lab components (higher cross-sheet references)
+            # Laboratory contains the component assessment grid (more assessment columns, fewer cross-sheet references)
+            if refs1 != refs2:
+                if refs1 > refs2:
+                    con_sheet = s1
+                    lab_sheet = s2
+                else:
+                    con_sheet = s2
+                    lab_sheet = s1
+                has_lab = True
                 has_consolidated = True
-                con_sheet = sorted_remaining[1]
+            elif cols1 != cols2:
+                if cols1 > cols2:
+                    lab_sheet = s1
+                    con_sheet = s2
+                else:
+                    lab_sheet = s2
+                    con_sheet = s1
+                has_lab = True
+                has_consolidated = True
+            else:
+                raise AmbiguousTemplateError(
+                    f"Grade sheet template '{os.path.basename(template_path)}' contains secondary assessment worksheets with indistinguishable structural evidence: {[s1, s2]}"
+                )
+        elif len(remaining_assessment_sheets) > 2:
+            raise AmbiguousTemplateError(
+                f"Grade sheet template '{os.path.basename(template_path)}' contains {len(remaining_assessment_sheets)} secondary assessment worksheets, exceeding supported dual-component capacity: {remaining_assessment_sheets}"
+            )
 
 
         ws_lec = wb[primary_roster_sheet]

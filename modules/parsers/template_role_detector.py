@@ -823,6 +823,31 @@ class TemplateRoleDetector:
 
         try:
             cand = self._xlsx_inspector.inspect(file_path, profile_id="grade_sheet_xlsx")
+        except AmbiguousTemplateError as e:
+            all_grade_roles = [
+                ROLE_GRADE_SHEET_LECTURE,
+                ROLE_GRADE_SHEET_LECTURE_LAB,
+            ]
+            cands = [
+                RoleCandidate(
+                    role=r,
+                    evidence=[str(e)],
+                    confidence=0.5,
+                    structural_dominance=0.5,
+                )
+                for r in all_grade_roles
+            ]
+            return DetectionResult(
+                file_path=file_path,
+                file_name=file_name,
+                file_type="xlsx",
+                status="ambiguous",
+                candidate_roles=all_grade_roles,
+                candidates=cands,
+                structural_evidence=[str(e)],
+                diagnostic_hints=diag_hints,
+                error=str(e),
+            )
         except TemplateError as e:
             return DetectionResult(
                 file_path=file_path,

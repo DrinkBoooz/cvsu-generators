@@ -53,6 +53,8 @@ AUDIT_RULES: List[Tuple[str, str, str]] = [
     (r"total_rows\s*==\s*\d+", "total-rows-equality", "Fixed total_rows equality assumption"),
     (r"sheetnames\[0\]|worksheets\[0\]", "worksheet-0-lookup", "Fixed worksheet index 0 lookup"),
     (r"(?:ws_name|sheet_name|s_name)\s*==\s*[\"']", "worksheet-name-equality", "Worksheet name equality check"),
+    (r"(?:scored_rosters|scored_summaries|sorted_remaining)\[0\]", "workbook-order-role-selection", "First candidate in sorted or workbook order selected without ambiguity check"),
+    (r"sorted\([^)]*roster[^)]*\)\[0\]|sorted\([^)]*summar[^)]*\)\[0\]", "first-candidate-wins", "First candidate selected from sorted candidates without ambiguity check"),
 ]
 
 
@@ -61,6 +63,12 @@ def classify_finding(rel_path: str, line_num: int, label: str, snippet: str) -> 
     Classifies a raw finding into Category A, B, C, D, or E.
     Returns (Category, Justification).
     """
+    # Category E: Workbook-order role selection or first-candidate-wins without ambiguity check
+    if label in ("workbook-order-role-selection", "first-candidate-wins"):
+        if "template_role_detector.py" in rel_path or "template_inspector.py" in rel_path or "detector" in rel_path:
+            return "E", "Prohibited workbook-order role selection or first-candidate-wins behavior without ambiguity check"
+        return "D", "Legitimate sorting"
+
     # Category E: Constant-4-week assumption
     if label == "constant-4-week-assumption":
         return "E", "Prohibited synthetic four-week assumption"

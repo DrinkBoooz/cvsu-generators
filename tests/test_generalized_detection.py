@@ -59,6 +59,7 @@ from modules.models.template_set import (
 )
 from modules.parsers.template_role_detector import TemplateRoleDetector, RoleCandidate
 from modules.parsers.template_inspector import XlsxTemplateInspector
+from modules.models.recipe import AmbiguousTemplateError
 from modules.services.template_set_manager import TemplateSetManager
 from modules.generators.ceit_gen import GeneratorFactory, SyllabusGenerator
 from modules.generators.attendance_gen import AttendanceGenerator
@@ -2144,8 +2145,217 @@ def validate_role(cand):
     violations_3 = scan_source(bad_source_3, "bad_validator.py")
     assert any(cat == "E" for _, cat, _ in violations_3), "Audit failed to catch sessions_per_week >= 1.5"
 
+    bad_source_4 = """
+def inspect_xlsx(wb):
+    primary_roster_sheet = scored_rosters[0]
+"""
+    violations_4 = scan_source(bad_source_4, "template_inspector.py")
+    assert any(cat == "E" for _, cat, _ in violations_4), "Audit failed to catch scored_rosters[0] workbook-order authority"
+
     # Assert live modules have zero prohibited assumptions
     ret = audit(os.path.join(repo_root, "modules"))
     assert ret == 0, f"Live codebase audit returned non-zero code: {ret}"
+
+
+# ── 12. Final Micro-Closure: XLSX Structural Ambiguity & Fail-Closed Tests ──
+
+def test_xlsx_duplicate_roster_is_ambiguous(detector, tmp_path):
+    """
+    Requirement 3: Create a workbook containing two worksheets with genuinely equivalent
+    student-roster structures. Neither sheet may have an identifying name.
+    Expected: inspection/detection -> ambiguous.
+    The system must not silently choose worksheet 0.
+    """
+    wb = openpyxl.Workbook()
+    # Sheet 1: Data_Alpha
+    ws_a = wb.active
+    ws_a.title = "Data_Alpha"
+    ws_a.cell(4, 1, "#")
+    ws_a.cell(4, 2, "Name of Student")
+    ws_a.cell(4, 3, "Student Number")
+    for r in range(5, 10):
+        ws_a.cell(r, 1, r - 4)
+        ws_a.cell(r, 2, f"Student {r - 4}")
+        ws_a.cell(r, 3, f"2026-000{r - 4}")
+
+    # Sheet 2: Data_Beta (genuinely equivalent student roster structure)
+    ws_b = wb.create_sheet(title="Data_Beta")
+    ws_b.cell(4, 1, "#")
+    ws_b.cell(4, 2, "Name of Student")
+    ws_b.cell(4, 3, "Student Number")
+    for r in range(5, 10):
+        ws_b.cell(r, 1, r - 4)
+        ws_b.cell(r, 2, f"Student {r - 4}")
+        ws_b.cell(r, 3, f"2026-000{r - 4}")
+
+    # Sheet 3: Summary ratings
+    ws_s = wb.create_sheet(title="Ratings")
+    ws_s.cell(1, 1, "COLLEGE OF ENGINEERING")
+    ws_s.cell(3, 1, "#")
+    ws_s.cell(3, 2, "Student Number")
+    ws_s.cell(3, 3, "Final Grade")
+    for r in range(4, 9):
+        ws_s.cell(r, 1, r - 3)
+        ws_s.cell(r, 2, f"2026-000{r - 3}")
+        ws_s.cell(r, 3, "1.50")
+
+    p = tmp_path / "ambiguous_duplicate_rosters.xlsx"
+    wb.save(str(p))
+
+    # 1. Inspector must raise AmbiguousTemplateError and not silently pick sheet 0
+    from modules.parsers.template_inspector import XlsxTemplateInspector
+    with pytest.raises(AmbiguousTemplateError) as exc_info:
+        XlsxTemplateInspector().inspect(str(p), profile_id="grade_sheet_xlsx")
+    assert "multiple ambiguous candidate roster worksheets" in str(exc_info.value).lower()
+
+    # 2. Detector must classify as ambiguous with both grade sheet roles
+    res = detector.detect_role(str(p))
+    assert res.status == "ambiguous"
+    assert ROLE_GRADE_SHEET_LECTURE in res.candidate_roles
+    assert ROLE_GRADE_SHEET_LECTURE_LAB in res.candidate_roles
+    assert res.role is None
+
+
+def test_xlsx_duplicate_summary_is_ambiguous(detector, tmp_path):
+    """
+    Requirement 4: Create two worksheets with equally strong summary/rating structures.
+    Use completely opaque worksheet names.
+    Expected: summary selection -> ambiguous.
+    Do not select based on workbook order.
+    """
+    wb = openpyxl.Workbook()
+    # Sheet 1: Primary roster
+    ws_r = wb.active
+    ws_r.title = "Section_Roster"
+    ws_r.cell(1, 1, "Course: BSCS")
+    ws_r.cell(2, 1, "Instructor: Dr. Turing")
+    ws_r.cell(4, 1, "#")
+    ws_r.cell(4, 2, "Name of Student")
+    ws_r.cell(4, 3, "Student Number")
+    for r in range(5, 10):
+        ws_r.cell(r, 1, r - 4)
+        ws_r.cell(r, 2, f"Student {r - 4}")
+        ws_r.cell(r, 3, f"2026-000{r - 4}")
+
+    # Sheet 2: Summary A (opaque name)
+    ws_s1 = wb.create_sheet(title="Report_Omega")
+    ws_s1.cell(1, 1, "COLLEGE OF ENGINEERING")
+    ws_s1.cell(2, 1, "OFFICIAL GRADES")
+    ws_s1.cell(4, 1, "#")
+    ws_s1.cell(4, 2, "Student Number")
+    ws_s1.cell(4, 3, "Final Grade")
+    for r in range(5, 10):
+        ws_s1.cell(r, 1, r - 4)
+        ws_s1.cell(r, 2, f"2026-000{r - 4}")
+        ws_s1.cell(r, 3, "1.25")
+
+    # Sheet 3: Summary B (equally strong summary/rating structure, opaque name)
+    ws_s2 = wb.create_sheet(title="Report_Sigma")
+    ws_s2.cell(1, 1, "COLLEGE OF ENGINEERING")
+    ws_s2.cell(2, 1, "OFFICIAL GRADES")
+    ws_s2.cell(4, 1, "#")
+    ws_s2.cell(4, 2, "Student Number")
+    ws_s2.cell(4, 3, "Final Grade")
+    for r in range(5, 10):
+        ws_s2.cell(r, 1, r - 4)
+        ws_s2.cell(r, 2, f"2026-000{r - 4}")
+        ws_s2.cell(r, 3, "1.25")
+
+    p = tmp_path / "ambiguous_duplicate_summaries.xlsx"
+    wb.save(str(p))
+
+    # 1. Inspector must raise AmbiguousTemplateError and not pick Report_Omega by order
+    from modules.parsers.template_inspector import XlsxTemplateInspector
+    with pytest.raises(AmbiguousTemplateError) as exc_info:
+        XlsxTemplateInspector().inspect(str(p), profile_id="grade_sheet_xlsx")
+    assert "multiple ambiguous summary rating worksheets" in str(exc_info.value).lower()
+
+    # 2. Detector must classify as ambiguous
+    res = detector.detect_role(str(p))
+    assert res.status == "ambiguous"
+    assert ROLE_GRADE_SHEET_LECTURE in res.candidate_roles
+    assert ROLE_GRADE_SHEET_LECTURE_LAB in res.candidate_roles
+    assert res.role is None
+
+
+def test_xlsx_identical_secondary_matrices_is_ambiguous(detector, tmp_path):
+    """
+    Requirement 5: Create two secondary assessment worksheets with:
+      - identical dimensions;
+      - equivalent structural evidence;
+      - no informative worksheet names.
+    Expected: lab/consolidated assignment -> ambiguous.
+    Never use worksheet order as the deciding factor.
+    """
+    wb = openpyxl.Workbook()
+    # Sheet 1: Primary roster
+    ws_r = wb.active
+    ws_r.title = "Component_Primary"
+    ws_r.cell(1, 1, "Course: BSCS")
+    ws_r.cell(2, 1, "Instructor: Dr. Turing")
+    ws_r.cell(4, 1, "#")
+    ws_r.cell(4, 2, "Name of Student")
+    ws_r.cell(4, 3, "Student Number")
+    for r in range(5, 10):
+        ws_r.cell(r, 1, r - 4)
+        ws_r.cell(r, 2, f"Student {r - 4}")
+        ws_r.cell(r, 3, f"2026-000{r - 4}")
+
+    # Sheet 2: Summary sheet
+    ws_s = wb.create_sheet(title="Component_Summary")
+    ws_s.cell(1, 1, "COLLEGE OF ENGINEERING")
+    ws_s.cell(2, 1, "OFFICIAL GRADES")
+    ws_s.cell(4, 1, "#")
+    ws_s.cell(4, 2, "Student Number")
+    ws_s.cell(4, 3, "Final Grade")
+    for r in range(5, 10):
+        ws_s.cell(r, 1, r - 4)
+        ws_s.cell(r, 2, f"2026-000{r - 4}")
+        ws_s.cell(r, 3, "1.75")
+
+    # Sheet 3: Secondary Matrix 1 (opaque name, assessment grid)
+    ws_m1 = wb.create_sheet(title="Matrix_Foo")
+    ws_m1.cell(4, 1, "#")
+    ws_m1.cell(4, 2, "Name of Student")
+    ws_m1.cell(4, 3, "Student Number")
+    ws_m1.cell(4, 4, "Task 1")
+    ws_m1.cell(4, 5, "Task 2")
+    for r in range(5, 10):
+        ws_m1.cell(r, 1, r - 4)
+        ws_m1.cell(r, 2, f"Student {r - 4}")
+        ws_m1.cell(r, 3, f"2026-000{r - 4}")
+        ws_m1.cell(r, 4, 85)
+        ws_m1.cell(r, 5, 90)
+
+    # Sheet 4: Secondary Matrix 2 (opaque name, IDENTICAL dimensions and structural evidence)
+    ws_m2 = wb.create_sheet(title="Matrix_Bar")
+    ws_m2.cell(4, 1, "#")
+    ws_m2.cell(4, 2, "Name of Student")
+    ws_m2.cell(4, 3, "Student Number")
+    ws_m2.cell(4, 4, "Task 1")
+    ws_m2.cell(4, 5, "Task 2")
+    for r in range(5, 10):
+        ws_m2.cell(r, 1, r - 4)
+        ws_m2.cell(r, 2, f"Student {r - 4}")
+        ws_m2.cell(r, 3, f"2026-000{r - 4}")
+        ws_m2.cell(r, 4, 88)
+        ws_m2.cell(r, 5, 92)
+
+    p = tmp_path / "ambiguous_secondary_matrices.xlsx"
+    wb.save(str(p))
+
+    # 1. Inspector must raise AmbiguousTemplateError and not assign lab/consolidated by order
+    from modules.parsers.template_inspector import XlsxTemplateInspector
+    with pytest.raises(AmbiguousTemplateError) as exc_info:
+        XlsxTemplateInspector().inspect(str(p), profile_id="grade_sheet_xlsx")
+    assert "multiple secondary assessment worksheets" in str(exc_info.value).lower()
+
+    # 2. Detector must classify as ambiguous
+    res = detector.detect_role(str(p))
+    assert res.status == "ambiguous"
+    assert ROLE_GRADE_SHEET_LECTURE in res.candidate_roles
+    assert ROLE_GRADE_SHEET_LECTURE_LAB in res.candidate_roles
+    assert res.role is None
+
 
 
