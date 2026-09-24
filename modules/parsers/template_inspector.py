@@ -1056,33 +1056,70 @@ class XlsxTemplateInspector:
             s for s in sheet_names
             if s in roster_candidates_by_sheet and s != primary_roster_sheet and s != summary_sheet
         ]
-        has_lab = bool(len(remaining_assessment_sheets) >= 1)
+        has_lab = False
         lab_sheet: Optional[str] = None
         has_consolidated = False
         con_sheet: Optional[str] = None
 
+        # Determine worksheet formula dependencies:
+        # Construct directed dependency relation: A -> B meaning worksheet A
+        # physically contains formulas referencing worksheet B.
+        def get_referenced_sheets(ws_source) -> Tuple[set, bool]:
+            referenced = set()
+            is_reliable = True
+            for row in ws_source.iter_rows(values_only=True):
+                for val in row:
+                    if isinstance(val, str) and val.startswith("="):
+                        sheet_refs = extract_referenced_sheets(val)
+                        if not getattr(sheet_refs, "is_reliable", True):
+                            is_reliable = False
+                        referenced.update(sheet_refs)
+            return referenced, is_reliable
+
         if len(remaining_assessment_sheets) == 1:
-            lab_sheet = remaining_assessment_sheets[0]
+            s1 = remaining_assessment_sheets[0]
+            ws1 = wb[s1]
+            ws_prim = wb[primary_roster_sheet]
+            ws_sum = wb[summary_sheet]
+
+            s1_referenced, s1_reliable = get_referenced_sheets(ws1)
+            prim_referenced, prim_reliable = get_referenced_sheets(ws_prim)
+            sum_referenced, sum_reliable = get_referenced_sheets(ws_sum)
+
+            if not s1_reliable or not prim_reliable or not sum_reliable:
+                unreliable = [
+                    s for s, r in [
+                        (s1, s1_reliable),
+                        (primary_roster_sheet, prim_reliable),
+                        (summary_sheet, sum_reliable),
+                    ] if not r
+                ]
+                raise AmbiguousTemplateError(
+                    f"Grade sheet template '{os.path.basename(template_path)}' contains assessment worksheets with unparseable or indeterminate formula lineage: {unreliable}"
+                )
+
+            # Establish secondary instructional role strictly through verified physical lineage:
+            # A candidate secondary worksheet is an authoritative instructional component (Laboratory)
+            # ONLY IF it has role-consistent physical instructional lineage connecting it into
+            # the course grade computation:
+            # 1. Either summary_sheet physically contains formulas referencing s1, OR
+            # 2. primary_roster_sheet physically contains formulas referencing s1.
+            # An unreferenced candidate is merely a helper/master/reference sheet that happens
+            # to be roster-shaped. ROSTER-SHAPED != INSTRUCTIONAL-COMPONENT.
+            is_integrated_component = any(
+                r.lower() == s1.lower() for r in (sum_referenced | prim_referenced)
+            )
+            if not is_integrated_component:
+                raise AmbiguousTemplateError(
+                    f"Grade sheet template '{os.path.basename(template_path)}' contains secondary assessment candidate worksheet '{s1}' with roster structure but lacking role-consistent physical instructional lineage connecting it to primary roster or summary rating sheets."
+                )
+
+            lab_sheet = s1
             has_lab = True
             has_consolidated = False
         elif len(remaining_assessment_sheets) == 2:
             s1, s2 = remaining_assessment_sheets[0], remaining_assessment_sheets[1]
             ws1, ws2 = wb[s1], wb[s2]
-
-            # Determine laboratory vs consolidated based on unique physical lineage:
-            # Construct directed dependency relation: A -> B meaning worksheet A
-            # physically contains formulas referencing worksheet B.
-            def get_referenced_sheets(ws_source) -> Tuple[set, bool]:
-                referenced = set()
-                is_reliable = True
-                for row in ws_source.iter_rows(values_only=True):
-                    for val in row:
-                        if isinstance(val, str) and val.startswith("="):
-                            sheet_refs = extract_referenced_sheets(val)
-                            if not getattr(sheet_refs, "is_reliable", True):
-                                is_reliable = False
-                            referenced.update(sheet_refs)
-                return referenced, is_reliable
 
             s1_referenced, s1_reliable = get_referenced_sheets(ws1)
             s2_referenced, s2_reliable = get_referenced_sheets(ws2)

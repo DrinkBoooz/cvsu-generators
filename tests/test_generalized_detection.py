@@ -3627,6 +3627,7 @@ def test_structural_audit_catches_prohibited_assumptions():
         ("modules/parsers/template_inspector.py", "sample_rows = range(first_row, first_row + 10)", "arbitrary-sampling-bounds"),
         ("modules/parsers/template_inspector.py", "cols = range(1, min(ws.max_column + 1, 50))", "arbitrary-sampling-bounds"),
         ("modules/parsers/template_inspector.py", "def is_aggregation_formula(val, other_sheet, all_sheets):", "all-sheets-compatibility-alias"),
+        ("modules/parsers/template_inspector.py", "lab_sheet = remaining_assessment_sheets[0]", "unverified-candidate-promotion"),
     ]
 
     for rel_path, snippet, expected_label in violations:
@@ -4543,6 +4544,383 @@ def test_xlsx_summary_roster_structure_never_satisfies_component_count(tmp_path)
     res = detector.detect_role(str(p))
     assert res.status == "confirmed"
     assert res.role == ROLE_GRADE_SHEET_LECTURE
+
+
+def test_xlsx_convincing_fake_master_never_becomes_authoritative_role(tmp_path):
+    """
+    Commit 174 Section 2:
+    Foreign workbook containing:
+      - Primary instructional component
+      - Real secondary/laboratory component
+      - Consolidated candidate
+      - Official results/summary
+      - Student Master (intentionally convincing: valid roster headers, sequential student numbers,
+        student names and IDs, grade/assessment-looking columns, realistic student rows, enough physical
+        structure to resemble an assessment worksheet).
+      - Notes
+    Verify:
+      Student Master never becomes an authoritative s1/s2 role without unique role-consistent topology.
+    """
+    detector = TemplateRoleDetector()
+    wb = openpyxl.Workbook()
+
+    # 1. Primary instructional component
+    ws_prim = wb.active
+    ws_prim.title = "Primary Component"
+    ws_prim.cell(1, 1, "Instructor: Dr. Marie Curie")
+    ws_prim.cell(2, 1, "Course & Section: PHYS301-A")
+    ws_prim.cell(3, 1, "Subject: Modern Physics")
+    ws_prim.cell(6, 1, "#")
+    ws_prim.cell(6, 2, "Student Name")
+    ws_prim.cell(6, 3, "Student Number")
+    ws_prim.cell(6, 4, "Lecture Grade")
+    for r in range(7, 12):
+        ws_prim.cell(r, 1, r - 6)
+        ws_prim.cell(r, 2, f"Student {r - 6}")
+        ws_prim.cell(r, 3, f"2026-PHYS-{r - 6:03d}")
+        ws_prim.cell(r, 4, 88)
+
+    # 2. Real secondary/laboratory component
+    ws_sec = wb.create_sheet(title="Secondary Component")
+    ws_sec.cell(6, 1, "#")
+    ws_sec.cell(6, 2, "Student Name")
+    ws_sec.cell(6, 3, "Student Number")
+    ws_sec.cell(6, 4, "Lab Practical Score")
+    for r in range(7, 12):
+        ws_sec.cell(r, 1, r - 6)
+        ws_sec.cell(r, 2, f"Student {r - 6}")
+        ws_sec.cell(r, 3, f"2026-PHYS-{r - 6:03d}")
+        ws_sec.cell(r, 4, 94)
+
+    # 3. Consolidated candidate (combines Primary Component and Secondary Component)
+    ws_con = wb.create_sheet(title="Consolidated candidate")
+    ws_con.cell(6, 1, "#")
+    ws_con.cell(6, 2, "Student Name")
+    ws_con.cell(6, 3, "Student Number")
+    ws_con.cell(6, 4, "Combined Final")
+    for r in range(7, 12):
+        ws_con.cell(r, 1, r - 6)
+        ws_con.cell(r, 2, f"Student {r - 6}")
+        ws_con.cell(r, 3, f"2026-PHYS-{r - 6:03d}")
+        ws_con.cell(r, 4, f"='Primary Component'!D{r}*0.6 + 'Secondary Component'!D{r}*0.4")
+
+    # 4. Official results/summary
+    ws_sum = wb.create_sheet(title="Official results")
+    ws_sum.cell(1, 1, "Republic of the Philippines")
+    ws_sum.cell(2, 1, "Cavite State University")
+    ws_sum.cell(3, 1, "Official Grades Summary")
+    ws_sum.cell(6, 1, "Student Number")
+    ws_sum.cell(6, 2, "Final Rating")
+    for r in range(7, 12):
+        ws_sum.cell(r, 1, f"2026-PHYS-{r - 6:03d}")
+        ws_sum.cell(r, 2, f"='Consolidated candidate'!D{r}")
+
+    # 5. Student Master: Intentionally convincing assessment structure!
+    # Valid roster headers, sequential student numbers, student names, IDs,
+    # grade/assessment-looking columns (Quiz, Homework, Exam, Total), realistic rows.
+    ws_mst = wb.create_sheet(title="Student Master")
+    ws_mst.cell(5, 1, "#")
+    ws_mst.cell(5, 2, "Student Name")
+    ws_mst.cell(5, 3, "Student ID")
+    ws_mst.cell(5, 4, "Quiz Avg")
+    ws_mst.cell(5, 5, "HW Avg")
+    ws_mst.cell(5, 6, "Term Project")
+    ws_mst.cell(5, 7, "Master Score")
+    for r in range(6, 11):
+        ws_mst.cell(r, 1, r - 5)
+        ws_mst.cell(r, 2, f"Student {r - 5}")
+        ws_mst.cell(r, 3, f"2026-PHYS-{r - 5:03d}")
+        ws_mst.cell(r, 4, 85)
+        ws_mst.cell(r, 5, 90)
+        ws_mst.cell(r, 6, 88)
+        ws_mst.cell(r, 7, f"=AVERAGE(D{r}:F{r})")
+
+    # 6. Notes
+    ws_not = wb.create_sheet(title="Notes")
+    ws_not.cell(1, 1, "Physics Laboratory Safety Guidelines and Grading Policy.")
+
+    p = tmp_path / "strong_fake_master.xlsx"
+    wb.save(str(p))
+
+    # Inspection / Detection:
+    # Student Master enters generic roster candidate collection because of its physical roster table,
+    # but the workbook contains 3 secondary candidate worksheets without a supported 3-way consolidation schema.
+    # Therefore, the system fails closed as ambiguous and NEVER crowns Student Master as an authoritative role!
+    with pytest.raises(AmbiguousTemplateError) as exc_info:
+        XlsxTemplateInspector().inspect(str(p), profile_id="grade_sheet_xlsx")
+    assert "secondary assessment worksheets" in str(exc_info.value)
+    assert "Student Master" in str(exc_info.value)
+
+    res = detector.detect_role(str(p))
+    assert res.status == "ambiguous"
+    assert res.role is None
+    # Student Master must never be chosen as lab_sheet or con_sheet:
+    for cand in res.candidates:
+        assert getattr(cand, "lab_sheet", None) != "Student Master"
+        assert getattr(cand, "con_sheet", None) != "Student Master"
+
+
+def test_xlsx_valid_foreign_dual_component_positive_control(tmp_path):
+    """
+    Commit 174 Section 3:
+    Keep the valid foreign dual-component workbook:
+      Primary Component
+      Secondary Component
+      Consolidated Component
+      Official Results
+    and verify it still produces:
+      grade_sheet_lecture_lab
+    with:
+      lab_sheet = Secondary Component
+      con_sheet = Consolidated Component
+    """
+    detector = TemplateRoleDetector()
+    wb = openpyxl.Workbook()
+
+    # Primary Component
+    ws_prim = wb.active
+    ws_prim.title = "Primary Component"
+    ws_prim.cell(1, 1, "Instructor: Dr. Marie Curie")
+    ws_prim.cell(2, 1, "Course & Section: PHYS301-A")
+    ws_prim.cell(3, 1, "Subject: Modern Physics")
+    ws_prim.cell(6, 1, "#")
+    ws_prim.cell(6, 2, "Student Name")
+    ws_prim.cell(6, 3, "Student Number")
+    ws_prim.cell(6, 4, "Lecture Grade")
+    for r in range(7, 12):
+        ws_prim.cell(r, 1, r - 6)
+        ws_prim.cell(r, 2, f"Student {r - 6}")
+        ws_prim.cell(r, 3, f"2026-PHYS-{r - 6:03d}")
+        ws_prim.cell(r, 4, 88)
+
+    # Secondary Component
+    ws_sec = wb.create_sheet(title="Secondary Component")
+    ws_sec.cell(6, 1, "#")
+    ws_sec.cell(6, 2, "Student Name")
+    ws_sec.cell(6, 3, "Student Number")
+    ws_sec.cell(6, 4, "Lab Score")
+    for r in range(7, 12):
+        ws_sec.cell(r, 1, r - 6)
+        ws_sec.cell(r, 2, f"Student {r - 6}")
+        ws_sec.cell(r, 3, f"2026-PHYS-{r - 6:03d}")
+        ws_sec.cell(r, 4, 95)
+
+    # Consolidated Component
+    ws_con = wb.create_sheet(title="Consolidated Component")
+    ws_con.cell(6, 1, "#")
+    ws_con.cell(6, 2, "Student Name")
+    ws_con.cell(6, 3, "Student Number")
+    ws_con.cell(6, 4, "Composite Grade")
+    for r in range(7, 12):
+        ws_con.cell(r, 1, r - 6)
+        ws_con.cell(r, 2, f"Student {r - 6}")
+        ws_con.cell(r, 3, f"2026-PHYS-{r - 6:03d}")
+        ws_con.cell(r, 4, f"='Primary Component'!D{r}*0.6 + 'Secondary Component'!D{r}*0.4")
+
+    # Official Results
+    ws_sum = wb.create_sheet(title="Official Results")
+    ws_sum.cell(1, 1, "Republic of the Philippines")
+    ws_sum.cell(2, 1, "Cavite State University")
+    ws_sum.cell(3, 1, "Official Grades")
+    ws_sum.cell(6, 1, "Student Number")
+    ws_sum.cell(6, 2, "Final Rating")
+    for r in range(7, 12):
+        ws_sum.cell(r, 1, f"2026-PHYS-{r - 6:03d}")
+        ws_sum.cell(r, 2, f"='Consolidated Component'!D{r}")
+
+    p = tmp_path / "valid_foreign_dual.xlsx"
+    wb.save(str(p))
+
+    cand = XlsxTemplateInspector().inspect(str(p), profile_id="grade_sheet_xlsx")
+    assert cand.metadata["lab_sheet"] == "Secondary Component"
+    assert cand.metadata["con_sheet"] == "Consolidated Component"
+    assert cand.metadata["has_lab"] is True
+
+    res = detector.detect_role(str(p))
+    assert res.status == "confirmed"
+    assert res.role == ROLE_GRADE_SHEET_LECTURE_LAB
+    assert res.variant == "lecture_lab"
+
+
+def test_xlsx_stronger_roster_fake_master_false_promotion_regression(tmp_path):
+    """
+    Commit 174 Section 4:
+    Construct a workbook where Student Master looks MORE like a roster than the actual
+    secondary component (e.g. 50 students, all consecutive, formatted headers, higher capacity).
+    Ensure the resolver does NOT choose:
+      Student Master = Laboratory
+    or:
+      Student Master = Consolidated
+    merely because its roster structure is stronger.
+    Expected:
+      ambiguous (or correct legitimate role resolution based on physical instructional components).
+    """
+    detector = TemplateRoleDetector()
+    wb = openpyxl.Workbook()
+
+    # Primary Component
+    ws_prim = wb.active
+    ws_prim.title = "Primary Component"
+    ws_prim.cell(1, 1, "Instructor: Dr. Ada Lovelace")
+    ws_prim.cell(2, 1, "Course & Section: CS202-B")
+    ws_prim.cell(3, 1, "Subject: Data Structures")
+    ws_prim.cell(5, 1, "#")
+    ws_prim.cell(5, 2, "Student Name")
+    ws_prim.cell(5, 3, "Student Number")
+    ws_prim.cell(5, 4, "Grade")
+    for r in range(6, 16):
+        ws_prim.cell(r, 1, r - 5)
+        ws_prim.cell(r, 2, f"Student {r - 5}")
+        ws_prim.cell(r, 3, f"2026-CS-{r - 5:03d}")
+        ws_prim.cell(r, 4, 85)
+
+    # Real secondary component: minimal 10 students
+    ws_sec = wb.create_sheet(title="Secondary Component")
+    ws_sec.cell(5, 1, "#")
+    ws_sec.cell(5, 2, "Student Name")
+    ws_sec.cell(5, 3, "Student Number")
+    ws_sec.cell(5, 4, "Lab Score")
+    for r in range(6, 16):
+        ws_sec.cell(r, 1, r - 5)
+        ws_sec.cell(r, 2, f"Student {r - 5}")
+        ws_sec.cell(r, 3, f"2026-CS-{r - 5:03d}")
+        ws_sec.cell(r, 4, 90)
+
+    # Student Master: looks MUCH STRONGER as a roster!
+    # 50 students, high capacity, formatted columns, detailed fields
+    ws_mst = wb.create_sheet(title="Student Master")
+    ws_mst.cell(4, 1, "No.")
+    ws_mst.cell(4, 2, "Student Full Name")
+    ws_mst.cell(4, 3, "Student ID Number")
+    ws_mst.cell(4, 4, "Course")
+    ws_mst.cell(4, 5, "Section")
+    ws_mst.cell(4, 6, "Email Address")
+    for r in range(5, 55):
+        ws_mst.cell(r, 1, r - 4)
+        ws_mst.cell(r, 2, f"Full Student Name {r - 4}")
+        ws_mst.cell(r, 3, f"2026-ALL-{r - 4:04d}")
+        ws_mst.cell(r, 4, "BSCS")
+        ws_mst.cell(r, 5, "Section B")
+        ws_mst.cell(r, 6, f"student{r - 4}@university.edu")
+
+    # Official Summary
+    ws_sum = wb.create_sheet(title="Official Results")
+    ws_sum.cell(1, 1, "Republic of the Philippines")
+    ws_sum.cell(2, 1, "Cavite State University")
+    ws_sum.cell(3, 1, "Official Grades")
+    ws_sum.cell(5, 1, "Student Number")
+    ws_sum.cell(5, 2, "Final Rating")
+    for r in range(6, 16):
+        ws_sum.cell(r, 1, f"2026-CS-{r - 5:03d}")
+        ws_sum.cell(r, 2, "1.75")
+
+    p = tmp_path / "stronger_master_regression.xlsx"
+    wb.save(str(p))
+
+    # The resolver must NOT choose Student Master as Laboratory or Consolidated
+    # merely because it has 50 students vs 10 students.
+    try:
+        cand = XlsxTemplateInspector().inspect(str(p), profile_id="grade_sheet_xlsx")
+        assert cand.metadata.get("lab_sheet") != "Student Master"
+        assert cand.metadata.get("con_sheet") != "Student Master"
+    except AmbiguousTemplateError:
+        pass  # Fails closed as ambiguous - correct!
+
+    res = detector.detect_role(str(p))
+    # Must be ambiguous, or if confirmed, must never crown Student Master
+    assert res.status == "ambiguous"
+    assert res.role is None
+
+
+def test_xlsx_assessment_looking_helper_with_formulas_fails_closed_without_topology(tmp_path):
+    """
+    Commit 174 Section 5:
+    Create a helper sheet that contains:
+      - student roster;
+      - grade columns;
+      - sequential rows;
+      - formulas;
+      - metadata.
+    It must still NOT automatically become an instructional component (Laboratory)
+    unless the surrounding physical topology establishes that role (i.e. referenced by
+    summary rating sheet or primary roster sheet).
+    """
+    detector = TemplateRoleDetector()
+    wb = openpyxl.Workbook()
+
+    # Primary Component (Lecture)
+    ws_lec = wb.active
+    ws_lec.title = "Lecture Component"
+    ws_lec.cell(1, 1, "Instructor: Prof. Claude Shannon")
+    ws_lec.cell(2, 1, "Course & Section: BSCS-3B")
+    ws_lec.cell(3, 1, "Subject: Information Theory")
+    ws_lec.cell(6, 1, "#")
+    ws_lec.cell(6, 2, "Student Name")
+    ws_lec.cell(6, 3, "Student Number")
+    ws_lec.cell(6, 4, "Lecture Grade")
+    for r in range(7, 17):
+        ws_lec.cell(r, 1, r - 6)
+        ws_lec.cell(r, 2, f"Student {r - 6}")
+        ws_lec.cell(r, 3, f"2026-IT-{r - 6:03d}")
+        ws_lec.cell(r, 4, 88)
+
+    # Official Grading Sheet (pulls grades ONLY from Lecture Component)
+    ws_sum = wb.create_sheet(title="Official Grading Sheet")
+    ws_sum.cell(1, 1, "Republic of the Philippines")
+    ws_sum.cell(2, 1, "Cavite State University")
+    ws_sum.cell(3, 1, "Official Grades")
+    ws_sum.cell(6, 1, "Student Number")
+    ws_sum.cell(6, 2, "Final Rating")
+    for r in range(7, 17):
+        ws_sum.cell(r, 1, f"2026-IT-{r - 6:03d}")
+        ws_sum.cell(r, 2, f"='Lecture Component'!D{r}")
+
+    # Helper sheet with assessment-looking structure:
+    # student roster, grade columns, sequential rows, formulas, and metadata!
+    ws_hlp = wb.create_sheet(title="Assessment Criteria Helper")
+    ws_hlp.cell(1, 1, "Assessment Rubric and Grading Criteria Breakdown")
+    ws_hlp.cell(2, 1, "Passing threshold: 75% | Final Grade Weighting: Lecture 100%")
+    ws_hlp.cell(5, 1, "#")
+    ws_hlp.cell(5, 2, "Student Name")
+    ws_hlp.cell(5, 3, "Student Number")
+    ws_hlp.cell(5, 4, "Prelim")
+    ws_hlp.cell(5, 5, "Midterm")
+    ws_hlp.cell(5, 6, "Final")
+    ws_hlp.cell(5, 7, "Computed Grade")
+    for r in range(6, 16):
+        ws_hlp.cell(r, 1, r - 5)
+        ws_hlp.cell(r, 2, f"Student {r - 5}")
+        ws_hlp.cell(r, 3, f"2026-IT-{r - 5:03d}")
+        ws_hlp.cell(r, 4, 80)
+        ws_hlp.cell(r, 5, 85)
+        ws_hlp.cell(r, 6, 90)
+        # Formulas present inside helper sheet:
+        ws_hlp.cell(r, 7, f"=AVERAGE(D{r}:F{r})")
+
+    # Notes sheet
+    ws_not = wb.create_sheet(title="Notes")
+    ws_not.cell(1, 1, "Departmental grading policy notes.")
+
+    p = tmp_path / "assessment_looking_helper.xlsx"
+    wb.save(str(p))
+
+    # Even though Assessment Criteria Helper contains roster headers, student names, IDs,
+    # sequential rows, assessment columns, formulas, and metadata:
+    # The surrounding physical topology does NOT integrate it into the course grade calculation
+    # (neither Official Grading Sheet nor Lecture Component pulls grades from it).
+    # Therefore, it must NOT automatically become an authoritative Laboratory component!
+    # It must fail closed as ambiguous.
+    with pytest.raises(AmbiguousTemplateError) as exc_info:
+        XlsxTemplateInspector().inspect(str(p), profile_id="grade_sheet_xlsx")
+    assert "lacking role-consistent physical instructional lineage" in str(exc_info.value)
+    assert "Assessment Criteria Helper" in str(exc_info.value)
+
+    res = detector.detect_role(str(p))
+    assert res.status == "ambiguous"
+    assert res.role is None
+    # Crucially: it must NOT be confirmed as Lecture+Lab!
+    assert res.role != ROLE_GRADE_SHEET_LECTURE_LAB
+
 
 
 

@@ -68,6 +68,7 @@ AUDIT_RULES: List[Tuple[str, str, str]] = [
     (r"for\s+row\s+in\s+ws\.iter_rows\(values_only=True\):", "whole-sheet-consolidation-scan", "Whole-sheet row iteration used for consolidation authority without student data region bounding"),
     (r"(?:first_row\s*\+\s*10|max_column\s*\+\s*1,\s*50)", "arbitrary-sampling-bounds", "Arbitrary row or column sampling boundary used as authoritative role evidence"),
     (r"def\s+(?:is_aggregation_formula|has_aggregation_structure)\([^)]*all_sheets", "all-sheets-compatibility-alias", "Compatibility alias reinterpreting all_sheets as student components"),
+    (r"lab_sheet\s*=\s*remaining_assessment_sheets\[0\]", "unverified-candidate-promotion", "Promoting candidate roster sheet to lab_sheet without lineage/role verification"),
 ]
 
 
@@ -76,6 +77,12 @@ def classify_finding(rel_path: str, line_num: int, label: str, snippet: str) -> 
     Classifies a raw finding into Category A, B, C, D, or E.
     Returns (Category, Justification).
     """
+    # Category E: Unverified promotion of candidate sheet to authoritative role
+    if label == "unverified-candidate-promotion":
+        if "template_inspector.py" in rel_path or "template_role_detector.py" in rel_path or "detector" in rel_path:
+            return "E", "Prohibited unverified promotion of candidate sheet to authoritative role"
+        return "D", "Legitimate candidate check"
+
     # Category E: Single formula aggregation predicate used as direct role authority
     if label == "aggregation-formula-role-authority":
         if "template_inspector.py" in rel_path or "template_role_detector.py" in rel_path or "detector" in rel_path:
