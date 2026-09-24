@@ -664,26 +664,26 @@ class XlsxTemplateInspector:
             if r_cand is not None:
                 roster_candidates_by_sheet[s_name] = r_cand
 
-        # Select primary roster sheet (prefer literal 'lecture' if present for CvSU compatibility)
+        # Select primary roster sheet based on structural class metadata density in header rows
         def score_roster_sheet(s_name: str) -> int:
             ws_cand = wb[s_name]
             score = 0
-            s_lower = s_name.lower().strip()
-            if "lecture" in s_lower or "theory" in s_lower or "main" in s_lower or s_lower in ("lec", "lec_sheet", "lecture_sheet", "sheet_a"):
-                score += 50
+            # Metadata presence in rows 1-10 is the primary structural discriminator
             for r in range(1, min(ws_cand.max_row + 1, 10)):
                 for c in range(1, min(ws_cand.max_column + 1, 15)):
                     val = ws_cand.cell(r, c).value
                     if val and isinstance(val, str):
                         m = SemanticRegistry.match_metadata_candidate(val.strip())
                         if m:
-                            score += 10
+                            score += 25
+            s_lower = s_name.lower().strip()
+            # Non-authoritative tie-breaker ONLY (never overrides metadata score)
+            if "lecture" in s_lower or "theory" in s_lower or "main" in s_lower:
+                score += 1
             return score
 
         primary_roster_sheet: Optional[str] = None
-        if "lecture" in sheet_map and sheet_map["lecture"] in roster_candidates_by_sheet:
-            primary_roster_sheet = sheet_map["lecture"]
-        elif roster_candidates_by_sheet:
+        if roster_candidates_by_sheet:
             scored_rosters = sorted(
                 roster_candidates_by_sheet.keys(),
                 key=lambda s: score_roster_sheet(s),
@@ -693,82 +693,98 @@ class XlsxTemplateInspector:
 
         if not primary_roster_sheet:
             raise TemplateError(
-                f"Grade sheet template '{os.path.basename(template_path)}' is missing required 'Lecture' worksheet or structural student roster sheet."
+                f"Grade sheet template '{os.path.basename(template_path)}' is missing required student roster worksheet."
             )
 
-        # Select summary rating sheet (prefer literal 'grading sheet' if present for CvSU compatibility)
-        summary_sheet: Optional[str] = None
-        if "grading sheet" in sheet_map:
-            summary_sheet = sheet_map["grading sheet"]
-        else:
-            # Structurally discover summary sheet by scanning non-roster sheets for summary rating table or banner
-            for s_name in sheet_names:
-                if s_name == primary_roster_sheet or s_name.lower().strip() in ("notes", "instructions", "guide", "readme", "transmutation table"):
-                    continue
-                ws_s = wb[s_name]
-                has_banner = False
-                has_rating_table = False
-                for r in range(1, min(ws_s.max_row + 1, 25)):
-                    row_txt = [str(ws_s.cell(r, c).value or "").strip().lower() for c in range(1, min(ws_s.max_column + 1, 15))]
-                    if any(k in t for t in row_txt for k in ("college", "faculty", "department", "university", "grading", "summary")):
+        # Select summary rating sheet structurally by scoring rating table and institutional banners
+        def score_summary_sheet(s_name: str) -> int:
+            if s_name == primary_roster_sheet:
+                return -100
+            s_lower = s_name.lower().strip()
+            if s_lower in ("notes", "instructions", "guide", "readme", "transmutation table"):
+                return -50
+            ws_s = wb[s_name]
+            score = 0
+            has_student_id = False
+            has_rating_col = False
+            has_banner = False
+            for r in range(1, min(ws_s.max_row + 1, 30)):
+                for c in range(1, min(ws_s.max_column + 1, 25)):
+                    raw_val = ws_s.cell(r, c).value
+                    if not raw_val or not isinstance(raw_val, str):
+                        continue
+                    t = raw_val.strip().lower()
+                    if len(t) > 100:
+                        continue
+                    if any(k in t for k in ("college", "faculty", "department", "university", "republic", "official grades")):
                         has_banner = True
-                    if any(k in t for t in row_txt for k in ("grade", "rating", "mark", "score")) and any(k in t for t in row_txt for k in ("name", "student")):
-                        has_rating_table = True
-                    if has_banner or has_rating_table:
-                        break
-                if has_banner or has_rating_table:
-                    summary_sheet = s_name
-                    break
+                    # Table headers must be concise column labels, not prose instructions
+                    if len(t) <= 30:
+                        if t in ("student number", "id number", "student no", "student no.", "stud no", "lrn", "id", "id."):
+                            has_student_id = True
+                        elif t in ("grade", "rating", "mark", "final grade", "final rating", "semestral grade", "numerical rating", "remarks"):
+                            has_rating_col = True
+
+            if has_student_id and has_rating_col:
+                score += 100
+            elif has_rating_col:
+                score += 50
+            if has_banner:
+                score += 25
+            # Non-authoritative tie-breaker only (cannot override structural evidence)
+            if "grading" in s_lower or "grade" in s_lower or "summary" in s_lower:
+                score += 1
+            return score
+
+        candidate_summary_sheets = [s for s in sheet_names if s != primary_roster_sheet]
+        summary_sheet: Optional[str] = None
+        if candidate_summary_sheets:
+            scored_summaries = sorted(candidate_summary_sheets, key=score_summary_sheet, reverse=True)
+            if score_summary_sheet(scored_summaries[0]) > 0:
+                summary_sheet = scored_summaries[0]
 
         if not summary_sheet:
             raise TemplateError(
                 f"Grade sheet template '{os.path.basename(template_path)}' is missing required 'Grading Sheet' worksheet or structural summary rating sheet."
             )
 
-        # Detect secondary / laboratory component structurally
-        has_lab = False
+        # Detect secondary / laboratory component structurally from remaining assessment sheets
+        remaining_assessment_sheets = [
+            s for s in sheet_names
+            if s in roster_candidates_by_sheet and s != primary_roster_sheet and s != summary_sheet
+        ]
+        has_lab = bool(len(remaining_assessment_sheets) >= 1)
         lab_sheet: Optional[str] = None
-        if "laboratory" in sheet_map:
-            has_lab = True
-            lab_sheet = sheet_map["laboratory"]
-        elif "lab" in sheet_map:
-            has_lab = True
-            lab_sheet = sheet_map["lab"]
-        else:
-            for s_name in sheet_names:
-                if s_name in (primary_roster_sheet, summary_sheet) or s_name.lower().strip() in ("notes", "instructions", "guide", "readme", "transmutation table"):
-                    continue
-                norm_sn = s_name.lower().strip()
-                if "lab" in norm_sn or "practical" in norm_sn:
-                    has_lab = True
-                    lab_sheet = s_name
-                    break
-                elif s_name in roster_candidates_by_sheet and s_name != primary_roster_sheet:
-                    # Distinct second student assessment grid
-                    has_lab = True
-                    lab_sheet = s_name
-                    break
-
-        # Detect consolidated component
         has_consolidated = False
         con_sheet: Optional[str] = None
-        if "consolidated" in sheet_map:
-            has_consolidated = True
-            con_sheet = sheet_map["consolidated"]
+
+        if remaining_assessment_sheets:
+            def lab_tie_breaker(s: str) -> int:
+                s_l = s.lower()
+                return 10 if ("lab" in s_l or "prac" in s_l) else 0
+
+            sorted_remaining = sorted(remaining_assessment_sheets, key=lab_tie_breaker, reverse=True)
+            lab_sheet = sorted_remaining[0]
+
+            if len(sorted_remaining) > 1:
+                has_consolidated = True
+                con_sheet = sorted_remaining[1]
+            else:
+                for s in sheet_names:
+                    if s not in (primary_roster_sheet, summary_sheet, lab_sheet):
+                        if any(k in s.lower() for k in ("consolidat", "combined", "computation", "result")):
+                            has_consolidated = True
+                            con_sheet = s
+                            break
         else:
-            for s_name in sheet_names:
-                if s_name in (primary_roster_sheet, summary_sheet, lab_sheet) or s_name.lower().strip() in ("notes", "instructions", "guide", "readme", "transmutation table"):
-                    continue
-                norm_sn = s_name.lower().strip()
-                if any(k in norm_sn for k in ("consolidat", "combined", "summary", "result")):
-                    has_consolidated = True
-                    con_sheet = s_name
-                    break
-                elif s_name in roster_candidates_by_sheet:
-                    # Third distinct student assessment sheet
-                    has_consolidated = True
-                    con_sheet = s_name
-                    break
+            # Fallback check for sheets with lab in name or practical
+            for s in sheet_names:
+                if s not in (primary_roster_sheet, summary_sheet):
+                    s_l = s.lower()
+                    if "lab" in s_l or "prac" in s_l:
+                        has_lab = True
+                        lab_sheet = s
+                        break
 
 
         ws_lec = wb[primary_roster_sheet]

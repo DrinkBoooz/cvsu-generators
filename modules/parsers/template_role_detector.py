@@ -59,7 +59,15 @@ from modules.parsers.recipe_validator import RecipeValidator
 
 @dataclass
 class RoleCandidate:
-    """Detailed structural evidence for a candidate role proposed by TemplateRoleDetector."""
+    """
+    Detailed structural evidence for a candidate role proposed by TemplateRoleDetector.
+
+    CRITICAL SEMANTIC NOTICE:
+    `confidence` is heuristic discovery metadata intended solely for UI ranking or diagnostic hints.
+    It is NEVER treated as a statistically calibrated probability or used as validation authority.
+    Final role acceptance is strictly governed by authoritative structural validation via
+    RecipeValidator, independent of heuristic confidence scores.
+    """
     role: str
     evidence: List[str] = field(default_factory=list)
     confidence: float = 1.0
@@ -276,39 +284,47 @@ class TemplateRoleDetector:
             or (" CCL " in info_text or "COMP LAB" in info_text)
         )
 
-        # Check for physically paired session columns under week blocks
+        # Check for physically paired session columns or multi-session week blocks
         has_paired_columns = False
+        has_multi_session_weeks = False
+        has_single_session_weeks = False
         if matrix_t_idx < len(tbls):
             m_rows = tbls[matrix_t_idx].findall(w("tr"))
+            if len(m_rows) > 0:
+                tc_r0 = m_rows[0].findall(w("tc"))
+                week_cells = tc_r0[date_start:date_start + cap] if cap > 0 else tc_r0[date_start:]
+                week_texts = []
+                for tc in week_cells:
+                    txt = get_full_text(tc).strip().upper()
+                    if txt:
+                        week_texts.append(txt)
+                    tc_pr = tc.find(w("tcPr"))
+                    if tc_pr is not None:
+                        gs = tc_pr.find(w("gridSpan"))
+                        if gs is not None:
+                            try:
+                                span_val = int(gs.attrib.get(w("val"), "1"))
+                                if span_val >= 2 and ("WEEK" in txt or "LINGGO" in txt or re.match(r"^W\d+$", txt)):
+                                    has_multi_session_weeks = True
+                            except (ValueError, TypeError):
+                                pass
+                for i in range(len(week_texts) - 1):
+                    if week_texts[i] == week_texts[i + 1]:
+                        has_multi_session_weeks = True
+                        break
+
             if len(m_rows) > 1:
                 date_cells = [get_full_text(tc).strip() for tc in m_rows[1].findall(w("tc"))[date_start:date_start + cap]]
                 duplicate_adjacent = sum(1 for i in range(len(date_cells) - 1) if date_cells[i] and date_cells[i] == date_cells[i + 1])
                 if duplicate_adjacent >= 2:
                     has_paired_columns = True
 
-        has_dual_tracking = bool(
-            ("lb" in summary_names and "lc" in summary_names)
-            or (any("lab" in n or "lb" in n or "prac" in n for n in summary_names) and any("lec" in n or "lc" in n or "theory" in n for n in summary_names))
-        )
+            if num_weeks > 0 and cap <= num_weeks:
+                has_multi_session_weeks = False
 
-        if sessions_per_week is None:
-            evidence.append(f"No explicit week column headers detected in matrix; evaluating independent physical structure (capacity: {cap})")
+            if num_weeks > 0 and num_weeks == cap and not has_multi_session_weeks and not has_paired_columns:
+                has_single_session_weeks = True
 
-        # Multi-signal structural discrimination (strictly independent of numeric capacity thresholds):
-        # 1. Dual instructional component structural indicators:
-        has_dual_instructional_structure = bool(
-            has_lab_schedule
-            or has_paired_columns
-            or (sessions_per_week is not None and sessions_per_week >= 1.5)
-        )
-
-        # 2. Single instructional component structural indicators:
-        has_single_summary_only = bool(
-            any("lec" in n or "lc" in n or "theory" in n for n in summary_names)
-            and not any("lab" in n or "lb" in n or "prac" in n for n in summary_names)
-        )
-
-        # Extract schedule text specifically from info bindings if available
         sched_text = ""
         if info_t_idx is not None and info_t_idx < len(tbls):
             bindings = info.get("bindings", {})
@@ -324,21 +340,41 @@ class TemplateRoleDetector:
         sched_intervals = len(re.findall(r"\b\d{1,2}:\d{2}", sched_text))
         has_single_sched_interval = bool(sched_intervals == 2 and "," not in sched_text and ";" not in sched_text)
 
+        has_single_summary_only = bool(
+            any("lec" in n or "lc" in n or "theory" in n for n in summary_names)
+            and not any("lab" in n or "lb" in n or "prac" in n for n in summary_names)
+        )
+        has_dual_tracking = bool(
+            (any("lab" in n or "lb" in n or "prac" in n for n in summary_names) and any("lec" in n or "lc" in n or "theory" in n for n in summary_names))
+        )
+
+        if sessions_per_week is None:
+            diag_hints.append(f"No explicit week column headers detected in matrix (capacity: {cap} sessions)")
+            evidence.append("Session headers omit explicit week blocks; evaluating independent physical structure")
+        else:
+            diag_hints.append(f"Diagnostic session structure: {sessions_per_week:.1f} sessions/week across {num_weeks} weeks")
+
+        # Multi-signal structural discrimination (strictly independent of numeric capacity/ratio thresholds):
+        # 1. Dual instructional component structural indicators:
+        has_dual_instructional_structure = bool(
+            has_lab_schedule
+            or has_paired_columns
+            or has_multi_session_weeks
+        )
+
+        # 2. Single instructional component structural indicators:
         has_single_instructional_component = bool(
             not has_dual_instructional_structure
-            and not (re.search(r"\bLAB\b", info_text) or "LABORATORY" in info_text)
+            and not (re.search(r"\bLAB\b", info_text) or "LABORATORY" in info_text or " CCL " in info_text or "COMP LAB" in info_text)
             and (
                 has_single_summary_only
                 or ("LEC:" in info_text or "LECTURE" in info_text or "THEORY" in info_text)
-                or (sessions_per_week is not None and not has_paired_columns and sessions_per_week <= 1.25)
-                or (sessions_per_week is None and not has_paired_columns and not has_lab_schedule and has_single_sched_interval)
+                or has_single_session_weeks
+                or (not has_paired_columns and not has_multi_session_weeks and has_single_sched_interval)
             )
         )
 
-        is_dual_component = bool(
-            has_dual_instructional_structure
-            or (has_dual_tracking and sessions_per_week is not None and not has_single_instructional_component)
-        )
+        is_dual_component = has_dual_instructional_structure
 
         if is_dual_component:
             evidence.append(
@@ -351,6 +387,8 @@ class TemplateRoleDetector:
                 evidence.append("Summary columns track both lecture (LC) and laboratory (LB) absences")
             if has_paired_columns:
                 evidence.append("Paired session columns indicate multi-session weekly instructional periods")
+            if has_multi_session_weeks:
+                evidence.append("Multi-column week blocks indicate multi-session weekly instructional periods")
 
             role_cand = RoleCandidate(
                 role=ROLE_ATTENDANCE_LECTURE_LAB,
@@ -422,6 +460,7 @@ class TemplateRoleDetector:
                 diagnostic_hints=diag_hints,
                 profile_id="attendance_docx",
                 family="attendance",
+                variant="ambiguous",
             )
 
 
@@ -466,9 +505,11 @@ class TemplateRoleDetector:
             if len(tbl_trs) >= 2:
                 header_texts = [get_full_text(tc).strip().upper() for tc in tbl_trs[0].findall(w("tc"))]
                 combined_hdr = " ".join(header_texts)
-                if any(k in combined_hdr for k in ("TOPIC", "COMPETENC", "LEVEL", "ITEM", "DISTRIBUTION", "COGNITIVE", "DOMAIN", "OBJECTIVE", "PLACEMENT", "ALLOCATION")):
-                    has_tos_matrix = True
-                    break
+                is_student_roster = any(n in combined_hdr for n in ("STUDENT", "NAME", "MATRICULATION", "PANGALAN", "ID NUMBER", "STUDENT NUMBER"))
+                if not is_student_roster:
+                    if any(k in combined_hdr for k in ("TOPIC", "COMPETENC", "COGNITIVE", "DOMAIN", "OBJECTIVE", "PLACEMENT", "ALLOCATION")) or ("ITEM" in combined_hdr and any(k in combined_hdr for k in ("DISTRIBUTION", "COUNT", "TOTAL", "LEVEL", "SPECIFICATION", "PLACEMENT"))):
+                        has_tos_matrix = True
+                        break
 
         # ── Step 1: Detect Document Family ────────────────────────────────
         is_syllabus = bool(
@@ -483,7 +524,6 @@ class TemplateRoleDetector:
             or "ACCEPTANCE OF SYLLABUS" in doc_upper
             or "RECEIPT OF SYLLABUS" in doc_upper
             or "RECEIPT OF COURSE OUTLINE" in doc_upper
-            or (docx_cand.roster_candidate and docx_cand.roster_candidate.get("total_cols") == 4)
         )
 
         is_exam = bool(
@@ -885,38 +925,99 @@ class TemplateRoleDetector:
 
                 # Variant compatibility check: Lecture+Lab requires multi-session or lab component structure
                 if role == ROLE_ATTENDANCE_LECTURE_LAB:
+                    mat = raw_cand.matrix_candidate
+                    inf = raw_cand.info_candidate
+                    summary_names = [str(n).lower() for n in mat.get("summary_column_names", [])] if mat else []
+                    has_single_summary_only = bool(
+                        any("lec" in n or "lc" in n or "theory" in n for n in summary_names)
+                        and not any("lab" in n or "lb" in n or "prac" in n for n in summary_names)
+                    )
+
                     zin, root, body = load_docx(file_path)
                     zin.close()
                     tbls = body.findall(w("tbl"))
+
+                    info_t_idx = inf.get("table_index") if inf else None
                     info_text = ""
-                    info = raw_cand.info_candidate
-                    if info and info.get("table_index") is not None and info["table_index"] < len(tbls):
-                        for tr in tbls[info["table_index"]].findall(w("tr")):
+                    if info_t_idx is not None and info_t_idx < len(tbls):
+                        for tr in tbls[info_t_idx].findall(w("tr")):
                             for tc in tr.findall(w("tc")):
                                 info_text += " " + get_full_text(tc).strip().upper()
-                    has_lab = bool("LAB:" in info_text or "LABORATORY" in info_text or re.search(r"\bLAB\b", info_text))
-                    mat = raw_cand.matrix_candidate
-                    has_pairs = False
-                    if mat and mat.get("table_index") is not None and mat["table_index"] < len(tbls):
-                        m_rows = tbls[mat["table_index"]].findall(w("tr"))
-                        if len(m_rows) > 1:
-                            cap = mat.get("template_session_capacity", 0)
-                            date_start = mat.get("date_columns_start", 0)
-                            date_cells = [get_full_text(tc).strip() for tc in m_rows[1].findall(w("tc"))[date_start:date_start + cap]]
-                            if sum(1 for i in range(len(date_cells) - 1) if date_cells[i] and date_cells[i] == date_cells[i + 1]) >= 2:
-                                has_pairs = True
+
+                    has_lab_schedule = bool(
+                        ("LAB:" in info_text and "LEC:" in info_text)
+                        or ("LABORATORY" in info_text and "LECTURE" in info_text)
+                        or (" CCL " in info_text or "COMP LAB" in info_text)
+                        or ("LAB" in info_text and ("LEC" in info_text or "THEORY" in info_text))
+                    )
+
+                    mat_t_idx = mat.get("table_index") if mat else None
+                    cap = mat.get("template_session_capacity", 0) if mat else 0
+                    date_start = mat.get("date_columns_start", 0) if mat else 0
+
+                    has_paired_columns = False
+                    has_multi_session_weeks = False
                     num_weeks = 0
-                    if mat and mat.get("table_index") is not None and mat["table_index"] < len(tbls):
-                        m_rows = tbls[mat["table_index"]].findall(w("tr"))
-                        if m_rows:
+                    if mat_t_idx is not None and mat_t_idx < len(tbls):
+                        m_rows = tbls[mat_t_idx].findall(w("tr"))
+                        if len(m_rows) > 0:
+                            prev_w = None
                             for tc in m_rows[0].findall(w("tc")):
                                 txt = get_full_text(tc).strip().upper()
                                 if "WEEK" in txt or "LINGGO" in txt or re.match(r"^W\d+$", txt):
-                                    num_weeks += 1
-                    cap = mat.get("template_session_capacity", 0) if mat else 0
-                    spw = (cap / float(num_weeks)) if num_weeks > 0 else None
-                    if not has_lab and not has_pairs and (spw is not None and spw <= 1.25):
-                        return False, f"Template lacks required secondary laboratory/multi-session component for role '{role}'", None
+                                    tc_pr = tc.find(w("tcPr"))
+                                    has_gridspan = tc_pr is not None and tc_pr.find(w("gridSpan")) is not None
+                                    if txt != prev_w or has_gridspan:
+                                        num_weeks += 1
+                                    prev_w = txt
+                                else:
+                                    prev_w = None
+
+                            tc_r0 = m_rows[0].findall(w("tc"))
+                            week_cells = tc_r0[date_start:date_start + cap] if cap > 0 else tc_r0[date_start:]
+                            week_texts = []
+                            for tc in week_cells:
+                                txt = get_full_text(tc).strip().upper()
+                                if txt:
+                                    week_texts.append(txt)
+                                tc_pr = tc.find(w("tcPr"))
+                                if tc_pr is not None:
+                                    gs = tc_pr.find(w("gridSpan"))
+                                    if gs is not None:
+                                        try:
+                                            span_val = int(gs.attrib.get(w("val"), "1"))
+                                            if span_val >= 2 and ("WEEK" in txt or "LINGGO" in txt or re.match(r"^W\d+$", txt)):
+                                                has_multi_session_weeks = True
+                                        except (ValueError, TypeError):
+                                            pass
+                            for i in range(len(week_texts) - 1):
+                                if week_texts[i] == week_texts[i + 1]:
+                                    has_multi_session_weeks = True
+                                    break
+
+                        if len(m_rows) > 1:
+                            date_cells = [get_full_text(tc).strip() for tc in m_rows[1].findall(w("tc"))[date_start:date_start + cap]]
+                            duplicate_adjacent = sum(1 for i in range(len(date_cells) - 1) if date_cells[i] and date_cells[i] == date_cells[i + 1])
+                            if duplicate_adjacent >= 2:
+                                has_paired_columns = True
+
+                    if num_weeks > 0 and cap <= num_weeks:
+                        has_multi_session_weeks = False
+
+                    has_single_session_weeks = bool(num_weeks > 0 and num_weeks == cap and not has_multi_session_weeks and not has_paired_columns)
+
+                    is_demonstrably_single = bool(
+                        has_single_summary_only
+                        or (
+                            has_single_session_weeks
+                            and not has_lab_schedule
+                            and not has_paired_columns
+                            and not has_multi_session_weeks
+                            and not (re.search(r"\bLAB\b", info_text) or "LABORATORY" in info_text or " CCL " in info_text or "COMP LAB" in info_text)
+                        )
+                    )
+                    if is_demonstrably_single:
+                        return False, f"Template defines a single instructional component and lacks required secondary laboratory or multi-session instructional structure for role '{role}'", None
 
                 validated = self._validator.validate(raw_cand, profile=profile_id)
             elif profile_id == "grade_sheet_xlsx":

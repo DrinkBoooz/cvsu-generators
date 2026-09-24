@@ -31,11 +31,16 @@ Comprehensive tests for Generalized Automatic Template-Role Detection:
 """
 
 import os
+import sys
 import shutil
 import tempfile
 import pytest
 import openpyxl
 import docx
+
+_repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _repo_root not in sys.path:
+    sys.path.insert(0, _repo_root)
 
 from modules.parsers.recipe_validator import RecipeValidator
 from modules.models.template_set import (
@@ -50,15 +55,18 @@ from modules.models.template_set import (
     ROLE_ATTENDANCE_LECTURE_LAB,
     ROLE_GRADE_SHEET_LECTURE,
     ROLE_GRADE_SHEET_LECTURE_LAB,
+    BUILTIN_SET_ID,
 )
 from modules.parsers.template_role_detector import TemplateRoleDetector, RoleCandidate
 from modules.parsers.template_inspector import XlsxTemplateInspector
 from modules.services.template_set_manager import TemplateSetManager
-from modules.generators.ceit_gen import GeneratorFactory
+from modules.generators.ceit_gen import GeneratorFactory, SyllabusGenerator
 from modules.generators.attendance_gen import AttendanceGenerator
 from modules.generators.grade_gen import GradeGenerator
 from modules.services.template_recipe_service import TemplateRecipeResolver
 from modules.common.docx_utils import load_docx, get_full_text, set_cell_text, w
+from modules.models.schedule import ClassInfo
+from tests.audit_structural_patterns import scan_source, audit
 
 
 @pytest.fixture
@@ -1368,7 +1376,514 @@ def test_synthetic_institution_complete_end_to_end_pipeline(repo_root, templates
         assert os.path.getsize(out_grade) > 1000
 
     finally:
-        from modules.models.template_set import BUILTIN_SET_ID
         set_manager.activate_template_set(BUILTIN_SET_ID)
         set_manager.delete_template_set(ts.set_id)
+
+
+# ── 14. Forensic Template Role Detection Regression Tests ────────────────────
+
+def test_attendance_lecture_lab_nonstandard_capacity(tmp_path, repo_root):
+    """
+    Requirement 10.3:
+    Lecture+Lab with nonstandard capacity (e.g. 5, 7, 9 sessions) is still detected
+    from dual structural evidence (paired dates or dual schedule or week spans).
+    """
+    detector = TemplateRoleDetector()
+    src_lab_lec = os.path.join(repo_root, "attendance", "template lab and lec.docx")
+
+    # Construct 7-session template from template lab and lec:
+    # Schedule has distinct LEC / LAB rooms and dual time intervals
+    dst_7 = tmp_path / "attendance_7_sessions_dual.docx"
+    doc = docx.Document(src_lab_lec)
+    m_tbl = doc.tables[1]
+
+    # Delete 1 date column across all rows to leave 7 date columns (instead of 8)
+    for tr in m_tbl._element.findall(w("tr")):
+        tcs = tr.findall(w("tc"))
+        if len(tcs) > 10:
+            tr.remove(tcs[10])
+
+    doc.save(str(dst_7))
+
+    res = detector.detect_role(str(dst_7))
+    assert res.status == "confirmed"
+    assert res.role == ROLE_ATTENDANCE_LECTURE_LAB
+    assert res.variant == "lecture_lab"
+
+    ok, err, recipe = detector.validate_role(str(dst_7), ROLE_ATTENDANCE_LECTURE_LAB)
+    assert ok is True
+    assert err is None
+    assert recipe.matrix_binding.template_session_capacity == 7
+
+
+def test_attendance_indecisive_evidence_is_ambiguous(tmp_path):
+    """
+    Requirement 6 & 10.4:
+    Attendance with no decisive dual/single evidence becomes strictly ambiguous.
+    Assert status == 'ambiguous' (NOT confirmed OR ambiguous).
+    """
+    detector = TemplateRoleDetector()
+    dst = tmp_path / "ambiguous_attendance_record.docx"
+
+    doc = docx.Document()
+    # Table 0: Info table with no LEC or LAB keywords
+    t_info = doc.add_table(rows=5, cols=2)
+    t_info.rows[0].cells[0].text = "Course Title:"
+    t_info.rows[0].cells[1].text = "Information Architecture"
+    t_info.rows[1].cells[0].text = "Meeting Hours:"
+    t_info.rows[1].cells[1].text = "09:00AM-12:00PM"
+    t_info.rows[2].cells[0].text = "Academic Term:"
+    t_info.rows[2].cells[1].text = "Fall Semester 2026"
+    t_info.rows[3].cells[0].text = "Facility:"
+    t_info.rows[3].cells[1].text = "Auditorium 101"
+    t_info.rows[4].cells[0].text = "Faculty:"
+    t_info.rows[4].cells[1].text = "Prof. Jane Doe"
+
+    # Table 1: Matrix with 6 generic date columns, no week headers, all unique dates
+    t_matrix = doc.add_table(rows=12, cols=10)
+    t_matrix.rows[0].cells[0].text = "No."
+    t_matrix.rows[0].cells[1].text = "Student Name"
+    t_matrix.rows[0].cells[2].text = "Student ID"
+    for col_i in range(3, 9):
+        t_matrix.rows[0].cells[col_i].text = ""
+    t_matrix.rows[0].cells[9].text = "Summary"
+
+    t_matrix.rows[1].cells[0].text = ""
+    t_matrix.rows[1].cells[1].text = ""
+    t_matrix.rows[1].cells[2].text = ""
+    for col_i in range(3, 9):
+        t_matrix.rows[1].cells[col_i].text = f"Date {col_i-2}"
+    t_matrix.rows[1].cells[9].text = "Total"
+
+    for r in range(2, 12):
+        t_matrix.rows[r].cells[0].text = str(r - 1)
+        t_matrix.rows[r].cells[1].text = f"Student {r - 1}"
+        t_matrix.rows[r].cells[2].text = f"ID-2026-{100+r}"
+
+    doc.save(str(dst))
+
+    res = detector.detect_role(str(dst))
+    assert res.status == "ambiguous"
+    assert ROLE_ATTENDANCE_LECTURE in res.candidate_roles
+    assert ROLE_ATTENDANCE_LECTURE_LAB in res.candidate_roles
+
+    # Both roles must be accepted through manual assignment since structure is compatible with either
+    ok_lec, err_lec, _ = detector.validate_role(str(dst), ROLE_ATTENDANCE_LECTURE)
+    assert ok_lec is True
+
+    ok_lab, err_lab, _ = detector.validate_role(str(dst), ROLE_ATTENDANCE_LECTURE_LAB)
+    assert ok_lab is True
+
+
+def test_validate_role_no_session_ratio_rejection(tmp_path, repo_root):
+    """
+    Requirement 1 & 10.5:
+    validate_role() does not reject a structurally valid template because of session-count ratio.
+    A valid template with low ratio (1.0 sessions/week) is accepted for ROLE_ATTENDANCE_LECTURE_LAB
+    when it is not demonstrably single-component (e.g. ambiguous or dual markers present).
+    """
+    detector = TemplateRoleDetector()
+    dst = tmp_path / "valid_ratio_one_dual.docx"
+
+    src_lab_lec = os.path.join(repo_root, "attendance", "template lab and lec.docx")
+    doc = docx.Document(src_lab_lec)
+    m_tbl = doc.tables[1]
+    for tr in m_tbl._element.findall(w("tr")):
+        tcs = tr.findall(w("tc"))
+        if len(tcs) > 10:
+            for _ in range(4):
+                tr.remove(tr.findall(w("tc"))[7])
+    doc.save(str(dst))
+
+    # Even if session count is 4 (1.0 session per week across 4 weeks), it must NOT be rejected by ratio
+    ok, err, recipe = detector.validate_role(str(dst), ROLE_ATTENDANCE_LECTURE_LAB)
+    assert ok is True, f"validate_role unexpectedly rejected: {err}"
+    assert recipe is not None
+
+
+def test_generic_four_column_roster_not_classified_as_syllabus(tmp_path):
+    """
+    Requirement 2 & 10.6:
+    A generic four-column academic roster is NOT automatically classified as syllabus
+    solely because it has four columns.
+    """
+    detector = TemplateRoleDetector()
+    dst = tmp_path / "generic_cohort_manifest.docx"
+
+    doc = docx.Document()
+    t_hdr = doc.add_table(rows=4, cols=2)
+    t_hdr.rows[0].cells[0].text = "Instructor:"
+    t_hdr.rows[0].cells[1].text = "Dr. Michael Faraday"
+    t_hdr.rows[1].cells[0].text = "Course Title:"
+    t_hdr.rows[1].cells[1].text = "Electromagnetic Principles"
+    t_hdr.rows[2].cells[0].text = "Cohort ID:"
+    t_hdr.rows[2].cells[1].text = "PHY-301-A"
+    t_hdr.rows[3].cells[0].text = "Semester Term:"
+    t_hdr.rows[3].cells[1].text = "Spring 2026"
+
+    # 4-column roster table without ANY syllabus vocabulary
+    t_rst = doc.add_table(rows=8, cols=4)
+    t_rst.rows[0].cells[0].text = "Item"
+    t_rst.rows[0].cells[1].text = "Candidate Name"
+    t_rst.rows[0].cells[2].text = "Matriculation Number"
+    t_rst.rows[0].cells[3].text = "Acknowledgement"
+    for r in range(1, 8):
+        t_rst.rows[r].cells[0].text = str(r)
+        t_rst.rows[r].cells[1].text = f"Candidate {r}"
+        t_rst.rows[r].cells[2].text = f"2026-{1000+r}"
+        t_rst.rows[r].cells[3].text = ""
+
+    doc.add_paragraph("OFFICIAL DEPARTMENT ENROLLMENT VERIFICATION LIST")
+    doc.save(str(dst))
+
+    res = detector.detect_role(str(dst))
+    assert res.role != ROLE_SYLLABUS
+    assert res.status == "ambiguous"
+    assert ROLE_SYLLABUS in res.candidate_roles
+
+
+def test_academic_docx_neutral_without_structure_is_ambiguous(tmp_path):
+    """
+    Requirement 4 & 10.8:
+    A terminology-neutral template without sufficient role-specific structure
+    becomes ambiguous rather than falsely confirmed.
+    """
+    detector = TemplateRoleDetector()
+    dst = tmp_path / "neutral_undifferentiated.docx"
+
+    doc = docx.Document()
+    t_hdr = doc.add_table(rows=3, cols=2)
+    t_hdr.rows[0].cells[0].text = "Professor:"
+    t_hdr.rows[0].cells[1].text = "Dr. Carl Sagan"
+    t_hdr.rows[1].cells[0].text = "Subject Code:"
+    t_hdr.rows[1].cells[1].text = "ASTRO-101"
+    t_hdr.rows[2].cells[0].text = "Term:"
+    t_hdr.rows[2].cells[1].text = "Academic Year 2026"
+
+    # 3-column generic roster
+    t_rst = doc.add_table(rows=6, cols=3)
+    t_rst.rows[0].cells[0].text = "Index"
+    t_rst.rows[0].cells[1].text = "Name of Student"
+    t_rst.rows[0].cells[2].text = "Student Number"
+    for r in range(1, 6):
+        t_rst.rows[r].cells[0].text = str(r)
+        t_rst.rows[r].cells[1].text = f"Student {r}"
+        t_rst.rows[r].cells[2].text = f"SN-{2000+r}"
+
+    doc.add_paragraph("GENERAL STUDENT ROSTER")
+    doc.save(str(dst))
+
+    res = detector.detect_role(str(dst))
+    assert res.status == "ambiguous"
+    assert res.role is None
+
+
+def test_xlsx_opaque_names_and_arbitrary_order(tmp_path, repo_root):
+    """
+    Requirement 5 & 10.9:
+    Workbook using completely opaque sheet names:
+      Omega, Q7, Ledger_19, Archive_X, BlueSheet
+    with NO role-identifying names.
+    Reordered so BlueSheet (the summary sheet) is at sheet index 0.
+    Assert detection, validation, and coordinate binding succeed.
+    """
+    detector = TemplateRoleDetector()
+    src_grade = os.path.join(repo_root, "templates", "GRADING_LECTURE_LAB_TEMPLATE.xlsx")
+    dst = tmp_path / "opaque_workbook_grade.xlsx"
+
+    wb = openpyxl.load_workbook(src_grade)
+    wb["Lecture"].title = "Omega"
+    wb["Laboratory"].title = "Q7"
+    wb["Consolidated"].title = "Ledger_19"
+    wb["Grading Sheet"].title = "BlueSheet"
+    wb.create_sheet("Archive_X", 0)
+
+    # Reorder so BlueSheet is at index 0, followed by Archive_X
+    bs = wb["BlueSheet"]
+    wb._sheets.remove(bs)
+    wb._sheets.insert(0, bs)
+    assert wb.sheetnames[0] == "BlueSheet"
+    wb.save(str(dst))
+
+    res = detector.detect_role(str(dst))
+    assert res.status == "confirmed"
+    assert res.role == ROLE_GRADE_SHEET_LECTURE_LAB
+    assert res.variant == "lecture_lab"
+
+    ok, err, recipe = detector.validate_role(str(dst), ROLE_GRADE_SHEET_LECTURE_LAB)
+    assert ok is True
+    assert err is None
+    assert recipe.metadata["summary_sheet"] == "BlueSheet"
+    assert recipe.metadata["roster_sheet"] == "Omega"
+    assert recipe.metadata["lab_sheet"] == "Q7"
+    assert recipe.metadata["con_sheet"] == "Ledger_19"
+
+
+def test_misleading_worksheet_names_do_not_affect_role(tmp_path, repo_root):
+    """
+    Requirement 10.11:
+    Misleading worksheet names do not affect role:
+    A single-component grade sheet whose worksheet is named 'Laboratory' or 'Practical'
+    is still classified as ROLE_GRADE_SHEET_LECTURE based on physical topology.
+    """
+    detector = TemplateRoleDetector()
+    src_lec = os.path.join(repo_root, "templates", "GRADING_LECTURE_TEMPLATE.xlsx")
+    dst = tmp_path / "deceptive_sheet_name.xlsx"
+
+    wb = openpyxl.load_workbook(src_lec)
+    wb["Lecture"].title = "Laboratory"  # Deceptive!
+    wb["Grading Sheet"].title = "Final_Review"
+    wb.save(str(dst))
+
+    res = detector.detect_role(str(dst))
+    assert res.status == "confirmed"
+    assert res.role == ROLE_GRADE_SHEET_LECTURE
+    assert res.variant == "lecture"
+
+
+def test_independently_constructed_foreign_fixtures_e2e(tmp_path):
+    """
+    Requirement 7 & 10.12:
+    Build completely independent, from-scratch foreign institution fixtures
+    (academic docx, attendance docx, grade xlsx) and run them through the full pipeline:
+    Inspect -> Detect -> Validate -> Save to Template Set -> Activate -> Generate -> Verify output.
+    """
+    output_dir = tmp_path / "out_foreign"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    detector = TemplateRoleDetector()
+    set_manager = TemplateSetManager.get_instance()
+    ts = set_manager.create_template_set("foreign_institute_set_e2e", "Completely Independent Foreign Set", fallback_to_default=True)
+
+    dummy_info = {
+        "instructor": "DR. MARIE CURIE",
+        "course": "PHYS 3-1",
+        "sched": "20268877",
+        "subject": "PHYS301 - NUCLEAR PHYSICS",
+        "time": "09:00AM-12:00PM",
+        "day": "Mon",
+        "room": "Science Hall 101",
+        "semester": "First Semester 2026-2027",
+        "units": "3",
+    }
+    dummy_students = [
+        ("BECQUEREL, HENRI H.", "202690001"),
+        ("RUTHERFORD, ERNEST E.", "202690002"),
+    ]
+
+    try:
+        # 1. Academic DOCX (Syllabus) constructed from scratch
+        p_syl = tmp_path / "polytechnic_registry_01.docx"
+        doc_syl = docx.Document()
+        doc_syl.add_paragraph("METROPOLITAN POLYTECHNIC INSTITUTE -- TEACHING PLAN AND COURSE OUTLINE")
+        t_meta = doc_syl.add_table(rows=6, cols=2)
+        t_meta.rows[0].cells[0].text = "Instructor:"
+        t_meta.rows[0].cells[1].text = dummy_info["instructor"]
+        t_meta.rows[1].cells[0].text = "Subject:"
+        t_meta.rows[1].cells[1].text = dummy_info["subject"]
+        t_meta.rows[2].cells[0].text = "Class Section:"
+        t_meta.rows[2].cells[1].text = dummy_info["course"]
+        t_meta.rows[3].cells[0].text = "Schedule Code:"
+        t_meta.rows[3].cells[1].text = dummy_info["sched"]
+        t_meta.rows[4].cells[0].text = "Class Schedule:"
+        t_meta.rows[4].cells[1].text = f"{dummy_info['time']} {dummy_info['day']} {dummy_info['room']}"
+        t_meta.rows[5].cells[0].text = "Semester Term:"
+        t_meta.rows[5].cells[1].text = dummy_info["semester"]
+
+        t_rst = doc_syl.add_table(rows=5, cols=4)
+        t_rst.rows[0].cells[0].text = "No."
+        t_rst.rows[0].cells[1].text = "Student Name"
+        t_rst.rows[0].cells[2].text = "Student Number"
+        t_rst.rows[0].cells[3].text = "Acknowledgement"
+        for r in range(1, 5):
+            t_rst.rows[r].cells[0].text = str(r)
+            t_rst.rows[r].cells[1].text = f"Candidate {r}"
+            t_rst.rows[r].cells[2].text = f"2026-{r:04d}"
+            t_rst.rows[r].cells[3].text = ""
+
+        doc_syl.add_paragraph("SYLLABUS RECEIPT AND STUDENT ACKNOWLEDGEMENT")
+        doc_syl.save(str(p_syl))
+
+        res_syl = detector.detect_role(str(p_syl))
+        assert res_syl.status == "confirmed"
+        assert res_syl.role == ROLE_SYLLABUS
+        set_manager.add_template_to_set(ts.set_id, ROLE_SYLLABUS, str(p_syl))
+
+        # 2. Attendance DOCX constructed from scratch
+        p_att = tmp_path / "roster_matrix_99.docx"
+        doc_att = docx.Document()
+        t_info = doc_att.add_table(rows=5, cols=2)
+        t_info.rows[0].cells[0].text = "Course Code & Title:"
+        t_info.rows[0].cells[1].text = f"{dummy_info['course']} - {dummy_info['subject']}"
+        t_info.rows[1].cells[0].text = "Class Schedule:"
+        t_info.rows[1].cells[1].text = f"{dummy_info['time']} / {dummy_info['day']}"
+        t_info.rows[2].cells[0].text = "Semester & AY:"
+        t_info.rows[2].cells[1].text = dummy_info["semester"]
+        t_info.rows[3].cells[0].text = "Room Assignment"
+        t_info.rows[3].cells[1].text = dummy_info["room"]
+        t_info.rows[4].cells[0].text = "Name of Instructor:"
+        t_info.rows[4].cells[1].text = dummy_info["instructor"]
+
+        t_mat = doc_att.add_table(rows=10, cols=11)
+        t_mat.rows[0].cells[0].text = "NO."
+        t_mat.rows[0].cells[1].text = "NAME"
+        t_mat.rows[0].cells[2].text = "STUDENT NUMBER"
+        for i in range(7):
+            t_mat.rows[0].cells[3 + i].text = f"WEEK {i + 1}"
+        t_mat.rows[0].cells[10].text = "ABS"
+
+        for c in range(3):
+            t_mat.rows[1].cells[c].text = ""
+        for i in range(7):
+            t_mat.rows[1].cells[3 + i].text = f"Date {i + 1}"
+        t_mat.rows[1].cells[10].text = "TOTAL"
+
+        for r in range(2, 10):
+            t_mat.rows[r].cells[0].text = str(r - 1)
+            t_mat.rows[r].cells[1].text = f"Student {r - 1}"
+            t_mat.rows[r].cells[2].text = f"2026-{r:04d}"
+
+        doc_att.save(str(p_att))
+
+        res_att = detector.detect_role(str(p_att))
+        assert res_att.status == "confirmed"
+        assert res_att.role == ROLE_ATTENDANCE_LECTURE
+        assert res_att.variant == "lecture"
+        set_manager.add_template_to_set(ts.set_id, ROLE_ATTENDANCE_LECTURE, str(p_att))
+
+        # 3. Grade XLSX constructed from scratch
+        p_grade = tmp_path / "marks_ledger_2026.xlsx"
+        wb = openpyxl.Workbook()
+        ws_default = wb.active
+        ws_default.title = "Archive_X"
+        ws_default["A1"] = "ARCHIVAL SYSTEM STORAGE - DO NOT EDIT"
+
+        ws_summary = wb.create_sheet("BlueSheet")
+        ws_summary["A1"] = "METROPOLITAN POLYTECHNIC INSTITUTE"
+        ws_summary["A2"] = "COLLEGE OF SCIENCE AND TECHNOLOGY"
+        ws_summary["A3"] = "OFFICIAL SUMMARY RECORD OF MARKS"
+        ws_summary.append([])
+        ws_summary.append(["NO.", "STUDENT NAME", "STUDENT NUMBER", "FINAL RATING", "REMARKS"])
+        for idx in range(1, 10):
+            ws_summary.append([idx, f"Student {idx}", f"2026-{idx:04d}", "", ""])
+
+        ws_roster = wb.create_sheet("Omega")
+        ws_roster["A1"] = "Instructor:"
+        ws_roster["B1"] = "DR. MARIE CURIE"
+        ws_roster["A2"] = "Course / Section:"
+        ws_roster["B2"] = "PHYS 3-1"
+        ws_roster["A3"] = "Subject Code / Title:"
+        ws_roster["B3"] = "PHYS301"
+        ws_roster["A4"] = "Schedule Code:"
+        ws_roster["B4"] = "20268877"
+        ws_roster["A5"] = "Semester & AY:"
+        ws_roster["B5"] = "First Semester 2026-2027"
+        ws_roster.append([])
+        ws_roster.append(["NO.", "STUDENT NAME", "STUDENT NUMBER", "QUIZ 1", "MIDTERM", "FINAL"])
+        for idx in range(1, 10):
+            ws_roster.append([idx, f"Student {idx}", f"2026-{idx:04d}", "", "", ""])
+
+        wb.save(str(p_grade))
+
+        res_grade = detector.detect_role(str(p_grade))
+        assert res_grade.status == "confirmed"
+        assert res_grade.role == ROLE_GRADE_SHEET_LECTURE
+        assert res_grade.variant == "lecture"
+        set_manager.add_template_to_set(ts.set_id, ROLE_GRADE_SHEET_LECTURE, str(p_grade))
+
+        # 4. Activate and Generate
+        set_manager.activate_template_set(ts.set_id)
+        ts_active = set_manager.get_template_set(ts.set_id)
+
+        # Generate CEIT (Syllabus)
+        resolver = TemplateRecipeResolver.get_instance()
+        syl_entry = set_manager.resolve_template(ROLE_SYLLABUS, active_set=ts_active)
+        syl_recipe = resolver.resolve(syl_entry.file_path, "academic_docx")
+        gen_syl = SyllabusGenerator(syl_entry.file_path, syl_recipe)
+        class_info = ClassInfo(
+            instructor=dummy_info["instructor"],
+            course_section=dummy_info["course"],
+            schedule_code=dummy_info["sched"],
+            subject=dummy_info["subject"],
+            time_days_room=f"{dummy_info['time']} {dummy_info['day']} {dummy_info['room']}",
+            semester_ay=dummy_info["semester"],
+            students=dummy_students,
+        )
+        out_syl = output_dir / "out_foreign_syllabus.docx"
+        gen_syl.generate(class_info, str(out_syl))
+        assert os.path.exists(out_syl)
+        assert os.path.getsize(out_syl) > 500
+
+        # Generate Attendance
+        att_entry = set_manager.resolve_template(ROLE_ATTENDANCE_LECTURE, active_set=ts_active)
+        att_recipe = resolver.resolve(att_entry.file_path, "attendance_docx")
+        gen_att = AttendanceGenerator(att_entry.file_path, att_recipe)
+        out_att = output_dir / "out_foreign_attendance.docx"
+        gen_att.generate(
+            output_path=str(out_att),
+            course_code_title=f"{dummy_info['course']} - {dummy_info['subject']}",
+            class_schedule=f"{dummy_info['time']} / {dummy_info['day']}",
+            semester_ay=dummy_info["semester"],
+            room_assignment=dummy_info["room"],
+            instructor=dummy_info["instructor"],
+            months=[8],
+            year=2026,
+            weekdays=[0],
+            students=dummy_students,
+        )
+        assert os.path.exists(out_att)
+        assert os.path.getsize(out_att) > 500
+
+        # Generate Grade Sheet
+        grade_entry = set_manager.resolve_template(ROLE_GRADE_SHEET_LECTURE, active_set=ts_active)
+        grade_recipe = resolver.resolve(grade_entry.file_path, "grade_sheet_xlsx")
+        gen_grade = GradeGenerator(grade_entry.file_path, grade_recipe)
+        out_grade = output_dir / "out_foreign_grades.xlsx"
+        success_grade = gen_grade.generate(dummy_info, dummy_students, str(out_grade))
+        assert success_grade is True
+        assert os.path.exists(out_grade)
+        assert os.path.getsize(out_grade) > 500
+
+    finally:
+        set_manager.activate_template_set(BUILTIN_SET_ID)
+        set_manager.delete_template_set(ts.set_id)
+
+
+def test_structural_audit_catches_prohibited_assumptions(repo_root):
+    """
+    Requirement 8 & 10.13:
+    The structural audit flags prohibited authoritative assumptions:
+    A. tables[0] used as role authority
+    B. cap >= 6 or spw >= 1.5 used for role classification
+    C. total_cols == 4 used for syllabus authority
+    """
+    bad_source_1 = """
+def classify_attendance(cand):
+    if cand.cap >= 6:
+        return ROLE_ATTENDANCE_LECTURE_LAB
+    return ROLE_ATTENDANCE_LECTURE
+"""
+    violations_1 = scan_source(bad_source_1, "bad_detector.py")
+    assert any(cat == "E" for _, cat, _ in violations_1), "Audit failed to catch cap >= 6 threshold"
+
+    bad_source_2 = """
+def classify_academic(cand):
+    if cand.total_cols == 4:
+        return ROLE_SYLLABUS
+"""
+    violations_2 = scan_source(bad_source_2, "bad_academic.py")
+    assert any(cat == "E" for _, cat, _ in violations_2), "Audit failed to catch total_cols == 4 shortcut"
+
+    bad_source_3 = """
+def validate_role(cand):
+    if cand.sessions_per_week >= 1.5:
+        return True
+"""
+    violations_3 = scan_source(bad_source_3, "bad_validator.py")
+    assert any(cat == "E" for _, cat, _ in violations_3), "Audit failed to catch sessions_per_week >= 1.5"
+
+    # Assert live modules have zero prohibited assumptions
+    ret = audit(os.path.join(repo_root, "modules"))
+    assert ret == 0, f"Live codebase audit returned non-zero code: {ret}"
+
 
