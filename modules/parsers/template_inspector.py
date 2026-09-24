@@ -57,10 +57,50 @@ FIELD_SHRINK_THRESHOLDS = {
     "date": 0,
 }
 
-FALLBACK_SHEET_REF_REGEX = re.compile(r"(?:'((?:[^']|'')*)'|([A-Za-z0-9_]+))!")
+class SheetReferenceSet(set):
+    """
+    A set of worksheet names extracted from an Excel formula,
+    carrying an is_reliable flag indicating whether the formula
+    was parsed conclusively without syntax corruption or ambiguity.
+    """
+    def __init__(self, iterable=(), is_reliable: bool = True):
+        super().__init__(iterable)
+        self.is_reliable = bool(is_reliable)
 
 
-def extract_referenced_sheets(formula_str: str) -> set:
+CELL_ADDR_PATTERN = re.compile(
+    r"^(?:\$?[A-Za-z]+\$?[0-9]+(?::\$?[A-Za-z]+\$?[0-9]+)?|\$?[A-Za-z]+:\$?[A-Za-z]+|\$?[0-9]+:\$?[0-9]+|#REF!|[A-Za-z_][A-Za-z0-9_]*)$"
+)
+
+STRICT_CELL_REF = r"(?:\$?[A-Za-z]+\$?[0-9]+(?::\$?[A-Za-z]+\$?[0-9]+)?|\$?[A-Za-z]+:\$?[A-Za-z]+|\$?[0-9]+:\$?[0-9]+|#REF!)"
+CONSERVATIVE_SHEET_REF_REGEX = re.compile(
+    rf"(?:'((?:[^']|'')*)'|([A-Za-z0-9_]+))!({STRICT_CELL_REF})",
+    re.IGNORECASE
+)
+
+# Unparseable syntax or illegal characters outside standard Excel formula grammar
+CORRUPTED_CHARS_REGEX = re.compile(r"[^A-Za-z0-9_ \t\r\n\+\-\*\/\^\=\<\>\&\:\%\$\#\(\)\,\'\"\.\!]")
+
+
+def split_sheet_and_cell(val: str) -> Tuple[Optional[str], str]:
+    """Splits a RANGE token value into (sheet_part, cell_part)."""
+    if val.startswith("'"):
+        idx = 1
+        while idx < len(val):
+            if val[idx] == "'":
+                if idx + 1 < len(val) and val[idx + 1] == "'":
+                    idx += 2
+                    continue
+                elif idx + 1 < len(val) and val[idx + 1] == "!":
+                    return val[:idx + 1], val[idx + 2:]
+            idx += 1
+    elif "!" in val:
+        parts = val.split("!", 1)
+        return parts[0], parts[1]
+    return None, val
+
+
+def extract_referenced_sheets(formula_str: str) -> SheetReferenceSet:
     """
     Extracts all worksheet names referenced in an Excel formula string.
     Supports:
@@ -69,35 +109,68 @@ def extract_referenced_sheets(formula_str: str) -> set:
       - Escaped apostrophes: 'Dean''s Practical Sheet'!C7
       - Ranges: 'Summary 2026'!A1:A20
       - Absolute refs: 'Practical Component'!$B$5
-    Uses OpenXML/openpyxl formula tokenizer with fallback regex.
+    Uses OpenXML/openpyxl formula tokenizer with conservative validation.
+    Returns a SheetReferenceSet with is_reliable flag.
+    If the formula cannot be parsed reliably, lineage = unknown (is_reliable = False)
+    and no incomplete or false dependency edges are created.
     """
     if not isinstance(formula_str, str) or not formula_str.startswith("="):
-        return set()
-    referenced = set()
+        return SheetReferenceSet(set(), is_reliable=True)
+
     try:
         tok = Tokenizer(formula_str)
+        referenced = set()
         for item in tok.items:
-            if item.type == "OPERAND" and item.subtype == "RANGE" and "!" in item.value:
-                sheet_part = item.value.rsplit("!", 1)[0]
-                if "]" in sheet_part:
-                    sheet_part = sheet_part.split("]", 1)[1]
-                if sheet_part.startswith("'") and sheet_part.endswith("'"):
-                    sheet_name = sheet_part[1:-1].replace("''", "'")
-                else:
-                    sheet_name = sheet_part
-                if sheet_name:
+            if "!" in item.value:
+                if item.type == "OPERAND" and item.subtype == "RANGE":
+                    sheet_part, cell_part = split_sheet_and_cell(item.value)
+                    if not sheet_part or not cell_part:
+                        return SheetReferenceSet(set(), is_reliable=False)
+                    if not CELL_ADDR_PATTERN.match(cell_part):
+                        return SheetReferenceSet(set(), is_reliable=False)
+                    if "]" in sheet_part:
+                        sheet_part = sheet_part.split("]", 1)[1]
+                    if sheet_part.startswith("'") and sheet_part.endswith("'"):
+                        sheet_name = sheet_part[1:-1].replace("''", "'")
+                    else:
+                        sheet_name = sheet_part
+                    if not sheet_name:
+                        return SheetReferenceSet(set(), is_reliable=False)
                     referenced.add(sheet_name)
+                elif item.type == "OPERAND" and item.subtype == "TEXT":
+                    pass
+                else:
+                    return SheetReferenceSet(set(), is_reliable=False)
+        return SheetReferenceSet(referenced, is_reliable=True)
     except Exception:
         pass
 
-    if not referenced and "!" in formula_str:
-        for m in FALLBACK_SHEET_REF_REGEX.finditer(formula_str):
-            quoted, unquoted = m.groups()
-            name = (quoted.replace("''", "'") if quoted is not None else unquoted)
-            if name:
-                referenced.add(name)
+    if "!" not in formula_str:
+        return SheetReferenceSet(set(), is_reliable=True)
 
-    return referenced
+    # Conservative validation when Tokenizer fails:
+    # 1. Balanced quotes
+    if formula_str.replace("''", "").count("'") % 2 != 0:
+        return SheetReferenceSet(set(), is_reliable=False)
+    if formula_str.replace('""', '').count('"') % 2 != 0:
+        return SheetReferenceSet(set(), is_reliable=False)
+
+    # 2. Check for corrupted/invalid characters outside normal formula grammar
+    if CORRUPTED_CHARS_REGEX.search(formula_str):
+        return SheetReferenceSet(set(), is_reliable=False)
+
+    # 3. All '!' occurrences must match strict sheet reference pattern
+    matches = list(CONSERVATIVE_SHEET_REF_REGEX.finditer(formula_str))
+    if len(matches) == 0 or len(matches) != formula_str.count("!"):
+        return SheetReferenceSet(set(), is_reliable=False)
+
+    referenced = set()
+    for m in matches:
+        quoted, unquoted, _ = m.groups()
+        name = quoted.replace("''", "'") if quoted is not None else unquoted
+        if name:
+            referenced.add(name)
+    return SheetReferenceSet(referenced, is_reliable=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -826,37 +899,63 @@ class XlsxTemplateInspector:
             # Determine laboratory vs consolidated based on unique physical lineage:
             # Construct directed dependency relation: A -> B meaning worksheet A
             # physically contains formulas referencing worksheet B.
-            def get_referenced_sheets(ws_source) -> set:
+            def get_referenced_sheets(ws_source) -> Tuple[set, bool]:
                 referenced = set()
+                is_reliable = True
                 for row in ws_source.iter_rows(values_only=True):
                     for val in row:
                         if isinstance(val, str) and val.startswith("="):
-                            referenced.update(extract_referenced_sheets(val))
-                return referenced
+                            sheet_refs = extract_referenced_sheets(val)
+                            if not getattr(sheet_refs, "is_reliable", True):
+                                is_reliable = False
+                            referenced.update(sheet_refs)
+                return referenced, is_reliable
 
-            s1_referenced = get_referenced_sheets(ws1)
-            s2_referenced = get_referenced_sheets(ws2)
+            s1_referenced, s1_reliable = get_referenced_sheets(ws1)
+            s2_referenced, s2_reliable = get_referenced_sheets(ws2)
+
+            # Harden fallback formula parsing: if candidate secondary sheets contain
+            # unparseable, corrupted, or indeterminate formula references, fail closed.
+            if not s1_reliable or not s2_reliable:
+                unreliable = [s for s, r in [(s1, s1_reliable), (s2, s2_reliable)] if not r]
+                raise AmbiguousTemplateError(
+                    f"Grade sheet template '{os.path.basename(template_path)}' contains secondary assessment worksheets with unparseable or indeterminate formula lineage: {unreliable}"
+                )
 
             s1_refs_s2 = any(r.lower() == s2.lower() for r in s1_referenced)
             s2_refs_s1 = any(r.lower() == s1.lower() for r in s2_referenced)
+            s1_refs_primary = any(r.lower() == primary_roster_sheet.lower() for r in s1_referenced)
+            s2_refs_primary = any(r.lower() == primary_roster_sheet.lower() for r in s2_referenced)
 
+            # Case D: s1 -> s2 and s2 -> s1 (competing/cyclic lineage)
+            if s1_refs_s2 and s2_refs_s1:
+                raise AmbiguousTemplateError(
+                    f"Grade sheet template '{os.path.basename(template_path)}' contains multiple secondary assessment worksheets with competing/cyclic formula lineage referencing each other: {[s1, s2]}"
+                )
             # Case A: s1 -> s2 and s2 !-> s1 (s1 aggregates s2)
-            if s1_refs_s2 and not s2_refs_s1:
+            elif s1_refs_s2 and not s2_refs_s1:
+                # Directed lineage alone is not automatic semantic truth:
+                # To resolve s1 as Consolidated, s1 must exhibit role-consistent
+                # physical aggregation topology combining s2 and the primary lecture structure.
+                if not s1_refs_primary:
+                    raise AmbiguousTemplateError(
+                        f"Grade sheet template '{os.path.basename(template_path)}' contains secondary assessment worksheets with directed lineage ({s1} -> {s2}) but lacking role-consistent aggregation of primary lecture structure: {[s1, s2]}"
+                    )
                 con_sheet = s1
                 lab_sheet = s2
                 has_lab = True
                 has_consolidated = True
             # Case B: s2 -> s1 and s1 !-> s2 (s2 aggregates s1)
             elif s2_refs_s1 and not s1_refs_s2:
+                # Symmetrically, s2 must exhibit role-consistent physical aggregation topology:
+                if not s2_refs_primary:
+                    raise AmbiguousTemplateError(
+                        f"Grade sheet template '{os.path.basename(template_path)}' contains secondary assessment worksheets with directed lineage ({s2} -> {s1}) but lacking role-consistent aggregation of primary lecture structure: {[s1, s2]}"
+                    )
                 con_sheet = s2
                 lab_sheet = s1
                 has_lab = True
                 has_consolidated = True
-            # Case D: s1 -> s2 and s2 -> s1 (competing/cyclic lineage)
-            elif s1_refs_s2 and s2_refs_s1:
-                raise AmbiguousTemplateError(
-                    f"Grade sheet template '{os.path.basename(template_path)}' contains multiple secondary assessment worksheets with competing/cyclic formula lineage referencing each other: {[s1, s2]}"
-                )
             # Case C: s1 !-> s2 and s2 !-> s1 (no unique lineage)
             else:
                 if cols1 == cols2 and rows1 == rows2 and refs1 == refs2:

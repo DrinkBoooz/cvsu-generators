@@ -2920,6 +2920,215 @@ def test_xlsx_cyclic_lineage_is_ambiguous(detector, tmp_path):
     assert res.candidate_roles == [ROLE_GRADE_SHEET_LECTURE_LAB]
 
 
+def test_xlsx_misleading_lineage_without_primary_aggregation_is_ambiguous(detector, tmp_path):
+    """
+    Requirement 3:
+    Misleading-lineage regression:
+      Component_A -> Component_B
+      Component_B !-> Component_A
+    but the physical structures indicate that neither sheet can uniquely be classified
+    as Consolidated/Laboratory because neither exhibits role-consistent aggregation
+    of the primary lecture grade structure.
+    Expected:
+      AmbiguousTemplateError raised by inspector.
+      detector returns status="ambiguous", role=None, candidate_roles=[ROLE_GRADE_SHEET_LECTURE_LAB].
+    This proves dependency direction alone cannot manufacture semantic role identity.
+    """
+    from modules.parsers.template_inspector import XlsxTemplateInspector
+
+    wb = openpyxl.Workbook()
+    ws_r = wb.active
+    ws_r.title = "Roster"
+    ws_r.cell(1, 1, "Course: BSCS")
+    ws_r.cell(2, 1, "Instructor: Dr. Turing")
+    ws_r.cell(4, 1, "#")
+    ws_r.cell(4, 2, "Name of Student")
+    ws_r.cell(4, 3, "Student Number")
+    for r in range(5, 10):
+        ws_r.cell(r, 1, r - 4)
+        ws_r.cell(r, 2, f"Student {r - 4}")
+        ws_r.cell(r, 3, f"2026-000{r - 4}")
+
+    ws_s = wb.create_sheet(title="Summary")
+    ws_s.cell(1, 1, "COLLEGE OF ENGINEERING")
+    ws_s.cell(2, 1, "OFFICIAL GRADES")
+    ws_s.cell(4, 1, "#")
+    ws_s.cell(4, 2, "Student Number")
+    ws_s.cell(4, 3, "Final Grade")
+    for r in range(5, 10):
+        ws_s.cell(r, 1, r - 4)
+        ws_s.cell(r, 2, f"2026-000{r - 4}")
+        ws_s.cell(r, 3, "2.00")
+
+    ws_a = wb.create_sheet(title="Component_A")
+    ws_a.cell(4, 1, "#")
+    ws_a.cell(4, 2, "Name of Student")
+    ws_a.cell(4, 3, "Student Number")
+    for c in range(4, 10):
+        ws_a.cell(4, c, f"A_{c}")
+    for r in range(5, 10):
+        ws_a.cell(r, 1, r - 4)
+        ws_a.cell(r, 2, f"Student {r - 4}")
+        ws_a.cell(r, 3, f"2026-000{r - 4}")
+        for c in range(4, 10):
+            ws_a.cell(r, c, 75)
+
+    ws_b = wb.create_sheet(title="Component_B")
+    ws_b.cell(4, 1, "#")
+    ws_b.cell(4, 2, "Name of Student")
+    ws_b.cell(4, 3, "Student Number")
+    for c in range(4, 10):
+        ws_b.cell(4, c, f"B_{c}")
+    for r in range(5, 10):
+        ws_b.cell(r, 1, r - 4)
+        ws_b.cell(r, 2, f"Student {r - 4}")
+        ws_b.cell(r, 3, f"2026-000{r - 4}")
+        for c in range(4, 10):
+            ws_b.cell(r, c, 85)
+
+    # Injects directed formula dependency: Component_A -> Component_B
+    # but NEITHER sheet references 'Roster' (primary_roster_sheet)!
+    ws_a.cell(5, 4, "=Component_B!D5 * 0.5")
+
+    p = tmp_path / "misleading_lineage.xlsx"
+    wb.save(str(p))
+
+    with pytest.raises(AmbiguousTemplateError) as exc:
+        XlsxTemplateInspector().inspect(str(p), profile_id="grade_sheet_xlsx")
+    assert "role-consistent aggregation of primary lecture structure" in str(exc.value).lower()
+
+    res = detector.detect_role(str(p))
+    assert res.status == "ambiguous"
+    assert res.role is None
+    assert res.candidate_roles == [ROLE_GRADE_SHEET_LECTURE_LAB]
+
+
+def test_xlsx_unparseable_formula_fails_closed(detector, tmp_path):
+    """
+    Requirement 5:
+    Unusual / unparseable formula handling:
+    When a candidate secondary assessment worksheet contains an unparseable or corrupted
+    cross-sheet formula necessary for role determination, the lineage is indeterminate (unknown).
+    The resolver must fail closed rather than manufacturing a false dependency edge.
+    Expected:
+      AmbiguousTemplateError raised by inspector.
+      detector returns status="ambiguous", role=None, candidate_roles=[ROLE_GRADE_SHEET_LECTURE_LAB].
+    """
+    from modules.parsers.template_inspector import XlsxTemplateInspector
+
+    wb = openpyxl.Workbook()
+    ws_r = wb.active
+    ws_r.title = "Roster"
+    ws_r.cell(1, 1, "Course: BSCS")
+    ws_r.cell(2, 1, "Instructor: Dr. Turing")
+    ws_r.cell(4, 1, "#")
+    ws_r.cell(4, 2, "Name of Student")
+    ws_r.cell(4, 3, "Student Number")
+    for r in range(5, 10):
+        ws_r.cell(r, 1, r - 4)
+        ws_r.cell(r, 2, f"Student {r - 4}")
+        ws_r.cell(r, 3, f"2026-000{r - 4}")
+
+    ws_s = wb.create_sheet(title="Summary")
+    ws_s.cell(1, 1, "COLLEGE OF ENGINEERING")
+    ws_s.cell(2, 1, "OFFICIAL GRADES")
+    ws_s.cell(4, 1, "#")
+    ws_s.cell(4, 2, "Student Number")
+    ws_s.cell(4, 3, "Final Grade")
+    for r in range(5, 10):
+        ws_s.cell(r, 1, r - 4)
+        ws_s.cell(r, 2, f"2026-000{r - 4}")
+        ws_s.cell(r, 3, "2.00")
+
+    ws_a = wb.create_sheet(title="Component_A")
+    ws_a.cell(4, 1, "#")
+    ws_a.cell(4, 2, "Name of Student")
+    ws_a.cell(4, 3, "Student Number")
+    for c in range(4, 10):
+        ws_a.cell(4, c, f"A_{c}")
+    for r in range(5, 10):
+        ws_a.cell(r, 1, r - 4)
+        ws_a.cell(r, 2, f"Student {r - 4}")
+        ws_a.cell(r, 3, f"2026-000{r - 4}")
+        for c in range(4, 10):
+            ws_a.cell(r, c, 75)
+
+    ws_b = wb.create_sheet(title="Component_B")
+    ws_b.cell(4, 1, "#")
+    ws_b.cell(4, 2, "Name of Student")
+    ws_b.cell(4, 3, "Student Number")
+    for c in range(4, 10):
+        ws_b.cell(4, c, f"B_{c}")
+    for r in range(5, 10):
+        ws_b.cell(r, 1, r - 4)
+        ws_b.cell(r, 2, f"Student {r - 4}")
+        ws_b.cell(r, 3, f"2026-000{r - 4}")
+        for c in range(4, 10):
+            ws_b.cell(r, c, 85)
+
+    # Component_A references Component_B and Roster
+    ws_a.cell(5, 4, "=Component_B!D5 * 0.5")
+    ws_a.cell(5, 5, "=Roster!A5")
+
+    # Component_B has an unparseable/corrupted formula with '!'
+    ws_b.cell(5, 4, "=UNPARSEABLE(!)")
+
+    p = tmp_path / "unparseable_lineage.xlsx"
+    wb.save(str(p))
+
+    with pytest.raises(AmbiguousTemplateError) as exc:
+        XlsxTemplateInspector().inspect(str(p), profile_id="grade_sheet_xlsx")
+    assert "unparseable or indeterminate formula lineage" in str(exc.value).lower()
+
+    res = detector.detect_role(str(p))
+    assert res.status == "ambiguous"
+    assert res.role is None
+    assert res.candidate_roles == [ROLE_GRADE_SHEET_LECTURE_LAB]
+
+
+def test_extract_referenced_sheets_syntax_and_conservative_coverage():
+    """
+    Requirement 5 & 6:
+    Preserve formula syntax coverage and verify conservative fallback behavior:
+      - SheetA!A1
+      - 'Sheet A'!A1
+      - 'Practical Component'!$B$5
+      - SUM('Summary 2026'!A1:A20)
+      - 'Dean''s Practical Sheet'!C7
+      - multiple references
+      - ranges
+      - absolute references
+      - text strings with !
+      - unparseable formulas, unclosed quotes, invalid characters failing closed
+    """
+    from modules.parsers.template_inspector import extract_referenced_sheets
+
+    cases = [
+        ("=SheetA!A1", {"SheetA"}, True),
+        ("='Sheet A'!A1", {"Sheet A"}, True),
+        ("='Practical Component'!$B$5", {"Practical Component"}, True),
+        ("=SUM('Summary 2026'!A1:A20)", {"Summary 2026"}, True),
+        ("='Dean''s Practical Sheet'!C7", {"Dean's Practical Sheet"}, True),
+        ("='Sheet1'!A1 + 'Sheet2'!B2", {"Sheet1", "Sheet2"}, True),
+        ('="Hello!World"', set(), True),
+        ("='Valid Sheet'!A1:B10", {"Valid Sheet"}, True),
+        ("='Sheet 1'!$A$1:$Z$100", {"Sheet 1"}, True),
+        ("='Dean''s Sheet'!#REF!", {"Dean's Sheet"}, True),
+        # Corrupted / unparseable formulas must return is_reliable=False
+        ("=SUM('Unclosed Sheet!A1)", set(), False),
+        ("=Sheet1!A1 + @#$%", set(), False),
+        ("='Broken'!$#@!", set(), False),
+        ("=UNPARSEABLE(!)", set(), False),
+        ("=Sheet1!A1 + BrokenRef!", set(), False),
+    ]
+
+    for formula_str, expected_refs, expected_reliable in cases:
+        result = extract_referenced_sheets(formula_str)
+        assert set(result) == expected_refs, f"Mismatch in refs for {formula_str}: got {set(result)}, expected {expected_refs}"
+        assert result.is_reliable == expected_reliable, f"Mismatch in reliability for {formula_str}: got {result.is_reliable}, expected {expected_reliable}"
+
+
+
 
 
 
