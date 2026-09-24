@@ -55,6 +55,8 @@ AUDIT_RULES: List[Tuple[str, str, str]] = [
     (r"(?:ws_name|sheet_name|s_name)\s*==\s*[\"']", "worksheet-name-equality", "Worksheet name equality check"),
     (r"(?:scored_rosters|scored_summaries|sorted_remaining)\[0\]", "workbook-order-role-selection", "First candidate in sorted or workbook order selected without ambiguity check"),
     (r"sorted\([^)]*roster[^)]*\)\[0\]|sorted\([^)]*summar[^)]*\)\[0\]", "first-candidate-wins", "First candidate selected from sorted candidates without ambiguity check"),
+    (r"sorted\([^)]*(?:max_column|max_row)[^)]*\)\[0\]", "dimension-sorted-role-selection", "Prohibited dimension-sorted candidate selection without unique structural lineage"),
+    (r"cols1\s*(?:>|<|!=|==)\s*cols2|max_column\s*(?:>|<|!=|==)\s*max_column", "dimension-role-authority", "Prohibited dimension comparison used as authoritative role discriminator"),
 ]
 
 
@@ -63,6 +65,19 @@ def classify_finding(rel_path: str, line_num: int, label: str, snippet: str) -> 
     Classifies a raw finding into Category A, B, C, D, or E.
     Returns (Category, Justification).
     """
+    # Category E: Dimension-based role authority for secondary assessment sheets
+    if label == "dimension-sorted-role-selection":
+        if "template_inspector.py" in rel_path or "template_role_detector.py" in rel_path or "detector" in rel_path:
+            return "E", "Prohibited dimension-sorted candidate selection without unique structural lineage"
+        return "D", "Legitimate geometry calculation"
+
+    if label == "dimension-role-authority":
+        if "cols1 == cols2" in snippet and "rows1 == rows2" in snippet:
+            return "A", "Physical symmetry check for ambiguous candidate rejection"
+        if "template_inspector.py" in rel_path or "template_role_detector.py" in rel_path or "detector" in rel_path:
+            return "E", "Prohibited dimension comparison used as authoritative role discriminator"
+        return "D", "Legitimate geometry calculation"
+
     # Category E: Workbook-order role selection or first-candidate-wins without ambiguity check
     if label in ("workbook-order-role-selection", "first-candidate-wins"):
         if "template_role_detector.py" in rel_path or "template_inspector.py" in rel_path or "detector" in rel_path:

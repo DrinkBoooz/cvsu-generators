@@ -2152,6 +2152,15 @@ def inspect_xlsx(wb):
     violations_4 = scan_source(bad_source_4, "template_inspector.py")
     assert any(cat == "E" for _, cat, _ in violations_4), "Audit failed to catch scored_rosters[0] workbook-order authority"
 
+    bad_source_5 = """
+def resolve_secondary(cols1, cols2):
+    if cols1 > cols2:
+        lab_sheet = "Sheet_A"
+        con_sheet = "Sheet_B"
+"""
+    violations_5 = scan_source(bad_source_5, "template_inspector.py")
+    assert any(cat == "E" for _, cat, _ in violations_5), "Audit failed to catch dimension-based role authority"
+
     # Assert live modules have zero prohibited assumptions
     ret = audit(os.path.join(repo_root, "modules"))
     assert ret == 0, f"Live codebase audit returned non-zero code: {ret}"
@@ -2350,12 +2359,305 @@ def test_xlsx_identical_secondary_matrices_is_ambiguous(detector, tmp_path):
         XlsxTemplateInspector().inspect(str(p), profile_id="grade_sheet_xlsx")
     assert "multiple secondary assessment worksheets" in str(exc_info.value).lower()
 
-    # 2. Detector must classify as ambiguous
+    # 2. Detector must classify as ambiguous with candidate_roles=[ROLE_GRADE_SHEET_LECTURE_LAB]
     res = detector.detect_role(str(p))
     assert res.status == "ambiguous"
-    assert ROLE_GRADE_SHEET_LECTURE in res.candidate_roles
-    assert ROLE_GRADE_SHEET_LECTURE_LAB in res.candidate_roles
     assert res.role is None
+    assert res.candidate_roles == [ROLE_GRADE_SHEET_LECTURE_LAB]
+
+
+def test_xlsx_dimension_only_secondary_is_ambiguous(detector, tmp_path):
+    """
+    Forensic Micro-Closure 1: Secondary assessment sheets with different physical dimensions
+    (e.g. 15 columns vs 8 columns) but no structural lineage uniquely establishing Laboratory
+    vs Consolidated must raise AmbiguousTemplateError and detector status='ambiguous'.
+    Must not use max_column / dimension alone as role authority.
+    Verifies both workbook appearance orders.
+    """
+    def build_test_wb(sheet_order_reversed: bool):
+        wb = openpyxl.Workbook()
+        ws_r = wb.active
+        ws_r.title = "Main_Roster"
+        ws_r.cell(1, 1, "Course: BSCS")
+        ws_r.cell(2, 1, "Instructor: Dr. Turing")
+        ws_r.cell(4, 1, "#")
+        ws_r.cell(4, 2, "Name of Student")
+        ws_r.cell(4, 3, "Student Number")
+        for r in range(5, 10):
+            ws_r.cell(r, 1, r - 4)
+            ws_r.cell(r, 2, f"Student {r - 4}")
+            ws_r.cell(r, 3, f"2026-000{r - 4}")
+
+        ws_s = wb.create_sheet(title="Institutional_Summary")
+        ws_s.cell(1, 1, "COLLEGE OF ENGINEERING")
+        ws_s.cell(2, 1, "OFFICIAL GRADES")
+        ws_s.cell(4, 1, "#")
+        ws_s.cell(4, 2, "Student Number")
+        ws_s.cell(4, 3, "Final Grade")
+        for r in range(5, 10):
+            ws_s.cell(r, 1, r - 4)
+            ws_s.cell(r, 2, f"2026-000{r - 4}")
+            ws_s.cell(r, 3, "1.75")
+
+        # Wide secondary sheet: 15 columns
+        def populate_wide(ws):
+            ws.cell(4, 1, "#")
+            ws.cell(4, 2, "Name of Student")
+            ws.cell(4, 3, "Student Number")
+            for c in range(4, 16):
+                ws.cell(4, c, f"Assessment_{c - 3}")
+            for r in range(5, 10):
+                ws.cell(r, 1, r - 4)
+                ws.cell(r, 2, f"Student {r - 4}")
+                ws.cell(r, 3, f"2026-000{r - 4}")
+                for c in range(4, 16):
+                    ws.cell(r, c, 80 + c)
+
+        # Narrow secondary sheet: 6 columns
+        def populate_narrow(ws):
+            ws.cell(4, 1, "#")
+            ws.cell(4, 2, "Name of Student")
+            ws.cell(4, 3, "Student Number")
+            for c in range(4, 7):
+                ws.cell(4, c, f"Score_{c - 3}")
+            for r in range(5, 10):
+                ws.cell(r, 1, r - 4)
+                ws.cell(r, 2, f"Student {r - 4}")
+                ws.cell(r, 3, f"2026-000{r - 4}")
+                for c in range(4, 7):
+                    ws.cell(r, c, 90 + c)
+
+        if not sheet_order_reversed:
+            ws_wide = wb.create_sheet(title="Component_Wide")
+            populate_wide(ws_wide)
+            ws_narrow = wb.create_sheet(title="Component_Narrow")
+            populate_narrow(ws_narrow)
+        else:
+            ws_narrow = wb.create_sheet(title="Component_Narrow")
+            populate_narrow(ws_narrow)
+            ws_wide = wb.create_sheet(title="Component_Wide")
+            populate_wide(ws_wide)
+
+        return wb
+
+    from modules.parsers.template_inspector import XlsxTemplateInspector
+
+    # Order 1: Wide sheet before Narrow sheet
+    p1 = tmp_path / "dim_only_wide_first.xlsx"
+    wb1 = build_test_wb(sheet_order_reversed=False)
+    wb1.save(str(p1))
+
+    with pytest.raises(AmbiguousTemplateError) as exc1:
+        XlsxTemplateInspector().inspect(str(p1), profile_id="grade_sheet_xlsx")
+    assert "different physical dimensions but no unique structural lineage" in str(exc1.value).lower()
+
+    res1 = detector.detect_role(str(p1))
+    assert res1.status == "ambiguous"
+    assert res1.role is None
+    assert res1.candidate_roles == [ROLE_GRADE_SHEET_LECTURE_LAB]
+
+    # Order 2: Narrow sheet before Wide sheet
+    p2 = tmp_path / "dim_only_narrow_first.xlsx"
+    wb2 = build_test_wb(sheet_order_reversed=True)
+    wb2.save(str(p2))
+
+    with pytest.raises(AmbiguousTemplateError) as exc2:
+        XlsxTemplateInspector().inspect(str(p2), profile_id="grade_sheet_xlsx")
+    assert "different physical dimensions but no unique structural lineage" in str(exc2.value).lower()
+
+    res2 = detector.detect_role(str(p2))
+    assert res2.status == "ambiguous"
+    assert res2.role is None
+    assert res2.candidate_roles == [ROLE_GRADE_SHEET_LECTURE_LAB]
+
+
+def test_xlsx_reversed_dimensions_remain_ambiguous(detector, tmp_path):
+    """
+    Forensic Micro-Closure 2: Reversed dimensions must not manufacture role identity.
+    Creating Sheet A wider / Sheet B narrower, and then Sheet A narrower / Sheet B wider,
+    with no unique structural lineage must result in ambiguous in both cases.
+    """
+    from modules.parsers.template_inspector import XlsxTemplateInspector
+
+    for swap in [False, True]:
+        wb = openpyxl.Workbook()
+        ws_r = wb.active
+        ws_r.title = "Roster"
+        ws_r.cell(1, 1, "Course: BSCS")
+        ws_r.cell(2, 1, "Instructor: Dr. Turing")
+        ws_r.cell(4, 1, "#")
+        ws_r.cell(4, 2, "Name of Student")
+        ws_r.cell(4, 3, "Student Number")
+        for r in range(5, 10):
+            ws_r.cell(r, 1, r - 4)
+            ws_r.cell(r, 2, f"Student {r - 4}")
+            ws_r.cell(r, 3, f"2026-000{r - 4}")
+
+        ws_s = wb.create_sheet(title="Summary")
+        ws_s.cell(1, 1, "COLLEGE OF ENGINEERING")
+        ws_s.cell(2, 1, "OFFICIAL GRADES")
+        ws_s.cell(4, 1, "#")
+        ws_s.cell(4, 2, "Student Number")
+        ws_s.cell(4, 3, "Final Grade")
+        for r in range(5, 10):
+            ws_s.cell(r, 1, r - 4)
+            ws_s.cell(r, 2, f"2026-000{r - 4}")
+            ws_s.cell(r, 3, "2.00")
+
+        cols_a = 18 if not swap else 7
+        cols_b = 7 if not swap else 18
+
+        ws_a = wb.create_sheet(title="Alpha_Grid")
+        ws_a.cell(4, 1, "#")
+        ws_a.cell(4, 2, "Name of Student")
+        ws_a.cell(4, 3, "Student Number")
+        for c in range(4, cols_a + 1):
+            ws_a.cell(4, c, f"A_{c}")
+        for r in range(5, 10):
+            ws_a.cell(r, 1, r - 4)
+            ws_a.cell(r, 2, f"Student {r - 4}")
+            ws_a.cell(r, 3, f"2026-000{r - 4}")
+            for c in range(4, cols_a + 1):
+                ws_a.cell(r, c, 75)
+
+        ws_b = wb.create_sheet(title="Beta_Grid")
+        ws_b.cell(4, 1, "#")
+        ws_b.cell(4, 2, "Name of Student")
+        ws_b.cell(4, 3, "Student Number")
+        for c in range(4, cols_b + 1):
+            ws_b.cell(4, c, f"B_{c}")
+        for r in range(5, 10):
+            ws_b.cell(r, 1, r - 4)
+            ws_b.cell(r, 2, f"Student {r - 4}")
+            ws_b.cell(r, 3, f"2026-000{r - 4}")
+            for c in range(4, cols_b + 1):
+                ws_b.cell(r, c, 85)
+
+        f_path = tmp_path / f"rev_dim_swap_{swap}.xlsx"
+        wb.save(str(f_path))
+
+        with pytest.raises(AmbiguousTemplateError):
+            XlsxTemplateInspector().inspect(str(f_path), profile_id="grade_sheet_xlsx")
+
+        res = detector.detect_role(str(f_path))
+        assert res.status == "ambiguous"
+        assert res.role is None
+        assert res.candidate_roles == [ROLE_GRADE_SHEET_LECTURE_LAB]
+
+
+def test_xlsx_unique_structural_evidence_still_resolves(detector, tmp_path, repo_root):
+    """
+    Forensic Micro-Closure 3: Canonical dual-component grading sheet with existing structural lineage
+    (e.g. cross-sheet aggregation references) still resolves Laboratory and Consolidated,
+    even with opaque worksheet names and permuted sheet order.
+    """
+    src_grade = os.path.join(repo_root, "templates", "GRADING_LECTURE_LAB_TEMPLATE.xlsx")
+    wb = openpyxl.load_workbook(src_grade)
+
+    # Rename all sheets to opaque non-informative names
+    wb["Lecture"].title = "Custom_Lec"
+    wb["Laboratory"].title = "Custom_Lab"
+    wb["Consolidated"].title = "Custom_Con"
+    wb["Grading Sheet"].title = "Custom_Summary"
+
+    # Permute order so Summary is first, followed by Consolidated, Lecture, and Lab
+    desired_order = ["Custom_Summary", "Custom_Con", "Custom_Lec", "Custom_Lab"]
+    wb._sheets = [wb[n] for n in desired_order if n in wb.sheetnames]
+
+    dst = tmp_path / "permuted_canonical_dual.xlsx"
+    wb.save(str(dst))
+
+    from modules.parsers.template_inspector import XlsxTemplateInspector
+    cand = XlsxTemplateInspector().inspect(str(dst), profile_id="grade_sheet_xlsx")
+    assert cand.metadata["roster_sheet"] == "Custom_Lec"
+    assert cand.metadata["summary_sheet"] == "Custom_Summary"
+    assert cand.metadata["lab_sheet"] == "Custom_Lab"
+    assert cand.metadata["con_sheet"] == "Custom_Con"
+
+    res = detector.detect_role(str(dst))
+    assert res.status == "confirmed"
+    assert res.role == ROLE_GRADE_SHEET_LECTURE_LAB
+    assert res.variant == "lecture_lab"
+
+
+def test_xlsx_permutation_invariance(detector, tmp_path, repo_root):
+    """
+    Forensic Micro-Closure 5: Permuting workbook sheet order produces the exact same detection result
+    for both ambiguous cases and uniquely resolvable cases.
+    """
+    # 1. Ambiguous case permutation invariance
+    from modules.parsers.template_inspector import XlsxTemplateInspector
+
+    wb_ambig = openpyxl.Workbook()
+    ws_r = wb_ambig.active
+    ws_r.title = "Roster"
+    ws_r.cell(1, 1, "Course: BSCS")
+    ws_r.cell(2, 1, "Instructor: Dr. Turing")
+    ws_r.cell(4, 1, "#")
+    ws_r.cell(4, 2, "Name of Student")
+    ws_r.cell(4, 3, "Student Number")
+    for r in range(5, 10):
+        ws_r.cell(r, 1, r - 4)
+        ws_r.cell(r, 2, f"Student {r - 4}")
+        ws_r.cell(r, 3, f"2026-000{r - 4}")
+
+    ws_s = wb_ambig.create_sheet(title="Summary")
+    ws_s.cell(1, 1, "COLLEGE OF ENGINEERING")
+    ws_s.cell(2, 1, "OFFICIAL GRADES")
+    ws_s.cell(4, 1, "#")
+    ws_s.cell(4, 2, "Student Number")
+    ws_s.cell(4, 3, "Final Grade")
+    for r in range(5, 10):
+        ws_s.cell(r, 1, r - 4)
+        ws_s.cell(r, 2, f"2026-000{r - 4}")
+        ws_s.cell(r, 3, "2.00")
+
+    ws_m1 = wb_ambig.create_sheet(title="Matrix_1")
+    ws_m1.cell(4, 1, "#")
+    ws_m1.cell(4, 2, "Name of Student")
+    ws_m1.cell(4, 3, "Student Number")
+    for c in range(4, 12):
+        ws_m1.cell(4, c, f"M1_{c}")
+    for r in range(5, 10):
+        ws_m1.cell(r, 1, r - 4)
+        ws_m1.cell(r, 2, f"Student {r - 4}")
+        ws_m1.cell(r, 3, f"2026-000{r - 4}")
+        for c in range(4, 12):
+            ws_m1.cell(r, c, 80)
+
+    ws_m2 = wb_ambig.create_sheet(title="Matrix_2")
+    ws_m2.cell(4, 1, "#")
+    ws_m2.cell(4, 2, "Name of Student")
+    ws_m2.cell(4, 3, "Student Number")
+    for c in range(4, 8):
+        ws_m2.cell(4, c, f"M2_{c}")
+    for r in range(5, 10):
+        ws_m2.cell(r, 1, r - 4)
+        ws_m2.cell(r, 2, f"Student {r - 4}")
+        ws_m2.cell(r, 3, f"2026-000{r - 4}")
+        for c in range(4, 8):
+            ws_m2.cell(r, c, 85)
+
+    ambig_orders = [
+        ["Roster", "Summary", "Matrix_1", "Matrix_2"],
+        ["Summary", "Matrix_2", "Roster", "Matrix_1"],
+        ["Matrix_1", "Matrix_2", "Summary", "Roster"],
+        ["Matrix_2", "Summary", "Matrix_1", "Roster"],
+    ]
+
+    for idx, order in enumerate(ambig_orders):
+        wb_ambig._sheets = [wb_ambig[n] for n in order]
+        p_order = tmp_path / f"ambig_perm_{idx}.xlsx"
+        wb_ambig.save(str(p_order))
+
+        with pytest.raises(AmbiguousTemplateError):
+            XlsxTemplateInspector().inspect(str(p_order), profile_id="grade_sheet_xlsx")
+
+        res = detector.detect_role(str(p_order))
+        assert res.status == "ambiguous"
+        assert res.role is None
+        assert res.candidate_roles == [ROLE_GRADE_SHEET_LECTURE_LAB]
+
 
 
 

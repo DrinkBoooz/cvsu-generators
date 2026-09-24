@@ -594,7 +594,7 @@ class XlsxTemplateInspector:
         with open(template_path, "rb") as f:
             fingerprint = hashlib.sha256(f.read()).hexdigest()
 
-        wb = openpyxl.load_workbook(template_path, data_only=True)
+        wb = openpyxl.load_workbook(template_path, data_only=False)
         sheet_names = wb.sheetnames
         sheet_map = {s.lower().strip(): s for s in sheet_names}
 
@@ -787,10 +787,33 @@ class XlsxTemplateInspector:
                     f"Grade sheet template '{os.path.basename(template_path)}' contains multiple secondary assessment worksheets with identical structural dimensions and evidence: {[s1, s2]}"
                 )
 
-            # Determine laboratory vs consolidated based on structural evidence:
-            # Consolidated aggregates lecture & lab components (higher cross-sheet references)
-            # Laboratory contains the component assessment grid (more assessment columns, fewer cross-sheet references)
-            if refs1 != refs2:
+            # Determine laboratory vs consolidated based on unique structural lineage:
+            # 1. Direct physical formula lineage between candidate sheets:
+            #    An aggregation sheet (Consolidated) references the assessment component (Laboratory).
+            def references_sheet(ws_source, target_title: str) -> bool:
+                pattern = re.compile(rf"(?:'|\b){re.escape(target_title)}(?:'|\b)!", re.IGNORECASE)
+                for row in ws_source.iter_rows(values_only=True):
+                    for val in row:
+                        if isinstance(val, str) and val.startswith("=") and pattern.search(val):
+                            return True
+                return False
+
+            s1_refs_s2 = references_sheet(ws1, s2)
+            s2_refs_s1 = references_sheet(ws2, s1)
+
+            if s1_refs_s2 and not s2_refs_s1:
+                con_sheet = s1
+                lab_sheet = s2
+                has_lab = True
+                has_consolidated = True
+            elif s2_refs_s1 and not s1_refs_s2:
+                con_sheet = s2
+                lab_sheet = s1
+                has_lab = True
+                has_consolidated = True
+            elif refs1 != refs2 and (refs1 > 0 or refs2 > 0):
+                # 2. Cross-sheet aggregation differential:
+                #    Consolidated aggregates lecture & lab components with extensive cross-sheet formulas
                 if refs1 > refs2:
                     con_sheet = s1
                     lab_sheet = s2
@@ -799,18 +822,11 @@ class XlsxTemplateInspector:
                     lab_sheet = s1
                 has_lab = True
                 has_consolidated = True
-            elif cols1 != cols2:
-                if cols1 > cols2:
-                    lab_sheet = s1
-                    con_sheet = s2
-                else:
-                    lab_sheet = s2
-                    con_sheet = s1
-                has_lab = True
-                has_consolidated = True
             else:
+                # Insufficient structural evidence: physical dimensions (max_column / max_row) alone
+                # must NEVER establish Laboratory versus Consolidated.
                 raise AmbiguousTemplateError(
-                    f"Grade sheet template '{os.path.basename(template_path)}' contains secondary assessment worksheets with indistinguishable structural evidence: {[s1, s2]}"
+                    f"Grade sheet template '{os.path.basename(template_path)}' contains multiple secondary assessment worksheets with different physical dimensions but no unique structural lineage distinguishing laboratory from consolidated roles: {[s1, s2]}"
                 )
         elif len(remaining_assessment_sheets) > 2:
             raise AmbiguousTemplateError(
