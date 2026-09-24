@@ -69,6 +69,9 @@ AUDIT_RULES: List[Tuple[str, str, str]] = [
     (r"(?:first_row\s*\+\s*10|max_column\s*\+\s*1,\s*50)", "arbitrary-sampling-bounds", "Arbitrary row or column sampling boundary used as authoritative role evidence"),
     (r"def\s+(?:is_aggregation_formula|has_aggregation_structure)\([^)]*all_sheets", "all-sheets-compatibility-alias", "Compatibility alias reinterpreting all_sheets as student components"),
     (r"lab_sheet\s*=\s*remaining_assessment_sheets\[0\]", "unverified-candidate-promotion", "Promoting candidate roster sheet to lab_sheet without lineage/role verification"),
+    (r"primary_roster_sheet\s*=\s*top_rosters\[0\]", "unconditional-primary-score-authority", "Metadata density score alone used as unconditional primary roster authority without topology verification"),
+    (r"primary_roster_sheet\s*=\s*(?:roster_candidates_by_sheet|candidate_rosters|sheet_names)\[0\]", "workbook-order-primary-selection", "First candidate in workbook order selected as primary roster without ambiguity check"),
+    (r"primary_roster_sheet\s*=\s*sorted\([^)]*\)\[0\]", "first-candidate-primary-wins", "Prohibited primary-role selection using sorted candidates without ambiguity check"),
 ]
 
 
@@ -77,6 +80,18 @@ def classify_finding(rel_path: str, line_num: int, label: str, snippet: str) -> 
     Classifies a raw finding into Category A, B, C, D, or E.
     Returns (Category, Justification).
     """
+    # Category E: Metadata density score alone used as unconditional primary roster authority
+    if label == "unconditional-primary-score-authority":
+        if "template_inspector.py" in rel_path or "template_role_detector.py" in rel_path or "detector" in rel_path:
+            return "E", "Prohibited metadata density score alone used as unconditional primary roster authority without topology verification"
+        return "D", "Legitimate primary candidate check"
+
+    # Category E: Workbook-order primary selection without ambiguity check
+    if label in ("workbook-order-primary-selection", "first-candidate-primary-wins"):
+        if "template_inspector.py" in rel_path or "template_role_detector.py" in rel_path or "detector" in rel_path:
+            return "E", "Prohibited workbook-order primary selection without ambiguity check"
+        return "D", "Legitimate primary candidate check"
+
     # Category E: Unverified promotion of candidate sheet to authoritative role
     if label == "unverified-candidate-promotion":
         if "template_inspector.py" in rel_path or "template_role_detector.py" in rel_path or "detector" in rel_path:
