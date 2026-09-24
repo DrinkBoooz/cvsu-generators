@@ -1475,30 +1475,68 @@ def test_attendance_indecisive_evidence_is_ambiguous(tmp_path):
     assert ok_lab is True
 
 
-def test_validate_role_no_session_ratio_rejection(tmp_path, repo_root):
+def test_validate_role_no_session_ratio_rejection(tmp_path):
     """
-    Requirement 1 & 10.5:
-    validate_role() does not reject a structurally valid template because of session-count ratio.
-    A valid template with low ratio (1.0 sessions/week) is accepted for ROLE_ATTENDANCE_LECTURE_LAB
-    when it is not demonstrably single-component (e.g. ambiguous or dual markers present).
+    Requirement 1: Prove session-ratio removal with the exact historical failure case.
+    Historically, validate_role() rejected templates with:
+        spw <= 1.25 -> "Attendance template ... has session-count ratio X <= 1.25, incompatible with Lecture+Lab role."
+    We construct physically valid Lecture+Lab attendance templates having sessions_per_week <= 1.25
+    and explicit dual instructional components (schedule/room).
+    Assert validate_role(..., ROLE_ATTENDANCE_LECTURE_LAB) returns True without ratio rejection.
     """
     detector = TemplateRoleDetector()
-    dst = tmp_path / "valid_ratio_one_dual.docx"
 
-    src_lab_lec = os.path.join(repo_root, "attendance", "template lab and lec.docx")
-    doc = docx.Document(src_lab_lec)
-    m_tbl = doc.tables[1]
-    for tr in m_tbl._element.findall(w("tr")):
-        tcs = tr.findall(w("tc"))
-        if len(tcs) > 10:
-            for _ in range(4):
-                tr.remove(tr.findall(w("tc"))[7])
-    doc.save(str(dst))
+    def make_dual_attendance_doc(path, num_weeks, num_sessions):
+        doc = docx.Document()
+        t_info = doc.add_table(rows=4, cols=2)
+        t_info.rows[0].cells[0].text = "Course Code & Title:"
+        t_info.rows[0].cells[1].text = "COSC 101 - ADVANCED COMPUTING"
+        t_info.rows[1].cells[0].text = "Class Schedule:"
+        t_info.rows[1].cells[1].text = "LEC: Mon 8-10am / LAB: Wed 1-4pm"
+        t_info.rows[2].cells[0].text = "Room Assignment:"
+        t_info.rows[2].cells[1].text = "LEC: RM 101 / LAB: CCL 2"
+        t_info.rows[3].cells[0].text = "Name of Instructor:"
+        t_info.rows[3].cells[1].text = "DR. ALAN TURING"
 
-    # Even if session count is 4 (1.0 session per week across 4 weeks), it must NOT be rejected by ratio
-    ok, err, recipe = detector.validate_role(str(dst), ROLE_ATTENDANCE_LECTURE_LAB)
-    assert ok is True, f"validate_role unexpectedly rejected: {err}"
-    assert recipe is not None
+        total_cols = 3 + num_sessions + 1
+        t_mat = doc.add_table(rows=6, cols=total_cols)
+        t_mat.rows[0].cells[0].text = "NO."
+        t_mat.rows[0].cells[1].text = "NAME"
+        t_mat.rows[0].cells[2].text = "STUDENT NUMBER"
+        for i in range(num_sessions):
+            w_idx = min(i + 1, num_weeks)
+            t_mat.rows[0].cells[3 + i].text = f"WEEK {w_idx}"
+        t_mat.rows[0].cells[total_cols - 1].text = "ABS"
+
+        for i in range(num_sessions):
+            t_mat.rows[1].cells[3 + i].text = f"Date {i + 1}"
+        t_mat.rows[1].cells[total_cols - 1].text = "TOTAL"
+
+        for r in range(2, 6):
+            t_mat.rows[r].cells[0].text = str(r - 1)
+            t_mat.rows[r].cells[1].text = f"Student {r - 1}"
+            t_mat.rows[r].cells[2].text = f"2026-000{r}"
+        doc.save(str(path))
+
+    # Case A: 4 weeks, 5 sessions (spw = 1.25) -> exactly inside the historical rejection cutoff (spw <= 1.25)
+    p_125 = tmp_path / "dual_spw_125.docx"
+    make_dual_attendance_doc(p_125, num_weeks=4, num_sessions=5)
+    res_125 = detector.detect_role(str(p_125))
+    assert res_125.status == "confirmed"
+    assert res_125.role == ROLE_ATTENDANCE_LECTURE_LAB
+    ok_125, err_125, recipe_125 = detector.validate_role(str(p_125), ROLE_ATTENDANCE_LECTURE_LAB)
+    assert ok_125 is True, f"validate_role unexpectedly rejected Case A (spw=1.25): {err_125}"
+    assert recipe_125 is not None
+
+    # Case B: 6 weeks, 6 sessions (spw = 1.0) -> nonstandard physical capacity well below 1.25
+    p_100 = tmp_path / "dual_spw_100.docx"
+    make_dual_attendance_doc(p_100, num_weeks=6, num_sessions=6)
+    res_100 = detector.detect_role(str(p_100))
+    assert res_100.status == "confirmed"
+    assert res_100.role == ROLE_ATTENDANCE_LECTURE_LAB
+    ok_100, err_100, recipe_100 = detector.validate_role(str(p_100), ROLE_ATTENDANCE_LECTURE_LAB)
+    assert ok_100 is True, f"validate_role unexpectedly rejected Case B (spw=1.00): {err_100}"
+    assert recipe_100 is not None
 
 
 def test_generic_four_column_roster_not_classified_as_syllabus(tmp_path):
@@ -1847,6 +1885,230 @@ def test_independently_constructed_foreign_fixtures_e2e(tmp_path):
     finally:
         set_manager.activate_template_set(BUILTIN_SET_ID)
         set_manager.delete_template_set(ts.set_id)
+
+
+def test_xlsx_worksheet_name_permutations(tmp_path, repo_root):
+    """
+    Requirement 3:
+    1. Builds one valid Lecture+Lab workbook.
+    2. Captures its validated structural recipe.
+    3. Renames all worksheets to arbitrary opaque identifiers:
+       Omega, Q7, Ledger_19, BlueSheet, Archive_X, Aux_Tbl, Temp_Sheet
+    4. Permutationally reorders those sheets.
+    5. Re-inspects and re-validates.
+    6. Repeats with another completely different set of worksheet names (Alpha, Beta, Gamma, Delta, Epsilon, Zeta, Eta).
+    7. Compares the structural recipe fields:
+       The structural recipe coordinates must be identical except for naturally expected worksheet-name metadata fields.
+       The selected logical roster/summary/lab/consolidated structures MUST remain the same.
+    """
+    src_grade = os.path.join(repo_root, "templates", "GRADING_LECTURE_LAB_TEMPLATE.xlsx")
+
+    inspector = XlsxTemplateInspector()
+    orig_cand = inspector.inspect(src_grade, "grade_sheet_xlsx")
+    validator = RecipeValidator()
+    orig_recipe = validator.validate(orig_cand, "grade_sheet_xlsx")
+
+    # Permutation 1: Set 1 of opaque names and arbitrary reordering
+    names_set_1 = {
+        "Lecture": "Omega",
+        "Laboratory": "Q7",
+        "Consolidated": "Ledger_19",
+        "Grading Sheet": "BlueSheet",
+        "Notes": "Archive_X",
+        "Transmutation Table": "Aux_Tbl",
+        "Sheet1": "Temp_Sheet",
+    }
+    p1 = tmp_path / "permuted_grades_set1.xlsx"
+    wb1 = openpyxl.load_workbook(src_grade)
+    for old_n, new_n in names_set_1.items():
+        if old_n in wb1.sheetnames:
+            wb1[old_n].title = new_n
+
+    # Reorder sheets arbitrarily: BlueSheet (summary) at index 0, Archive_X, Ledger_19, Q7, Omega, etc.
+    desired_order_1 = ["BlueSheet", "Archive_X", "Ledger_19", "Aux_Tbl", "Q7", "Temp_Sheet", "Omega"]
+    wb1._sheets = [wb1[n] for n in desired_order_1 if n in wb1.sheetnames]
+    wb1.save(str(p1))
+
+    cand1 = inspector.inspect(str(p1), "grade_sheet_xlsx")
+    recipe1 = validator.validate(cand1, "grade_sheet_xlsx")
+
+    assert cand1.metadata["roster_sheet"] == "Omega"
+    assert cand1.metadata["lab_sheet"] == "Q7"
+    assert cand1.metadata["con_sheet"] == "Ledger_19"
+    assert cand1.metadata["summary_sheet"] == "BlueSheet"
+
+    # Permutation 2: Set 2 of completely different opaque names and reverse order
+    names_set_2 = {
+        "Lecture": "Alpha",
+        "Laboratory": "Beta",
+        "Consolidated": "Gamma",
+        "Grading Sheet": "Delta",
+        "Notes": "Epsilon",
+        "Transmutation Table": "Zeta",
+        "Sheet1": "Eta",
+    }
+    p2 = tmp_path / "permuted_grades_set2.xlsx"
+    wb2 = openpyxl.load_workbook(src_grade)
+    for old_n, new_n in names_set_2.items():
+        if old_n in wb2.sheetnames:
+            wb2[old_n].title = new_n
+
+    desired_order_2 = ["Eta", "Zeta", "Gamma", "Epsilon", "Beta", "Delta", "Alpha"]
+    wb2._sheets = [wb2[n] for n in desired_order_2 if n in wb2.sheetnames]
+    wb2.save(str(p2))
+
+    cand2 = inspector.inspect(str(p2), "grade_sheet_xlsx")
+    recipe2 = validator.validate(cand2, "grade_sheet_xlsx")
+
+    assert cand2.metadata["roster_sheet"] == "Alpha"
+    assert cand2.metadata["lab_sheet"] == "Beta"
+    assert cand2.metadata["con_sheet"] == "Gamma"
+    assert cand2.metadata["summary_sheet"] == "Delta"
+
+    # Compare structural recipe coordinates between orig, set1, and set2
+    assert recipe1.roster_binding.first_data_row_index == orig_recipe.roster_binding.first_data_row_index
+    assert recipe1.roster_binding.name_col == orig_recipe.roster_binding.name_col
+    assert recipe1.roster_binding.id_col == orig_recipe.roster_binding.id_col
+    assert recipe1.roster_binding.capacity_limit == orig_recipe.roster_binding.capacity_limit
+
+    assert recipe2.roster_binding.first_data_row_index == orig_recipe.roster_binding.first_data_row_index
+    assert recipe2.roster_binding.name_col == orig_recipe.roster_binding.name_col
+    assert recipe2.roster_binding.id_col == orig_recipe.roster_binding.id_col
+    assert recipe2.roster_binding.capacity_limit == orig_recipe.roster_binding.capacity_limit
+
+    assert len(recipe1.header_bindings) == len(orig_recipe.header_bindings)
+    assert len(recipe2.header_bindings) == len(orig_recipe.header_bindings)
+
+
+def test_attendance_foreign_terminology_structural_differentiation(tmp_path):
+    """
+    Requirement 4:
+    Create independently constructed attendance fixtures whose instructional components do not use:
+      LAB, LECTURE, LEC, LABORATORY, THEORY
+    Use arbitrary foreign concepts/labels.
+    The physical structure must still distinguish:
+      - physical dual structure -> Lecture+Lab (ROLE_ATTENDANCE_LECTURE_LAB)
+      - physical single structure -> Lecture (ROLE_ATTENDANCE_LECTURE)
+      - insufficient structural distinction -> ambiguous
+    """
+    detector = TemplateRoleDetector()
+
+    # 1. Foreign Dual Component (No LEC, LAB, THEORY, LABORATORY)
+    doc_dual = docx.Document()
+    t_info_d = doc_dual.add_table(rows=4, cols=2)
+    t_info_d.rows[0].cells[0].text = "Course Code & Title:"
+    t_info_d.rows[0].cells[1].text = "ASTRONOMY 101 - CELESTIAL MECHANICS"
+    t_info_d.rows[1].cells[0].text = "Class Schedule:"
+    t_info_d.rows[1].cells[1].text = "08:00-10:00 Mon / 13:00-16:00 Wed"
+    t_info_d.rows[2].cells[0].text = "Room Assignment:"
+    t_info_d.rows[2].cells[1].text = "Hall Alpha / Workshop Beta"
+    t_info_d.rows[3].cells[0].text = "Name of Instructor:"
+    t_info_d.rows[3].cells[1].text = "DR. NICOLAUS COPERNICUS"
+
+    t_mat_d = doc_dual.add_table(rows=6, cols=8)
+    t_mat_d.rows[0].cells[0].text = "NO."
+    t_mat_d.rows[0].cells[1].text = "STUDENT NAME"
+    t_mat_d.rows[0].cells[2].text = "STUDENT NUMBER"
+    t_mat_d.rows[0].cells[3].text = "WEEK 1"
+    t_mat_d.rows[0].cells[4].text = "WEEK 1"  # Multi-session cycle block
+    t_mat_d.rows[0].cells[5].text = "WEEK 2"
+    t_mat_d.rows[0].cells[6].text = "WEEK 2"  # Multi-session cycle block
+    t_mat_d.rows[0].cells[7].text = "ABS"
+
+    for i in range(4):
+        t_mat_d.rows[1].cells[3 + i].text = f"Date {i + 1}"
+    t_mat_d.rows[1].cells[7].text = "TOTAL"
+
+    for r in range(2, 6):
+        t_mat_d.rows[r].cells[0].text = str(r - 1)
+        t_mat_d.rows[r].cells[1].text = f"Scholar {r - 1}"
+        t_mat_d.rows[r].cells[2].text = f"2026-000{r}"
+
+    p_dual = tmp_path / "foreign_dual.docx"
+    doc_dual.save(str(p_dual))
+
+    # Assert no forbidden terms in dual fixture
+    full_text_d = " ".join([p.text for p in doc_dual.paragraphs] + [c.text for t in doc_dual.tables for r in t.rows for c in r.cells]).upper()
+    for forbidden in ["LAB", "LECTURE", "LEC", "LABORATORY", "THEORY"]:
+        assert forbidden not in full_text_d.split() and f"{forbidden}:" not in full_text_d
+
+    res_dual = detector.detect_role(str(p_dual))
+    assert res_dual.status == "confirmed"
+    assert res_dual.role == ROLE_ATTENDANCE_LECTURE_LAB
+    assert res_dual.variant == "lecture_lab"
+
+    # 2. Foreign Single Component (No LEC, LAB, THEORY, LABORATORY)
+    doc_single = docx.Document()
+    t_info_s = doc_single.add_table(rows=4, cols=2)
+    t_info_s.rows[0].cells[0].text = "Course Code & Title:"
+    t_info_s.rows[0].cells[1].text = "PHILOSOPHY 201 - FORMAL LOGIC"
+    t_info_s.rows[1].cells[0].text = "Class Schedule:"
+    t_info_s.rows[1].cells[1].text = "09:00-12:00 Friday"
+    t_info_s.rows[2].cells[0].text = "Room Assignment:"
+    t_info_s.rows[2].cells[1].text = "Forum Hall 1"
+    t_info_s.rows[3].cells[0].text = "Name of Instructor:"
+    t_info_s.rows[3].cells[1].text = "DR. ARISTOTLE"
+
+    t_mat_s = doc_single.add_table(rows=6, cols=8)
+    t_mat_s.rows[0].cells[0].text = "NO."
+    t_mat_s.rows[0].cells[1].text = "STUDENT NAME"
+    t_mat_s.rows[0].cells[2].text = "STUDENT NUMBER"
+    for i in range(4):
+        t_mat_s.rows[0].cells[3 + i].text = f"WEEK {i + 1}"
+    t_mat_s.rows[0].cells[7].text = "ABS"
+
+    for i in range(4):
+        t_mat_s.rows[1].cells[3 + i].text = f"Date {i + 1}"
+    t_mat_s.rows[1].cells[7].text = "TOTAL"
+
+    for r in range(2, 6):
+        t_mat_s.rows[r].cells[0].text = str(r - 1)
+        t_mat_s.rows[r].cells[1].text = f"Scholar {r - 1}"
+        t_mat_s.rows[r].cells[2].text = f"2026-000{r}"
+
+    p_single = tmp_path / "foreign_single.docx"
+    doc_single.save(str(p_single))
+
+    full_text_s = " ".join([p.text for p in doc_single.paragraphs] + [c.text for t in doc_single.tables for r in t.rows for c in r.cells]).upper()
+    for forbidden in ["LAB", "LECTURE", "LEC", "LABORATORY", "THEORY"]:
+        assert forbidden not in full_text_s.split() and f"{forbidden}:" not in full_text_s
+
+    res_single = detector.detect_role(str(p_single))
+    assert res_single.status == "confirmed"
+    assert res_single.role == ROLE_ATTENDANCE_LECTURE
+    assert res_single.variant == "lecture"
+
+    # 3. Foreign Ambiguous (No decisive dual/single markers)
+    doc_ambig = docx.Document()
+    t_info_a = doc_ambig.add_table(rows=3, cols=2)
+    t_info_a.rows[0].cells[0].text = "Course Code & Title:"
+    t_info_a.rows[0].cells[1].text = "SEMINAR 501 - ADVANCED RESEARCH"
+    t_info_a.rows[1].cells[0].text = "Class Schedule:"
+    t_info_a.rows[1].cells[1].text = "By Arrangement"
+    t_info_a.rows[2].cells[0].text = "Name of Instructor:"
+    t_info_a.rows[2].cells[1].text = "DR. HYPATIA"
+
+    t_mat_a = doc_ambig.add_table(rows=6, cols=7)
+    t_mat_a.rows[0].cells[0].text = "NO."
+    t_mat_a.rows[0].cells[1].text = "STUDENT NAME"
+    t_mat_a.rows[0].cells[2].text = "STUDENT NUMBER"
+    for i in range(3):
+        t_mat_a.rows[0].cells[3 + i].text = f"Col {i + 1}"
+    t_mat_a.rows[0].cells[6].text = "ABS"
+    for i in range(3):
+        t_mat_a.rows[1].cells[3 + i].text = f"Meeting {i + 1}"
+    t_mat_a.rows[1].cells[6].text = "TOTAL"
+    for r in range(2, 6):
+        t_mat_a.rows[r].cells[0].text = str(r - 1)
+        t_mat_a.rows[r].cells[1].text = f"Scholar {r - 1}"
+        t_mat_a.rows[r].cells[2].text = f"2026-000{r}"
+
+    p_ambig = tmp_path / "foreign_ambig.docx"
+    doc_ambig.save(str(p_ambig))
+
+    res_ambig = detector.detect_role(str(p_ambig))
+    assert res_ambig.status == "ambiguous"
+    assert res_ambig.role is None
 
 
 def test_structural_audit_catches_prohibited_assumptions(repo_root):

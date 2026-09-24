@@ -676,10 +676,6 @@ class XlsxTemplateInspector:
                         m = SemanticRegistry.match_metadata_candidate(val.strip())
                         if m:
                             score += 25
-            s_lower = s_name.lower().strip()
-            # Non-authoritative tie-breaker ONLY (never overrides metadata score)
-            if "lecture" in s_lower or "theory" in s_lower or "main" in s_lower:
-                score += 1
             return score
 
         primary_roster_sheet: Optional[str] = None
@@ -700,9 +696,6 @@ class XlsxTemplateInspector:
         def score_summary_sheet(s_name: str) -> int:
             if s_name == primary_roster_sheet:
                 return -100
-            s_lower = s_name.lower().strip()
-            if s_lower in ("notes", "instructions", "guide", "readme", "transmutation table"):
-                return -50
             ws_s = wb[s_name]
             score = 0
             has_student_id = False
@@ -731,9 +724,6 @@ class XlsxTemplateInspector:
                 score += 50
             if has_banner:
                 score += 25
-            # Non-authoritative tie-breaker only (cannot override structural evidence)
-            if "grading" in s_lower or "grade" in s_lower or "summary" in s_lower:
-                score += 1
             return score
 
         candidate_summary_sheets = [s for s in sheet_names if s != primary_roster_sheet]
@@ -759,32 +749,18 @@ class XlsxTemplateInspector:
         con_sheet: Optional[str] = None
 
         if remaining_assessment_sheets:
-            def lab_tie_breaker(s: str) -> int:
-                s_l = s.lower()
-                return 10 if ("lab" in s_l or "prac" in s_l) else 0
-
-            sorted_remaining = sorted(remaining_assessment_sheets, key=lab_tie_breaker, reverse=True)
+            # Secondary assessment sheet (e.g. lab) is the raw assessment grid with more columns;
+            # Consolidated sheet aggregates lecture and lab (fewer columns)
+            sorted_remaining = sorted(
+                remaining_assessment_sheets,
+                key=lambda s: wb[s].max_column,
+                reverse=True,
+            )
             lab_sheet = sorted_remaining[0]
 
             if len(sorted_remaining) > 1:
                 has_consolidated = True
                 con_sheet = sorted_remaining[1]
-            else:
-                for s in sheet_names:
-                    if s not in (primary_roster_sheet, summary_sheet, lab_sheet):
-                        if any(k in s.lower() for k in ("consolidat", "combined", "computation", "result")):
-                            has_consolidated = True
-                            con_sheet = s
-                            break
-        else:
-            # Fallback check for sheets with lab in name or practical
-            for s in sheet_names:
-                if s not in (primary_roster_sheet, summary_sheet):
-                    s_l = s.lower()
-                    if "lab" in s_l or "prac" in s_l:
-                        has_lab = True
-                        lab_sheet = s
-                        break
 
 
         ws_lec = wb[primary_roster_sheet]

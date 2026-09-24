@@ -51,6 +51,8 @@ AUDIT_RULES: List[Tuple[str, str, str]] = [
     (r"(?:cap|capacity|sessions_per_week|spw)\s*(?:>=|<=|>|<|==)\s*\d+(?:\.\d+)?", "capacity-session-threshold", "Numeric capacity or sessions-per-week threshold"),
     (r"total_cols\s*==\s*\d+", "total-cols-equality", "Fixed total_cols equality assumption"),
     (r"total_rows\s*==\s*\d+", "total-rows-equality", "Fixed total_rows equality assumption"),
+    (r"sheetnames\[0\]|worksheets\[0\]", "worksheet-0-lookup", "Fixed worksheet index 0 lookup"),
+    (r"(?:ws_name|sheet_name|s_name)\s*==\s*[\"']", "worksheet-name-equality", "Worksheet name equality check"),
 ]
 
 
@@ -66,6 +68,19 @@ def classify_finding(rel_path: str, line_num: int, label: str, snippet: str) -> 
     # Category E: Filename substring role authority
     if label == "filename-role-classification":
         return "E", "Prohibited filename substring authoritative role classification"
+
+    # Category E: Fixed worksheet index 0 used as role authority
+    if label == "worksheet-0-lookup":
+        if "template_role_detector.py" in rel_path or "detector" in rel_path:
+            return "E", "Prohibited fixed worksheet index 0 used as role authority"
+        return "D", "Sequential workbook processing or default sheet selection"
+
+    # Category E: Worksheet name equality used as role authority
+    if label == "worksheet-name-equality":
+        if "template_role_detector.py" in rel_path or "detector" in rel_path or "validator" in rel_path:
+            if any(term in snippet for term in ("role", "ROLE_", "variant", "return")):
+                return "E", "Prohibited worksheet name equality used as role authority"
+        return "D", "Internal dictionary or config mapping"
 
     # Category B: Numeric capacity / sessions-per-week thresholds
     if label == "capacity-session-threshold":
@@ -101,10 +116,12 @@ def classify_finding(rel_path: str, line_num: int, label: str, snippet: str) -> 
 
     # Category D: Worksheet name authority
     if label in ("literal-Lecture-name", "literal-Laboratory-name", "literal-Grading-Sheet-name"):
-        if "TEMPLATE_FILES" in snippet or "defaults" in snippet.lower():
+        if ("template_role_detector.py" in rel_path or "detector" in rel_path) and any(term in snippet for term in ("role =", "return ROLE_", "candidate =")):
+            return "E", "Prohibited worksheet name token used as role authority in detector"
+        elif "TEMPLATE_FILES" in snippet or "defaults" in snippet.lower():
             return "D", "Legitimate business default / bundled template mapping"
-        elif "sheet_map" in snippet or "in sheet_names" in snippet or "score_roster_sheet" in snippet or "score_summary_sheet" in snippet:
-            return "B", "Non-authoritative tie-breaker / backwards-compatible semantic hint"
+        elif "sheet_map" in snippet or "in sheet_names" in snippet:
+            return "B", "Non-authoritative backwards-compatible semantic hint"
         elif "wb[" in snippet or "ws[" in snippet:
             return "D", "Workbook target cell population"
         else:
@@ -228,7 +245,7 @@ def audit(scan_dir: str = MODULES_DIR) -> int:
             print(f"  - {v['file']}:{v['line_num']}: {v['snippet']} ({reason})")
         return 1
     else:
-        print("\n[PASS] Zero prohibited authoritative assumptions found across modules/.")
+        print("\n[PASS] The current structural audit found zero Category E prohibited authoritative assumptions across modules/.")
         return 0
 
 
