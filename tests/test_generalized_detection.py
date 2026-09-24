@@ -3652,6 +3652,7 @@ def test_structural_audit_catches_prohibited_assumptions():
         ("modules/parsers/template_inspector.py", "cols = range(1, min(ws.max_column + 1, 50))", "arbitrary-sampling-bounds"),
         ("modules/parsers/template_inspector.py", "def is_aggregation_formula(val, other_sheet, all_sheets):", "all-sheets-compatibility-alias"),
         ("modules/parsers/template_inspector.py", "lab_sheet = remaining_assessment_sheets[0]", "unverified-candidate-promotion"),
+        ("modules/parsers/template_inspector.py", "primary_roster_sheet = primary_candidate", "metadata-primary-authority-anti-pattern"),
     ]
 
     for rel_path, snippet, expected_label in violations:
@@ -4379,8 +4380,8 @@ def test_xlsx_legitimate_dual_component_positive_control(tmp_path):
     ws_sec.cell(6, 4, "Lab Grade")
     for r in range(7, 12):
         ws_sec.cell(r, 1, r - 6)
-        ws_sec.cell(r, 2, f"Student {r - 6}")
-        ws_sec.cell(r, 3, f"2026-000{r - 6}")
+        ws_sec.cell(r, 2, f"='Primary Component'!B{r}")
+        ws_sec.cell(r, 3, f"='Primary Component'!C{r}")
         ws_sec.cell(r, 4, 94)
 
     # Consolidated Component: combines Primary Component and Secondary Component
@@ -4391,8 +4392,8 @@ def test_xlsx_legitimate_dual_component_positive_control(tmp_path):
     ws_con.cell(6, 4, "Combined Grade")
     for r in range(7, 12):
         ws_con.cell(r, 1, r - 6)
-        ws_con.cell(r, 2, f"Student {r - 6}")
-        ws_con.cell(r, 3, f"2026-000{r - 6}")
+        ws_con.cell(r, 2, f"='Primary Component'!B{r}")
+        ws_con.cell(r, 3, f"='Primary Component'!C{r}")
         ws_con.cell(r, 4, f"='Primary Component'!D{r}*0.6 + 'Secondary Component'!D{r}*0.4")
 
     # Summary: Official Results
@@ -4612,8 +4613,8 @@ def test_xlsx_convincing_fake_master_never_becomes_authoritative_role(tmp_path):
     ws_sec.cell(6, 4, "Lab Practical Score")
     for r in range(7, 12):
         ws_sec.cell(r, 1, r - 6)
-        ws_sec.cell(r, 2, f"Student {r - 6}")
-        ws_sec.cell(r, 3, f"2026-PHYS-{r - 6:03d}")
+        ws_sec.cell(r, 2, f"='Primary Component'!B{r}")
+        ws_sec.cell(r, 3, f"='Primary Component'!C{r}")
         ws_sec.cell(r, 4, 94)
 
     # 3. Consolidated candidate (combines Primary Component and Secondary Component)
@@ -4624,8 +4625,8 @@ def test_xlsx_convincing_fake_master_never_becomes_authoritative_role(tmp_path):
     ws_con.cell(6, 4, "Combined Final")
     for r in range(7, 12):
         ws_con.cell(r, 1, r - 6)
-        ws_con.cell(r, 2, f"Student {r - 6}")
-        ws_con.cell(r, 3, f"2026-PHYS-{r - 6:03d}")
+        ws_con.cell(r, 2, f"='Primary Component'!B{r}")
+        ws_con.cell(r, 3, f"='Primary Component'!C{r}")
         ws_con.cell(r, 4, f"='Primary Component'!D{r}*0.6 + 'Secondary Component'!D{r}*0.4")
 
     # 4. Official results/summary
@@ -4725,8 +4726,8 @@ def test_xlsx_valid_foreign_dual_component_positive_control(tmp_path):
     ws_sec.cell(6, 4, "Lab Score")
     for r in range(7, 12):
         ws_sec.cell(r, 1, r - 6)
-        ws_sec.cell(r, 2, f"Student {r - 6}")
-        ws_sec.cell(r, 3, f"2026-PHYS-{r - 6:03d}")
+        ws_sec.cell(r, 2, f"='Primary Component'!B{r}")
+        ws_sec.cell(r, 3, f"='Primary Component'!C{r}")
         ws_sec.cell(r, 4, 95)
 
     # Consolidated Component
@@ -4737,8 +4738,8 @@ def test_xlsx_valid_foreign_dual_component_positive_control(tmp_path):
     ws_con.cell(6, 4, "Composite Grade")
     for r in range(7, 12):
         ws_con.cell(r, 1, r - 6)
-        ws_con.cell(r, 2, f"Student {r - 6}")
-        ws_con.cell(r, 3, f"2026-PHYS-{r - 6:03d}")
+        ws_con.cell(r, 2, f"='Primary Component'!B{r}")
+        ws_con.cell(r, 3, f"='Primary Component'!C{r}")
         ws_con.cell(r, 4, f"='Primary Component'!D{r}*0.6 + 'Secondary Component'!D{r}*0.4")
 
     # Official Results
@@ -5113,8 +5114,8 @@ def test_xlsx_legitimate_positive_control_with_stronger_primary_metadata(tmp_pat
     ws_sec.cell(6, 4, "Lab Score")
     for r in range(7, 12):
         ws_sec.cell(r, 1, r - 6)
-        ws_sec.cell(r, 2, f"Student {r - 6}")
-        ws_sec.cell(r, 3, f"2026-PHYS-{r - 6:03d}")
+        ws_sec.cell(r, 2, f"='Primary Component'!B{r}")
+        ws_sec.cell(r, 3, f"='Primary Component'!C{r}")
         ws_sec.cell(r, 4, 92)
 
     # 3. Consolidated Component
@@ -5125,8 +5126,8 @@ def test_xlsx_legitimate_positive_control_with_stronger_primary_metadata(tmp_pat
     ws_con.cell(6, 4, "Combined Grade")
     for r in range(7, 12):
         ws_con.cell(r, 1, r - 6)
-        ws_con.cell(r, 2, f"Student {r - 6}")
-        ws_con.cell(r, 3, f"2026-PHYS-{r - 6:03d}")
+        ws_con.cell(r, 2, f"='Primary Component'!B{r}")
+        ws_con.cell(r, 3, f"='Primary Component'!C{r}")
         ws_con.cell(r, 4, f"='Primary Component'!D{r}*0.6 + 'Secondary Component'!D{r}*0.4")
 
     # 4. Official Results
@@ -5258,8 +5259,8 @@ def test_xlsx_indistinguishable_master_hard_information_boundary_is_ambiguous(tm
     ws_lab.cell(6, 4, "Lab Assessment")
     for r in range(7, 12):
         ws_lab.cell(r, 1, r - 6)
-        ws_lab.cell(r, 2, f"Student {r - 6}")
-        ws_lab.cell(r, 3, f"2026-CHEM-{r - 6:03d}")
+        ws_lab.cell(r, 2, f"='Primary Component'!B{r}")
+        ws_lab.cell(r, 3, f"='Primary Component'!C{r}")
         ws_lab.cell(r, 4, 90)
 
     # 3. Fake Master: physically equivalent roster structure, assessment column
@@ -5270,8 +5271,8 @@ def test_xlsx_indistinguishable_master_hard_information_boundary_is_ambiguous(tm
     ws_fak.cell(6, 4, "Master Assessment")
     for r in range(7, 12):
         ws_fak.cell(r, 1, r - 6)
-        ws_fak.cell(r, 2, f"Student {r - 6}")
-        ws_fak.cell(r, 3, f"2026-CHEM-{r - 6:03d}")
+        ws_fak.cell(r, 2, f"='Primary Component'!B{r}")
+        ws_fak.cell(r, 3, f"='Primary Component'!C{r}")
         ws_fak.cell(r, 4, 92)
 
     # 4. Consolidated Component participates in physically identical consolidation topology
@@ -5283,8 +5284,8 @@ def test_xlsx_indistinguishable_master_hard_information_boundary_is_ambiguous(tm
     ws_con.cell(6, 4, "Aggregated Grade")
     for r in range(7, 12):
         ws_con.cell(r, 1, r - 6)
-        ws_con.cell(r, 2, f"Student {r - 6}")
-        ws_con.cell(r, 3, f"2026-CHEM-{r - 6:03d}")
+        ws_con.cell(r, 2, f"='Primary Component'!B{r}")
+        ws_con.cell(r, 3, f"='Primary Component'!C{r}")
         ws_con.cell(r, 4, f"='Primary Component'!D{r}*0.6 + 'Real Laboratory'!D{r}*0.2 + 'Fake Master'!D{r}*0.2")
 
     # 5. Official Results
@@ -5565,8 +5566,8 @@ def test_xlsx_numeric_master_contribution_is_ambiguous_without_independent_role_
     ws_sec.cell(7, 4, "Score")
     for r in range(8, 13):
         ws_sec.cell(r, 1, r - 7)
-        ws_sec.cell(r, 2, f"Student {r - 7}")
-        ws_sec.cell(r, 3, f"2026-PHYS-{r - 7:03d}")
+        ws_sec.cell(r, 2, f"='Primary Component'!B{r}")
+        ws_sec.cell(r, 3, f"='Primary Component'!C{r}")
         ws_sec.cell(r, 4, 90)
 
     # 3. Consolidated Component: physically consumes Directory Score from Student Master!
@@ -5577,8 +5578,8 @@ def test_xlsx_numeric_master_contribution_is_ambiguous_without_independent_role_
     ws_con.cell(7, 4, "Combined Grade")
     for r in range(8, 13):
         ws_con.cell(r, 1, r - 7)
-        ws_con.cell(r, 2, f"Student {r - 7}")
-        ws_con.cell(r, 3, f"2026-PHYS-{r - 7:03d}")
+        ws_con.cell(r, 2, f"='Primary Component'!B{r}")
+        ws_con.cell(r, 3, f"='Primary Component'!C{r}")
         ws_con.cell(r, 4, f"='Primary Component'!D{r}*0.5 + 'Secondary Component'!D{r}*0.3 + 'Student Master'!B{r - 3}*0.2")
 
     # 4. Student Master: contains Student ID and Directory Score
@@ -5823,6 +5824,226 @@ def test_xlsx_summary_helper_referenced_only_for_metadata_not_selected_as_summar
     res = detector.detect_role(str(p))
     assert res.status == "confirmed"
     assert res.role == ROLE_GRADE_SHEET_LECTURE
+
+
+def test_xlsx_higher_metadata_secondary_does_not_override_primary_without_independent_discriminator(detector, tmp_path):
+    """
+    Commit 178 forensic micro-closure:
+    Secondary Component has significantly higher metadata score (10 fields) than Primary Component (3 fields).
+    Both are valid roster candidates, have valid student data regions, valid score structures,
+    and are physically integrated into final grading via Consolidated Component.
+    However, NEITHER derives from the other and NEITHER has an independent structural discriminator
+    (asymmetric dependency, summary student roster identity, or consolidation student identity).
+
+    METADATA DENSITY = CANDIDATE EVIDENCE ONLY.
+    Secondary MUST NOT be promoted to primary solely from metadata density.
+    Because multiple primary-compatible candidates remain without an independent physical discriminator,
+    the system MUST fail closed as ambiguous:
+        status == "ambiguous"
+        role is None
+    """
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+
+    # 1. Primary Component (lower metadata score: 3 fields)
+    ws_prim = wb.create_sheet(title="Primary Component")
+    ws_prim.cell(1, 1, "Instructor: Dr. Richard Feynman")
+    ws_prim.cell(2, 1, "Course & Section: Physics 101")
+    ws_prim.cell(3, 1, "Subject: Mechanics")
+    ws_prim.cell(6, 1, "#")
+    ws_prim.cell(6, 2, "Student Name")
+    ws_prim.cell(6, 3, "Student Number")
+    ws_prim.cell(6, 4, "Lecture Grade")
+    for r in range(7, 12):
+        ws_prim.cell(r, 1, r - 6)
+        ws_prim.cell(r, 2, f"Student {r - 6}")
+        ws_prim.cell(r, 3, f"2026-PHYS-{r - 6:03d}")
+        ws_prim.cell(r, 4, 88)
+
+    # 2. Secondary Component (much higher metadata score: 10 fields)
+    ws_sec = wb.create_sheet(title="Secondary Component")
+    ws_sec.cell(1, 1, "Instructor: Dr. Richard Feynman")
+    ws_sec.cell(2, 1, "Course & Section: Physics 101")
+    ws_sec.cell(3, 1, "Subject: Mechanics")
+    ws_sec.cell(4, 1, "Section: Section A")
+    ws_sec.cell(5, 1, "Term: 1st Semester")
+    ws_sec.cell(6, 1, "#")
+    ws_sec.cell(6, 2, "Student Name")
+    ws_sec.cell(6, 3, "Student Number")
+    ws_sec.cell(6, 4, "Lab Score")
+    ws_sec.cell(13, 1, "Program: BS Applied Physics")
+    ws_sec.cell(14, 1, "Department: Physical Sciences")
+    ws_sec.cell(15, 1, "College: College of Arts and Sciences")
+    ws_sec.cell(16, 1, "Campus: Main Campus")
+    ws_sec.cell(17, 1, "Academic Year: AY 2026-2027")
+    for r in range(7, 12):
+        ws_sec.cell(r, 1, r - 6)
+        ws_sec.cell(r, 2, f"Student {r - 6}")
+        ws_sec.cell(r, 3, f"2026-PHYS-{r - 6:03d}")
+        ws_sec.cell(r, 4, 95)
+
+    # 3. Consolidated Component (symmetrically combines scores from both components)
+    ws_con = wb.create_sheet(title="Consolidated Component")
+    ws_con.cell(6, 1, "#")
+    ws_con.cell(6, 2, "Student Name")
+    ws_con.cell(6, 3, "Student Number")
+    ws_con.cell(6, 4, "Combined Grade")
+    for r in range(7, 12):
+        ws_con.cell(r, 1, r - 6)
+        ws_con.cell(r, 2, f"Student {r - 6}")
+        ws_con.cell(r, 3, f"2026-PHYS-{r - 6:03d}")
+        ws_con.cell(r, 4, f"='Primary Component'!D{r}*0.6 + 'Secondary Component'!D{r}*0.4")
+
+    # 4. Official Results
+    ws_sum = wb.create_sheet(title="Official Results")
+    ws_sum.cell(1, 1, "Republic of the Philippines")
+    ws_sum.cell(2, 1, "Cavite State University")
+    ws_sum.cell(3, 1, "Official Grades Summary")
+    ws_sum.cell(6, 1, "Student Number")
+    ws_sum.cell(6, 2, "Final Rating")
+    for r in range(7, 12):
+        ws_sum.cell(r, 1, f"2026-PHYS-{r - 6:03d}")
+        ws_sum.cell(r, 2, f"='Consolidated Component'!D{r}")
+
+    p = tmp_path / "higher_metadata_secondary_no_discriminator.xlsx"
+    wb.save(str(p))
+
+    # Inspector MUST raise AmbiguousTemplateError because multiple primary candidates exist without discriminator
+    with pytest.raises(AmbiguousTemplateError) as exc_info:
+        XlsxTemplateInspector().inspect(str(p), profile_id="grade_sheet_xlsx")
+    assert "multiple ambiguous candidate roster worksheets" in str(exc_info.value)
+
+    # Detector MUST fail closed as ambiguous
+    res = detector.detect_role(str(p))
+    assert res.status == "ambiguous"
+    assert res.role is None
+
+
+def test_xlsx_primary_selection_permutation_invariance(detector, tmp_path):
+    """
+    Commit 178 permutation regression:
+    Worksheet creation/order must NEVER determine primary role.
+
+    Permutation A (Ambiguous case):
+      Permutation 1: [Primary, Secondary, Consolidated, Official Results]
+      Permutation 2: [Secondary, Primary, Consolidated, Official Results]
+      Both permutations MUST fail closed as ambiguous.
+
+    Permutation B (Positive control with independent physical discriminator):
+      Secondary derives student roster from Primary (asymmetric dependency).
+      Permutation 1: [Primary, Secondary, Consolidated, Official Results]
+      Permutation 2: [Secondary, Primary, Consolidated, Official Results]
+      Both permutations MUST resolve to the exact same confirmed semantic roles:
+        roster_sheet == "Primary Component"
+        lab_sheet == "Secondary Component"
+        con_sheet == "Consolidated Component"
+    """
+    def build_workbook(order: list, with_discriminator: bool):
+        wb = openpyxl.Workbook()
+        wb.remove(wb.active)
+
+        for sheet_name in order:
+            ws = wb.create_sheet(title=sheet_name)
+            if sheet_name == "Primary Component":
+                ws.cell(1, 1, "Instructor: Dr. Richard Feynman")
+                ws.cell(2, 1, "Course & Section: Physics 101")
+                ws.cell(3, 1, "Subject: Mechanics")
+                ws.cell(6, 1, "#")
+                ws.cell(6, 2, "Student Name")
+                ws.cell(6, 3, "Student Number")
+                ws.cell(6, 4, "Lecture Grade")
+                for r in range(7, 12):
+                    ws.cell(r, 1, r - 6)
+                    ws.cell(r, 2, f"Student {r - 6}")
+                    ws.cell(r, 3, f"2026-PHYS-{r - 6:03d}")
+                    ws.cell(r, 4, 88)
+            elif sheet_name == "Secondary Component":
+                ws.cell(1, 1, "Instructor: Dr. Richard Feynman")
+                ws.cell(2, 1, "Course & Section: Physics 101")
+                ws.cell(3, 1, "Subject: Mechanics")
+                ws.cell(4, 1, "Section: Section A")
+                ws.cell(5, 1, "Term: 1st Semester")
+                ws.cell(6, 1, "#")
+                ws.cell(6, 2, "Student Name")
+                ws.cell(6, 3, "Student Number")
+                ws.cell(6, 4, "Lab Score")
+                ws.cell(13, 1, "Program: BS Applied Physics")
+                ws.cell(14, 1, "Department: Physical Sciences")
+                ws.cell(15, 1, "College: College of Arts and Sciences")
+                ws.cell(16, 1, "Campus: Main Campus")
+                ws.cell(17, 1, "Academic Year: AY 2026-2027")
+                for r in range(7, 12):
+                    ws.cell(r, 1, r - 6)
+                    if with_discriminator:
+                        # Secondary derives student identity from Primary (independent physical discriminator)
+                        ws.cell(r, 2, f"='Primary Component'!B{r}")
+                        ws.cell(r, 3, f"='Primary Component'!C{r}")
+                    else:
+                        ws.cell(r, 2, f"Student {r - 6}")
+                        ws.cell(r, 3, f"2026-PHYS-{r - 6:03d}")
+                    ws.cell(r, 4, 95)
+            elif sheet_name == "Consolidated Component":
+                ws.cell(6, 1, "#")
+                ws.cell(6, 2, "Student Name")
+                ws.cell(6, 3, "Student Number")
+                ws.cell(6, 4, "Combined Grade")
+                for r in range(7, 12):
+                    ws.cell(r, 1, r - 6)
+                    if with_discriminator:
+                        ws.cell(r, 2, f"='Primary Component'!B{r}")
+                        ws.cell(r, 3, f"='Primary Component'!C{r}")
+                    else:
+                        ws.cell(r, 2, f"Student {r - 6}")
+                        ws.cell(r, 3, f"2026-PHYS-{r - 6:03d}")
+                    ws.cell(r, 4, f"='Primary Component'!D{r}*0.6 + 'Secondary Component'!D{r}*0.4")
+            elif sheet_name == "Official Results":
+                ws.cell(1, 1, "Republic of the Philippines")
+                ws.cell(2, 1, "Cavite State University")
+                ws.cell(3, 1, "Official Grades Summary")
+                ws.cell(6, 1, "Student Number")
+                ws.cell(6, 2, "Final Rating")
+                for r in range(7, 12):
+                    ws.cell(r, 1, f"2026-PHYS-{r - 6:03d}")
+                    ws.cell(r, 2, f"='Consolidated Component'!D{r}")
+        return wb
+
+    order1 = ["Primary Component", "Secondary Component", "Consolidated Component", "Official Results"]
+    order2 = ["Secondary Component", "Primary Component", "Consolidated Component", "Official Results"]
+
+    # --- Part A: Ambiguous case (without discriminator) ---
+    p_amb1 = tmp_path / "perm_amb_order1.xlsx"
+    build_workbook(order1, with_discriminator=False).save(str(p_amb1))
+    res_amb1 = detector.detect_role(str(p_amb1))
+    assert res_amb1.status == "ambiguous"
+    assert res_amb1.role is None
+
+    p_amb2 = tmp_path / "perm_amb_order2.xlsx"
+    build_workbook(order2, with_discriminator=False).save(str(p_amb2))
+    res_amb2 = detector.detect_role(str(p_amb2))
+    assert res_amb2.status == "ambiguous"
+    assert res_amb2.role is None
+
+    # --- Part B: Positive control (with independent physical discriminator) ---
+    p_pos1 = tmp_path / "perm_pos_order1.xlsx"
+    build_workbook(order1, with_discriminator=True).save(str(p_pos1))
+    res_pos1 = detector.detect_role(str(p_pos1))
+    assert res_pos1.status == "confirmed"
+    assert res_pos1.role == ROLE_GRADE_SHEET_LECTURE_LAB
+    rec_pos1 = XlsxTemplateInspector().inspect(str(p_pos1), profile_id="grade_sheet_xlsx")
+    assert rec_pos1.metadata["roster_sheet"] == "Primary Component"
+    assert rec_pos1.metadata["lab_sheet"] == "Secondary Component"
+    assert rec_pos1.metadata["con_sheet"] == "Consolidated Component"
+
+    p_pos2 = tmp_path / "perm_pos_order2.xlsx"
+    build_workbook(order2, with_discriminator=True).save(str(p_pos2))
+    res_pos2 = detector.detect_role(str(p_pos2))
+    assert res_pos2.status == "confirmed"
+    assert res_pos2.role == ROLE_GRADE_SHEET_LECTURE_LAB
+    rec_pos2 = XlsxTemplateInspector().inspect(str(p_pos2), profile_id="grade_sheet_xlsx")
+    assert rec_pos2.metadata["roster_sheet"] == "Primary Component"
+    assert rec_pos2.metadata["lab_sheet"] == "Secondary Component"
+    assert rec_pos2.metadata["con_sheet"] == "Consolidated Component"
+
 
 
 
