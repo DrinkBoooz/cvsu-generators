@@ -2484,7 +2484,7 @@ def test_xlsx_dimension_only_secondary_is_ambiguous(detector, tmp_path):
 
     with pytest.raises(AmbiguousTemplateError) as exc1:
         XlsxTemplateInspector().inspect(str(p1), profile_id="grade_sheet_xlsx")
-    assert "different physical dimensions but no unique structural lineage" in str(exc1.value).lower()
+    assert "no unique structural lineage" in str(exc1.value).lower()
 
     res1 = detector.detect_role(str(p1))
     assert res1.status == "ambiguous"
@@ -2498,7 +2498,7 @@ def test_xlsx_dimension_only_secondary_is_ambiguous(detector, tmp_path):
 
     with pytest.raises(AmbiguousTemplateError) as exc2:
         XlsxTemplateInspector().inspect(str(p2), profile_id="grade_sheet_xlsx")
-    assert "different physical dimensions but no unique structural lineage" in str(exc2.value).lower()
+    assert "no unique structural lineage" in str(exc2.value).lower()
 
     res2 = detector.detect_role(str(p2))
     assert res2.status == "ambiguous"
@@ -3618,9 +3618,15 @@ def test_structural_audit_catches_prohibited_assumptions():
         ("modules/parsers/template_role_detector.py", "res = scored_rosters[0]", "workbook-order-role-selection"),
         ("modules/parsers/template_role_detector.py", "cap = cap / 4 # four-week assumption", "constant-4-week-assumption"),
         ("modules/parsers/template_role_detector.py", "if fn_indicates_role(filename): return", "filename-role-classification"),
-        ("modules/parsers/template_inspector.py", "if is_aggregation_formula(val, s2, all_sheets): con_sheet = s1", "aggregation-formula-role-authority"),
+        ("modules/parsers/template_inspector.py", "if is_consolidation_formula(val, s2, comps): con_sheet = s1", "aggregation-formula-role-authority"),
         ("modules/parsers/template_inspector.py", "non_summary_sheets = {s for s in sheet_names}", "non-summary-sheet-broad-set"),
         ("modules/parsers/template_inspector.py", "if has_operators: return True", "single-source-operator-consolidation"),
+        ("modules/parsers/template_inspector.py", "student_component_sheets = set(roster_candidates_by_sheet.keys())", "summary-in-component-sheets"),
+        ("modules/parsers/template_inspector.py", "student_component_sheets = set(sheet_names)", "broad-workbook-sheets-as-components"),
+        ("modules/parsers/template_inspector.py", "for row in ws.iter_rows(values_only=True):", "whole-sheet-consolidation-scan"),
+        ("modules/parsers/template_inspector.py", "sample_rows = range(first_row, first_row + 10)", "arbitrary-sampling-bounds"),
+        ("modules/parsers/template_inspector.py", "cols = range(1, min(ws.max_column + 1, 50))", "arbitrary-sampling-bounds"),
+        ("modules/parsers/template_inspector.py", "def is_aggregation_formula(val, other_sheet, all_sheets):", "all-sheets-compatibility-alias"),
     ]
 
     for rel_path, snippet, expected_label in violations:
@@ -3885,6 +3891,273 @@ def test_xlsx_indirect_on_unrelated_sheet_does_not_invalidate_candidates(detecto
     res = detector.detect_role(str(p))
     assert res.status == "confirmed"
     assert res.role == ROLE_GRADE_SHEET_LECTURE_LAB
+
+
+def test_xlsx_adversarial_metadata_header_formula_fails_closed_as_ambiguous(detector, tmp_path):
+    """
+    Forensic Micro-Closure: Metadata / header formulas must not prove consolidation.
+    Cell A1 = Component_B!A1 & Student_Master!A1 in title/metadata row must not satisfy
+    consolidation structure when student assessment data rows have no multi-component combinations.
+    Must fail closed as ambiguous.
+    """
+    from modules.parsers.template_inspector import XlsxTemplateInspector, AmbiguousTemplateError
+
+    wb, _, _, ws_a, _ = _build_adversarial_base_workbook()
+    ws_a.cell(1, 1, "=Component_B!A1 & Student_Master!A1")
+    ws_a.cell(2, 1, "=Component_B!A2 & Student_Master!A2")
+    p = tmp_path / "header_formula_adv.xlsx"
+    wb.save(str(p))
+
+    with pytest.raises(AmbiguousTemplateError):
+        XlsxTemplateInspector().inspect(str(p), profile_id="grade_sheet_xlsx")
+
+    res = detector.detect_role(str(p))
+    assert res.status == "ambiguous"
+    assert res.role is None
+
+
+def test_xlsx_adversarial_summary_sheet_roster_excluded_from_student_components(detector, tmp_path):
+    """
+    Forensic Micro-Closure: Summary worksheet satisfying roster detection must NOT become
+    student-component evidence. Component_A referencing Component_B and Summary must NOT
+    satisfy >= 2 student components requirement. Must fail closed as ambiguous.
+    """
+    from modules.parsers.template_inspector import XlsxTemplateInspector, AmbiguousTemplateError
+
+    wb, _, _, ws_a, _ = _build_adversarial_base_workbook()
+    ws_a.cell(5, 4, "=Component_B!D5*0.5 + Summary!D5*0.5")
+    p = tmp_path / "summary_comp_adv.xlsx"
+    wb.save(str(p))
+
+    with pytest.raises(AmbiguousTemplateError):
+        XlsxTemplateInspector().inspect(str(p), profile_id="grade_sheet_xlsx")
+
+    res = detector.detect_role(str(p))
+    assert res.status == "ambiguous"
+    assert res.role is None
+
+
+def test_xlsx_positive_consolidation_beyond_10_row_window(detector, tmp_path):
+    """
+    Forensic Micro-Closure: Removing arbitrary 10-row sampling limit.
+    Consolidation formulas appearing only after row 15 (beyond former 10-row window)
+    must be fully discovered across the structurally identified data region.
+    """
+    from modules.parsers.template_inspector import XlsxTemplateInspector
+
+    wb, ws_r, ws_s, ws_a, ws_b = _build_adversarial_base_workbook()
+    for r in range(10, 26):
+        ws_r.cell(r, 1, r - 4)
+        ws_r.cell(r, 2, f"Student {r - 4}")
+        ws_r.cell(r, 3, f"2026-000{r - 4}")
+        ws_r.cell(r, 4, 80)
+        ws_s.cell(r, 1, r - 4)
+        ws_s.cell(r, 2, f"2026-000{r - 4}")
+        ws_s.cell(r, 3, "2.00")
+        ws_a.cell(r, 1, r - 4)
+        ws_a.cell(r, 2, f"Student {r - 4}")
+        ws_a.cell(r, 3, f"2026-000{r - 4}")
+        ws_b.cell(r, 1, r - 4)
+        ws_b.cell(r, 2, f"Student {r - 4}")
+        ws_b.cell(r, 3, f"2026-000{r - 4}")
+        for c in range(4, 10):
+            ws_a.cell(r, c, 75)
+            ws_b.cell(r, c, 85)
+    for r in range(16, 21):
+        ws_a.cell(r, 4, f"=Component_B!D{r}*0.4 + Student_Master!D{r}*0.6")
+
+    p = tmp_path / "beyond_10_rows.xlsx"
+    wb.save(str(p))
+
+    cand = XlsxTemplateInspector().inspect(str(p), profile_id="grade_sheet_xlsx")
+    assert cand.metadata["con_sheet"] == "Component_A"
+    assert cand.metadata["lab_sheet"] == "Component_B"
+
+    res = detector.detect_role(str(p))
+    assert res.status == "confirmed"
+    assert res.role == ROLE_GRADE_SHEET_LECTURE_LAB
+
+
+def test_xlsx_positive_synthesized_column_beyond_49_column_window(detector, tmp_path):
+    """
+    Forensic Micro-Closure: Removing arbitrary 49-column sampling limit.
+    Synthesized combination columns at column 65 (BM), 66 (BN), 67 (BO)
+    must be fully discovered across all structurally used worksheet columns.
+    """
+    from modules.parsers.template_inspector import XlsxTemplateInspector
+
+    wb, _, _, ws_a, _ = _build_adversarial_base_workbook()
+    ws_a.cell(5, 65, "=Component_B!BM5")
+    ws_a.cell(5, 66, "=Student_Master!BN5")
+    ws_a.cell(5, 67, "=BM5*0.4 + BN5*0.6")
+
+    p = tmp_path / "beyond_49_cols.xlsx"
+    wb.save(str(p))
+
+    cand = XlsxTemplateInspector().inspect(str(p), profile_id="grade_sheet_xlsx")
+    assert cand.metadata["con_sheet"] == "Component_A"
+    assert cand.metadata["lab_sheet"] == "Component_B"
+
+    res = detector.detect_role(str(p))
+    assert res.status == "confirmed"
+    assert res.role == ROLE_GRADE_SHEET_LECTURE_LAB
+
+
+def test_xlsx_adversarial_synthesized_source_formulas_outside_student_rows(detector, tmp_path):
+    """
+    Forensic Micro-Closure: Source formulas appearing outside student data rows (in headers)
+    must not satisfy synthesized column consolidation evidence.
+    """
+    wb, _, _, ws_a, _ = _build_adversarial_base_workbook()
+    ws_a.cell(1, 4, "=Component_B!D1")
+    ws_a.cell(1, 5, "=Student_Master!E1")
+    ws_a.cell(5, 6, "=D5*0.4 + E5*0.6")
+
+    p = tmp_path / "synth_outside_rows.xlsx"
+    wb.save(str(p))
+
+    res = detector.detect_role(str(p))
+    assert res.status == "ambiguous"
+    assert res.role is None
+
+
+def test_xlsx_adversarial_synthesized_unrelated_formulas_in_other_columns(detector, tmp_path):
+    """
+    Forensic Micro-Closure: Unrelated formulas in other columns that do not combine imported
+    secondary and partner component columns must not trigger synthesized consolidation.
+    """
+    wb, _, _, ws_a, _ = _build_adversarial_base_workbook()
+    ws_a.cell(5, 4, "=Component_B!D5")
+    ws_a.cell(5, 5, "=Student_Master!D5")
+    ws_a.cell(5, 6, "=AVERAGE(D5:D9)")
+    ws_a.cell(5, 7, "=E5*2")
+
+    p = tmp_path / "synth_unrelated_cols.xlsx"
+    wb.save(str(p))
+
+    res = detector.detect_role(str(p))
+    assert res.status == "ambiguous"
+    assert res.role is None
+
+
+def test_xlsx_adversarial_synthesized_helper_sheet_formula_not_student_component(detector, tmp_path):
+    """
+    Forensic Micro-Closure: Formulas importing from helper sheets (Notes, Settings, etc.)
+    must not count as student component imports.
+    """
+    wb, _, _, ws_a, _ = _build_adversarial_base_workbook()
+    ws_notes = wb.create_sheet(title="Notes")
+    ws_notes.cell(1, 1, "Help")
+    ws_a.cell(5, 4, "=Notes!D5")
+    ws_a.cell(5, 5, "=Student_Master!D5")
+    ws_a.cell(5, 6, "=D5*0.4 + E5*0.6")
+
+    p = tmp_path / "synth_helper_sheet.xlsx"
+    wb.save(str(p))
+
+    res = detector.detect_role(str(p))
+    assert res.status == "ambiguous"
+    assert res.role is None
+
+
+def test_xlsx_adversarial_synthesized_combines_student_row_with_header_cell(detector, tmp_path):
+    """
+    Forensic Micro-Closure: A formula combining student data with a header/metadata cell
+    from another column does not combine imported student assessment data.
+    """
+    wb, _, _, ws_a, _ = _build_adversarial_base_workbook()
+    ws_a.cell(5, 4, "=Component_B!D5")
+    ws_a.cell(1, 5, "=Student_Master!E1")
+    ws_a.cell(5, 6, "=D5*0.4 + E1*0.6")
+
+    p = tmp_path / "synth_header_cell_mix.xlsx"
+    wb.save(str(p))
+
+    res = detector.detect_role(str(p))
+    assert res.status == "ambiguous"
+    assert res.role is None
+
+
+def test_xlsx_permutation_renamed_and_reordered_with_helpers_and_summary_first(detector, tmp_path):
+    """
+    Forensic Micro-Closure: Full permutation invariance.
+    Worksheets are renamed to non-canonical titles and reordered such that the summary sheet
+    appears at index 0 (and also satisfies roster detection), a helper sheet appears at index 1,
+    and candidate component sheets appear afterwards.
+    Role detector must correctly confirm ROLE_GRADE_SHEET_LECTURE_LAB with validated recipes.
+    """
+    from modules.parsers.template_inspector import XlsxTemplateInspector
+
+    wb = openpyxl.Workbook()
+    # Sheet 0: Official_Summary (summary rating sheet at position 0, satisfying roster detection)
+    ws_s = wb.active
+    ws_s.title = "Official_Summary"
+    ws_s.cell(1, 1, "OFFICIAL GRADES")
+    ws_s.cell(4, 1, "#")
+    ws_s.cell(4, 2, "Student Number")
+    ws_s.cell(4, 3, "Final Grade")
+    for r in range(5, 10):
+        ws_s.cell(r, 1, r - 4)
+        ws_s.cell(r, 2, f"2026-000{r - 4}")
+        ws_s.cell(r, 3, "2.00")
+
+    # Sheet 1: Auxiliary_Guide (helper sheet)
+    ws_g = wb.create_sheet(title="Auxiliary_Guide")
+    ws_g.cell(1, 1, "Instructions and Reference Scale")
+
+    # Sheet 2: Component_Secondary (laboratory component)
+    ws_sec = wb.create_sheet(title="Component_Secondary")
+    ws_sec.cell(4, 1, "#")
+    ws_sec.cell(4, 2, "Name of Student")
+    ws_sec.cell(4, 3, "Student Number")
+    for c in range(4, 10):
+        ws_sec.cell(4, c, f"S_{c}")
+    for r in range(5, 10):
+        ws_sec.cell(r, 1, r - 4)
+        ws_sec.cell(r, 2, f"Student {r - 4}")
+        ws_sec.cell(r, 3, f"2026-000{r - 4}")
+        for c in range(4, 10):
+            ws_sec.cell(r, c, 85)
+
+    # Sheet 3: Master_Component (primary roster component with class metadata)
+    ws_m = wb.create_sheet(title="Master_Component")
+    ws_m.cell(1, 1, "Course: BSCS")
+    ws_m.cell(2, 1, "Instructor: Dr. Turing")
+    ws_m.cell(4, 1, "#")
+    ws_m.cell(4, 2, "Name of Student")
+    ws_m.cell(4, 3, "Student Number")
+    for r in range(5, 10):
+        ws_m.cell(r, 1, r - 4)
+        ws_m.cell(r, 2, f"Student {r - 4}")
+        ws_m.cell(r, 3, f"2026-000{r - 4}")
+        ws_m.cell(r, 4, 80)
+
+    # Sheet 4: Component_Aggregate (consolidated component combining secondary + master)
+    ws_agg = wb.create_sheet(title="Component_Aggregate")
+    ws_agg.cell(4, 1, "#")
+    ws_agg.cell(4, 2, "Name of Student")
+    ws_agg.cell(4, 3, "Student Number")
+    for c in range(4, 10):
+        ws_agg.cell(4, c, f"A_{c}")
+    for r in range(5, 10):
+        ws_agg.cell(r, 1, r - 4)
+        ws_agg.cell(r, 2, f"Student {r - 4}")
+        ws_agg.cell(r, 3, f"2026-000{r - 4}")
+        for c in range(4, 10):
+            ws_agg.cell(r, c, 75)
+        ws_agg.cell(r, 4, f"=Component_Secondary!D{r}*0.4 + Master_Component!D{r}*0.6")
+
+    p = tmp_path / "perm_full.xlsx"
+    wb.save(str(p))
+
+    cand = XlsxTemplateInspector().inspect(str(p), profile_id="grade_sheet_xlsx")
+    assert cand.metadata["con_sheet"] == "Component_Aggregate"
+    assert cand.metadata["lab_sheet"] == "Component_Secondary"
+
+    res = detector.detect_role(str(p))
+    assert res.status == "confirmed"
+    assert res.role == ROLE_GRADE_SHEET_LECTURE_LAB
+
 
 
 

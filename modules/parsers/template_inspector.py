@@ -199,6 +199,7 @@ def is_consolidation_formula(
     val: str,
     other_sheet: str,
     student_component_sheets: set,
+    min_data_row: Optional[int] = None,
 ) -> bool:
     """
     Checks if a formula string physically represents a true multi-source consolidation formula.
@@ -238,15 +239,27 @@ def is_consolidation_formula(
         # This is a mathematical transformation or single-source aggregation, NOT multi-source consolidation.
         return False
 
+    # If min_data_row is specified, verify that the formula does not solely reference
+    # header/metadata rows (< min_data_row) on the component sheets.
+    if min_data_row is not None and min_data_row > 1:
+        try:
+            tok = Tokenizer(val)
+            has_student_row_ref = False
+            for item in tok.items:
+                if item.type == "OPERAND" and item.subtype == "RANGE":
+                    m = re.search(r"!\$?([A-Za-z]+)\$?(\d+)", item.value)
+                    if m:
+                        ref_row = int(m.group(2))
+                        if ref_row >= min_data_row:
+                            has_student_row_ref = True
+                            break
+            if not has_student_row_ref:
+                return False
+        except Exception:
+            pass
+
     # Genuine multi-source combination: combines other_sheet with >= 1 other student component sheet!
     return True
-
-
-def is_aggregation_formula(val: str, other_sheet: str, all_sheets: set) -> bool:
-    """
-    Backwards-compatible alias for is_consolidation_formula.
-    """
-    return is_consolidation_formula(val, other_sheet, all_sheets)
 
 
 def has_consolidation_structure(
@@ -259,67 +272,93 @@ def has_consolidation_structure(
     Scans a worksheet to verify whether it physically demonstrates a true multi-source
     consolidation structure combining other_sheet with another student component sheet.
 
+    Consolidation evidence is strictly bound to the structurally identified student
+    assessment data region (first_data_row_index to first_data_row_index + capacity_limit).
+    Metadata and header rows (< first_data_row_index) are excluded to prevent title/metadata
+    formulas from manufacturing false consolidation authority.
+
     Checks:
-      1. Direct multi-source formulas: any cell formula that simultaneously combines
-         other_sheet and at least one other student component sheet.
+      1. Direct multi-source formulas: cell formulas within the student data region
+         that simultaneously combine other_sheet and at least one other student component sheet.
       2. Synthesized multi-source combination: on student data rows, the sheet imports
          a column from other_sheet, imports a column from another student component sheet,
          and combines those imported columns in an assessment formula.
     """
-    # 1. Direct multi-source formulas
-    for row in ws.iter_rows(values_only=True):
-        for val in row:
+    if not roster_info or "first_data_row_index" not in roster_info:
+        return False
+
+    first_row = roster_info["first_data_row_index"]
+    capacity = roster_info.get("capacity_limit", 0)
+    last_row = first_row + capacity - 1 if capacity > 0 else ws.max_row
+    data_rows = range(first_row, min(ws.max_row + 1, last_row + 1))
+    data_cols = range(1, ws.max_column + 1)
+
+    # 1. Direct multi-source formulas within student data region
+    for r in data_rows:
+        for c in data_cols:
+            val = ws.cell(r, c).value
             if isinstance(val, str) and val.startswith("="):
-                if is_consolidation_formula(val, other_sheet, student_component_sheets):
+                if is_consolidation_formula(
+                    val, other_sheet, student_component_sheets, min_data_row=first_row
+                ):
                     return True
 
-    # 2. Synthesized column combination across student rows (if roster_info available)
-    if roster_info and "first_data_row_index" in roster_info:
-        first_row = roster_info["first_data_row_index"]
-        other_sheet_cols = set()
-        partner_comp_cols = set()
-        partner_sheets = {s.lower() for s in student_component_sheets if s.lower() != other_sheet.lower()}
+    # 2. Synthesized column combination across student data rows
+    other_sheet_cols = set()
+    partner_comp_cols = set()
+    partner_sheets = {s.lower() for s in student_component_sheets if s.lower() != other_sheet.lower()}
 
-        sample_rows = range(first_row, min(ws.max_row + 1, first_row + 10))
-        for r in sample_rows:
-            for c in range(1, min(ws.max_column + 1, 50)):
+    for r in data_rows:
+        for c in data_cols:
+            v = ws.cell(r, c).value
+            if isinstance(v, str) and v.startswith("="):
+                refs = extract_referenced_sheets(v)
+                is_other = any(ref.lower() == other_sheet.lower() for ref in refs)
+                is_partner = any(ref.lower() in partner_sheets for ref in refs)
+                # Exclusive single-component import columns
+                if is_other and not is_partner:
+                    other_sheet_cols.add(c)
+                elif is_partner and not is_other:
+                    partner_comp_cols.add(c)
+
+    if other_sheet_cols and partner_comp_cols:
+        from openpyxl.utils import column_index_from_string
+        for r in data_rows:
+            for c in data_cols:
+                if c in other_sheet_cols or c in partner_comp_cols:
+                    continue
                 v = ws.cell(r, c).value
                 if isinstance(v, str) and v.startswith("="):
-                    refs = extract_referenced_sheets(v)
-                    if any(ref.lower() == other_sheet.lower() for ref in refs):
-                        other_sheet_cols.add(c)
-                    elif any(ref.lower() in partner_sheets for ref in refs):
-                        partner_comp_cols.add(c)
-
-        if other_sheet_cols and partner_comp_cols:
-            for r in sample_rows:
-                for c in range(1, min(ws.max_column + 1, 50)):
-                    if c in other_sheet_cols or c in partner_comp_cols:
-                        continue
-                    v = ws.cell(r, c).value
-                    if isinstance(v, str) and v.startswith("="):
-                        try:
-                            tok = Tokenizer(v)
-                            cell_col_refs = set()
-                            for item in tok.items:
-                                if item.type == "OPERAND" and item.subtype == "RANGE":
-                                    col_letter = re.match(r"^\$?([A-Za-z]+)\$?\d+", item.value)
-                                    if col_letter:
-                                        from openpyxl.utils import column_index_from_string
-                                        cell_col_refs.add(column_index_from_string(col_letter.group(1)))
-                            if any(c_idx in other_sheet_cols for c_idx in cell_col_refs) and any(c_idx in partner_comp_cols for c_idx in cell_col_refs):
-                                return True
-                        except Exception:
-                            pass
+                    try:
+                        tok = Tokenizer(v)
+                        local_cols_referenced = set()
+                        for item in tok.items:
+                            if item.type == "OPERAND" and item.subtype == "RANGE":
+                                if "!" in item.value:
+                                    continue
+                                # Single cell reference on the current student row (e.g. D5, $D$5)
+                                m_cell = re.match(r"^\$?([A-Za-z]+)\$?(\d+)$", item.value)
+                                if m_cell:
+                                    col_name, row_num = m_cell.group(1), int(m_cell.group(2))
+                                    if row_num == r:
+                                        local_cols_referenced.add(column_index_from_string(col_name))
+                                    continue
+                                # Bounded range reference on student rows (e.g. D5:E5)
+                                m_rng = re.match(r"^\$?([A-Za-z]+)\$?(\d+):\$?([A-Za-z]+)\$?(\d+)$", item.value)
+                                if m_rng:
+                                    c1 = column_index_from_string(m_rng.group(1))
+                                    r1 = int(m_rng.group(2))
+                                    c2 = column_index_from_string(m_rng.group(3))
+                                    r2 = int(m_rng.group(4))
+                                    if r1 <= r <= r2:
+                                        for c_idx in range(min(c1, c2), max(c1, c2) + 1):
+                                            local_cols_referenced.add(c_idx)
+                        if any(c_idx in other_sheet_cols for c_idx in local_cols_referenced) and any(c_idx in partner_comp_cols for c_idx in local_cols_referenced):
+                            return True
+                    except Exception:
+                        pass
 
     return False
-
-
-def has_aggregation_structure(ws, other_sheet: str, all_sheets: set) -> bool:
-    """
-    Backwards-compatible alias for has_consolidation_structure.
-    """
-    return has_consolidation_structure(ws, other_sheet, all_sheets)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1030,21 +1069,6 @@ class XlsxTemplateInspector:
             s1, s2 = remaining_assessment_sheets[0], remaining_assessment_sheets[1]
             ws1, ws2 = wb[s1], wb[s2]
 
-            def count_cross_sheet_refs(ws) -> int:
-                refs = 0
-                for row in ws.iter_rows(values_only=True):
-                    for val in row:
-                        if isinstance(val, str) and val.startswith("=") and "!" in val:
-                            refs += 1
-                return refs
-
-            refs1 = count_cross_sheet_refs(ws1)
-            refs2 = count_cross_sheet_refs(ws2)
-            cols1 = ws1.max_column
-            cols2 = ws2.max_column
-            rows1 = ws1.max_row
-            rows2 = ws2.max_row
-
             # Determine laboratory vs consolidated based on unique physical lineage:
             # Construct directed dependency relation: A -> B meaning worksheet A
             # physically contains formulas referencing worksheet B.
@@ -1071,7 +1095,12 @@ class XlsxTemplateInspector:
                     f"Grade sheet template '{os.path.basename(template_path)}' contains secondary assessment worksheets with unparseable or indeterminate formula lineage: {unreliable}"
                 )
 
-            student_component_sheets = set(roster_candidates_by_sheet.keys())
+            # Exclude already-resolved non-component roles (summary_sheet) from student components.
+            # Only legitimate primary roster and secondary candidate sheets belong in student components.
+            student_component_sheets = {
+                s for s in roster_candidates_by_sheet
+                if s != summary_sheet
+            }
             s1_component_refs = {
                 r.lower() for r in s1_referenced
                 if any(r.lower() == s.lower() for s in student_component_sheets) and r.lower() != s1.lower()
@@ -1124,14 +1153,9 @@ class XlsxTemplateInspector:
                 has_consolidated = True
             # Case C: s1 !-> s2 and s2 !-> s1 (no unique lineage)
             else:
-                if cols1 == cols2 and rows1 == rows2 and refs1 == refs2:
-                    raise AmbiguousTemplateError(
-                        f"Grade sheet template '{os.path.basename(template_path)}' contains multiple secondary assessment worksheets with identical structural dimensions and evidence: {[s1, s2]}"
-                    )
-                else:
-                    raise AmbiguousTemplateError(
-                        f"Grade sheet template '{os.path.basename(template_path)}' contains multiple secondary assessment worksheets with different physical dimensions but no unique structural lineage distinguishing laboratory from consolidated roles: {[s1, s2]}"
-                    )
+                raise AmbiguousTemplateError(
+                    f"Grade sheet template '{os.path.basename(template_path)}' contains multiple secondary assessment worksheets with no unique structural lineage distinguishing laboratory from consolidated roles: {[s1, s2]}"
+                )
         elif len(remaining_assessment_sheets) > 2:
             raise AmbiguousTemplateError(
                 f"Grade sheet template '{os.path.basename(template_path)}' contains {len(remaining_assessment_sheets)} secondary assessment worksheets, exceeding supported dual-component capacity: {remaining_assessment_sheets}"

@@ -60,9 +60,14 @@ AUDIT_RULES: List[Tuple[str, str, str]] = [
     (r"refs1\s*(?:>|<|!=|==)\s*refs2|refs2\s*(?:>|<|!=|==)\s*refs1|(?:ref_count|formula_count)\s*(?:>|<|!=)", "reference-count-role-authority", "Reference or formula count comparison used as authoritative role discriminator"),
     (r"(?:s1_refs_primary|s2_refs_primary)\b", "primary-roster-role-authority", "Hardcoded primary-roster dependency used as mandatory role authority"),
     (r"if\s+s1_refs_s2\s*:\s*(?:con_sheet|lab_sheet|has_consolidated|return)", "direct-dependency-role-authority", "Direct dependency direction alone used as role authority without aggregation check"),
-    (r"if\s+is_aggregation_formula\([^)]*\)\s*:\s*(?:con_sheet|lab_sheet|role)", "aggregation-formula-role-authority", "Single formula aggregation predicate used as direct role authority"),
+    (r"if\s+(?:is_aggregation_formula|is_consolidation_formula)\([^)]*\)\s*:\s*(?:con_sheet|lab_sheet|role)", "aggregation-formula-role-authority", "Single formula consolidation/aggregation predicate used as direct role authority"),
     (r"non_summary_sheets\s*=", "non-summary-sheet-broad-set", "Overly broad non-summary sheet set without roster verification"),
     (r"if\s+has_operators\s*:\s*return\s+True", "single-source-operator-consolidation", "Single-source operator treated as multi-source consolidation"),
+    (r"student_component_sheets\s*=\s*set\([^)]*roster_candidates_by_sheet\.keys\(\)\)", "summary-in-component-sheets", "Inclusion of summary_sheet in student_component_sheets without exclusion"),
+    (r"student_component_sheets\s*=\s*(?:set\()?(?:sheet_names|wb\.sheetnames|all_sheets)\)?", "broad-workbook-sheets-as-components", "Broad workbook sheet set treated as student components"),
+    (r"for\s+row\s+in\s+ws\.iter_rows\(values_only=True\):", "whole-sheet-consolidation-scan", "Whole-sheet row iteration used for consolidation authority without student data region bounding"),
+    (r"(?:first_row\s*\+\s*10|max_column\s*\+\s*1,\s*50)", "arbitrary-sampling-bounds", "Arbitrary row or column sampling boundary used as authoritative role evidence"),
+    (r"def\s+(?:is_aggregation_formula|has_aggregation_structure)\([^)]*all_sheets", "all-sheets-compatibility-alias", "Compatibility alias reinterpreting all_sheets as student components"),
 ]
 
 
@@ -88,6 +93,36 @@ def classify_finding(rel_path: str, line_num: int, label: str, snippet: str) -> 
         if "template_inspector.py" in rel_path or "template_role_detector.py" in rel_path or "detector" in rel_path:
             return "E", "Prohibited single-source operator treated as multi-source consolidation"
         return "D", "Legitimate operator logic"
+
+    # Category E: Inclusion of summary_sheet in student_component_sheets without exclusion
+    if label == "summary-in-component-sheets":
+        if "template_inspector.py" in rel_path or "template_role_detector.py" in rel_path or "detector" in rel_path:
+            return "E", "Prohibited inclusion of summary_sheet in student_component_sheets without exclusion"
+        return "D", "Legitimate sheet grouping"
+
+    # Category E: Broad workbook sheet sets treated as student components
+    if label == "broad-workbook-sheets-as-components":
+        if "template_inspector.py" in rel_path or "template_role_detector.py" in rel_path or "detector" in rel_path:
+            return "E", "Prohibited broad workbook sheet sets treated as student components"
+        return "D", "Legitimate sheet grouping"
+
+    # Category E: Whole-sheet row iteration used for consolidation authority
+    if label == "whole-sheet-consolidation-scan":
+        if "template_inspector.py" in rel_path:
+            return "E", "Prohibited whole-sheet row iteration used for consolidation authority without student data region bounding"
+        return "D", "Legitimate row iteration"
+
+    # Category E: Arbitrary row or column sampling boundary used as authoritative role evidence
+    if label == "arbitrary-sampling-bounds":
+        if "template_inspector.py" in rel_path or "template_role_detector.py" in rel_path or "detector" in rel_path:
+            return "E", "Prohibited arbitrary row or column sampling boundary used as authoritative role evidence"
+        return "D", "Legitimate sampling"
+
+    # Category E: Compatibility alias reinterpreting all_sheets as student components
+    if label == "all-sheets-compatibility-alias":
+        if "template_inspector.py" in rel_path or "template_role_detector.py" in rel_path or "detector" in rel_path:
+            return "E", "Prohibited compatibility alias reinterpreting all_sheets as student components"
+        return "D", "Legitimate function signature"
 
     # Category E: Dimension-based role authority for secondary assessment sheets
     if label == "dimension-sorted-role-selection":
