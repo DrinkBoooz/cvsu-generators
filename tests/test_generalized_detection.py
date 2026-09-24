@@ -31,6 +31,7 @@ Comprehensive tests for Generalized Automatic Template-Role Detection:
 """
 
 import os
+import re
 import sys
 import shutil
 import tempfile
@@ -90,6 +91,33 @@ def attendance_dir(repo_root):
     return os.path.join(repo_root, "attendance")
 
 
+def rename_worksheet_with_formulas(wb, old_name: str, new_name: str):
+    """
+    Simulates Excel's native behavior of updating cross-sheet formula references
+    when a worksheet is renamed in a workbook.
+    """
+    if old_name not in wb.sheetnames:
+        return
+    wb[old_name].title = new_name
+    esc_old = old_name.replace("'", "''")
+    pattern = re.compile(
+        rf"(?:'|(?<![A-Za-z0-9_]))(?:{re.escape(old_name)}|{re.escape(esc_old)})(?:'|(?![A-Za-z0-9_]))!",
+        re.IGNORECASE,
+    )
+    escaped_new = new_name.replace("'", "''")
+    quoted_new = (
+        f"'{escaped_new}'!"
+        if (" " in new_name or "'" in new_name or "-" in new_name)
+        else f"{new_name}!"
+    )
+    for ws in wb.worksheets:
+        for row in ws.iter_rows():
+            for cell in row:
+                if isinstance(cell.value, str) and cell.value.startswith("=") and "!" in cell.value:
+                    if pattern.search(cell.value):
+                        cell.value = pattern.sub(quoted_new, cell.value)
+
+
 # ── 1. Worksheet Name Independence (Grade XLSX) ──────────────────────────────
 
 def test_grade_sheet_renamed_worksheets_lecture_lab(detector, templates_dir, tmp_path):
@@ -106,11 +134,11 @@ def test_grade_sheet_renamed_worksheets_lecture_lab(detector, templates_dir, tmp
     shutil.copy2(src, dst)
 
     wb = openpyxl.load_workbook(dst)
-    wb["Lecture"].title = "Main"
-    wb["Laboratory"].title = "Practical"
-    wb["Grading Sheet"].title = "Final Scores"
+    rename_worksheet_with_formulas(wb, "Lecture", "Main")
+    rename_worksheet_with_formulas(wb, "Laboratory", "Practical")
+    rename_worksheet_with_formulas(wb, "Grading Sheet", "Final Scores")
     if "Consolidated" in wb.sheetnames:
-        wb["Consolidated"].title = "Combined"
+        rename_worksheet_with_formulas(wb, "Consolidated", "Combined")
     wb.save(dst)
 
     res = detector.detect_role(str(dst))
@@ -370,16 +398,16 @@ def test_real_world_renamed_templates_end_to_end_generation(repo_root, templates
         # Mutate worksheet names in grade sheets
         if opaque_fn == "scores_single.xlsx":
             wb = openpyxl.load_workbook(dst_path)
-            wb["Lecture"].title = "Main"
-            wb["Grading Sheet"].title = "Final Scores"
+            rename_worksheet_with_formulas(wb, "Lecture", "Main")
+            rename_worksheet_with_formulas(wb, "Grading Sheet", "Final Scores")
             wb.save(dst_path)
         elif opaque_fn == "scores_dual.xlsx":
             wb = openpyxl.load_workbook(dst_path)
-            wb["Lecture"].title = "Main"
-            wb["Laboratory"].title = "Practical"
-            wb["Grading Sheet"].title = "Final Scores"
+            rename_worksheet_with_formulas(wb, "Lecture", "Main")
+            rename_worksheet_with_formulas(wb, "Laboratory", "Practical")
+            rename_worksheet_with_formulas(wb, "Grading Sheet", "Final Scores")
             if "Consolidated" in wb.sheetnames:
-                wb["Consolidated"].title = "Combined"
+                rename_worksheet_with_formulas(wb, "Consolidated", "Combined")
             wb.save(dst_path)
 
         staged_paths[role] = str(dst_path)
@@ -682,10 +710,10 @@ def test_grade_sheet_arbitrary_names_and_reordered_worksheets(tmp_path):
     dst_grade = tmp_path / "reordered_arbitrary_grades.xlsx"
 
     wb = openpyxl.load_workbook(src_grade)
-    wb["Lecture"].title = "Sheet_A"
-    wb["Laboratory"].title = "Sheet_B"
-    wb["Consolidated"].title = "Results"
-    wb["Grading Sheet"].title = "Summary_2026"
+    rename_worksheet_with_formulas(wb, "Lecture", "Sheet_A")
+    rename_worksheet_with_formulas(wb, "Laboratory", "Sheet_B")
+    rename_worksheet_with_formulas(wb, "Consolidated", "Results")
+    rename_worksheet_with_formulas(wb, "Grading Sheet", "Summary_2026")
 
     # Reorder sheets so Summary_2026 is sheet 0!
     # In openpyxl: wb._sheets is a list of Worksheet objects
@@ -789,16 +817,16 @@ def test_real_world_hardened_templates_end_to_end_generation(tmp_path):
 
             elif opaque_fn == "j10.xlsx":
                 wb = openpyxl.load_workbook(src_path)
-                wb["Lecture"].title = "Sheet_A"
-                wb["Grading Sheet"].title = "Summary_2026"
+                rename_worksheet_with_formulas(wb, "Lecture", "Sheet_A")
+                rename_worksheet_with_formulas(wb, "Grading Sheet", "Summary_2026")
                 wb.save(dst_path)
 
             elif opaque_fn == "k11.xlsx":
                 wb = openpyxl.load_workbook(src_path)
-                wb["Lecture"].title = "Sheet_A"
-                wb["Laboratory"].title = "Sheet_B"
-                wb["Consolidated"].title = "Results"
-                wb["Grading Sheet"].title = "Summary_2026"
+                rename_worksheet_with_formulas(wb, "Lecture", "Sheet_A")
+                rename_worksheet_with_formulas(wb, "Laboratory", "Sheet_B")
+                rename_worksheet_with_formulas(wb, "Consolidated", "Results")
+                rename_worksheet_with_formulas(wb, "Grading Sheet", "Summary_2026")
                 # Move Summary_2026 to first position
                 s_ws = wb["Summary_2026"]
                 wb._sheets.remove(s_ws)
@@ -1060,10 +1088,10 @@ def test_grade_sheet_five_sheet_arbitrary_topology(tmp_path, templates_dir):
     dst = tmp_path / "arbitrary_topology_grades.xlsx"
 
     wb = openpyxl.load_workbook(src)
-    wb["Lecture"].title = "Data"
-    wb["Laboratory"].title = "Practical_Component"
-    wb["Consolidated"].title = "Computation"
-    wb["Grading Sheet"].title = "Official_Grades"
+    rename_worksheet_with_formulas(wb, "Lecture", "Data")
+    rename_worksheet_with_formulas(wb, "Laboratory", "Practical_Component")
+    rename_worksheet_with_formulas(wb, "Consolidated", "Computation")
+    rename_worksheet_with_formulas(wb, "Grading Sheet", "Official_Grades")
     wb.create_sheet("Archive", 0)
     wb.save(dst)
 
@@ -1305,16 +1333,16 @@ def test_synthetic_institution_complete_end_to_end_pipeline(repo_root, templates
 
             elif target_fn == "j.xlsx":
                 wb = openpyxl.load_workbook(src_path)
-                wb["Lecture"].title = "Data"
-                wb["Grading Sheet"].title = "Official_Grades"
+                rename_worksheet_with_formulas(wb, "Lecture", "Data")
+                rename_worksheet_with_formulas(wb, "Grading Sheet", "Official_Grades")
                 wb.save(dst)
 
             elif target_fn == "k.xlsx":
                 wb = openpyxl.load_workbook(src_path)
-                wb["Lecture"].title = "Data"
-                wb["Laboratory"].title = "Practical_Component"
-                wb["Consolidated"].title = "Computation"
-                wb["Grading Sheet"].title = "Official_Grades"
+                rename_worksheet_with_formulas(wb, "Lecture", "Data")
+                rename_worksheet_with_formulas(wb, "Laboratory", "Practical_Component")
+                rename_worksheet_with_formulas(wb, "Consolidated", "Computation")
+                rename_worksheet_with_formulas(wb, "Grading Sheet", "Official_Grades")
                 wb.create_sheet("Archive", 0)
                 wb.save(dst)
 
@@ -1631,10 +1659,10 @@ def test_xlsx_opaque_names_and_arbitrary_order(tmp_path, repo_root):
     dst = tmp_path / "opaque_workbook_grade.xlsx"
 
     wb = openpyxl.load_workbook(src_grade)
-    wb["Lecture"].title = "Omega"
-    wb["Laboratory"].title = "Q7"
-    wb["Consolidated"].title = "Ledger_19"
-    wb["Grading Sheet"].title = "BlueSheet"
+    rename_worksheet_with_formulas(wb, "Lecture", "Omega")
+    rename_worksheet_with_formulas(wb, "Laboratory", "Q7")
+    rename_worksheet_with_formulas(wb, "Consolidated", "Ledger_19")
+    rename_worksheet_with_formulas(wb, "Grading Sheet", "BlueSheet")
     wb.create_sheet("Archive_X", 0)
 
     # Reorder so BlueSheet is at index 0, followed by Archive_X
@@ -1922,8 +1950,7 @@ def test_xlsx_worksheet_name_permutations(tmp_path, repo_root):
     p1 = tmp_path / "permuted_grades_set1.xlsx"
     wb1 = openpyxl.load_workbook(src_grade)
     for old_n, new_n in names_set_1.items():
-        if old_n in wb1.sheetnames:
-            wb1[old_n].title = new_n
+        rename_worksheet_with_formulas(wb1, old_n, new_n)
 
     # Reorder sheets arbitrarily: BlueSheet (summary) at index 0, Archive_X, Ledger_19, Q7, Omega, etc.
     desired_order_1 = ["BlueSheet", "Archive_X", "Ledger_19", "Aux_Tbl", "Q7", "Temp_Sheet", "Omega"]
@@ -1951,8 +1978,7 @@ def test_xlsx_worksheet_name_permutations(tmp_path, repo_root):
     p2 = tmp_path / "permuted_grades_set2.xlsx"
     wb2 = openpyxl.load_workbook(src_grade)
     for old_n, new_n in names_set_2.items():
-        if old_n in wb2.sheetnames:
-            wb2[old_n].title = new_n
+        rename_worksheet_with_formulas(wb2, old_n, new_n)
 
     desired_order_2 = ["Eta", "Zeta", "Gamma", "Epsilon", "Beta", "Delta", "Alpha"]
     wb2._sheets = [wb2[n] for n in desired_order_2 if n in wb2.sheetnames]
@@ -2160,6 +2186,15 @@ def resolve_secondary(cols1, cols2):
 """
     violations_5 = scan_source(bad_source_5, "template_inspector.py")
     assert any(cat == "E" for _, cat, _ in violations_5), "Audit failed to catch dimension-based role authority"
+
+    bad_source_6 = """
+def resolve_secondary(refs1, refs2):
+    if refs1 > refs2:
+        con_sheet = "Sheet_A"
+        lab_sheet = "Sheet_B"
+"""
+    violations_6 = scan_source(bad_source_6, "template_inspector.py")
+    assert any(cat == "E" for _, cat, _ in violations_6), "Audit failed to catch reference-count-based role authority"
 
     # Assert live modules have zero prohibited assumptions
     ret = audit(os.path.join(repo_root, "modules"))
@@ -2555,10 +2590,10 @@ def test_xlsx_unique_structural_evidence_still_resolves(detector, tmp_path, repo
     wb = openpyxl.load_workbook(src_grade)
 
     # Rename all sheets to opaque non-informative names
-    wb["Lecture"].title = "Custom_Lec"
-    wb["Laboratory"].title = "Custom_Lab"
-    wb["Consolidated"].title = "Custom_Con"
-    wb["Grading Sheet"].title = "Custom_Summary"
+    rename_worksheet_with_formulas(wb, "Lecture", "Custom_Lec")
+    rename_worksheet_with_formulas(wb, "Laboratory", "Custom_Lab")
+    rename_worksheet_with_formulas(wb, "Consolidated", "Custom_Con")
+    rename_worksheet_with_formulas(wb, "Grading Sheet", "Custom_Summary")
 
     # Permute order so Summary is first, followed by Consolidated, Lecture, and Lab
     desired_order = ["Custom_Summary", "Custom_Con", "Custom_Lec", "Custom_Lab"]
@@ -2657,6 +2692,233 @@ def test_xlsx_permutation_invariance(detector, tmp_path, repo_root):
         assert res.status == "ambiguous"
         assert res.role is None
         assert res.candidate_roles == [ROLE_GRADE_SHEET_LECTURE_LAB]
+
+
+def test_xlsx_reference_count_trap_asymmetric_refs_remain_ambiguous(detector, tmp_path):
+    """
+    Forensic Micro-Closure: Reference counts are evidence, NOT role authority.
+    Create a workbook where Sheet A -> unrelated sheet, Sheet B -> another unrelated sheet,
+    with refs(A) > refs(B), but neither references the other.
+    Both refs(A) > refs(B) and refs(A) < refs(B) MUST remain ambiguous.
+    """
+    from modules.parsers.template_inspector import XlsxTemplateInspector
+
+    for swap in [False, True]:
+        wb = openpyxl.Workbook()
+        ws_r = wb.active
+        ws_r.title = "Roster"
+        ws_r.cell(1, 1, "Course: BSCS")
+        ws_r.cell(2, 1, "Instructor: Dr. Turing")
+        ws_r.cell(4, 1, "#")
+        ws_r.cell(4, 2, "Name of Student")
+        ws_r.cell(4, 3, "Student Number")
+        for r in range(5, 10):
+            ws_r.cell(r, 1, r - 4)
+            ws_r.cell(r, 2, f"Student {r - 4}")
+            ws_r.cell(r, 3, f"2026-000{r - 4}")
+
+        ws_s = wb.create_sheet(title="Summary")
+        ws_s.cell(1, 1, "COLLEGE OF ENGINEERING")
+        ws_s.cell(2, 1, "OFFICIAL GRADES")
+        ws_s.cell(4, 1, "#")
+        ws_s.cell(4, 2, "Student Number")
+        ws_s.cell(4, 3, "Final Grade")
+        for r in range(5, 10):
+            ws_s.cell(r, 1, r - 4)
+            ws_s.cell(r, 2, f"2026-000{r - 4}")
+            ws_s.cell(r, 3, "1.75")
+
+        # Unrelated metadata sheet
+        ws_aux = wb.create_sheet(title="Notes")
+        for r in range(1, 10):
+            ws_aux.cell(r, 1, f"Note_{r}")
+
+        ws_a = wb.create_sheet(title="Matrix_A")
+        ws_a.cell(4, 1, "#")
+        ws_a.cell(4, 2, "Name of Student")
+        ws_a.cell(4, 3, "Student Number")
+        for c in range(4, 10):
+            ws_a.cell(4, c, f"A_{c}")
+        for r in range(5, 10):
+            ws_a.cell(r, 1, r - 4)
+            ws_a.cell(r, 2, f"Student {r - 4}")
+            ws_a.cell(r, 3, f"2026-000{r - 4}")
+            for c in range(4, 10):
+                ws_a.cell(r, c, 80)
+
+        ws_b = wb.create_sheet(title="Matrix_B")
+        ws_b.cell(4, 1, "#")
+        ws_b.cell(4, 2, "Name of Student")
+        ws_b.cell(4, 3, "Student Number")
+        for c in range(4, 10):
+            ws_b.cell(4, c, f"B_{c}")
+        for r in range(5, 10):
+            ws_b.cell(r, 1, r - 4)
+            ws_b.cell(r, 2, f"Student {r - 4}")
+            ws_b.cell(r, 3, f"2026-000{r - 4}")
+            for c in range(4, 10):
+                ws_b.cell(r, c, 85)
+
+        # Injects formulas referencing the unrelated sheet 'Notes'
+        # Neither Matrix_A nor Matrix_B references each other!
+        # Case 1: Matrix_A has 5 refs to Notes, Matrix_B has 1 ref to Notes (refs_A > refs_B)
+        # Case 2: Matrix_A has 1 ref to Notes, Matrix_B has 5 refs to Notes (refs_A < refs_B)
+        refs_a = 5 if not swap else 1
+        refs_b = 1 if not swap else 5
+
+        for i in range(refs_a):
+            ws_a.cell(5 + i, 4, f"=Notes!A{i+1}")
+        for i in range(refs_b):
+            ws_b.cell(5 + i, 4, f"=Notes!A{i+1}")
+
+        p = tmp_path / f"ref_trap_swap_{swap}.xlsx"
+        wb.save(str(p))
+
+        with pytest.raises(AmbiguousTemplateError):
+            XlsxTemplateInspector().inspect(str(p), profile_id="grade_sheet_xlsx")
+
+        res = detector.detect_role(str(p))
+        assert res.status == "ambiguous"
+        assert res.role is None
+        assert res.candidate_roles == [ROLE_GRADE_SHEET_LECTURE_LAB]
+
+
+def test_xlsx_quoted_name_lineage_resolution(detector, tmp_path, repo_root):
+    """
+    Forensic Micro-Closure: Quoted-name worksheet references with spaces and escaped apostrophes.
+    Construct a valid dual-component workbook with:
+      - Main Roster
+      - Practical Component
+      - Dean's Practical Sheet (escaped as 'Dean''s Practical Sheet')
+      - Official Results
+    Formulas in 'Dean''s Practical Sheet' reference 'Practical Component'.
+    The inspector and detector must correctly resolve the roles despite quoted names and arbitrary order.
+    """
+    src_grade = os.path.join(repo_root, "templates", "GRADING_LECTURE_LAB_TEMPLATE.xlsx")
+    wb = openpyxl.load_workbook(src_grade)
+
+    # Rename using quoted names with spaces and apostrophes
+    rename_worksheet_with_formulas(wb, "Lecture", "Main Roster")
+    rename_worksheet_with_formulas(wb, "Laboratory", "Practical Component")
+    rename_worksheet_with_formulas(wb, "Consolidated", "Dean's Practical Sheet")
+    rename_worksheet_with_formulas(wb, "Grading Sheet", "Official Results")
+
+    # Permute order arbitrarily so Official Results is index 0, followed by Consolidated, Lecture, Lab
+    desired_order = ["Official Results", "Dean's Practical Sheet", "Main Roster", "Practical Component"]
+    wb._sheets = [wb[n] for n in desired_order if n in wb.sheetnames]
+
+    dst = tmp_path / "quoted_apostrophe_grades.xlsx"
+    wb.save(str(dst))
+
+    from modules.parsers.template_inspector import XlsxTemplateInspector
+    cand = XlsxTemplateInspector().inspect(str(dst), profile_id="grade_sheet_xlsx")
+    assert cand.metadata["roster_sheet"] == "Main Roster"
+    assert cand.metadata["summary_sheet"] == "Official Results"
+    assert cand.metadata["lab_sheet"] == "Practical Component"
+    assert cand.metadata["con_sheet"] == "Dean's Practical Sheet"
+
+    res = detector.detect_role(str(dst))
+    assert res.status == "confirmed"
+    assert res.role == ROLE_GRADE_SHEET_LECTURE_LAB
+    assert res.variant == "lecture_lab"
+
+    # Also verify pair with hyphen and apostrophe: Omega-7 and Dean's Practical Sheet
+    wb2 = openpyxl.load_workbook(src_grade)
+    rename_worksheet_with_formulas(wb2, "Lecture", "Main Roster")
+    rename_worksheet_with_formulas(wb2, "Laboratory", "Omega-7")
+    rename_worksheet_with_formulas(wb2, "Consolidated", "Dean's Practical Sheet")
+    rename_worksheet_with_formulas(wb2, "Grading Sheet", "Official Results")
+
+    dst2 = tmp_path / "hyphen_apostrophe_grades.xlsx"
+    wb2.save(str(dst2))
+
+    cand2 = XlsxTemplateInspector().inspect(str(dst2), profile_id="grade_sheet_xlsx")
+    assert cand2.metadata["roster_sheet"] == "Main Roster"
+    assert cand2.metadata["summary_sheet"] == "Official Results"
+    assert cand2.metadata["lab_sheet"] == "Omega-7"
+    assert cand2.metadata["con_sheet"] == "Dean's Practical Sheet"
+
+    res2 = detector.detect_role(str(dst2))
+    assert res2.status == "confirmed"
+    assert res2.role == ROLE_GRADE_SHEET_LECTURE_LAB
+
+
+def test_xlsx_cyclic_lineage_is_ambiguous(detector, tmp_path):
+    """
+    Forensic Micro-Closure: Cyclic / competing formula lineage between secondary assessment sheets.
+    Sheet A -> Sheet B AND Sheet B -> Sheet A.
+    Must raise AmbiguousTemplateError and detector must return status="ambiguous".
+    """
+    from modules.parsers.template_inspector import XlsxTemplateInspector
+
+    wb = openpyxl.Workbook()
+    ws_r = wb.active
+    ws_r.title = "Roster"
+    ws_r.cell(1, 1, "Course: BSCS")
+    ws_r.cell(2, 1, "Instructor: Dr. Turing")
+    ws_r.cell(4, 1, "#")
+    ws_r.cell(4, 2, "Name of Student")
+    ws_r.cell(4, 3, "Student Number")
+    for r in range(5, 10):
+        ws_r.cell(r, 1, r - 4)
+        ws_r.cell(r, 2, f"Student {r - 4}")
+        ws_r.cell(r, 3, f"2026-000{r - 4}")
+
+    ws_s = wb.create_sheet(title="Summary")
+    ws_s.cell(1, 1, "COLLEGE OF ENGINEERING")
+    ws_s.cell(2, 1, "OFFICIAL GRADES")
+    ws_s.cell(4, 1, "#")
+    ws_s.cell(4, 2, "Student Number")
+    ws_s.cell(4, 3, "Final Grade")
+    for r in range(5, 10):
+        ws_s.cell(r, 1, r - 4)
+        ws_s.cell(r, 2, f"2026-000{r - 4}")
+        ws_s.cell(r, 3, "2.00")
+
+    ws_a = wb.create_sheet(title="Component_A")
+    ws_a.cell(4, 1, "#")
+    ws_a.cell(4, 2, "Name of Student")
+    ws_a.cell(4, 3, "Student Number")
+    for c in range(4, 10):
+        ws_a.cell(4, c, f"A_{c}")
+    for r in range(5, 10):
+        ws_a.cell(r, 1, r - 4)
+        ws_a.cell(r, 2, f"Student {r - 4}")
+        ws_a.cell(r, 3, f"2026-000{r - 4}")
+        for c in range(4, 10):
+            ws_a.cell(r, c, 75)
+
+    ws_b = wb.create_sheet(title="Component_B")
+    ws_b.cell(4, 1, "#")
+    ws_b.cell(4, 2, "Name of Student")
+    ws_b.cell(4, 3, "Student Number")
+    for c in range(4, 10):
+        ws_b.cell(4, c, f"B_{c}")
+    for r in range(5, 10):
+        ws_b.cell(r, 1, r - 4)
+        ws_b.cell(r, 2, f"Student {r - 4}")
+        ws_b.cell(r, 3, f"2026-000{r - 4}")
+        for c in range(4, 10):
+            ws_b.cell(r, c, 85)
+
+    # Injects circular formula dependencies:
+    # Component_A references Component_B
+    ws_a.cell(5, 4, "=Component_B!D5 * 0.5")
+    # Component_B references Component_A
+    ws_b.cell(5, 4, "=Component_A!D5 * 0.5")
+
+    p = tmp_path / "cyclic_lineage.xlsx"
+    wb.save(str(p))
+
+    with pytest.raises(AmbiguousTemplateError) as exc:
+        XlsxTemplateInspector().inspect(str(p), profile_id="grade_sheet_xlsx")
+    assert "competing/cyclic formula lineage" in str(exc.value).lower()
+
+    res = detector.detect_role(str(p))
+    assert res.status == "ambiguous"
+    assert res.role is None
+    assert res.candidate_roles == [ROLE_GRADE_SHEET_LECTURE_LAB]
+
 
 
 

@@ -57,6 +57,7 @@ AUDIT_RULES: List[Tuple[str, str, str]] = [
     (r"sorted\([^)]*roster[^)]*\)\[0\]|sorted\([^)]*summar[^)]*\)\[0\]", "first-candidate-wins", "First candidate selected from sorted candidates without ambiguity check"),
     (r"sorted\([^)]*(?:max_column|max_row)[^)]*\)\[0\]", "dimension-sorted-role-selection", "Prohibited dimension-sorted candidate selection without unique structural lineage"),
     (r"cols1\s*(?:>|<|!=|==)\s*cols2|max_column\s*(?:>|<|!=|==)\s*max_column", "dimension-role-authority", "Prohibited dimension comparison used as authoritative role discriminator"),
+    (r"refs1\s*(?:>|<|!=|==)\s*refs2|refs2\s*(?:>|<|!=|==)\s*refs1|(?:ref_count|formula_count)\s*(?:>|<|!=)", "reference-count-role-authority", "Reference or formula count comparison used as authoritative role discriminator"),
 ]
 
 
@@ -77,6 +78,14 @@ def classify_finding(rel_path: str, line_num: int, label: str, snippet: str) -> 
         if "template_inspector.py" in rel_path or "template_role_detector.py" in rel_path or "detector" in rel_path:
             return "E", "Prohibited dimension comparison used as authoritative role discriminator"
         return "D", "Legitimate geometry calculation"
+
+    # Category E: Reference-count role authority for secondary assessment sheets
+    if label == "reference-count-role-authority":
+        if "refs1 == refs2" in snippet and "cols1 == cols2" in snippet:
+            return "A", "Physical symmetry check for ambiguous candidate rejection"
+        if "template_inspector.py" in rel_path or "template_role_detector.py" in rel_path or "detector" in rel_path:
+            return "E", "Prohibited reference count comparison used as authoritative role discriminator"
+        return "D", "Legitimate reference counting"
 
     # Category E: Workbook-order role selection or first-candidate-wins without ambiguity check
     if label in ("workbook-order-role-selection", "first-candidate-wins"):

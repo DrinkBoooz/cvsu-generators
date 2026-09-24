@@ -15,6 +15,7 @@ from typing import Dict, Any, List, Optional, Tuple
 
 import openpyxl
 from openpyxl.utils import get_column_letter
+from openpyxl.formula.tokenizer import Tokenizer
 
 from modules.common.logger import logger
 from modules.common.docx_utils import load_docx, get_full_text, w
@@ -55,6 +56,48 @@ FIELD_SHRINK_THRESHOLDS = {
     "semester_ay": 0,
     "date": 0,
 }
+
+FALLBACK_SHEET_REF_REGEX = re.compile(r"(?:'((?:[^']|'')*)'|([A-Za-z0-9_]+))!")
+
+
+def extract_referenced_sheets(formula_str: str) -> set:
+    """
+    Extracts all worksheet names referenced in an Excel formula string.
+    Supports:
+      - Unquoted: Sheet1!A1
+      - Quoted with spaces: 'Sheet A'!A1
+      - Escaped apostrophes: 'Dean''s Practical Sheet'!C7
+      - Ranges: 'Summary 2026'!A1:A20
+      - Absolute refs: 'Practical Component'!$B$5
+    Uses OpenXML/openpyxl formula tokenizer with fallback regex.
+    """
+    if not isinstance(formula_str, str) or not formula_str.startswith("="):
+        return set()
+    referenced = set()
+    try:
+        tok = Tokenizer(formula_str)
+        for item in tok.items:
+            if item.type == "OPERAND" and item.subtype == "RANGE" and "!" in item.value:
+                sheet_part = item.value.rsplit("!", 1)[0]
+                if "]" in sheet_part:
+                    sheet_part = sheet_part.split("]", 1)[1]
+                if sheet_part.startswith("'") and sheet_part.endswith("'"):
+                    sheet_name = sheet_part[1:-1].replace("''", "'")
+                else:
+                    sheet_name = sheet_part
+                if sheet_name:
+                    referenced.add(sheet_name)
+    except Exception:
+        pass
+
+    if not referenced and "!" in formula_str:
+        for m in FALLBACK_SHEET_REF_REGEX.finditer(formula_str):
+            quoted, unquoted = m.groups()
+            name = (quoted.replace("''", "'") if quoted is not None else unquoted)
+            if name:
+                referenced.add(name)
+
+    return referenced
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -780,54 +823,50 @@ class XlsxTemplateInspector:
             rows1 = ws1.max_row
             rows2 = ws2.max_row
 
-            # If both sheets have identical dimensions and equivalent structural evidence,
-            # fail closed without relying on workbook appearance order.
-            if cols1 == cols2 and rows1 == rows2 and refs1 == refs2:
-                raise AmbiguousTemplateError(
-                    f"Grade sheet template '{os.path.basename(template_path)}' contains multiple secondary assessment worksheets with identical structural dimensions and evidence: {[s1, s2]}"
-                )
-
-            # Determine laboratory vs consolidated based on unique structural lineage:
-            # 1. Direct physical formula lineage between candidate sheets:
-            #    An aggregation sheet (Consolidated) references the assessment component (Laboratory).
-            def references_sheet(ws_source, target_title: str) -> bool:
-                pattern = re.compile(rf"(?:'|\b){re.escape(target_title)}(?:'|\b)!", re.IGNORECASE)
+            # Determine laboratory vs consolidated based on unique physical lineage:
+            # Construct directed dependency relation: A -> B meaning worksheet A
+            # physically contains formulas referencing worksheet B.
+            def get_referenced_sheets(ws_source) -> set:
+                referenced = set()
                 for row in ws_source.iter_rows(values_only=True):
                     for val in row:
-                        if isinstance(val, str) and val.startswith("=") and pattern.search(val):
-                            return True
-                return False
+                        if isinstance(val, str) and val.startswith("="):
+                            referenced.update(extract_referenced_sheets(val))
+                return referenced
 
-            s1_refs_s2 = references_sheet(ws1, s2)
-            s2_refs_s1 = references_sheet(ws2, s1)
+            s1_referenced = get_referenced_sheets(ws1)
+            s2_referenced = get_referenced_sheets(ws2)
 
+            s1_refs_s2 = any(r.lower() == s2.lower() for r in s1_referenced)
+            s2_refs_s1 = any(r.lower() == s1.lower() for r in s2_referenced)
+
+            # Case A: s1 -> s2 and s2 !-> s1 (s1 aggregates s2)
             if s1_refs_s2 and not s2_refs_s1:
                 con_sheet = s1
                 lab_sheet = s2
                 has_lab = True
                 has_consolidated = True
+            # Case B: s2 -> s1 and s1 !-> s2 (s2 aggregates s1)
             elif s2_refs_s1 and not s1_refs_s2:
                 con_sheet = s2
                 lab_sheet = s1
                 has_lab = True
                 has_consolidated = True
-            elif refs1 != refs2 and (refs1 > 0 or refs2 > 0):
-                # 2. Cross-sheet aggregation differential:
-                #    Consolidated aggregates lecture & lab components with extensive cross-sheet formulas
-                if refs1 > refs2:
-                    con_sheet = s1
-                    lab_sheet = s2
-                else:
-                    con_sheet = s2
-                    lab_sheet = s1
-                has_lab = True
-                has_consolidated = True
-            else:
-                # Insufficient structural evidence: physical dimensions (max_column / max_row) alone
-                # must NEVER establish Laboratory versus Consolidated.
+            # Case D: s1 -> s2 and s2 -> s1 (competing/cyclic lineage)
+            elif s1_refs_s2 and s2_refs_s1:
                 raise AmbiguousTemplateError(
-                    f"Grade sheet template '{os.path.basename(template_path)}' contains multiple secondary assessment worksheets with different physical dimensions but no unique structural lineage distinguishing laboratory from consolidated roles: {[s1, s2]}"
+                    f"Grade sheet template '{os.path.basename(template_path)}' contains multiple secondary assessment worksheets with competing/cyclic formula lineage referencing each other: {[s1, s2]}"
                 )
+            # Case C: s1 !-> s2 and s2 !-> s1 (no unique lineage)
+            else:
+                if cols1 == cols2 and rows1 == rows2 and refs1 == refs2:
+                    raise AmbiguousTemplateError(
+                        f"Grade sheet template '{os.path.basename(template_path)}' contains multiple secondary assessment worksheets with identical structural dimensions and evidence: {[s1, s2]}"
+                    )
+                else:
+                    raise AmbiguousTemplateError(
+                        f"Grade sheet template '{os.path.basename(template_path)}' contains multiple secondary assessment worksheets with different physical dimensions but no unique structural lineage distinguishing laboratory from consolidated roles: {[s1, s2]}"
+                    )
         elif len(remaining_assessment_sheets) > 2:
             raise AmbiguousTemplateError(
                 f"Grade sheet template '{os.path.basename(template_path)}' contains {len(remaining_assessment_sheets)} secondary assessment worksheets, exceeding supported dual-component capacity: {remaining_assessment_sheets}"
