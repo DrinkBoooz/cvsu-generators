@@ -898,6 +898,7 @@ class XlsxTemplateInspector:
         self,
         template_path: str,
         profile_id: str = "grade_sheet_xlsx",
+        sheet_selection: Optional[Dict[str, str]] = None,
     ) -> RawTemplateRecipeCandidate:
         if not os.path.exists(template_path):
             raise FileNotFoundError(f"Template file not found: {template_path}")
@@ -922,18 +923,19 @@ class XlsxTemplateInspector:
                     if not c_val or not isinstance(c_val, str):
                         continue
                     norm_c = c_val.strip().lower()
-                    if norm_c in ("#", "no.", "no", "item", "bilang"):
+                    if norm_c in ("#", "no.", "no", "item", "bilang", "rec", "record", "record no", "record no.", "record number"):
                         index_col = c
                         header_row = r
-                    elif "student name" in norm_c or "name of student" in norm_c or "surname" in norm_c or norm_c in ("name", "pangalan", "full name", "names of students"):
+                    elif "student name" in norm_c or "name of student" in norm_c or "surname" in norm_c or norm_c in ("name", "pangalan", "full name", "names of students", "student", "person", "participant", "candidate"):
                         name_col = c
-                    elif "student number" in norm_c or "student no" in norm_c or "id number" in norm_c or "id no" in norm_c or norm_c in ("id", "student id", "lrn", "id no."):
+                    elif "student number" in norm_c or "student no" in norm_c or "id number" in norm_c or "id no" in norm_c or norm_c in ("id", "student id", "lrn", "id no.", "registration", "matriculation", "identifier"):
                         id_col = c
 
-                if header_row is not None and name_col is not None and id_col is not None and index_col is not None:
-                    break
+                if header_row is not None and index_col is not None and (name_col is not None or id_col is not None):
+                    if name_col is not None and id_col is not None:
+                        break
 
-            if header_row is not None and name_col is not None and id_col is not None and index_col is not None:
+            if header_row is not None and index_col is not None and (name_col is not None or id_col is not None):
                 first_data_row = None
                 capacity_limit = 0
                 check_col = index_col
@@ -955,7 +957,38 @@ class XlsxTemplateInspector:
                         else:
                             break
 
-                if first_data_row is not None and capacity_limit > 0:
+                # Physical structural fallback for foreign terminology:
+                if first_data_row is not None and capacity_limit >= 2 and (name_col is None or id_col is None):
+                    sample_limit = min(first_data_row + min(capacity_limit, 10), ws.max_row + 1)
+                    sample_rows = range(first_data_row, sample_limit)
+                    for c in range(1, min(ws.max_column + 1, 30)):
+                        if c == index_col:
+                            continue
+                        vals = [ws.cell(r, c).value for r in sample_rows]
+                        str_vals = [str(v).strip() for v in vals if v is not None and str(v).strip() != ""]
+                        if len(str_vals) < 2:
+                            continue
+                        if name_col is None:
+                            is_text = (
+                                all(not v.startswith("=") for v in str_vals)
+                                and sum(1 for v in str_vals if any(ch.isalpha() for ch in v) and not v.replace(".", "").isdigit()) >= len(str_vals) * 0.8
+                                and any(" " in v or "," in v or len(v) > 3 for v in str_vals)
+                            )
+                            if is_text:
+                                name_col = c
+                        if id_col is None and c != name_col:
+                            is_id = (
+                                len(set(str_vals)) == len(str_vals)
+                                and all(not v.startswith("=") for v in str_vals)
+                                and (
+                                    all(any(ch.isdigit() for ch in v) for v in str_vals)
+                                    or all("-" in v or "_" in v for v in str_vals)
+                                )
+                            )
+                            if is_id:
+                                id_col = c
+
+                if first_data_row is not None and capacity_limit > 0 and name_col is not None and id_col is not None:
                     return {
                         "table_index": 0,
                         "worksheet_name": ws.title,
@@ -1033,528 +1066,597 @@ class XlsxTemplateInspector:
 
         # Discover candidate summary worksheets based on physical rating header presence
         summary_candidates = [s for s in sheet_names if score_summary_sheet(s) > 0]
-        if not summary_candidates:
-            raise TemplateError(
-                f"Grade sheet template '{os.path.basename(template_path)}' is missing required 'Grading Sheet' worksheet or structural summary rating sheet."
+
+        disc_struct = {
+            "roster_candidates": list(roster_candidates_by_sheet.keys()),
+            "summary_candidates": list(summary_candidates),
+            "roster_details": {
+                s: {
+                    "first_data_row_index": info.get("first_data_row_index"),
+                    "name_col": info.get("name_col"),
+                    "id_col": info.get("id_col"),
+                    "capacity_limit": info.get("capacity_limit"),
+                }
+                for s, info in roster_candidates_by_sheet.items()
+            },
+            "all_sheets": list(sheet_names),
+        }
+
+        if sheet_selection:
+            # User confirmed sheet selection: user selects among inspector-discovered candidates.
+            # Coordinates are discovered & verified physically by the inspector, never typed or fabricated.
+            sel_roster = (
+                sheet_selection.get("roster_sheet")
+                or sheet_selection.get("primary_roster_sheet")
+                or sheet_selection.get("lecture_sheet")
+                or sheet_selection.get("roster")
+            )
+            sel_summary = sheet_selection.get("summary_sheet") or sheet_selection.get("summary")
+            sel_lab = (
+                sheet_selection.get("lab_sheet")
+                or sheet_selection.get("laboratory_sheet")
+                or sheet_selection.get("lab")
+            )
+            sel_con = (
+                sheet_selection.get("consolidated_sheet")
+                or sheet_selection.get("consolidation_sheet")
+                or sheet_selection.get("consolidated")
             )
 
-        # ── Authoritative Physical Final-Rating Calculation Lineage Trace ──────────
-        # Traces physical calculation dependencies from the official final rating cells
-        # on candidate summary sheets through intermediate consolidation/calculation cells back to
-        # candidate instructional roster components.
-        #
-        # INVARIANTS:
-        # 1. candidate roster -> student-row grade calculation -> downstream consolidation -> official final rating.
-        # 2. A worksheet referenced solely for student names, student IDs, lookup metadata, or
-        #    administrative info must NOT qualify as an instructional component.
-        # 3. Empty or unverified lineage MUST fail closed as AmbiguousTemplateError.
-        # 4. Lexical score alone NEVER establishes summary authority; authority requires unique physical final-rating topology.
-        def get_instructional_grade_lineage_for(target_summary: str) -> Tuple[set, bool]:
-            ws_sum = wb[target_summary]
-            rating_cols = []
-            hdr_row = None
+            if not sel_roster or sel_roster not in sheet_names:
+                raise AmbiguousTemplateError(
+                    f"Selected roster sheet '{sel_roster}' does not exist in workbook: {sheet_names}",
+                    discovered_structures=disc_struct,
+                )
+            if sel_roster not in roster_candidates_by_sheet:
+                raise TemplateError(
+                    f"Selected sheet '{sel_roster}' lacks physical student roster structures (name/ID columns)."
+                )
 
-            # Locate rating header column(s) on target_summary
-            for r in range(1, min(ws_sum.max_row + 1, 30)):
-                for c in range(1, min(ws_sum.max_column + 1, 25)):
-                    raw_val = ws_sum.cell(r, c).value
-                    if raw_val and isinstance(raw_val, str):
-                        t = raw_val.strip().lower()
-                        if len(t) <= 30 and t in ("grade", "rating", "mark", "final mark", "final grade", "final rating", "semestral grade", "numerical rating"):
-                            rating_cols.append(c)
-                            if hdr_row is None or r > hdr_row:
-                                hdr_row = r
+            primary_roster_sheet = sel_roster
+            if sel_summary:
+                if sel_summary not in sheet_names:
+                    raise AmbiguousTemplateError(
+                        f"Selected summary sheet '{sel_summary}' does not exist in workbook: {sheet_names}",
+                        discovered_structures=disc_struct,
+                    )
+                summary_sheet = sel_summary
+            else:
+                summary_sheet = summary_candidates[0] if summary_candidates else sel_roster
 
-            if not rating_cols:
+            has_lab = bool(sel_lab and sel_lab in sheet_names)
+            lab_sheet = sel_lab if has_lab else None
+            has_consolidated = bool(sel_con and sel_con in sheet_names)
+            con_sheet = sel_con if has_consolidated else None
+        else:
+            if not summary_candidates:
+                raise TemplateError(
+                    f"Grade sheet template '{os.path.basename(template_path)}' is missing required 'Grading Sheet' worksheet or structural summary rating sheet."
+                )
+
+            # ── Authoritative Physical Final-Rating Calculation Lineage Trace ──────────
+            # Traces physical calculation dependencies from the official final rating cells
+            # on candidate summary sheets through intermediate consolidation/calculation cells back to
+            # candidate instructional roster components.
+            #
+            # INVARIANTS:
+            # 1. candidate roster -> student-row grade calculation -> downstream consolidation -> official final rating.
+            # 2. A worksheet referenced solely for student names, student IDs, lookup metadata, or
+            #    administrative info must NOT qualify as an instructional component.
+            # 3. Empty or unverified lineage MUST fail closed as AmbiguousTemplateError.
+            # 4. Lexical score alone NEVER establishes summary authority; authority requires unique physical final-rating topology.
+            def get_instructional_grade_lineage_for(target_summary: str) -> Tuple[set, bool]:
+                ws_sum = wb[target_summary]
+                rating_cols = []
+                hdr_row = None
+
+                # Locate rating header column(s) on target_summary
                 for r in range(1, min(ws_sum.max_row + 1, 30)):
                     for c in range(1, min(ws_sum.max_column + 1, 25)):
                         raw_val = ws_sum.cell(r, c).value
                         if raw_val and isinstance(raw_val, str):
                             t = raw_val.strip().lower()
-                            if len(t) <= 30 and t in ("remarks", "eval", "evaluation"):
+                            if len(t) <= 30 and t in ("grade", "rating", "mark", "final mark", "final grade", "final rating", "semestral grade", "numerical rating"):
                                 rating_cols.append(c)
                                 if hdr_row is None or r > hdr_row:
                                     hdr_row = r
 
-            if not rating_cols or hdr_row is None:
-                return set(), True
+                if not rating_cols:
+                    for r in range(1, min(ws_sum.max_row + 1, 30)):
+                        for c in range(1, min(ws_sum.max_column + 1, 25)):
+                            raw_val = ws_sum.cell(r, c).value
+                            if raw_val and isinstance(raw_val, str):
+                                t = raw_val.strip().lower()
+                                if len(t) <= 30 and t in ("remarks", "eval", "evaluation"):
+                                    rating_cols.append(c)
+                                    if hdr_row is None or r > hdr_row:
+                                        hdr_row = r
 
-            # Candidate rosters for target_summary are all other roster candidates
-            potential_rosters = {s for s in roster_candidates_by_sheet if s != target_summary}
+                if not rating_cols or hdr_row is None:
+                    return set(), True
 
-            # Gather formula rating cells in student rows
-            data_start = hdr_row + 1
-            data_end = min(ws_sum.max_row + 1, data_start + 100)
-            formula_rating_cells = [
-                (target_summary, r, c)
-                for r in range(data_start, data_end)
-                for c in rating_cols
-                if isinstance(ws_sum.cell(r, c).value, str) and ws_sum.cell(r, c).value.startswith("=")
+                # Candidate rosters for target_summary are all other roster candidates
+                potential_rosters = {s for s in roster_candidates_by_sheet if s != target_summary}
+
+                # Gather formula rating cells in student rows
+                data_start = hdr_row + 1
+                data_end = min(ws_sum.max_row + 1, data_start + 100)
+                formula_rating_cells = [
+                    (target_summary, r, c)
+                    for r in range(data_start, data_end)
+                    for c in rating_cols
+                    if isinstance(ws_sum.cell(r, c).value, str) and ws_sum.cell(r, c).value.startswith("=")
+                ]
+
+                if not formula_rating_cells:
+                    # Summary rating sheet contains static values or no grade formulas
+                    return set(), True
+
+                visited_cells = set()
+                queue = list(formula_rating_cells)
+                instructional_contributors = set()
+                is_reliable = True
+
+                while queue:
+                    curr_sheet, curr_r, curr_c = queue.pop(0)
+                    cell_key = (curr_sheet.lower(), curr_r, curr_c)
+                    if cell_key in visited_cells:
+                        continue
+                    visited_cells.add(cell_key)
+
+                    ws_curr = wb[curr_sheet]
+                    val = ws_curr.cell(curr_r, curr_c).value
+                    if not isinstance(val, str) or not val.startswith("="):
+                        continue
+
+                    refs = extract_referenced_sheets(val)
+                    if not getattr(refs, "is_reliable", True):
+                        is_reliable = False
+                        break
+
+                    try:
+                        tok = Tokenizer(val)
+                    except Exception:
+                        is_reliable = False
+                        break
+
+                    for item in tok.items:
+                        if item.type == "OPERAND" and item.subtype == "RANGE":
+                            sh_part, cell_part = split_sheet_and_cell(item.value)
+                            target_sheet = curr_sheet
+                            if sh_part:
+                                clean_sh = sh_part.strip("'").replace("''", "'")
+                                matched = next((s for s in sheet_names if s.lower() == clean_sh.lower()), None)
+                                if not matched:
+                                    continue
+                                target_sheet = matched
+
+                            try:
+                                min_col, min_row, max_col, max_row = range_boundaries(cell_part)
+                            except Exception:
+                                is_reliable = False
+                                break
+
+                            if min_col is None or min_row is None:
+                                continue
+                            max_col = max_col or min_col
+                            max_row = max_row or min_row
+
+                            if target_sheet in potential_rosters:
+                                r_info = roster_candidates_by_sheet[target_sheet]
+                                f_row = r_info["first_data_row_index"]
+                                cap = r_info.get("capacity_limit", 0)
+                                l_row = f_row + cap - 1 if cap > 0 else 1000
+                                non_grade_cols = {r_info.get("name_col"), r_info.get("id_col"), r_info.get("index_col")}
+
+                                for ref_r in range(min_row, max_row + 1):
+                                    if f_row <= ref_r <= l_row:
+                                        for ref_c in range(min_col, max_col + 1):
+                                            if ref_c not in non_grade_cols:
+                                                instructional_contributors.add(target_sheet)
+
+                            # Enqueue target cells to follow transitive calculation lineage into intermediate sheets
+                            ref_r_end = min(max_row, min_row + 50)
+                            ref_c_end = min(max_col, min_col + 50)
+                            for ref_r in range(min_row, ref_r_end + 1):
+                                for ref_c in range(min_col, ref_c_end + 1):
+                                    k = (target_sheet.lower(), ref_r, ref_c)
+                                    if k not in visited_cells:
+                                        queue.append((target_sheet, ref_r, ref_c))
+
+                return instructional_contributors, is_reliable
+
+            # Evaluate physical final-rating calculation topology across all summary candidates.
+            # Lexical score alone does NOT establish authority: a summary worksheet MUST exhibit
+            # role-consistent physical final-rating calculation topology connecting to candidate rosters.
+            topological_summaries: List[str] = []
+            summary_lineage_map: Dict[str, set] = {}
+
+            for s_cand in summary_candidates:
+                contribs, is_rel = get_instructional_grade_lineage_for(s_cand)
+                if not is_rel:
+                    raise AmbiguousTemplateError(
+                        f"Grade sheet template '{os.path.basename(template_path)}' contains unparseable or indeterminate formula lineage connecting to summary candidate '{s_cand}'",
+                discovered_structures=disc_struct,
+        )
+                if contribs:
+                    topological_summaries.append(s_cand)
+                    summary_lineage_map[s_cand] = contribs
+
+            # A summary worksheet must be a terminal rating sheet (not an upstream contributor to another summary sheet)
+            terminal_summaries = [
+                s for s in topological_summaries
+                if not any(s.lower() in {c.lower() for c in summary_lineage_map[other]}
+                           for other in topological_summaries if other.lower() != s.lower())
             ]
 
-            if not formula_rating_cells:
-                # Summary rating sheet contains static values or no grade formulas
-                return set(), True
-
-            visited_cells = set()
-            queue = list(formula_rating_cells)
-            instructional_contributors = set()
-            is_reliable = True
-
-            while queue:
-                curr_sheet, curr_r, curr_c = queue.pop(0)
-                cell_key = (curr_sheet.lower(), curr_r, curr_c)
-                if cell_key in visited_cells:
-                    continue
-                visited_cells.add(cell_key)
-
-                ws_curr = wb[curr_sheet]
-                val = ws_curr.cell(curr_r, curr_c).value
-                if not isinstance(val, str) or not val.startswith("="):
-                    continue
-
-                refs = extract_referenced_sheets(val)
-                if not getattr(refs, "is_reliable", True):
-                    is_reliable = False
-                    break
-
-                try:
-                    tok = Tokenizer(val)
-                except Exception:
-                    is_reliable = False
-                    break
-
-                for item in tok.items:
-                    if item.type == "OPERAND" and item.subtype == "RANGE":
-                        sh_part, cell_part = split_sheet_and_cell(item.value)
-                        target_sheet = curr_sheet
-                        if sh_part:
-                            clean_sh = sh_part.strip("'").replace("''", "'")
-                            matched = next((s for s in sheet_names if s.lower() == clean_sh.lower()), None)
-                            if not matched:
-                                continue
-                            target_sheet = matched
-
-                        try:
-                            min_col, min_row, max_col, max_row = range_boundaries(cell_part)
-                        except Exception:
-                            is_reliable = False
-                            break
-
-                        if min_col is None or min_row is None:
-                            continue
-                        max_col = max_col or min_col
-                        max_row = max_row or min_row
-
-                        if target_sheet in potential_rosters:
-                            r_info = roster_candidates_by_sheet[target_sheet]
-                            f_row = r_info["first_data_row_index"]
-                            cap = r_info.get("capacity_limit", 0)
-                            l_row = f_row + cap - 1 if cap > 0 else 1000
-                            non_grade_cols = {r_info.get("name_col"), r_info.get("id_col"), r_info.get("index_col")}
-
-                            for ref_r in range(min_row, max_row + 1):
-                                if f_row <= ref_r <= l_row:
-                                    for ref_c in range(min_col, max_col + 1):
-                                        if ref_c not in non_grade_cols:
-                                            instructional_contributors.add(target_sheet)
-
-                        # Enqueue target cells to follow transitive calculation lineage into intermediate sheets
-                        ref_r_end = min(max_row, min_row + 50)
-                        ref_c_end = min(max_col, min_col + 50)
-                        for ref_r in range(min_row, ref_r_end + 1):
-                            for ref_c in range(min_col, ref_c_end + 1):
-                                k = (target_sheet.lower(), ref_r, ref_c)
-                                if k not in visited_cells:
-                                    queue.append((target_sheet, ref_r, ref_c))
-
-            return instructional_contributors, is_reliable
-
-        # Evaluate physical final-rating calculation topology across all summary candidates.
-        # Lexical score alone does NOT establish authority: a summary worksheet MUST exhibit
-        # role-consistent physical final-rating calculation topology connecting to candidate rosters.
-        topological_summaries: List[str] = []
-        summary_lineage_map: Dict[str, set] = {}
-
-        for s_cand in summary_candidates:
-            contribs, is_rel = get_instructional_grade_lineage_for(s_cand)
-            if not is_rel:
+            if len(terminal_summaries) == 1:
+                summary_sheet = terminal_summaries[0]
+                instructional_lineage_sheets = summary_lineage_map[summary_sheet]
+            elif len(terminal_summaries) > 1:
                 raise AmbiguousTemplateError(
-                    f"Grade sheet template '{os.path.basename(template_path)}' contains unparseable or indeterminate formula lineage connecting to summary candidate '{s_cand}'"
-                )
-            if contribs:
-                topological_summaries.append(s_cand)
-                summary_lineage_map[s_cand] = contribs
-
-        # A summary worksheet must be a terminal rating sheet (not an upstream contributor to another summary sheet)
-        terminal_summaries = [
-            s for s in topological_summaries
-            if not any(s.lower() in {c.lower() for c in summary_lineage_map[other]}
-                       for other in topological_summaries if other.lower() != s.lower())
-        ]
-
-        if len(terminal_summaries) == 1:
-            summary_sheet = terminal_summaries[0]
-            instructional_lineage_sheets = summary_lineage_map[summary_sheet]
-        elif len(terminal_summaries) > 1:
-            raise AmbiguousTemplateError(
-                f"Grade sheet template '{os.path.basename(template_path)}' contains multiple ambiguous summary rating worksheets with equal structural evidence: {terminal_summaries}"
-            )
-        elif len(summary_candidates) > 1:
-            raise AmbiguousTemplateError(
-                f"Grade sheet template '{os.path.basename(template_path)}' contains multiple ambiguous summary rating worksheets with equal structural evidence: {summary_candidates}"
-            )
-        else:
-            summary_sheet = summary_candidates[0]
-            instructional_lineage_sheets = set()
-
-        # Candidate roster worksheets excluding summary_sheet
-        candidate_rosters = [
-            s for s in sheet_names
-            if s in roster_candidates_by_sheet and s != summary_sheet
-        ]
-
-        if not candidate_rosters:
-            raise TemplateError(
-                f"Grade sheet template '{os.path.basename(template_path)}' is missing required student roster worksheet."
-            )
-
-        # Score candidate rosters using metadata density in rows 1-10 (candidate evidence only)
-        def score_roster_sheet(s_name: str) -> int:
-            ws_cand = wb[s_name]
-            score = 0
-            for r in range(1, min(ws_cand.max_row + 1, 10)):
-                for c in range(1, min(ws_cand.max_column + 1, 15)):
-                    val = ws_cand.cell(r, c).value
-                    if val and isinstance(val, str):
-                        m = SemanticRegistry.match_metadata_candidate(val.strip())
-                        if m:
-                            score += 25
-            return score
-
-        roster_scores = {s: score_roster_sheet(s) for s in candidate_rosters}
-
-        # Authoritative physical role validation:
-        # Candidate rosters MUST participate in verified student-row instructional calculation
-        # lineage leading into the official final rating on summary_sheet.
-        if not instructional_lineage_sheets:
-            max_r_score = max(roster_scores.values()) if roster_scores else 0
-            top_meta = [s for s in candidate_rosters if roster_scores[s] == max_r_score]
-            if len(top_meta) > 1:
-                raise AmbiguousTemplateError(
-                    f"Grade sheet template '{os.path.basename(template_path)}' contains multiple ambiguous candidate roster worksheets with equal structural evidence: {top_meta}"
-                )
-            top_desc = f"candidate primary roster '{top_meta[0]}' has highest metadata density ({max_r_score}) but " if top_meta else ""
-            raise AmbiguousTemplateError(
-                f"Grade sheet template '{os.path.basename(template_path)}' {top_desc}summary rating sheet '{summary_sheet}' lacks role-consistent physical instructional lineage (lacks verified physical student-row instructional calculation lineage connecting to candidate rosters)."
-            )
-
-        # Commit 175-177 protection: If a candidate has the highest metadata density score,
-        # but fails to participate in verified instructional lineage, fail closed as ambiguous
-        # (rejecting deceptive / unintegrated fake masters).
-        max_r_score = max(roster_scores.values()) if roster_scores else 0
-        if max_r_score > 0:
-            top_meta_candidates = [s for s in candidate_rosters if roster_scores[s] == max_r_score]
-            unverified_top = [s for s in top_meta_candidates if s not in instructional_lineage_sheets]
-            if unverified_top:
-                raise AmbiguousTemplateError(
-                    f"Grade sheet template '{os.path.basename(template_path)}' candidate primary roster '{unverified_top[0]}' has highest metadata density ({max_r_score}) but lacks role-consistent physical instructional lineage (lacks verified student-row instructional calculation lineage connecting to summary sheet '{summary_sheet}')."
-                )
-
-        # Identify physically validated instructional candidates:
-        instructional_candidates = [
-            s for s in candidate_rosters if s in instructional_lineage_sheets
-        ]
-        if not instructional_candidates:
-            raise AmbiguousTemplateError(
-                f"Grade sheet template '{os.path.basename(template_path)}' contains candidate roster worksheets but none participate in verified instructional calculation lineage connecting to summary sheet '{summary_sheet}'."
-            )
-
-        # Helper to detect whether a candidate worksheet is a multi-source consolidation sheet
-        # combining at least two other student component candidates on student data rows.
-        def is_multi_source_consolidation(s_name: str, comp_pool: set) -> bool:
-            other_comps = {c for c in comp_pool if c.lower() != s_name.lower()}
-            if len(other_comps) < 2:
-                return False
-            ws_c = wb[s_name]
-            r_info = roster_candidates_by_sheet.get(s_name)
-            for other in other_comps:
-                if has_consolidation_structure(ws_c, other, other_comps, roster_info=r_info):
-                    return True
-            return False
-
-        # Identify primary-compatible raw instructional components:
-        # A downstream consolidation sheet aggregates raw instructional components and is not primary.
-        all_comp_pool = set(candidate_rosters)
-        raw_instructional_candidates = [
-            s for s in instructional_candidates
-            if not is_multi_source_consolidation(s, all_comp_pool)
-        ]
-
-        # Helper to find which sheets are referenced in student roster identity columns (name, ID) of a sheet
-        def get_roster_identity_sources(ws, r_info: Optional[Dict[str, Any]]) -> set:
-            if not r_info or "first_data_row_index" not in r_info:
-                return set()
-            f_row = r_info["first_data_row_index"]
-            cap = r_info.get("capacity_limit", 0)
-            l_row = f_row + cap - 1 if cap > 0 else min(ws.max_row, f_row + 100)
-            id_cols = [c for c in (r_info.get("name_col"), r_info.get("id_col")) if c]
-            sources = set()
-            for r in range(f_row, min(ws.max_row + 1, l_row + 1)):
-                for c in id_cols:
-                    v = ws.cell(r, c).value
-                    if isinstance(v, str) and v.startswith("="):
-                        refs = extract_referenced_sheets(v)
-                        for ref in refs:
-                            sources.add(ref.lower())
-            return sources
-
-        ws_sum = wb[summary_sheet]
-        summary_roster_sources = get_roster_identity_sources(
-            ws_sum, roster_candidates_by_sheet.get(summary_sheet)
+                    f"Grade sheet template '{os.path.basename(template_path)}' contains multiple ambiguous summary rating worksheets with equal structural evidence: {terminal_summaries}",
+                discovered_structures=disc_struct,
         )
-        if not summary_roster_sources:
-            sum_id_cols = set()
-            sum_data_start = None
-            for r in range(1, min(ws_sum.max_row + 1, 15)):
-                for c in range(1, min(ws_sum.max_column + 1, 20)):
-                    v = ws_sum.cell(r, c).value
-                    if v and isinstance(v, str):
-                        vl = v.strip().lower()
-                        if any(k in vl for k in ("student", "name", "number", "stud")):
-                            sum_id_cols.add(c)
-                            if sum_data_start is None or r + 1 > sum_data_start:
-                                sum_data_start = r + 1
-            if sum_id_cols and sum_data_start:
-                for r in range(sum_data_start, min(ws_sum.max_row + 1, sum_data_start + 60)):
-                    for c in sum_id_cols:
-                        val = ws_sum.cell(r, c).value
-                        if isinstance(val, str) and val.startswith("="):
-                            refs = extract_referenced_sheets(val)
-                            for ref in refs:
-                                summary_roster_sources.add(ref.lower())
+            elif len(summary_candidates) > 1:
+                raise AmbiguousTemplateError(
+                    f"Grade sheet template '{os.path.basename(template_path)}' contains multiple ambiguous summary rating worksheets with equal structural evidence: {summary_candidates}",
+                discovered_structures=disc_struct,
+        )
+            else:
+                summary_sheet = summary_candidates[0]
+                instructional_lineage_sheets = set()
 
-        primary_roster_sheet: Optional[str] = None
+            # Candidate roster worksheets excluding summary_sheet
+            candidate_rosters = [
+                s for s in sheet_names
+                if s in roster_candidates_by_sheet and s != summary_sheet
+            ]
 
-        if len(raw_instructional_candidates) == 1:
-            primary_roster_sheet = raw_instructional_candidates[0]
-        elif len(raw_instructional_candidates) > 1:
-            # Multiple candidates independently satisfy primary-compatible physical evidence.
-            # Metadata density score is CANDIDATE EVIDENCE ONLY and MUST NOT choose the primary role.
-            # An independent physical structural discriminator is REQUIRED.
-            primary_scores: Dict[str, int] = {s: 0 for s in raw_instructional_candidates}
-
-            # 1. Role-consistent student roster identity derivation between candidates:
-            # DIRECTED FORMULA DEPENDENCY ALONE != SEMANTIC ROLE AUTHORITY.
-            # An arbitrary cell reference does not confer primary authority.
-            # Primary authority requires physical derivation of student roster identity (name/ID) on student rows.
-            for i, s_a in enumerate(raw_instructional_candidates):
-                ws_a = wb[s_a]
-                refs_a, rel_a = get_referenced_sheets(ws_a)
-                if not rel_a:
-                    raise AmbiguousTemplateError(
-                        f"Grade sheet template '{os.path.basename(template_path)}' contains candidate worksheet '{s_a}' with unparseable or indeterminate formula lineage"
-                    )
-                r_info_a = roster_candidates_by_sheet.get(s_a)
-                roster_sources_a = get_roster_identity_sources(ws_a, r_info_a)
-
-                for s_b in raw_instructional_candidates[i + 1:]:
-                    ws_b = wb[s_b]
-                    refs_b, rel_b = get_referenced_sheets(ws_b)
-                    if not rel_b:
-                        raise AmbiguousTemplateError(
-                            f"Grade sheet template '{os.path.basename(template_path)}' contains candidate worksheet '{s_b}' with unparseable or indeterminate formula lineage"
-                        )
-                    r_info_b = roster_candidates_by_sheet.get(s_b)
-                    roster_sources_b = get_roster_identity_sources(ws_b, r_info_b)
-
-                    # Fail closed on cyclic/competing formula dependencies anywhere between the two sheets
-                    any_b_refs_a = any(r.lower() == s_a.lower() for r in refs_b)
-                    any_a_refs_b = any(r.lower() == s_b.lower() for r in refs_a)
-                    if any_a_refs_b and any_b_refs_a:
-                        raise AmbiguousTemplateError(
-                            f"Grade sheet template '{os.path.basename(template_path)}' contains candidate roster worksheets with competing/cyclic formula lineage referencing each other: {[s_a, s_b]}"
-                        )
-
-                    # Physical student-row roster identity derivation:
-                    b_derives_roster_from_a = s_a.lower() in roster_sources_b
-                    a_derives_roster_from_b = s_b.lower() in roster_sources_a
-
-                    if b_derives_roster_from_a and not a_derives_roster_from_b:
-                        primary_scores[s_a] += 1
-                    elif a_derives_roster_from_b and not b_derives_roster_from_a:
-                        primary_scores[s_b] += 1
-
-            # 2. Student roster identity derivation from summary rating sheet:
-            for s in raw_instructional_candidates:
-                if s.lower() in summary_roster_sources:
-                    primary_scores[s] += 1
-
-            # 3. Student roster identity derivation from consolidation sheets:
-            con_sheets = [s for s in candidate_rosters if is_multi_source_consolidation(s, all_comp_pool)]
-            for c_sheet in con_sheets:
-                con_roster_sources = get_roster_identity_sources(
-                    wb[c_sheet], roster_candidates_by_sheet.get(c_sheet)
+            if not candidate_rosters:
+                raise TemplateError(
+                    f"Grade sheet template '{os.path.basename(template_path)}' is missing required student roster worksheet."
                 )
+
+            # Score candidate rosters using metadata density in rows 1-10 (candidate evidence only)
+            def score_roster_sheet(s_name: str) -> int:
+                ws_cand = wb[s_name]
+                score = 0
+                for r in range(1, min(ws_cand.max_row + 1, 10)):
+                    for c in range(1, min(ws_cand.max_column + 1, 15)):
+                        val = ws_cand.cell(r, c).value
+                        if val and isinstance(val, str):
+                            m = SemanticRegistry.match_metadata_candidate(val.strip())
+                            if m:
+                                score += 25
+                return score
+
+            roster_scores = {s: score_roster_sheet(s) for s in candidate_rosters}
+
+            # Authoritative physical role validation:
+            # Candidate rosters MUST participate in verified student-row instructional calculation
+            # lineage leading into the official final rating on summary_sheet.
+            if not instructional_lineage_sheets:
+                max_r_score = max(roster_scores.values()) if roster_scores else 0
+                top_meta = [s for s in candidate_rosters if roster_scores[s] == max_r_score]
+                if len(top_meta) > 1:
+                    raise AmbiguousTemplateError(
+                        f"Grade sheet template '{os.path.basename(template_path)}' contains multiple ambiguous candidate roster worksheets with equal structural evidence: {top_meta}",
+                discovered_structures=disc_struct,
+        )
+                top_desc = f"candidate primary roster '{top_meta[0]}' has highest metadata density ({max_r_score}) but " if top_meta else ""
+                raise AmbiguousTemplateError(
+                    f"Grade sheet template '{os.path.basename(template_path)}' {top_desc}summary rating sheet '{summary_sheet}' lacks role-consistent physical instructional lineage (lacks verified physical student-row instructional calculation lineage connecting to candidate rosters).",
+                discovered_structures=disc_struct,
+        )
+            # Identify physically validated instructional candidates:
+            instructional_candidates = [
+                s for s in candidate_rosters if s in instructional_lineage_sheets
+            ]
+            if not instructional_candidates:
+                raise AmbiguousTemplateError(
+                    f"Grade sheet template '{os.path.basename(template_path)}' contains candidate roster worksheets but none participate in verified instructional calculation lineage connecting to summary sheet '{summary_sheet}'.",
+                discovered_structures=disc_struct,
+        )
+
+            # Helper to detect whether a candidate worksheet is a multi-source consolidation sheet
+            # combining at least two other student component candidates on student data rows.
+            def is_multi_source_consolidation(s_name: str, comp_pool: set) -> bool:
+                other_comps = {c for c in comp_pool if c.lower() != s_name.lower()}
+                if len(other_comps) < 2:
+                    return False
+                ws_c = wb[s_name]
+                r_info = roster_candidates_by_sheet.get(s_name)
+                for other in other_comps:
+                    if has_consolidation_structure(ws_c, other, other_comps, roster_info=r_info):
+                        return True
+                return False
+
+            # Identify primary-compatible raw instructional components:
+            # A downstream consolidation sheet aggregates raw instructional components and is not primary.
+            all_comp_pool = set(candidate_rosters)
+            raw_instructional_candidates = [
+                s for s in instructional_candidates
+                if not is_multi_source_consolidation(s, all_comp_pool)
+            ]
+
+            # Helper to find which sheets are referenced in student roster identity columns (name, ID) of a sheet
+            def get_roster_identity_sources(ws, r_info: Optional[Dict[str, Any]]) -> set:
+                if not r_info or "first_data_row_index" not in r_info:
+                    return set()
+                f_row = r_info["first_data_row_index"]
+                cap = r_info.get("capacity_limit", 0)
+                l_row = f_row + cap - 1 if cap > 0 else min(ws.max_row, f_row + 100)
+                id_cols = [c for c in (r_info.get("name_col"), r_info.get("id_col")) if c]
+                sources = set()
+                for r in range(f_row, min(ws.max_row + 1, l_row + 1)):
+                    for c in id_cols:
+                        v = ws.cell(r, c).value
+                        if isinstance(v, str) and v.startswith("="):
+                            refs = extract_referenced_sheets(v)
+                            for ref in refs:
+                                sources.add(ref.lower())
+                return sources
+
+            ws_sum = wb[summary_sheet]
+            summary_roster_sources = get_roster_identity_sources(
+                ws_sum, roster_candidates_by_sheet.get(summary_sheet)
+            )
+            if not summary_roster_sources:
+                sum_id_cols = set()
+                sum_data_start = None
+                for r in range(1, min(ws_sum.max_row + 1, 15)):
+                    for c in range(1, min(ws_sum.max_column + 1, 20)):
+                        v = ws_sum.cell(r, c).value
+                        if v and isinstance(v, str):
+                            vl = v.strip().lower()
+                            if any(k in vl for k in ("student", "name", "number", "stud")):
+                                sum_id_cols.add(c)
+                                if sum_data_start is None or r + 1 > sum_data_start:
+                                    sum_data_start = r + 1
+                if sum_id_cols and sum_data_start:
+                    for r in range(sum_data_start, min(ws_sum.max_row + 1, sum_data_start + 60)):
+                        for c in sum_id_cols:
+                            val = ws_sum.cell(r, c).value
+                            if isinstance(val, str) and val.startswith("="):
+                                refs = extract_referenced_sheets(val)
+                                for ref in refs:
+                                    summary_roster_sources.add(ref.lower())
+
+            primary_roster_sheet: Optional[str] = None
+
+            if len(raw_instructional_candidates) == 1:
+                primary_roster_sheet = raw_instructional_candidates[0]
+            elif len(raw_instructional_candidates) > 1:
+                # Multiple candidates independently satisfy primary-compatible physical evidence.
+                # Metadata density score is CANDIDATE EVIDENCE ONLY and MUST NOT choose the primary role.
+                # An independent physical structural discriminator is REQUIRED.
+                primary_scores: Dict[str, int] = {s: 0 for s in raw_instructional_candidates}
+
+                # 1. Role-consistent student roster identity derivation between candidates:
+                # DIRECTED FORMULA DEPENDENCY ALONE != SEMANTIC ROLE AUTHORITY.
+                # An arbitrary cell reference does not confer primary authority.
+                # Primary authority requires physical derivation of student roster identity (name/ID) on student rows.
+                for i, s_a in enumerate(raw_instructional_candidates):
+                    ws_a = wb[s_a]
+                    refs_a, rel_a = get_referenced_sheets(ws_a)
+                    if not rel_a:
+                        raise AmbiguousTemplateError(
+                            f"Grade sheet template '{os.path.basename(template_path)}' contains candidate worksheet '{s_a}' with unparseable or indeterminate formula lineage",
+                discovered_structures=disc_struct,
+        )
+                    r_info_a = roster_candidates_by_sheet.get(s_a)
+                    roster_sources_a = get_roster_identity_sources(ws_a, r_info_a)
+
+                    for s_b in raw_instructional_candidates[i + 1:]:
+                        ws_b = wb[s_b]
+                        refs_b, rel_b = get_referenced_sheets(ws_b)
+                        if not rel_b:
+                            raise AmbiguousTemplateError(
+                                f"Grade sheet template '{os.path.basename(template_path)}' contains candidate worksheet '{s_b}' with unparseable or indeterminate formula lineage",
+                discovered_structures=disc_struct,
+        )
+                        r_info_b = roster_candidates_by_sheet.get(s_b)
+                        roster_sources_b = get_roster_identity_sources(ws_b, r_info_b)
+
+                        # Fail closed on cyclic/competing formula dependencies anywhere between the two sheets
+                        any_b_refs_a = any(r.lower() == s_a.lower() for r in refs_b)
+                        any_a_refs_b = any(r.lower() == s_b.lower() for r in refs_a)
+                        if any_a_refs_b and any_b_refs_a:
+                            raise AmbiguousTemplateError(
+                                f"Grade sheet template '{os.path.basename(template_path)}' contains candidate roster worksheets with competing/cyclic formula lineage referencing each other: {[s_a, s_b]}",
+                discovered_structures=disc_struct,
+        )
+
+                        # Physical student-row roster identity derivation:
+                        b_derives_roster_from_a = s_a.lower() in roster_sources_b
+                        a_derives_roster_from_b = s_b.lower() in roster_sources_a
+
+                        if b_derives_roster_from_a and not a_derives_roster_from_b:
+                            primary_scores[s_a] += 1
+                        elif a_derives_roster_from_b and not b_derives_roster_from_a:
+                            primary_scores[s_b] += 1
+
+                # 2. Student roster identity derivation from summary rating sheet:
                 for s in raw_instructional_candidates:
-                    if s.lower() in con_roster_sources:
+                    if s.lower() in summary_roster_sources:
                         primary_scores[s] += 1
 
-            max_phys = max(primary_scores.values())
-            top_phys = [s for s in raw_instructional_candidates if primary_scores[s] == max_phys]
+                # 3. Student roster identity derivation from consolidation sheets:
+                con_sheets = [s for s in candidate_rosters if is_multi_source_consolidation(s, all_comp_pool)]
+                for c_sheet in con_sheets:
+                    con_roster_sources = get_roster_identity_sources(
+                        wb[c_sheet], roster_candidates_by_sheet.get(c_sheet)
+                    )
+                    for s in raw_instructional_candidates:
+                        if s.lower() in con_roster_sources:
+                            primary_scores[s] += 1
 
-            if max_phys > 0 and len(top_phys) == 1:
-                primary_roster_sheet = top_phys[0]
+                max_phys = max(primary_scores.values())
+                top_phys = [s for s in raw_instructional_candidates if primary_scores[s] == max_phys]
+
+                if max_phys > 0 and len(top_phys) == 1:
+                    primary_roster_sheet = top_phys[0]
+                else:
+                    # Multiple candidates remain physically compatible with primary role without
+                    # an independent structural discriminator: fail closed as ambiguous.
+                    raise AmbiguousTemplateError(
+                        f"Grade sheet template '{os.path.basename(template_path)}' contains multiple ambiguous candidate roster worksheets with equal structural evidence: {raw_instructional_candidates}",
+                discovered_structures=disc_struct,
+        )
             else:
-                # Multiple candidates remain physically compatible with primary role without
-                # an independent structural discriminator: fail closed as ambiguous.
                 raise AmbiguousTemplateError(
-                    f"Grade sheet template '{os.path.basename(template_path)}' contains multiple ambiguous candidate roster worksheets with equal structural evidence: {raw_instructional_candidates}"
-                )
-        else:
-            raise AmbiguousTemplateError(
-                f"Grade sheet template '{os.path.basename(template_path)}' contains no primary-compatible instructional candidate roster worksheets."
-            )
+                    f"Grade sheet template '{os.path.basename(template_path)}' contains no primary-compatible instructional candidate roster worksheets.",
+                discovered_structures=disc_struct,
+        )
 
-        if not primary_roster_sheet:
-            raise TemplateError(
-                f"Grade sheet template '{os.path.basename(template_path)}' is missing required student roster worksheet."
-            )
-
-        # Detect secondary / laboratory component structurally from remaining assessment sheets
-        remaining_assessment_sheets = [
-            s for s in sheet_names
-            if s in roster_candidates_by_sheet and s != primary_roster_sheet and s != summary_sheet
-        ]
-        has_lab = False
-        lab_sheet: Optional[str] = None
-        has_consolidated = False
-        con_sheet: Optional[str] = None
-
-        if len(remaining_assessment_sheets) == 1:
-            s1 = remaining_assessment_sheets[0]
-            ws1 = wb[s1]
-            ws_prim = wb[primary_roster_sheet]
-            ws_sum = wb[summary_sheet]
-
-            s1_referenced, s1_reliable = get_referenced_sheets(ws1)
-            prim_referenced, prim_reliable = get_referenced_sheets(ws_prim)
-            sum_referenced, sum_reliable = get_referenced_sheets(ws_sum)
-
-            if not s1_reliable or not prim_reliable or not sum_reliable:
-                unreliable = [
-                    s for s, r in [
-                        (s1, s1_reliable),
-                        (primary_roster_sheet, prim_reliable),
-                        (summary_sheet, sum_reliable),
-                    ] if not r
-                ]
-                raise AmbiguousTemplateError(
-                    f"Grade sheet template '{os.path.basename(template_path)}' contains assessment worksheets with unparseable or indeterminate formula lineage: {unreliable}"
+            if not primary_roster_sheet:
+                raise TemplateError(
+                    f"Grade sheet template '{os.path.basename(template_path)}' is missing required student roster worksheet."
                 )
 
-            # Establish secondary instructional role strictly through verified physical lineage:
-            # A candidate secondary worksheet is an authoritative instructional component (Laboratory)
-            # ONLY IF it has role-consistent physical instructional lineage connecting it into
-            # the course grade computation:
-            # 1. It participates in instructional calculation lineage leading to summary rating, OR
-            # 2. primary_roster_sheet physically contains formulas referencing s1 for assessment calculation.
-            is_integrated_component = (
-                s1 in instructional_lineage_sheets or
-                any(r.lower() == s1.lower() for r in prim_referenced)
-            )
-            if not is_integrated_component:
-                raise AmbiguousTemplateError(
-                    f"Grade sheet template '{os.path.basename(template_path)}' contains secondary assessment candidate worksheet '{s1}' with roster structure but lacking role-consistent physical instructional lineage connecting it to primary roster or summary rating sheets."
-                )
-
-            lab_sheet = s1
-            has_lab = True
+            # Detect secondary / laboratory component structurally from remaining assessment sheets
+            remaining_assessment_sheets = [
+                s for s in sheet_names
+                if s in roster_candidates_by_sheet and s != primary_roster_sheet and s != summary_sheet
+            ]
+            has_lab = False
+            lab_sheet: Optional[str] = None
             has_consolidated = False
-        elif len(remaining_assessment_sheets) == 2:
-            s1, s2 = remaining_assessment_sheets[0], remaining_assessment_sheets[1]
-            ws1, ws2 = wb[s1], wb[s2]
+            con_sheet: Optional[str] = None
 
-            s1_referenced, s1_reliable = get_referenced_sheets(ws1)
-            s2_referenced, s2_reliable = get_referenced_sheets(ws2)
+            if len(remaining_assessment_sheets) == 1:
+                s1 = remaining_assessment_sheets[0]
+                ws1 = wb[s1]
+                ws_prim = wb[primary_roster_sheet]
+                ws_sum = wb[summary_sheet]
 
-            # Harden fallback formula parsing: if candidate secondary sheets contain
-            # unparseable, corrupted, or indeterminate formula references, fail closed.
-            if not s1_reliable or not s2_reliable:
-                unreliable = [s for s, r in [(s1, s1_reliable), (s2, s2_reliable)] if not r]
-                raise AmbiguousTemplateError(
-                    f"Grade sheet template '{os.path.basename(template_path)}' contains secondary assessment worksheets with unparseable or indeterminate formula lineage: {unreliable}"
-                )
+                s1_referenced, s1_reliable = get_referenced_sheets(ws1)
+                prim_referenced, prim_reliable = get_referenced_sheets(ws_prim)
+                sum_referenced, sum_reliable = get_referenced_sheets(ws_sum)
 
-            # Establish the component universe strictly from verified instructional roles:
-            # 1. The uniquely identified primary instructional component (primary_roster_sheet)
-            # 2. The uniquely identified secondary assessment/component candidates (s1, s2)
-            # Auxiliary/reference/master/helper sheets that merely resemble rosters are excluded
-            # from instructional component authority.
-            candidate_components = {primary_roster_sheet, s1, s2}
-            student_component_sheets = {
-                s for s in candidate_components
-                if s in roster_candidates_by_sheet and s != summary_sheet
-            }
-            s1_component_refs = {
-                r.lower() for r in s1_referenced
-                if any(r.lower() == s.lower() for s in student_component_sheets) and r.lower() != s1.lower()
-            }
-            s2_component_refs = {
-                r.lower() for r in s2_referenced
-                if any(r.lower() == s.lower() for s in student_component_sheets) and r.lower() != s2.lower()
-            }
-
-            s1_refs_s2 = any(r.lower() == s2.lower() for r in s1_referenced)
-            s2_refs_s1 = any(r.lower() == s1.lower() for r in s2_referenced)
-
-            s1_has_agg = has_consolidation_structure(
-                ws1, s2, student_component_sheets, roster_info=roster_candidates_by_sheet.get(s1)
-            )
-            s2_has_agg = has_consolidation_structure(
-                ws2, s1, student_component_sheets, roster_info=roster_candidates_by_sheet.get(s2)
-            )
-
-            # Case D: s1 -> s2 and s2 -> s1 (competing/cyclic lineage)
-            if s1_refs_s2 and s2_refs_s1:
-                raise AmbiguousTemplateError(
-                    f"Grade sheet template '{os.path.basename(template_path)}' contains multiple secondary assessment worksheets with competing/cyclic formula lineage referencing each other: {[s1, s2]}"
-                )
-            # Case A: s1 -> s2 and s2 !-> s1 (s1 candidate for Consolidated)
-            elif s1_refs_s2 and not s2_refs_s1:
-                # Directed lineage alone is not automatic semantic truth:
-                # To resolve s1 as Consolidated, s1 must exhibit role-consistent
-                # physical consolidation topology:
-                # 1. It must reference multiple instructional/student components (>= 2 student component sheets)
-                # 2. It must physically demonstrate an aggregation structure combining components
-                if len(s1_component_refs) < 2 or not s1_has_agg:
+                if not s1_reliable or not prim_reliable or not sum_reliable:
+                    unreliable = [
+                        s for s, r in [
+                            (s1, s1_reliable),
+                            (primary_roster_sheet, prim_reliable),
+                            (summary_sheet, sum_reliable),
+                        ] if not r
+                    ]
                     raise AmbiguousTemplateError(
-                        f"Grade sheet template '{os.path.basename(template_path)}' contains secondary assessment worksheets with directed lineage ({s1} -> {s2}) but lacking role-consistent physical aggregation topology: {[s1, s2]}"
-                    )
-                con_sheet = s1
-                lab_sheet = s2
-                has_lab = True
-                has_consolidated = True
-            # Case B: s2 -> s1 and s1 !-> s2 (s2 candidate for Consolidated)
-            elif s2_refs_s1 and not s1_refs_s2:
-                # Symmetrically, s2 must exhibit role-consistent physical consolidation topology:
-                if len(s2_component_refs) < 2 or not s2_has_agg:
+                        f"Grade sheet template '{os.path.basename(template_path)}' contains assessment worksheets with unparseable or indeterminate formula lineage: {unreliable}",
+                discovered_structures=disc_struct,
+        )
+
+                # Establish secondary instructional role strictly through verified physical lineage:
+                # A candidate secondary worksheet is an authoritative instructional component (Laboratory)
+                # ONLY IF it has role-consistent physical instructional lineage connecting it into
+                # the course grade computation:
+                # 1. It participates in instructional calculation lineage leading to summary rating, OR
+                # 2. primary_roster_sheet physically contains formulas referencing s1 for assessment calculation.
+                is_integrated_component = (
+                    s1 in instructional_lineage_sheets or
+                    any(r.lower() == s1.lower() for r in prim_referenced)
+                )
+                if not is_integrated_component:
                     raise AmbiguousTemplateError(
-                        f"Grade sheet template '{os.path.basename(template_path)}' contains secondary assessment worksheets with directed lineage ({s2} -> {s1}) but lacking role-consistent physical aggregation topology: {[s1, s2]}"
-                    )
-                con_sheet = s2
+                        f"Grade sheet template '{os.path.basename(template_path)}' contains secondary assessment candidate worksheet '{s1}' with roster structure but lacking role-consistent physical instructional lineage connecting it to primary roster or summary rating sheets.",
+                discovered_structures=disc_struct,
+        )
+
                 lab_sheet = s1
                 has_lab = True
-                has_consolidated = True
-            # Case C: s1 !-> s2 and s2 !-> s1 (no unique lineage)
-            else:
-                raise AmbiguousTemplateError(
-                    f"Grade sheet template '{os.path.basename(template_path)}' contains multiple secondary assessment worksheets with no unique structural lineage distinguishing laboratory from consolidated roles: {[s1, s2]}"
+                has_consolidated = False
+            elif len(remaining_assessment_sheets) == 2:
+                s1, s2 = remaining_assessment_sheets[0], remaining_assessment_sheets[1]
+                ws1, ws2 = wb[s1], wb[s2]
+
+                s1_referenced, s1_reliable = get_referenced_sheets(ws1)
+                s2_referenced, s2_reliable = get_referenced_sheets(ws2)
+
+                # Harden fallback formula parsing: if candidate secondary sheets contain
+                # unparseable, corrupted, or indeterminate formula references, fail closed.
+                if not s1_reliable or not s2_reliable:
+                    unreliable = [s for s, r in [(s1, s1_reliable), (s2, s2_reliable)] if not r]
+                    raise AmbiguousTemplateError(
+                        f"Grade sheet template '{os.path.basename(template_path)}' contains secondary assessment worksheets with unparseable or indeterminate formula lineage: {unreliable}",
+                discovered_structures=disc_struct,
+        )
+
+                # Establish the component universe strictly from verified instructional roles:
+                # 1. The uniquely identified primary instructional component (primary_roster_sheet)
+                # 2. The uniquely identified secondary assessment/component candidates (s1, s2)
+                # Auxiliary/reference/master/helper sheets that merely resemble rosters are excluded
+                # from instructional component authority.
+                candidate_components = {primary_roster_sheet, s1, s2}
+                student_component_sheets = {
+                    s for s in candidate_components
+                    if s in roster_candidates_by_sheet and s != summary_sheet
+                }
+                s1_component_refs = {
+                    r.lower() for r in s1_referenced
+                    if any(r.lower() == s.lower() for s in student_component_sheets) and r.lower() != s1.lower()
+                }
+                s2_component_refs = {
+                    r.lower() for r in s2_referenced
+                    if any(r.lower() == s.lower() for s in student_component_sheets) and r.lower() != s2.lower()
+                }
+
+                s1_refs_s2 = any(r.lower() == s2.lower() for r in s1_referenced)
+                s2_refs_s1 = any(r.lower() == s1.lower() for r in s2_referenced)
+
+                s1_has_agg = has_consolidation_structure(
+                    ws1, s2, student_component_sheets, roster_info=roster_candidates_by_sheet.get(s1)
                 )
-        elif len(remaining_assessment_sheets) > 2:
-            raise AmbiguousTemplateError(
-                f"Grade sheet template '{os.path.basename(template_path)}' contains {len(remaining_assessment_sheets)} secondary assessment worksheets, exceeding supported dual-component capacity: {remaining_assessment_sheets}"
-            )
+                s2_has_agg = has_consolidation_structure(
+                    ws2, s1, student_component_sheets, roster_info=roster_candidates_by_sheet.get(s2)
+                )
+
+                # Case D: s1 -> s2 and s2 -> s1 (competing/cyclic lineage)
+                if s1_refs_s2 and s2_refs_s1:
+                    raise AmbiguousTemplateError(
+                        f"Grade sheet template '{os.path.basename(template_path)}' contains multiple secondary assessment worksheets with competing/cyclic formula lineage referencing each other: {[s1, s2]}",
+                discovered_structures=disc_struct,
+        )
+                # Case A: s1 -> s2 and s2 !-> s1 (s1 candidate for Consolidated)
+                elif s1_refs_s2 and not s2_refs_s1:
+                    # Directed lineage alone is not automatic semantic truth:
+                    # To resolve s1 as Consolidated, s1 must exhibit role-consistent
+                    # physical consolidation topology:
+                    # 1. It must reference multiple instructional/student components (>= 2 student component sheets)
+                    # 2. It must physically demonstrate an aggregation structure combining components
+                    if len(s1_component_refs) < 2 or not s1_has_agg:
+                        raise AmbiguousTemplateError(
+                            f"Grade sheet template '{os.path.basename(template_path)}' contains secondary assessment worksheets with directed lineage ({s1} -> {s2}) but lacking role-consistent physical aggregation topology: {[s1, s2]}",
+                discovered_structures=disc_struct,
+        )
+                    con_sheet = s1
+                    lab_sheet = s2
+                    has_lab = True
+                    has_consolidated = True
+                # Case B: s2 -> s1 and s1 !-> s2 (s2 candidate for Consolidated)
+                elif s2_refs_s1 and not s1_refs_s2:
+                    # Symmetrically, s2 must exhibit role-consistent physical consolidation topology:
+                    if len(s2_component_refs) < 2 or not s2_has_agg:
+                        raise AmbiguousTemplateError(
+                            f"Grade sheet template '{os.path.basename(template_path)}' contains secondary assessment worksheets with directed lineage ({s2} -> {s1}) but lacking role-consistent physical aggregation topology: {[s1, s2]}",
+                discovered_structures=disc_struct,
+        )
+                    con_sheet = s2
+                    lab_sheet = s1
+                    has_lab = True
+                    has_consolidated = True
+                # Case C: s1 !-> s2 and s2 !-> s1 (no unique lineage)
+                else:
+                    raise AmbiguousTemplateError(
+                        f"Grade sheet template '{os.path.basename(template_path)}' contains multiple secondary assessment worksheets with no unique structural lineage distinguishing laboratory from consolidated roles: {[s1, s2]}",
+                discovered_structures=disc_struct,
+        )
+            elif len(remaining_assessment_sheets) > 2:
+                raise AmbiguousTemplateError(
+                    f"Grade sheet template '{os.path.basename(template_path)}' contains {len(remaining_assessment_sheets)} secondary assessment worksheets, exceeding supported dual-component capacity: {remaining_assessment_sheets}",
+                discovered_structures=disc_struct,
+        )
 
 
         ws_lec = wb[primary_roster_sheet]
@@ -1701,6 +1803,7 @@ class XlsxTemplateInspector:
                 "has_lab": has_lab,
                 "has_consolidated": has_consolidated,
                 "xlsx_geometry": xlsx_geometry,
+                "sheet_selection": dict(sheet_selection) if sheet_selection else {},
             },
         )
 

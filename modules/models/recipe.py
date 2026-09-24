@@ -41,7 +41,10 @@ class TemplateError(Exception):
 
 class AmbiguousTemplateError(TemplateError):
     """Raised when conflicting candidate bindings are observed and cannot be resolved."""
-    pass
+    def __init__(self, message: str, discovered_structures: Optional[Dict[str, Any]] = None):
+        super().__init__(message)
+        self.discovered_structures = discovered_structures or {}
+
 
 
 class InvalidRecipeError(TemplateError):

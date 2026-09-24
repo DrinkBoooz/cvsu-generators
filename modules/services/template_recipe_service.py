@@ -127,10 +127,11 @@ class TemplateRecipeResolver:
         template_path: str,
         profile_id: str = "academic_docx",
         force_reinspect: bool = False,
+        sheet_selection: Optional[Dict[str, str]] = None,
     ) -> ValidatedRecipeBase:
         """
         Resolves an authoritative ValidatedRecipeBase for the given template path and profile.
-        Handles caching with 4-tuple key (abs_path, profile_id, sha256, schema_version),
+        Handles caching with 5-tuple key (abs_path, profile_id, sha256, schema_version, sheet_selection),
         fingerprint checks, stale cache invalidation, candidate inspection, and validation.
         """
         if not template_path:
@@ -147,15 +148,16 @@ class TemplateRecipeResolver:
         profile = PROFILE_REGISTRY[prof]
 
         current_fp = self.compute_fingerprint(abs_path)
-        cache_key = (abs_path, prof, current_fp, RECIPE_SCHEMA_VERSION)
-        path_key = (abs_path, prof, RECIPE_SCHEMA_VERSION)
+        sel_key = tuple(sorted(sheet_selection.items())) if sheet_selection else None
+        cache_key = (abs_path, prof, current_fp, RECIPE_SCHEMA_VERSION, sel_key)
+        path_key = (abs_path, prof, RECIPE_SCHEMA_VERSION, sel_key)
 
         # Check for stale cache entry (fingerprint mismatch)
         if path_key in self._fingerprint_index:
             last_fp = self._fingerprint_index[path_key]
             if last_fp != current_fp:
                 # Invalidate old cached recipe
-                old_key = (abs_path, prof, last_fp, RECIPE_SCHEMA_VERSION)
+                old_key = (abs_path, prof, last_fp, RECIPE_SCHEMA_VERSION, sel_key)
                 self._cache.pop(old_key, None)
 
         if not force_reinspect and cache_key in self._cache:
@@ -165,7 +167,10 @@ class TemplateRecipeResolver:
         inspector = self.get_inspector(abs_path, profile_id=profile_id)
 
         # 1. Inspector emits raw candidate observations only
-        candidate = inspector.inspect(abs_path, profile_id=profile_id)
+        if sheet_selection and prof == "grade_sheet_xlsx":
+            candidate = inspector.inspect(abs_path, profile_id=profile_id, sheet_selection=sheet_selection)
+        else:
+            candidate = inspector.inspect(abs_path, profile_id=profile_id)
         candidate.template_path = abs_path
         candidate.fingerprint = current_fp
         candidate.profile_id = profile.profile_id

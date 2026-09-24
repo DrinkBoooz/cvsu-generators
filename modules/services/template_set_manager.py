@@ -371,7 +371,10 @@ class TemplateSetManager:
             raise FileNotFoundError(f"Template file not found: {file_path}")
 
         # 1. Authoritative physical validation
-        is_valid, err, validated = self._role_detector.validate_role(file_path, role)
+        sheet_selection = (display_metadata or {}).get("sheet_mapping")
+        is_valid, err, validated = self._role_detector.validate_role(
+            file_path, role, sheet_selection=sheet_selection
+        )
         if not is_valid:
             raise InvalidTemplateSetError(
                 f"File '{os.path.basename(file_path)}' failed physical recipe validation for role '{role}': {err}"
@@ -541,12 +544,14 @@ class TemplateSetManager:
                 if not os.path.exists(full_path):
                     continue
 
-                is_valid, err, val_recipe = self._role_detector.validate_role(full_path, role)
+                meta_dict = entry_dict.get("display_metadata", {})
+                sheet_sel = meta_dict.get("sheet_mapping") if isinstance(meta_dict, dict) else None
+                is_valid, err, val_recipe = self._role_detector.validate_role(full_path, role, sheet_selection=sheet_sel)
                 if not is_valid:
                     raise InvalidTemplateSetError(
                         f"Imported template for role '{role}' failed physical validation: {err}"
                     )
-                validated_entries.append((role, full_path, entry_dict.get("display_metadata", {})))
+                validated_entries.append((role, full_path, meta_dict))
 
             # Create destination user set
             new_ts = self.create_template_set(

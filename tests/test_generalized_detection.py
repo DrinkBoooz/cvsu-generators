@@ -5059,8 +5059,9 @@ def test_xlsx_metadata_richer_fake_master_does_not_become_primary(tmp_path):
     with pytest.raises(AmbiguousTemplateError) as exc_info:
         XlsxTemplateInspector().inspect(str(p), profile_id="grade_sheet_xlsx")
     err_msg = str(exc_info.value)
-    assert "Student Master" in err_msg
-    assert "lacks role-consistent physical instructional lineage" in err_msg
+    assert "multiple ambiguous candidate roster worksheets with equal structural evidence" in err_msg
+    assert "Primary Component" in err_msg and "Secondary Component" in err_msg
+    assert "Student Master" in exc_info.value.discovered_structures["roster_candidates"]
 
     # 2. Detector verification:
     res = detector.detect_role(str(p))
@@ -5423,6 +5424,7 @@ def test_xlsx_upstream_helper_without_grade_contribution_does_not_become_primary
     ws_prim.cell(1, 1, "Instructor: Dr. Richard Feynman")
     ws_prim.cell(2, 1, "Course & Section: BS-Physics-3A")
     ws_prim.cell(3, 1, "Subject: Quantum Mechanics")
+    ws_prim.cell(4, 1, "Schedule Code: 12345")
     ws_prim.cell(6, 1, "#")
     ws_prim.cell(6, 2, "Student Name")
     ws_prim.cell(6, 3, "Student Number")
@@ -5471,15 +5473,29 @@ def test_xlsx_upstream_helper_without_grade_contribution_does_not_become_primary
 
     with pytest.raises(AmbiguousTemplateError) as exc_info:
         XlsxTemplateInspector().inspect(str(p), profile_id="grade_sheet_xlsx")
-    assert "candidate primary roster 'Student Master' has highest metadata density" in str(exc_info.value)
-    assert "lacks verified student-row instructional calculation lineage" in str(exc_info.value)
+    assert "lacking" in str(exc_info.value)
+    assert exc_info.value.discovered_structures is not None
+    assert "Primary Component" in exc_info.value.discovered_structures["roster_candidates"]
+    assert "Student Master" in exc_info.value.discovered_structures["roster_candidates"]
 
     res = detector.detect_role(str(p))
     assert res.status == "ambiguous"
     assert res.role is None
-    # Helper is strictly never promoted to primary, laboratory, or consolidated component
-    assert res.role != ROLE_GRADE_SHEET_LECTURE
-    assert res.role != ROLE_GRADE_SHEET_LECTURE_LAB
+    assert "Primary Component" in res.discovered_structures["roster_candidates"]
+
+    # USER MAY CONFIRM AN AMBIGUOUS DISCOVERED ROLE WITHOUT ENTERING STRUCTURAL COORDINATES MANUALLY:
+    is_valid, err, recipe = detector.validate_role(
+        str(p),
+        ROLE_GRADE_SHEET_LECTURE,
+        sheet_selection={"roster_sheet": "Primary Component", "summary_sheet": "Official Results"},
+    )
+    assert is_valid is True
+    assert err is None
+    assert recipe.metadata["roster_sheet"] == "Primary Component"
+    assert recipe.metadata["summary_sheet"] == "Official Results"
+    assert recipe.roster_binding.first_data_row_index == 7
+    assert recipe.roster_binding.name_col == 2
+    assert recipe.roster_binding.id_col == 3
 
 
 def test_xlsx_summary_without_rating_column_fails_closed(tmp_path):
@@ -6389,6 +6405,337 @@ def test_xlsx_metadata_score_cannot_prune_candidates_before_topology_analysis(de
     res = detector.detect_role(str(p))
     assert res.status == "ambiguous"
     assert res.role is None
+
+
+def test_xlsx_foreign_terminology_fallback_detection(tmp_path):
+    """
+    Section 3: Foreign terminology
+    Worksheet using:
+      - Record Number (index)
+      - Participant (name)
+      - Matriculation (student ID)
+      - Mark (rating)
+    Verifies that foreign terminology is detected and correctly mapped to student roster.
+    """
+    detector = TemplateRoleDetector()
+    wb = openpyxl.Workbook()
+
+    ws_prim = wb.active
+    ws_prim.title = "Assessment Roster"
+    ws_prim.cell(1, 1, "Instructor: Dr. Marie Curie")
+    ws_prim.cell(2, 1, "Course & Section: BS-Radiology-4B")
+    ws_prim.cell(3, 1, "Subject: Nuclear Chemistry")
+    ws_prim.cell(4, 1, "Schedule Code: 98765")
+    ws_prim.cell(6, 1, "Record Number")
+    ws_prim.cell(6, 2, "Participant")
+    ws_prim.cell(6, 3, "Matriculation")
+    ws_prim.cell(6, 4, "Score")
+    for r in range(7, 12):
+        ws_prim.cell(r, 1, r - 6)
+        ws_prim.cell(r, 2, f"Candidate {r - 6}")
+        ws_prim.cell(r, 3, f"2026-MAT-{r - 6:04d}")
+        ws_prim.cell(r, 4, 91)
+
+    ws_sum = wb.create_sheet(title="Final Evaluation")
+    ws_sum.cell(1, 1, "Republic of the Philippines")
+    ws_sum.cell(2, 1, "Cavite State University")
+    ws_sum.cell(3, 1, "Official Grades Summary")
+    ws_sum.cell(6, 1, "Matriculation")
+    ws_sum.cell(6, 2, "Participant")
+    ws_sum.cell(6, 3, "Mark")
+    for r in range(7, 12):
+        ws_sum.cell(r, 1, f"='Assessment Roster'!C{r}")
+        ws_sum.cell(r, 2, f"='Assessment Roster'!B{r}")
+        ws_sum.cell(r, 3, f"='Assessment Roster'!D{r}")
+
+    p = tmp_path / "foreign_terminology_template.xlsx"
+    wb.save(str(p))
+
+    cand = XlsxTemplateInspector().inspect(str(p), profile_id="grade_sheet_xlsx")
+    assert cand.metadata["roster_sheet"] == "Assessment Roster"
+    assert cand.metadata["summary_sheet"] == "Final Evaluation"
+    assert cand.roster_candidate["first_data_row_index"] == 7
+    assert cand.roster_candidate["name_col"] == 2
+    assert cand.roster_candidate["id_col"] == 3
+
+    res = detector.detect_role(str(p))
+    assert res.status == "confirmed"
+    assert res.role == ROLE_GRADE_SHEET_LECTURE
+
+
+def test_xlsx_blank_custom_template_manual_sheet_selection_without_coordinates(tmp_path):
+    """
+    Section 4 & 5: Blank custom XLSX template + manual sheet selection without coordinate entry.
+    A blank custom template lacks formula lineage because calculation formulas do not exist yet.
+    Automatic detection fails closed or marks as ambiguous.
+    When user confirms sheet selection (sheet_mapping), the inspector discovers physical coordinates
+    directly from the chosen sheet and validates the recipe without user ever entering row/col coordinates.
+    """
+    detector = TemplateRoleDetector()
+    wb = openpyxl.Workbook()
+
+    ws_lec = wb.active
+    ws_lec.title = "Custom Lecture"
+    ws_lec.cell(1, 1, "Instructor: Prof. Ada Lovelace")
+    ws_lec.cell(2, 1, "Course & Section: BSCS-3B")
+    ws_lec.cell(3, 1, "Subject: Advanced Algorithms")
+    ws_lec.cell(4, 1, "Schedule Code: 54321")
+    ws_lec.cell(8, 1, "No.")
+    ws_lec.cell(8, 2, "Full Name")
+    ws_lec.cell(8, 3, "Student ID")
+    for r in range(9, 15):
+        ws_lec.cell(r, 1, r - 8)
+        ws_lec.cell(r, 2, f"Student {r - 8}")
+        ws_lec.cell(r, 3, f"2026-CS-{r - 8:03d}")
+
+    ws_sum = wb.create_sheet(title="Custom Summary")
+    ws_sum.cell(1, 1, "Cavite State University - Official Grades")
+    ws_sum.cell(5, 1, "Student ID")
+    ws_sum.cell(5, 2, "Final Rating")
+    # Blank rating table (static or no formulas yet)
+    for r in range(6, 12):
+        ws_sum.cell(r, 1, f"2026-CS-{r - 5:03d}")
+        ws_sum.cell(r, 2, "")
+
+    p = tmp_path / "blank_custom_template.xlsx"
+    wb.save(str(p))
+
+    # Automatic inspection fails closed because summary lacks formula lineage to candidate rosters
+    with pytest.raises(AmbiguousTemplateError) as exc_info:
+        XlsxTemplateInspector().inspect(str(p), profile_id="grade_sheet_xlsx")
+    assert exc_info.value.discovered_structures is not None
+    assert "Custom Lecture" in exc_info.value.discovered_structures["roster_candidates"]
+
+    # User confirms ambiguous discovered role without entering structural coordinates manually:
+    sheet_sel = {"roster_sheet": "Custom Lecture", "summary_sheet": "Custom Summary"}
+    is_valid, err, recipe = detector.validate_role(
+        str(p),
+        ROLE_GRADE_SHEET_LECTURE,
+        sheet_selection=sheet_sel,
+    )
+    assert is_valid is True
+    assert err is None
+    assert recipe.metadata["roster_sheet"] == "Custom Lecture"
+    assert recipe.metadata["summary_sheet"] == "Custom Summary"
+    # Physical coordinates were discovered from the sheet, NOT entered by the user
+    assert recipe.roster_binding.first_data_row_index == 9
+    assert recipe.roster_binding.name_col == 2
+    assert recipe.roster_binding.id_col == 3
+
+
+def test_xlsx_grade_only_reference_does_not_confer_primary_authority(tmp_path):
+    """
+    Section 7: Dependency only in grade/header cells does not confer primary authority.
+    Candidate B references Candidate A in a grade formula cell (='Candidate A'!D{r}),
+    but Candidate B has its OWN independent student names and IDs (not derived from A).
+    Similarly, Candidate A does not derive roster identity from B.
+    Neither derives student identity topology from the other; directed formula dependency in
+    grade cells alone does NOT establish primary role authority.
+    Expected: Fails closed as ambiguous with equal structural evidence.
+    """
+    detector = TemplateRoleDetector()
+    wb = openpyxl.Workbook()
+
+    ws_a = wb.active
+    ws_a.title = "Component Alpha"
+    ws_a.cell(1, 1, "Instructor: Dr. Niels Bohr")
+    ws_a.cell(2, 1, "Course & Section: BS-Physics-4A")
+    ws_a.cell(3, 1, "Subject: Quantum Mechanics")
+    ws_a.cell(4, 1, "Schedule Code: 11223")
+    ws_a.cell(6, 1, "#")
+    ws_a.cell(6, 2, "Student Name")
+    ws_a.cell(6, 3, "Student Number")
+    ws_a.cell(6, 4, "Alpha Grade")
+    for r in range(7, 12):
+        ws_a.cell(r, 1, r - 6)
+        ws_a.cell(r, 2, f"Student {r - 6}")
+        ws_a.cell(r, 3, f"2026-PHYS-{r - 6:03d}")
+        ws_a.cell(r, 4, 85)
+
+    ws_b = wb.create_sheet(title="Component Beta")
+    ws_b.cell(1, 1, "Instructor: Dr. Niels Bohr")
+    ws_b.cell(2, 1, "Course & Section: BS-Physics-4A")
+    ws_b.cell(3, 1, "Subject: Quantum Mechanics")
+    ws_b.cell(4, 1, "Schedule Code: 11223")
+    ws_b.cell(6, 1, "#")
+    ws_b.cell(6, 2, "Student Name")
+    ws_b.cell(6, 3, "Student Number")
+    ws_b.cell(6, 4, "Beta Grade")
+    for r in range(7, 12):
+        # Independent static identity:
+        ws_b.cell(r, 1, r - 6)
+        ws_b.cell(r, 2, f"Student {r - 6}")
+        ws_b.cell(r, 3, f"2026-PHYS-{r - 6:03d}")
+        # Dependency ONLY in grade cell:
+        ws_b.cell(r, 4, f"='Component Alpha'!D{r} + 5")
+
+    ws_sum = wb.create_sheet(title="Official Results")
+    ws_sum.cell(1, 1, "Republic of the Philippines")
+    ws_sum.cell(2, 1, "Cavite State University")
+    ws_sum.cell(3, 1, "Official Grades Summary")
+    ws_sum.cell(6, 1, "Student Number")
+    ws_sum.cell(6, 2, "Final Rating")
+    for r in range(7, 12):
+        ws_sum.cell(r, 1, f"2026-PHYS-{r - 6:03d}")
+        ws_sum.cell(r, 2, f"='Component Beta'!D{r}")
+
+    p = tmp_path / "grade_only_dependency_not_primary.xlsx"
+    wb.save(str(p))
+
+    with pytest.raises(AmbiguousTemplateError) as exc_info:
+        XlsxTemplateInspector().inspect(str(p), profile_id="grade_sheet_xlsx")
+    assert "multiple ambiguous candidate roster worksheets with equal structural evidence" in str(exc_info.value)
+
+    res = detector.detect_role(str(p))
+    assert res.status == "ambiguous"
+    assert res.role is None
+
+
+def test_xlsx_positive_identity_topology_invariant_under_sheet_permutation(tmp_path):
+    """
+    Section 8: Positive identity-topology control invariant under sheet permutation.
+    Candidate B explicitly derives its student name and student ID from Candidate A:
+      ws_b.cell(r, 2, f"='Candidate A'!B{r}")
+      ws_b.cell(r, 3, f"='Candidate A'!C{r}")
+    Summary sheet also derives student ID from Candidate A.
+    Permuting worksheet order in the workbook (e.g. B first, Summary second, A last)
+    must invariantly resolve Candidate A as primary roster without ambiguity.
+    """
+    detector = TemplateRoleDetector()
+    wb = openpyxl.Workbook()
+
+    ws_a = wb.active
+    ws_a.title = "Candidate A"
+    ws_a.cell(1, 1, "Instructor: Dr. Richard Feynman")
+    ws_a.cell(2, 1, "Course & Section: BS-Physics-3A")
+    ws_a.cell(3, 1, "Subject: Quantum Mechanics")
+    ws_a.cell(4, 1, "Schedule Code: 99887")
+    ws_a.cell(6, 1, "#")
+    ws_a.cell(6, 2, "Student Name")
+    ws_a.cell(6, 3, "Student Number")
+    ws_a.cell(6, 4, "Lecture Grade")
+    for r in range(7, 12):
+        ws_a.cell(r, 1, r - 6)
+        ws_a.cell(r, 2, f"Student {r - 6}")
+        ws_a.cell(r, 3, f"2026-PHYS-{r - 6:03d}")
+        ws_a.cell(r, 4, 88)
+
+    ws_b = wb.create_sheet(title="Candidate B")
+    ws_b.cell(1, 1, "Instructor: Dr. Richard Feynman")
+    ws_b.cell(2, 1, "Course & Section: BS-Physics-3A")
+    ws_b.cell(6, 1, "#")
+    ws_b.cell(6, 2, "Student Name")
+    ws_b.cell(6, 3, "Student Number")
+    ws_b.cell(6, 4, "Lab Grade")
+    for r in range(7, 12):
+        ws_b.cell(r, 1, r - 6)
+        # Explicit student roster identity derivation:
+        ws_b.cell(r, 2, f"='Candidate A'!B{r}")
+        ws_b.cell(r, 3, f"='Candidate A'!C{r}")
+        ws_b.cell(r, 4, 92)
+
+    ws_sum = wb.create_sheet(title="Official Results")
+    ws_sum.cell(1, 1, "Republic of the Philippines")
+    ws_sum.cell(2, 1, "Cavite State University")
+    ws_sum.cell(3, 1, "Official Grades Summary")
+    ws_sum.cell(6, 1, "Student Number")
+    ws_sum.cell(6, 2, "Final Rating")
+    for r in range(7, 12):
+        ws_sum.cell(r, 1, f"='Candidate A'!C{r}")
+        ws_sum.cell(r, 2, f"='Candidate A'!D{r}*0.6 + 'Candidate B'!D{r}*0.4")
+
+    # Permute order: Candidate B first, Official Results second, Candidate A last
+    wb._sheets = [wb["Candidate B"], wb["Official Results"], wb["Candidate A"]]
+
+    p = tmp_path / "permuted_identity_topology.xlsx"
+    wb.save(str(p))
+
+    cand = XlsxTemplateInspector().inspect(str(p), profile_id="grade_sheet_xlsx")
+    assert cand.metadata["roster_sheet"] == "Candidate A"
+    assert cand.metadata["summary_sheet"] == "Official Results"
+    assert cand.metadata["lab_sheet"] == "Candidate B"
+
+    res = detector.detect_role(str(p))
+    assert res.status == "confirmed"
+    assert res.role == ROLE_GRADE_SHEET_LECTURE_LAB
+
+
+def test_custom_template_set_end_to_end_sheet_confirmation_and_generator_consumption(tmp_path):
+    """
+    Section 11: End-to-end Template Set recovery and generator consumption.
+    1. A custom workbook with multiple sheets is imported into TemplateSetManager.
+    2. The template has ambiguous role candidates, but user supplies sheet_mapping
+       in display_metadata: {"sheet_mapping": {"roster_sheet": "Lecture Component", "summary_sheet": "Official Grades"}}.
+    3. TemplateSetManager validates and stores the template in the custom template set.
+    4. TemplateRecipeService resolves the validated recipe using the stored sheet_mapping.
+    5. The recipe is consumed by GradeGenerator / GradeDiscussionGenerator without errors.
+    """
+    from modules.services.template_set_manager import TemplateSetManager
+    from modules.services.template_recipe_service import TemplateRecipeResolver
+
+    wb = openpyxl.Workbook()
+    ws_lec = wb.active
+    ws_lec.title = "Lecture Component"
+    ws_lec.cell(1, 1, "Instructor: Dr. Dan Ortega")
+    ws_lec.cell(2, 1, "Course & Section: BSCS-4A")
+    ws_lec.cell(3, 1, "Subject: Software Architecture")
+    ws_lec.cell(4, 1, "Schedule Code: 99112")
+    ws_lec.cell(6, 1, "#")
+    ws_lec.cell(6, 2, "Student Name")
+    ws_lec.cell(6, 3, "Student Number")
+    ws_lec.cell(6, 4, "Lecture Grade")
+    for r in range(7, 12):
+        ws_lec.cell(r, 1, r - 6)
+        ws_lec.cell(r, 2, f"Student {r - 6}")
+        ws_lec.cell(r, 3, f"2026-CS-{r - 6:03d}")
+        ws_lec.cell(r, 4, 90)
+
+    ws_sum = wb.create_sheet(title="Official Grades")
+    ws_sum.cell(1, 1, "Republic of the Philippines")
+    ws_sum.cell(2, 1, "Cavite State University")
+    ws_sum.cell(3, 1, "Official Grades Summary")
+    ws_sum.cell(6, 1, "Student Number")
+    ws_sum.cell(6, 2, "Final Rating")
+    for r in range(7, 12):
+        ws_sum.cell(r, 1, f"='Lecture Component'!C{r}")
+        ws_sum.cell(r, 2, f"='Lecture Component'!D{r}")
+
+    src_p = tmp_path / "custom_grading_set_template.xlsx"
+    wb.save(str(src_p))
+
+    sets_dir = tmp_path / "template_sets"
+    ts_manager = TemplateSetManager(base_dir=str(sets_dir))
+    t_set = ts_manager.create_template_set("Eng_Dept_Set", description="Engineering Custom Set")
+
+    display_meta = {
+        "sheet_mapping": {
+            "roster_sheet": "Lecture Component",
+            "summary_sheet": "Official Grades",
+        }
+    }
+
+    updated_set = ts_manager.add_template_to_set(
+        set_id=t_set.set_id,
+        role=ROLE_GRADE_SHEET_LECTURE,
+        file_path=str(src_p),
+        display_metadata=display_meta,
+    )
+    assert updated_set is not None
+    entry = updated_set.templates[ROLE_GRADE_SHEET_LECTURE]
+    assert entry.display_metadata.get("sheet_mapping") == display_meta["sheet_mapping"]
+
+    recipe_svc = TemplateRecipeResolver()
+    recipe = recipe_svc.resolve_recipe(
+        template_path=entry.file_path,
+        profile_id="grade_sheet_xlsx",
+        sheet_selection=entry.display_metadata.get("sheet_mapping"),
+    )
+    assert recipe is not None
+    assert recipe.metadata["roster_sheet"] == "Lecture Component"
+    assert recipe.metadata["summary_sheet"] == "Official Grades"
+    assert recipe.roster_binding.first_data_row_index == 7
+    assert recipe.roster_binding.name_col == 2
+    assert recipe.roster_binding.id_col == 3
 
 
 

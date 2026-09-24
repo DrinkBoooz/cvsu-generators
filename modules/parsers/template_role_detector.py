@@ -100,6 +100,7 @@ class DetectionResult:
     family: Optional[str] = None
     variant: Optional[str] = None
     error: Optional[str] = None
+    discovered_structures: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -116,6 +117,7 @@ class DetectionResult:
             "family": self.family,
             "variant": self.variant,
             "error": self.error,
+            "discovered_structures": dict(self.discovered_structures),
         }
 
 
@@ -856,6 +858,7 @@ class TemplateRoleDetector:
                 ]
                 diag = diag_hints
 
+            disc_struct = getattr(e, "discovered_structures", {}) or {}
             return DetectionResult(
                 file_path=file_path,
                 file_name=file_name,
@@ -867,6 +870,7 @@ class TemplateRoleDetector:
                 structural_evidence=[err_str],
                 diagnostic_hints=diag,
                 error=err_str,
+                discovered_structures=disc_struct,
             )
         except TemplateError as e:
             return DetectionResult(
@@ -949,6 +953,7 @@ class TemplateRoleDetector:
         self,
         file_path: str,
         role: str,
+        sheet_selection: Optional[Dict[str, str]] = None,
     ) -> Tuple[bool, Optional[str], Optional[Any]]:
         """
         Validates that a template file actually satisfies the declared canonical role
@@ -1066,7 +1071,7 @@ class TemplateRoleDetector:
 
                 validated = self._validator.validate(raw_cand, profile=profile_id)
             elif profile_id == "grade_sheet_xlsx":
-                raw_cand = self._xlsx_inspector.inspect(file_path, profile_id=profile_id)
+                raw_cand = self._xlsx_inspector.inspect(file_path, profile_id=profile_id, sheet_selection=sheet_selection)
                 has_lab = raw_cand.metadata.get("has_lab", False)
 
                 # Variant compatibility check: Lecture+Lab requires secondary practical/lab component

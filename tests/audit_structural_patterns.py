@@ -76,6 +76,9 @@ AUDIT_RULES: List[Tuple[str, str, str]] = [
     (r"summary_sheet\s*=\s*sorted\([^)]*summar[^)]*\)\[0\]", "first-candidate-summary-wins", "Prohibited summary-role selection using sorted candidates without physical final-rating topology verification"),
     (r"primary_roster_sheet\s*=\s*(?:primary_candidate|top_candidates\[0\]|max_metadata_cand|scored_cand)", "metadata-primary-authority-anti-pattern", "Metadata scored candidate promoted to authoritative primary role without independent structural discriminator"),
     (r"(?:elif|if)\s+(?:b_refs_a|a_refs_b|references_primary)\b", "direct-dependency-primary-authority-anti-pattern", "Direct formula dependency alone used as primary role authority without student roster identity topology"),
+    (r"unverified_top\s*=\s*\[\s*s\s*for\s*s\s*in\s*top_meta_candidates\s*if\s*s\s*not\s*in", "metadata-primary-veto", "Metadata density score used to veto physically valid candidates"),
+    (r"candidate_rosters\s*=\s*\[\s*s\s*for\s*s\s*in\s*candidate_rosters\s*if\s*roster_scores\[s\]", "metadata-candidate-pruning", "Metadata density score used to prune candidate rosters before physical verification"),
+    (r"(?:manual_first_row|manual_name_col|manual_id_col)\s*=\s*", "manual-coordinate-injection", "Manual coordinate injection instead of physical discovery and user confirmation"),
 ]
 
 
@@ -95,6 +98,18 @@ def classify_finding(rel_path: str, line_num: int, label: str, snippet: str) -> 
         if "template_inspector.py" in rel_path or "template_role_detector.py" in rel_path or "detector" in rel_path:
             return "E", "Prohibited metadata scored candidate promoted to authoritative primary role without independent structural discriminator"
         return "D", "Legitimate candidate check"
+
+    # Category E: Metadata density score used to veto physically valid candidates
+    if label == "metadata-primary-veto":
+        return "E", "Prohibited metadata density score used to veto physically valid candidates"
+
+    # Category E: Metadata density score used to prune candidate rosters before physical verification
+    if label == "metadata-candidate-pruning":
+        return "E", "Prohibited metadata density score used to prune candidate rosters before physical verification"
+
+    # Category E: Manual coordinate injection instead of physical discovery and user confirmation
+    if label == "manual-coordinate-injection":
+        return "E", "Prohibited manual coordinate injection instead of physical discovery and user confirmation"
 
     # Category E: Weak or optional topology guard permitting empty lineage to bypass validation
     if label == "optional-topology-guard-bypass":
