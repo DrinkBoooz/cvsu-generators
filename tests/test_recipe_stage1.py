@@ -175,7 +175,7 @@ def test_grade_sheet_capacity_limit_mandatory():
             "worksheet_name": "Lecture",
             "first_data_row_index": 7,
             "name_col": 3,
-            "id_col": 1,
+            "id_col": 2,
             "index_col": 1,
             "capacity_limit": 50,
         },

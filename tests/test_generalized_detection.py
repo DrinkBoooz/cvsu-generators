@@ -60,7 +60,12 @@ from modules.models.template_set import (
 )
 from modules.parsers.template_role_detector import TemplateRoleDetector, RoleCandidate
 from modules.parsers.template_inspector import XlsxTemplateInspector
-from modules.models.recipe import TemplateError, AmbiguousTemplateError
+from modules.models.recipe import (
+    TemplateError,
+    AmbiguousTemplateError,
+    RawTemplateRecipeCandidate,
+    ValidatedTemplateRecipe,
+)
 from modules.services.template_set_manager import TemplateSetManager
 from modules.generators.ceit_gen import GeneratorFactory, SyllabusGenerator
 from modules.generators.attendance_gen import AttendanceGenerator
@@ -6738,16 +6743,771 @@ def test_custom_template_set_end_to_end_sheet_confirmation_and_generator_consump
     assert recipe.roster_binding.id_col == 3
 
 
+# ── 15. Forensic Authority-Boundary Audit Tests (Commit 180) ───────────────
+
+def test_metadata_density_cannot_select_veto_or_break_ties(tmp_path):
+    """
+    Forensic Invariant 1:
+    Candidate A and B have identical physical structures and both contribute to Summary.
+    Neither derives identity from the other, and Summary does not derive identity from either.
+    Varying metadata density (A high / B low vs A low / B high) must both fail closed as AMBIGUOUS.
+    Metadata density must never select, prune, veto, or break ties.
+    """
+    inspector = XlsxTemplateInspector()
+
+    def build_symmetric_wb(meta_count_a: int, meta_count_b: int) -> str:
+        wb = openpyxl.Workbook()
+        wb.remove(wb.active)
+
+        ws_a = wb.create_sheet("Component_A")
+        for m in range(1, meta_count_a + 1):
+            ws_a.cell(m, 1, f"MetaField_{m}: Value_{m}")
+        ws_a.cell(meta_count_a + 1, 1, "#")
+        ws_a.cell(meta_count_a + 1, 2, "Student Name")
+        ws_a.cell(meta_count_a + 1, 3, "Student Number")
+        ws_a.cell(meta_count_a + 1, 4, "Quiz")
+        r_start = meta_count_a + 2
+        for r in range(r_start, r_start + 5):
+            ws_a.cell(r, 1, r - r_start + 1)
+            ws_a.cell(r, 2, f"Student {r}")
+            ws_a.cell(r, 3, f"2026-00{r}")
+            ws_a.cell(r, 4, 85)
+
+        ws_b = wb.create_sheet("Component_B")
+        for m in range(1, meta_count_b + 1):
+            ws_b.cell(m, 1, f"MetaField_{m}: Value_{m}")
+        ws_b.cell(meta_count_b + 1, 1, "#")
+        ws_b.cell(meta_count_b + 1, 2, "Student Name")
+        ws_b.cell(meta_count_b + 1, 3, "Student Number")
+        ws_b.cell(meta_count_b + 1, 4, "Quiz")
+        r_start_b = meta_count_b + 2
+        for r in range(r_start_b, r_start_b + 5):
+            ws_b.cell(r, 1, r - r_start_b + 1)
+            ws_b.cell(r, 2, f"Student {r}")
+            ws_b.cell(r, 3, f"2026-00{r}")
+            ws_b.cell(r, 4, 88)
+
+        ws_s = wb.create_sheet("Summary")
+        ws_s.cell(1, 1, "Republic of the Philippines")
+        ws_s.cell(2, 1, "Cavite State University")
+        ws_s.cell(3, 1, "Official Grades Summary")
+        ws_s.cell(6, 1, "Student Number")
+        ws_s.cell(6, 2, "Final Rating")
+        for idx, (ra, rb) in enumerate(zip(range(r_start, r_start + 5), range(r_start_b, r_start_b + 5))):
+            sr = 7 + idx
+            ws_s.cell(sr, 1, f"2026-00{sr}")
+            ws_s.cell(sr, 2, f"='Component_A'!D{ra} + 'Component_B'!D{rb}")
+
+        p = tmp_path / f"sym_meta_{meta_count_a}_{meta_count_b}.xlsx"
+        wb.save(str(p))
+        return str(p)
+
+    # Trial 1: A has high metadata (10), B has low metadata (1)
+    p1 = build_symmetric_wb(10, 1)
+    with pytest.raises(AmbiguousTemplateError) as exc1:
+        inspector.inspect(p1)
+    assert "ambiguous candidate roster worksheets with equal structural evidence" in str(exc1.value)
+
+    # Trial 2: A has low metadata (1), B has high metadata (10)
+    p2 = build_symmetric_wb(1, 10)
+    with pytest.raises(AmbiguousTemplateError) as exc2:
+        inspector.inspect(p2)
+    assert "ambiguous candidate roster worksheets with equal structural evidence" in str(exc2.value)
 
 
+def test_manual_sheet_selection_must_be_discovered_candidate(tmp_path):
+    """
+    Forensic Invariant 2:
+    User cannot submit an arbitrary worksheet name that was not an eligible discovered candidate.
+    """
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+
+    ws_lec = wb.create_sheet("Lecture")
+    ws_lec.cell(1, 1, "Course & Section: BSCS-4A")
+    ws_lec.cell(6, 1, "#")
+    ws_lec.cell(6, 2, "Student Name")
+    ws_lec.cell(6, 3, "Student Number")
+    ws_lec.cell(6, 4, "Lecture Grade")
+    for r in range(7, 12):
+        ws_lec.cell(r, 1, r - 6)
+        ws_lec.cell(r, 2, f"Student {r - 6}")
+        ws_lec.cell(r, 3, f"2026-CS-{r - 6:03d}")
+        ws_lec.cell(r, 4, 90)
+
+    ws_hlp = wb.create_sheet("Helper")
+    ws_hlp.cell(1, 1, "Scale")
+    ws_hlp.cell(1, 2, "Equivalent")
+    ws_hlp.cell(2, 1, 95)
+    ws_hlp.cell(2, 2, "1.00")
+
+    ws_sum = wb.create_sheet("Summary")
+    ws_sum.cell(1, 1, "Republic of the Philippines")
+    ws_sum.cell(2, 1, "Cavite State University")
+    ws_sum.cell(3, 1, "Official Grades Summary")
+    ws_sum.cell(6, 1, "Student Number")
+    ws_sum.cell(6, 2, "Final Rating")
+    for r in range(7, 12):
+        ws_sum.cell(r, 1, f"='Lecture'!C{r}")
+        ws_sum.cell(r, 2, f"='Lecture'!D{r}")
+
+    p = tmp_path / "manual_sel_discovered.xlsx"
+    wb.save(str(p))
+
+    inspector = XlsxTemplateInspector()
+    # 1. Arbitrary non-existent sheet
+    with pytest.raises(AmbiguousTemplateError) as exc_nonexistent:
+        inspector.inspect(str(p), sheet_selection={"roster_sheet": "GhostSheet", "summary_sheet": "Summary"})
+    assert "does not exist in workbook" in str(exc_nonexistent.value)
+
+    # 2. Sheet exists in workbook but is a Helper without roster structure
+    with pytest.raises(TemplateError) as exc_helper:
+        inspector.inspect(str(p), sheet_selection={"roster_sheet": "Helper", "summary_sheet": "Summary"})
+    assert "is not an eligible discovered roster candidate" in str(exc_helper.value)
 
 
+def test_user_selection_cannot_promote_student_master_helper(tmp_path):
+    """
+    Forensic Invariant 3:
+    Student Master contains student names/IDs and emails, but lacks assessment columns
+    and does NOT contribute to instructional grade calculation on Summary.
+    Manual selection MUST NOT promote it.
+    """
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+
+    ws_m = wb.create_sheet("Student Master")
+    ws_m.cell(1, 1, "Master Directory 2026")
+    ws_m.cell(6, 1, "#")
+    ws_m.cell(6, 2, "Student Name")
+    ws_m.cell(6, 3, "Student Number")
+    ws_m.cell(6, 4, "Email")
+    for r in range(7, 12):
+        ws_m.cell(r, 1, r - 6)
+        ws_m.cell(r, 2, f"Student {r - 6}")
+        ws_m.cell(r, 3, f"2026-CS-{r - 6:03d}")
+        ws_m.cell(r, 4, f"student{r}@cvsu.edu.ph")
+
+    ws_lec = wb.create_sheet("Lecture")
+    ws_lec.cell(1, 1, "Course & Section: BSCS-4A")
+    ws_lec.cell(6, 1, "#")
+    ws_lec.cell(6, 2, "Student Name")
+    ws_lec.cell(6, 3, "Student Number")
+    ws_lec.cell(6, 4, "Lecture Grade")
+    for r in range(7, 12):
+        ws_lec.cell(r, 1, r - 6)
+        ws_lec.cell(r, 2, f"='Student Master'!B{r}")
+        ws_lec.cell(r, 3, f"='Student Master'!C{r}")
+        ws_lec.cell(r, 4, 88)
+
+    ws_sum = wb.create_sheet("Summary")
+    ws_sum.cell(1, 1, "Republic of the Philippines")
+    ws_sum.cell(2, 1, "Cavite State University")
+    ws_sum.cell(3, 1, "Official Grades Summary")
+    ws_sum.cell(6, 1, "Student Number")
+    ws_sum.cell(6, 2, "Final Rating")
+    for r in range(7, 12):
+        ws_sum.cell(r, 1, f"='Lecture'!C{r}")
+        ws_sum.cell(r, 2, f"='Lecture'!D{r}")
+
+    p = tmp_path / "student_master_promotion.xlsx"
+    wb.save(str(p))
+
+    inspector = XlsxTemplateInspector()
+
+    # Automatic detection selects Lecture, never promotes Student Master as primary roster
+    res = inspector.inspect(str(p))
+    assert res.metadata["roster_sheet"] == "Lecture"
+
+    # Explicit attempt to select Student Master must be rejected
+    with pytest.raises(TemplateError) as exc:
+        inspector.inspect(str(p), sheet_selection={"roster_sheet": "Student Master", "summary_sheet": "Summary"})
+    assert (
+        "lacks role-consistent physical instructional lineage" in str(exc.value)
+        or "lacks assessment or grade columns" in str(exc.value)
+    )
 
 
+def test_user_selection_cannot_inject_coordinates(tmp_path):
+    """
+    Forensic Invariant 4:
+    User cannot inject manual row, column, or coordinate bindings.
+    Any injected coordinates are ignored; bindings are derived exclusively by physical inspection.
+    """
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+
+    ws_lec = wb.create_sheet("Lecture")
+    ws_lec.cell(1, 1, "Course & Section: BSCS-4A")
+    ws_lec.cell(2, 1, "Instructor: Prof. Dan")
+    ws_lec.cell(3, 1, "Schedule Code: 99112")
+    ws_lec.cell(6, 1, "#")
+    ws_lec.cell(6, 2, "Student Name")
+    ws_lec.cell(6, 3, "Student Number")
+    ws_lec.cell(6, 4, "Lecture Grade")
+    for r in range(7, 12):
+        ws_lec.cell(r, 1, r - 6)
+        ws_lec.cell(r, 2, f"Student {r - 6}")
+        ws_lec.cell(r, 3, f"2026-CS-{r - 6:03d}")
+        ws_lec.cell(r, 4, 92)
+
+    ws_sum = wb.create_sheet("Summary")
+    ws_sum.cell(1, 1, "Republic of the Philippines")
+    ws_sum.cell(2, 1, "Cavite State University")
+    ws_sum.cell(3, 1, "Official Grades Summary")
+    ws_sum.cell(6, 1, "Student Number")
+    ws_sum.cell(6, 2, "Final Rating")
+    for r in range(7, 12):
+        ws_sum.cell(r, 1, f"='Lecture'!C{r}")
+        ws_sum.cell(r, 2, f"='Lecture'!D{r}")
+
+    p = tmp_path / "no_coord_injection.xlsx"
+    wb.save(str(p))
+
+    inspector = XlsxTemplateInspector()
+    recipe_cand = inspector.inspect(
+        str(p),
+        sheet_selection={
+            "roster_sheet": "Lecture",
+            "summary_sheet": "Summary",
+            "first_data_row_index": 999,
+            "name_col": 888,
+            "id_col": 777,
+        },
+    )
+    # The physical coordinates MUST be what the inspector discovered (row 7, col 2, col 3)
+    assert recipe_cand.roster_candidate["first_data_row_index"] == 7
+    assert recipe_cand.roster_candidate["name_col"] == 2
+    assert recipe_cand.roster_candidate["id_col"] == 3
+
+    validated = RecipeValidator.validate(recipe_cand, "grade_sheet_xlsx")
+    assert validated.roster_binding.first_data_row_index == 7
+    assert validated.roster_binding.name_col == 2
+    assert validated.roster_binding.id_col == 3
 
 
+def test_cache_key_authority_and_permutation_invariance(tmp_path):
+    """
+    Forensic Invariant 7:
+    Every structural sheet selection produces a distinct cache key.
+    Permutations of the sheet_selection dict produce equivalent cache keys and hit cache.
+    """
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+
+    ws_lec = wb.create_sheet("Lecture")
+    ws_lec.cell(1, 1, "Course & Section: BSCS-4A")
+    ws_lec.cell(2, 1, "Instructor: Prof. Dan")
+    ws_lec.cell(3, 1, "Schedule Code: 99112")
+    ws_lec.cell(6, 1, "#")
+    ws_lec.cell(6, 2, "Student Name")
+    ws_lec.cell(6, 3, "Student Number")
+    ws_lec.cell(6, 4, "Lecture Grade")
+    for r in range(7, 12):
+        ws_lec.cell(r, 1, r - 6)
+        ws_lec.cell(r, 2, f"Student {r - 6}")
+        ws_lec.cell(r, 3, f"2026-CS-{r - 6:03d}")
+        ws_lec.cell(r, 4, 90)
+
+    ws_sum = wb.create_sheet("Summary")
+    ws_sum.cell(1, 1, "Republic of the Philippines")
+    ws_sum.cell(2, 1, "Cavite State University")
+    ws_sum.cell(3, 1, "Official Grades Summary")
+    ws_sum.cell(6, 1, "Student Number")
+    ws_sum.cell(6, 2, "Final Rating")
+    for r in range(7, 12):
+        ws_sum.cell(r, 1, f"='Lecture'!C{r}")
+        ws_sum.cell(r, 2, f"='Lecture'!D{r}")
+
+    p = tmp_path / "cache_key_test.xlsx"
+    wb.save(str(p))
+
+    resolver = TemplateRecipeResolver()
+
+    # Resolution 1
+    rec1 = resolver.resolve_recipe(
+        template_path=str(p),
+        profile_id="grade_sheet_xlsx",
+        sheet_selection={"roster_sheet": "Lecture", "summary_sheet": "Summary"},
+    )
+    # Resolution 2: permuted dictionary keys -> must hit cache (same object instance)
+    rec2 = resolver.resolve_recipe(
+        template_path=str(p),
+        profile_id="grade_sheet_xlsx",
+        sheet_selection={"summary_sheet": "Summary", "roster_sheet": "Lecture"},
+    )
+    assert rec1 is rec2, "Permuted selection dictionary must hit cache"
 
 
+def test_manual_confirmation_of_all_four_xlsx_roles(tmp_path):
+    """
+    Forensic Invariant 6:
+    Confirm all 4 XLSX roles: roster_sheet, lab_sheet, con_sheet, summary_sheet.
+    """
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+
+    ws_lec = wb.create_sheet("Theory_Roster")
+    ws_lec.cell(1, 1, "Course & Section: BSCS-4A")
+    ws_lec.cell(2, 1, "Instructor: Prof. Dan")
+    ws_lec.cell(3, 1, "Schedule Code: 99112")
+    ws_lec.cell(6, 1, "#")
+    ws_lec.cell(6, 2, "Student Name")
+    ws_lec.cell(6, 3, "Student Number")
+    ws_lec.cell(6, 4, "Quiz")
+    for r in range(7, 12):
+        ws_lec.cell(r, 1, r - 6)
+        ws_lec.cell(r, 2, f"Student {r - 6}")
+        ws_lec.cell(r, 3, f"2026-CS-{r - 6:03d}")
+        ws_lec.cell(r, 4, 85)
+
+    ws_lab = wb.create_sheet("Practical_Roster")
+    ws_lab.cell(1, 1, "Course & Section: BSCS-4A")
+    ws_lab.cell(6, 1, "#")
+    ws_lab.cell(6, 2, "Student Name")
+    ws_lab.cell(6, 3, "Student Number")
+    ws_lab.cell(6, 4, "Lab Exam")
+    for r in range(7, 12):
+        ws_lab.cell(r, 1, r - 6)
+        ws_lab.cell(r, 2, f"='Theory_Roster'!B{r}")
+        ws_lab.cell(r, 3, f"='Theory_Roster'!C{r}")
+        ws_lab.cell(r, 4, 90)
+
+    ws_con = wb.create_sheet("Aggregate_Sheet")
+    ws_con.cell(1, 1, "Course & Section: BSCS-4A")
+    ws_con.cell(6, 1, "#")
+    ws_con.cell(6, 2, "Student Name")
+    ws_con.cell(6, 3, "Student Number")
+    ws_con.cell(6, 4, "Consolidated Mark")
+    for r in range(7, 12):
+        ws_con.cell(r, 1, r - 6)
+        ws_con.cell(r, 2, f"='Theory_Roster'!B{r}")
+        ws_con.cell(r, 3, f"='Theory_Roster'!C{r}")
+        ws_con.cell(r, 4, f"=0.6*'Theory_Roster'!D{r} + 0.4*'Practical_Roster'!D{r}")
+
+    ws_sum = wb.create_sheet("Final_Ratings")
+    ws_sum.cell(1, 1, "Republic of the Philippines")
+    ws_sum.cell(2, 1, "Cavite State University")
+    ws_sum.cell(3, 1, "Official Grades Summary")
+    ws_sum.cell(6, 1, "Student Number")
+    ws_sum.cell(6, 2, "Final Rating")
+    for r in range(7, 12):
+        ws_sum.cell(r, 1, f"='Theory_Roster'!C{r}")
+        ws_sum.cell(r, 2, f"='Aggregate_Sheet'!D{r}")
+
+    p = tmp_path / "all_four_roles.xlsx"
+    wb.save(str(p))
+
+    inspector = XlsxTemplateInspector()
+    recipe = inspector.inspect(
+        str(p),
+        sheet_selection={
+            "roster_sheet": "Theory_Roster",
+            "lab_sheet": "Practical_Roster",
+            "con_sheet": "Aggregate_Sheet",
+            "summary_sheet": "Final_Ratings",
+        },
+    )
+    assert recipe.metadata["roster_sheet"] == "Theory_Roster"
+    assert recipe.metadata["lab_sheet"] == "Practical_Roster"
+    assert recipe.metadata["con_sheet"] == "Aggregate_Sheet"
+    assert recipe.metadata["summary_sheet"] == "Final_Ratings"
+    assert recipe.metadata.get("has_lab") is True
+    assert recipe.metadata.get("has_consolidated") is True
+
+    # Validate recipe
+    validated = RecipeValidator.validate(recipe, "grade_sheet_xlsx")
+    assert validated is not None
+    assert isinstance(validated, ValidatedTemplateRecipe)
 
 
+def test_blank_formula_free_template_handling(tmp_path):
+    """
+    Forensic Invariant 8:
+    A genuinely blank custom XLSX template with ZERO formulas.
+    Assert zero formulas.
+    Proves automatic detection fails closed, manual sheet confirmation validates,
+    and recipe is generated.
+    """
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
 
+    ws_lec = wb.create_sheet("Lecture_Component")
+    ws_lec.cell(1, 1, "Course & Section: BSCS-4A")
+    ws_lec.cell(2, 1, "Instructor: Prof. Dan")
+    ws_lec.cell(3, 1, "Schedule Code: 99112")
+    ws_lec.cell(6, 1, "#")
+    ws_lec.cell(6, 2, "Student Name")
+    ws_lec.cell(6, 3, "Student Number")
+    ws_lec.cell(6, 4, "Quiz 1")
+    ws_lec.cell(6, 5, "Exam")
+    for r in range(7, 12):
+        ws_lec.cell(r, 1, r - 6)
+        ws_lec.cell(r, 2, f"Student {r - 6}")
+        ws_lec.cell(r, 3, f"2026-CS-{r - 6:03d}")
+        ws_lec.cell(r, 4, 85)
+        ws_lec.cell(r, 5, 90)
+
+    ws_sum = wb.create_sheet("Final_Grade_Summary")
+    ws_sum.cell(1, 1, "Republic of the Philippines")
+    ws_sum.cell(2, 1, "Cavite State University")
+    ws_sum.cell(3, 1, "Official Grades Summary")
+    ws_sum.cell(6, 1, "Student Number")
+    ws_sum.cell(6, 2, "Final Rating")
+    for r in range(7, 12):
+        ws_sum.cell(r, 1, f"2026-CS-{r - 6:03d}")
+        ws_sum.cell(r, 2, 87.5)
+
+    p = tmp_path / "formula_free_blank_template.xlsx"
+    wb.save(str(p))
+
+    # CRITICAL: Assert workbook contains ZERO formulas
+    wb_verify = openpyxl.load_workbook(str(p), data_only=False)
+    formula_count = 0
+    for s in wb_verify.worksheets:
+        for row in s.iter_rows(values_only=True):
+            for c in row:
+                if isinstance(c, str) and c.startswith("="):
+                    formula_count += 1
+    assert formula_count == 0, "Workbook must contain ZERO formulas"
+
+    detector = TemplateRoleDetector()
+    # Automatic detection must fail closed (status ambiguous) because calculation lineage is absent
+    det_res = detector.detect_role(str(p))
+    assert det_res.status == "ambiguous"
+    disc = det_res.discovered_structures
+    assert "Lecture_Component" in disc.get("roster_candidates", [])
+    assert "Final_Grade_Summary" in disc.get("summary_candidates", [])
+
+    # Manual sheet selection succeeds because physical layout has roster and assessment columns
+    inspector = XlsxTemplateInspector()
+    recipe = inspector.inspect(
+        str(p),
+        sheet_selection={
+            "roster_sheet": "Lecture_Component",
+            "summary_sheet": "Final_Grade_Summary",
+        },
+    )
+    assert recipe is not None
+    assert recipe.metadata["roster_sheet"] == "Lecture_Component"
+    assert recipe.metadata["summary_sheet"] == "Final_Grade_Summary"
+
+    # Validator verifies structural geometry and returns ValidatedTemplateRecipe
+    validated = RecipeValidator.validate(recipe, "grade_sheet_xlsx")
+    assert validated is not None
+    assert isinstance(validated, ValidatedTemplateRecipe)
+
+    # Real Generator generates output from validated recipe
+    dummy_info = {
+        "instructor": "Prof. Dan",
+        "course_section": "BSCS-4A",
+        "schedule_code": "99112",
+        "subject": "Software Architecture",
+        "semester": "1st Semester AY 2026-2027",
+    }
+    dummy_students = [("LOVELACE, ADA A.", "202610099")]
+    out_file = tmp_path / "out_blank_template.xlsx"
+    gen = GradeGenerator(str(p), validated)
+    success = gen.generate(dummy_info, dummy_students, str(out_file))
+    assert success is True
+    assert os.path.exists(out_file)
+
+
+def test_foreign_terminology_cases_and_opaque_limitation(tmp_path):
+    """
+    Forensic Invariant 9:
+    Foreign Terminology test:
+      A: Participant / Matriculation
+      B: Candidate / Registration
+      C: Person / Identifier
+      D: Opaque headers (Col_A, Col_B, Col_C) -> proves remaining limitation
+    """
+    detector = TemplateRoleDetector()
+
+    def make_foreign_wb(h_name: str, h_id: str) -> str:
+        wb = openpyxl.Workbook()
+        wb.remove(wb.active)
+        ws = wb.create_sheet("Evaluation_Roster")
+        ws.cell(1, 1, "Department of Academic Affairs")
+        ws.cell(2, 1, "Instructor: Prof. Dan")
+        ws.cell(3, 1, "Course & Section: BSCS-4A")
+        ws.cell(4, 1, "Schedule Code: 99112")
+        ws.cell(5, 1, "#")
+        ws.cell(5, 2, h_name)
+        ws.cell(5, 3, h_id)
+        ws.cell(5, 4, "Evaluation Mark")
+        for r in range(6, 11):
+            ws.cell(r, 1, r - 5)
+            ws.cell(r, 2, f"Subject {r}")
+            ws.cell(r, 3, f"ID-99{r}")
+            ws.cell(r, 4, 88)
+
+        ws_s = wb.create_sheet("Grading Sheet")
+        ws_s.cell(1, 1, "Grading Sheet Summary")
+        ws_s.cell(6, 1, "Student Number")
+        ws_s.cell(6, 2, "Final Rating")
+        for r in range(6, 11):
+            ws_s.cell(r + 1, 1, f"='Evaluation_Roster'!C{r}")
+            ws_s.cell(r + 1, 2, f"='Evaluation_Roster'!D{r}")
+
+        p = tmp_path / f"foreign_{h_name}_{h_id}.xlsx"
+        wb.save(str(p))
+        return str(p)
+
+    # A: Participant / Matriculation -> confirmed
+    p_a = make_foreign_wb("Participant", "Matriculation")
+    res_a = detector.detect_role(p_a)
+    assert res_a.status == "confirmed"
+    assert res_a.role == ROLE_GRADE_SHEET_LECTURE
+
+    # B: Candidate / Registration -> confirmed
+    p_b = make_foreign_wb("Candidate", "Registration")
+    res_b = detector.detect_role(p_b)
+    assert res_b.status == "confirmed"
+    assert res_b.role == ROLE_GRADE_SHEET_LECTURE
+
+    # C: Person / Identifier -> confirmed
+    p_c = make_foreign_wb("Person", "Identifier")
+    res_c = detector.detect_role(p_c)
+    assert res_c.status == "confirmed"
+    assert res_c.role == ROLE_GRADE_SHEET_LECTURE
+
+    # D: Opaque headers with no recognizable identity vocabulary
+    p_d = make_foreign_wb("COL_ALPHA", "COL_BETA")
+    res_d = detector.detect_role(p_d)
+    # Demonstrates and proves the remaining limitation:
+    # Completely opaque headers without lexical anchor cannot confirm student identity columns
+    assert res_d.status != "confirmed"
+
+
+def test_primary_identity_topology_invariant_under_tab_order(tmp_path):
+    """
+    Forensic Invariant 11:
+    Primary roster is determined by identity derivation:
+    Secondary student identity derives from Primary, and Primary does NOT derive from Secondary.
+    Permutation of worksheet tab order must not alter this outcome.
+    """
+    inspector = XlsxTemplateInspector()
+
+    def build_identity_wb(first_is_primary: bool) -> str:
+        wb = openpyxl.Workbook()
+        wb.remove(wb.active)
+
+        sheets = ["Comp_Lecture", "Comp_Lab"] if first_is_primary else ["Comp_Lab", "Comp_Lecture"]
+        for s in sheets:
+            wb.create_sheet(s)
+
+        ws_lec = wb["Comp_Lecture"]
+        ws_lec.cell(1, 1, "Course & Section: BSCS-4A")
+        ws_lec.cell(6, 1, "#")
+        ws_lec.cell(6, 2, "Student Name")
+        ws_lec.cell(6, 3, "Student Number")
+        ws_lec.cell(6, 4, "Lecture Grade")
+        for r in range(7, 12):
+            ws_lec.cell(r, 1, r - 6)
+            ws_lec.cell(r, 2, f"Student {r - 6}")
+            ws_lec.cell(r, 3, f"2026-CS-{r - 6:03d}")
+            ws_lec.cell(r, 4, 90)
+
+        ws_lab = wb["Comp_Lab"]
+        ws_lab.cell(1, 1, "Course & Section: BSCS-4A")
+        ws_lab.cell(6, 1, "#")
+        ws_lab.cell(6, 2, "Student Name")
+        ws_lab.cell(6, 3, "Student Number")
+        ws_lab.cell(6, 4, "Lab Grade")
+        for r in range(7, 12):
+            ws_lab.cell(r, 1, r - 6)
+            ws_lab.cell(r, 2, f"='Comp_Lecture'!B{r}")
+            ws_lab.cell(r, 3, f"='Comp_Lecture'!C{r}")
+            ws_lab.cell(r, 4, 95)
+
+        ws_sum = wb.create_sheet("Summary")
+        ws_sum.cell(1, 1, "Republic of the Philippines")
+        ws_sum.cell(2, 1, "Cavite State University")
+        ws_sum.cell(3, 1, "Official Grades Summary")
+        ws_sum.cell(6, 1, "Student Number")
+        ws_sum.cell(6, 2, "Final Rating")
+        for r in range(7, 12):
+            ws_sum.cell(r, 1, f"='Comp_Lecture'!C{r}")
+            ws_sum.cell(r, 2, f"=0.6*'Comp_Lecture'!D{r} + 0.4*'Comp_Lab'!D{r}")
+
+        p = tmp_path / f"tab_order_{first_is_primary}.xlsx"
+        wb.save(str(p))
+        return str(p)
+
+    p1 = build_identity_wb(first_is_primary=True)
+    rec1 = inspector.inspect(p1)
+    assert rec1.metadata["roster_sheet"] == "Comp_Lecture"
+    assert rec1.metadata["lab_sheet"] == "Comp_Lab"
+
+    p2 = build_identity_wb(first_is_primary=False)
+    rec2 = inspector.inspect(p2)
+    assert rec2.metadata["roster_sheet"] == "Comp_Lecture"
+    assert rec2.metadata["lab_sheet"] == "Comp_Lab"
+
+
+def test_recipe_validator_rejects_structural_column_collisions():
+    """
+    Forensic Invariant 13:
+    RecipeValidator must reject structurally incompatible bindings even if
+    coordinates are within sheet bounds (e.g. name_col == id_col or name_col == index_col).
+    """
+    # 1. name_col == id_col collision
+    cand_collide = RawTemplateRecipeCandidate(
+        template_path="fake.xlsx",
+        profile_id="grade_sheet_xlsx",
+        fingerprint="fp1",
+        roster_candidate={
+            "table_index": 0,
+            "first_data_row_index": 7,
+            "name_col": 2,
+            "id_col": 2,  # Collision!
+            "capacity_limit": 50,
+            "worksheet_name": "Roster",
+        },
+        header_candidates=[
+            {"field": "instructor", "cell_type": "xlsx_cell", "target": "A1"},
+            {"field": "course_section", "cell_type": "xlsx_cell", "target": "A2"},
+            {"field": "schedule_code", "cell_type": "xlsx_cell", "target": "A3"},
+        ],
+    )
+    with pytest.raises(TemplateError) as exc_collide:
+        RecipeValidator.validate(cand_collide, "grade_sheet_xlsx")
+    assert "name_col and id_col cannot bind to the same column" in str(exc_collide.value)
+
+    # 2. name_col == index_col collision
+    cand_idx_collide = RawTemplateRecipeCandidate(
+        template_path="fake.xlsx",
+        profile_id="grade_sheet_xlsx",
+        fingerprint="fp2",
+        roster_candidate={
+            "table_index": 0,
+            "first_data_row_index": 7,
+            "name_col": 2,
+            "id_col": 3,
+            "index_col": 2,  # Collision with name_col!
+            "capacity_limit": 50,
+            "worksheet_name": "Roster",
+        },
+        header_candidates=[
+            {"field": "instructor", "cell_type": "xlsx_cell", "target": "A1"},
+            {"field": "course_section", "cell_type": "xlsx_cell", "target": "A2"},
+            {"field": "schedule_code", "cell_type": "xlsx_cell", "target": "A3"},
+        ],
+    )
+    with pytest.raises(TemplateError) as exc_idx:
+        RecipeValidator.validate(cand_idx_collide, "grade_sheet_xlsx")
+    assert "index_col cannot collide with name_col" in str(exc_idx.value)
+
+
+def test_generic_dependency_alone_does_not_confer_primary_authority(tmp_path):
+    """
+    Forensic Invariant 11:
+    Direct formula dependency alone (e.g. referencing a header, grade column, or helper)
+    does NOT confer primary roster authority.
+    Only student-row roster identity derivation participates in primary authority.
+    When Comp_B references Comp_A!D7 (grade calculation) or Comp_A!A1 (header),
+    but identity is independent, detection must fail closed as AMBIGUOUS.
+    """
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+
+    ws_a = wb.create_sheet("Comp_A")
+    ws_a.cell(1, 1, "Course & Section: BSCS-4A")
+    ws_a.cell(6, 1, "#")
+    ws_a.cell(6, 2, "Student Name")
+    ws_a.cell(6, 3, "Student Number")
+    ws_a.cell(6, 4, "Quiz")
+    for r in range(7, 12):
+        ws_a.cell(r, 1, r - 6)
+        ws_a.cell(r, 2, f"Student {r - 6}")
+        ws_a.cell(r, 3, f"2026-CS-{r - 6:03d}")
+        ws_a.cell(r, 4, 85)
+
+    ws_b = wb.create_sheet("Comp_B")
+    ws_b.cell(1, 1, "Course & Section: BSCS-4A")
+    ws_b.cell(6, 1, "#")
+    ws_b.cell(6, 2, "Student Name")
+    ws_b.cell(6, 3, "Student Number")
+    ws_b.cell(6, 4, "Lab Exam")
+    for r in range(7, 12):
+        ws_b.cell(r, 1, r - 6)
+        # Independent identity cells (not referencing Comp_A)
+        ws_b.cell(r, 2, f"Student {r - 6}")
+        ws_b.cell(r, 3, f"2026-CS-{r - 6:03d}")
+        # Generic grade dependency: references Comp_A's grade column
+        ws_b.cell(r, 4, f"='Comp_A'!D{r} + 5")
+
+    ws_sum = wb.create_sheet("Summary")
+    ws_sum.cell(1, 1, "Republic of the Philippines")
+    ws_sum.cell(2, 1, "Cavite State University")
+    ws_sum.cell(3, 1, "Official Grades Summary")
+    ws_sum.cell(6, 1, "Student Number")
+    ws_sum.cell(6, 2, "Final Rating")
+    for r in range(7, 12):
+        ws_sum.cell(r, 1, f"2026-CS-{r - 6:03d}")
+        ws_sum.cell(r, 2, f"=0.5*'Comp_A'!D{r} + 0.5*'Comp_B'!D{r}")
+
+    p = tmp_path / "generic_dep_not_primary.xlsx"
+    wb.save(str(p))
+
+    inspector = XlsxTemplateInspector()
+    with pytest.raises(AmbiguousTemplateError) as exc:
+        inspector.inspect(str(p))
+    assert "ambiguous candidate roster worksheets with equal structural evidence" in str(exc.value)
+
+
+def test_inspector_detector_authority_boundary(tmp_path):
+    """
+    Forensic Invariant 10:
+    Inspector discovers physical layout and coordinates without fabricating bindings.
+    Detector proposes role candidates and exposes discovered structures.
+    RecipeValidator is the sole authoritative gate creating ValidatedTemplateRecipe.
+    """
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+
+    ws_lec = wb.create_sheet("Lecture")
+    ws_lec.cell(1, 1, "Course & Section: BSCS-4A")
+    ws_lec.cell(2, 1, "Instructor: Prof. Dan")
+    ws_lec.cell(3, 1, "Schedule Code: 99112")
+    ws_lec.cell(6, 1, "#")
+    ws_lec.cell(6, 2, "Student Name")
+    ws_lec.cell(6, 3, "Student Number")
+    ws_lec.cell(6, 4, "Quiz")
+    for r in range(7, 12):
+        ws_lec.cell(r, 1, r - 6)
+        ws_lec.cell(r, 2, f"Student {r - 6}")
+        ws_lec.cell(r, 3, f"2026-CS-{r - 6:03d}")
+        ws_lec.cell(r, 4, 85)
+
+    ws_sum = wb.create_sheet("Grading Sheet")
+    ws_sum.cell(1, 1, "Official Grades Summary")
+    ws_sum.cell(6, 1, "Student Number")
+    ws_sum.cell(6, 2, "Final Rating")
+    for r in range(7, 12):
+        ws_sum.cell(r, 1, f"='Lecture'!C{r}")
+        ws_sum.cell(r, 2, f"='Lecture'!D{r}")
+
+    p = tmp_path / "boundary_check.xlsx"
+    wb.save(str(p))
+
+    inspector = XlsxTemplateInspector()
+    cand = inspector.inspect(str(p))
+    # 1. Inspector produces RawTemplateRecipeCandidate ONLY
+    assert isinstance(cand, RawTemplateRecipeCandidate)
+    assert not isinstance(cand, ValidatedTemplateRecipe)
+
+    # 2. Detector proposes role candidates and structural evidence
+    detector = TemplateRoleDetector()
+    det_res = detector.detect_role(str(p))
+    assert det_res.status == "confirmed"
+    assert det_res.role == ROLE_GRADE_SHEET_LECTURE
+    assert len(det_res.structural_evidence) > 0
+
+    # 3. RecipeValidator produces ValidatedTemplateRecipe
+    validated = RecipeValidator.validate(cand, "grade_sheet_xlsx")
+    assert isinstance(validated, ValidatedTemplateRecipe)
+    assert validated.roster_binding.first_data_row_index == 7
+    assert validated.roster_binding.name_col == 2
+    assert validated.roster_binding.id_col == 3

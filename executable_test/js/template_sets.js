@@ -454,6 +454,46 @@ function renderInspectedFilesList() {
         return `<option value="${rKey}" ${isSelected ? "selected" : ""}>${escapeHTML(rName)}</option>`;
       }).join("");
 
+      let sheetMappingHTML = "";
+      if (isXlsx && item.discovered_structures) {
+        const disc = item.discovered_structures;
+        const rosterCands = disc.roster_candidates || [];
+        const summaryCands = disc.summary_candidates || [];
+        if (rosterCands.length > 0 || summaryCands.length > 0) {
+          const currentMapping = item.sheet_mapping || {
+            roster_sheet: rosterCands[0] || "",
+            summary_sheet: summaryCands[0] || "",
+          };
+          item.sheet_mapping = currentMapping;
+          const rosterOptions = rosterCands.map((s) => `<option value="${escapeHTML(s)}" ${currentMapping.roster_sheet === s ? "selected" : ""}>${escapeHTML(s)}</option>`).join("");
+          const summaryOptions = summaryCands.map((s) => `<option value="${escapeHTML(s)}" ${currentMapping.summary_sheet === s ? "selected" : ""}>${escapeHTML(s)}</option>`).join("");
+
+          sheetMappingHTML = `
+            <div style="margin-top: 8px; padding: 6px 10px; background: var(--surface-subtle); border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); font-size: 11px;">
+              <span style="font-weight: 600; color: var(--text-secondary);">Discovered Sheet Confirmation:</span>
+              <div style="display: flex; gap: 12px; margin-top: 4px; flex-wrap: wrap;">
+                ${rosterCands.length > 0 ? `
+                  <label style="display: flex; align-items: center; gap: 4px;">
+                    <span>Roster:</span>
+                    <select class="settings-input" style="padding: 2px 6px; font-size: 11px; height: auto;" onchange="onTemplateSheetMappingChanged(${idx}, 'roster_sheet', this.value)">
+                      ${rosterOptions}
+                    </select>
+                  </label>
+                ` : ""}
+                ${summaryCands.length > 0 ? `
+                  <label style="display: flex; align-items: center; gap: 4px;">
+                    <span>Summary:</span>
+                    <select class="settings-input" style="padding: 2px 6px; font-size: 11px; height: auto;" onchange="onTemplateSheetMappingChanged(${idx}, 'summary_sheet', this.value)">
+                      ${summaryOptions}
+                    </select>
+                  </label>
+                ` : ""}
+              </div>
+            </div>
+          `;
+        }
+      }
+
       return `
         <div style="background: var(--surface-elevated); border: 1px solid ${isConfirmed ? "var(--accent-emerald)" : "var(--accent-amber)"}; border-radius: var(--radius-md); padding: 12px; margin-bottom: 8px;">
           <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
@@ -472,6 +512,7 @@ function renderInspectedFilesList() {
                 ${item.diagnostic_hints ? item.diagnostic_hints.map((h) => `<div style="color: var(--text-muted); font-size: 11px;">💡 ${escapeHTML(h)}</div>`).join("") : ""}
                 ${item.error ? `<div style="color: var(--accent-red, #ef4444); font-size: 11px;">❌ ${escapeHTML(item.error)}</div>` : ""}
               </div>
+              ${sheetMappingHTML}
             </div>
 
             <!-- Role Selector & Actions -->
@@ -501,6 +542,19 @@ function renderInspectedFilesList() {
     .join("");
 }
 
+function onTemplateSheetMappingChanged(index, key, value) {
+  if (inspectedTemplateSetFiles[index]) {
+    if (!inspectedTemplateSetFiles[index].sheet_mapping) {
+      const disc = inspectedTemplateSetFiles[index].discovered_structures || {};
+      inspectedTemplateSetFiles[index].sheet_mapping = {
+        roster_sheet: (disc.roster_candidates || [])[0] || "",
+        summary_sheet: (disc.summary_candidates || [])[0] || "",
+      };
+    }
+    inspectedTemplateSetFiles[index].sheet_mapping[key] = value;
+  }
+}
+
 async function saveTemplateSetFromModal() {
   const nameInput = document.getElementById("templateSetNameInput");
   const descInput = document.getElementById("templateSetDescInput");
@@ -518,14 +572,22 @@ async function saveTemplateSetFromModal() {
   // Filter valid confirmed assignments
   const assignments = inspectedTemplateSetFiles
     .filter((f) => f.role && f.file_path)
-    .map((f) => ({
-      role: f.role,
-      file_path: f.file_path,
-      display_metadata: {
-        original_filename: f.file_name,
-        structural_evidence: f.structural_evidence || [],
-      },
-    }));
+    .map((f) => {
+      const disc = f.discovered_structures || {};
+      const defaultMapping = (disc.roster_candidates && disc.roster_candidates.length > 0) ? {
+        roster_sheet: disc.roster_candidates[0] || "",
+        summary_sheet: (disc.summary_candidates || [])[0] || "",
+      } : {};
+      return {
+        role: f.role,
+        file_path: f.file_path,
+        display_metadata: {
+          original_filename: f.file_name,
+          structural_evidence: f.structural_evidence || [],
+          sheet_mapping: f.sheet_mapping || defaultMapping,
+        },
+      };
+    });
 
   const setId = currentEditingTemplateSet || displayName.toLowerCase().replace(/[^a-z0-9_-]/g, "_");
 
@@ -564,5 +626,6 @@ window.openEditTemplateSetModal = openEditTemplateSetModal;
 window.closeTemplateSetEditorModal = closeTemplateSetEditorModal;
 window.browseTemplateSetFilesFromUI = browseTemplateSetFilesFromUI;
 window.onTemplateFileRoleChanged = onTemplateFileRoleChanged;
+window.onTemplateSheetMappingChanged = onTemplateSheetMappingChanged;
 window.removeInspectedFile = removeInspectedFile;
 window.saveTemplateSetFromModal = saveTemplateSetFromModal;

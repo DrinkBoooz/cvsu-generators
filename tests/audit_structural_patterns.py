@@ -78,7 +78,8 @@ AUDIT_RULES: List[Tuple[str, str, str]] = [
     (r"(?:elif|if)\s+(?:b_refs_a|a_refs_b|references_primary)\b", "direct-dependency-primary-authority-anti-pattern", "Direct formula dependency alone used as primary role authority without student roster identity topology"),
     (r"unverified_top\s*=\s*\[\s*s\s*for\s*s\s*in\s*top_meta_candidates\s*if\s*s\s*not\s*in", "metadata-primary-veto", "Metadata density score used to veto physically valid candidates"),
     (r"candidate_rosters\s*=\s*\[\s*s\s*for\s*s\s*in\s*candidate_rosters\s*if\s*roster_scores\[s\]", "metadata-candidate-pruning", "Metadata density score used to prune candidate rosters before physical verification"),
-    (r"(?:manual_first_row|manual_name_col|manual_id_col)\s*=\s*", "manual-coordinate-injection", "Manual coordinate injection instead of physical discovery and user confirmation"),
+    (r"(?:roster_scores\s*=|roster_scores\[|top_meta\s*=\s*\[)", "metadata-tie-breaking", "Metadata density score used for tie-breaking or candidate ranking"),
+    (r"(?:manual_first_row|manual_name_col|manual_id_col|manual_row|manual_col)\s*=\s*", "manual-coordinate-injection", "Manual coordinate injection instead of physical discovery and user confirmation"),
 ]
 
 
@@ -87,6 +88,12 @@ def classify_finding(rel_path: str, line_num: int, label: str, snippet: str) -> 
     Classifies a raw finding into Category A, B, C, D, or E.
     Returns (Category, Justification).
     """
+    # Category E: Metadata density score used for tie-breaking or candidate ranking
+    if label == "metadata-tie-breaking":
+        if "template_inspector.py" in rel_path or "template_role_detector.py" in rel_path or "detector" in rel_path:
+            return "E", "Prohibited metadata density score used for tie-breaking or candidate ranking"
+        return "D", "Legitimate scoring"
+
     # Category E: Direct formula dependency alone used as primary role authority
     if label == "direct-dependency-primary-authority-anti-pattern":
         if "template_inspector.py" in rel_path or "template_role_detector.py" in rel_path or "detector" in rel_path:

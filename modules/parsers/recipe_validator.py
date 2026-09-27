@@ -940,6 +940,12 @@ class RecipeValidator:
         if id_col is None:
             raise TemplateError("Roster binding requires id_col")
 
+        if name_col is not None and id_col is not None and name_col == id_col:
+            raise TemplateError("Roster name_col and id_col cannot bind to the same column")
+        idx_col = roster_data.get("index_col")
+        if idx_col is not None and name_col is not None and name_col == idx_col:
+            raise TemplateError("Roster index_col cannot collide with name_col")
+
         # Grade sheet capacity and structural requirements
         capacity = roster_data.get("capacity_limit")
         if capacity is not None and (not isinstance(capacity, int) or capacity <= 0):
