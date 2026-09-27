@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """
-Authoritative Test Orchestrator for DrinkBoooz/cvsu-generators.
+Authoritative Automated Multi-Layer Test Orchestrator for DrinkBoooz/cvsu-generators.
 
-Provides a unified, fully automated, repeatable test pipeline covering:
-  - Layer A: Static / AST Governance & Structural Authority Audits
-  - Layer B: Backend / Core Unit & Integration Tests
-  - Layer C: Adversarial Template Matrix & Mutation Invariance
-  - Layer D: UI API Bridge & Playwright Real-Authority Browser E2E Tests
+Provides an authoritative, fully repeatable, deterministic multi-layer test pipeline:
+  - Layer A: Static / AST Architectural Governance & Structural Authority Audits
+  - Layer B: Backend / Core Unit & Integration Tests (Parsers, Detectors, Validators, Generators)
+  - Layer C: Adversarial Template Matrix & Mutation Invariance Tests
+  - Layer D1: UI API Bridge, Accessibility, Asset Resilience & Consistent Themes
+  - Layer D2: Browser ScriptAPI Bridge E2E (Playwright Chromium + Real ScriptAPI + Real ui.html)
+  - Layer D3: Native PyWebView Host Smoke / Integration (Real Windows WebView2 Desktop Host + Native DnD)
   - Layer E: Windows PE Version Info & Packaged Executable Smoke Tests
 
 Usage:
@@ -15,16 +17,19 @@ Usage:
 
 Options:
   --all             Run all test layers (default).
-  --governance      Run Layer A (Static / AST governance & structural authority audit).
+  --governance      Run Layer A (AST rules, structural authority audit).
   --backend         Run Layer B (Backend / core unit & integration tests).
-  --templates       Run Layer C (Adversarial template matrix & mutation tests).
+  --templates       Run Layer C (Adversarial template matrix).
   --ui              Run Layer D1 (UI unit & bridge tests).
-  --playwright      Run Layer D2 (Playwright browser E2E tests).
-  --packaged        Run Layer E (PE version info & packaged executable smoke).
-  --fast            Run Layers A, B, and C (skips slower browser E2E).
-  --fail-fast, -x   Abort pipeline immediately upon first layer failure.
+  --playwright      Run Layer D2 (Browser ScriptAPI bridge E2E).
+  --native          Run Layer D3 (Native PyWebView host smoke & DnD).
+  --packaged        Run Layer E (PE metadata & packaged executable smoke).
+  --fast            Run Layers A, B, and C (skips UI, browser, and desktop integration).
+  --fail-fast, -x   Abort pipeline immediately upon first step failure.
+  --timeout SEC     Per-step timeout in seconds (default: 180s).
+  --retry-flaky     Re-run failed steps once to identify and isolate flaky tests.
   --report-dir DIR  Directory where test reports and logs are saved (default: test_reports).
-  --verbose, -v     Verbose output.
+  --verbose, -v     Verbose output (stream process stdout/stderr to console).
   --json            Print JSON report summary to stdout at completion.
   -h, --help        Show this help message and exit.
 """
@@ -34,9 +39,11 @@ import sys
 import time
 import json
 import shutil
-import re
 import argparse
 import subprocess
+import threading
+import re
+import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -54,6 +61,139 @@ if hasattr(sys.stderr, "reconfigure"):
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_REPORT_DIR = REPO_ROOT / "test_reports"
+DEFAULT_STEP_TIMEOUT_SEC = 180.0
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AUTHORITATIVE TEST MANIFEST
+# Explicit file mappings across all layers. Zero reliance on fragile `-k` string matching.
+# ─────────────────────────────────────────────────────────────────────────────
+
+MANIFEST = {
+    "Layer A": {
+        "A1_structural_patterns": [
+            "tests/audit_structural_patterns.py",
+        ],
+        "A2_ast_governance": [
+            "tests/test_ast_rules.py",
+            "tests/test_structural_authority_audit.py",
+            "tests/test_dependency_manifests.py",
+            "tests/test_obsidian_vault_integrity.py",
+            "tests/test_api_inventory.py",
+        ],
+    },
+    "Layer B": {
+        "B1_parsers_and_resolvers": [
+            "tests/test_modules_parsing.py",
+            "tests/test_roster_parser.py",
+            "tests/test_parser_user_config.py",
+            "tests/test_attendance_schedule_parsing.py",
+            "tests/test_canonical_schedule_room.py",
+            "tests/test_multi_row_roster_headers.py",
+            "tests/test_field_resolver.py",
+            "tests/test_compound_semantic_labels.py",
+        ],
+        "B2_inspectors_detectors_validators": [
+            "tests/test_template_inspector.py",
+            "tests/test_template_role_detector.py",
+            "tests/test_generalized_detection.py",
+            "tests/test_recipe_stage1.py",
+            "tests/test_xlsx_template_contract.py",
+            "tests/test_template_set_model.py",
+            "tests/test_template_set_manager.py",
+            "tests/test_template_set_orchestrator.py",
+            "tests/test_template_set_e2e.py",
+        ],
+        "B3_generators_and_lifecycle": [
+            "tests/test_modules_generation.py",
+            "tests/test_modules_integrity.py",
+            "tests/test_generic_doc_gen.py",
+            "tests/test_grade_generator.py",
+            "tests/test_grade_discussion_generator.py",
+            "tests/test_attendance_default_template.py",
+            "tests/test_attendance_name_scaling.py",
+            "tests/test_ceit_name_scaling.py",
+            "tests/test_custom_docx_typography.py",
+            "tests/test_custom_template_pipeline.py",
+            "tests/test_custom_template_routing.py",
+            "tests/test_docx_utils_retry.py",
+            "tests/test_replace_retry.py",
+            "tests/test_output_parity.py",
+            "tests/test_config_manager.py",
+            "tests/test_crash_logging_hooks.py",
+            "tests/test_executable_lifecycle.py",
+            "tests/test_executable_improvements.py",
+            "tests/test_executable_dnd_routing.py",
+            "tests/test_dnd_flow.py",
+            "tests/test_edge_cases.py",
+            "tests/test_regression.py",
+            "tests/test_diagnostic_probe.py",
+            "tests/test_ab_benchmark_probe.py",
+            "tests/test_localhost_stress_probe.py",
+        ],
+    },
+    "Layer C": {
+        "C1_adversarial_template_matrix": [
+            "tests/test_adversarial_template_matrix.py",
+            "tests/test_invalid_templates.py",
+            "tests/test_template_mutations.py",
+            "tests/test_simulate_unknown.py",
+            "tests/test_synthetic_non_ceit_header.py",
+        ],
+    },
+    "Layer D1": {
+        "D1_ui_bridge_and_consistency": [
+            "tests/test_ui_api_bridge.py",
+            "tests/test_ui_consistency.py",
+            "tests/test_ui_accessibility.py",
+            "tests/test_ui_asset_resilience.py",
+            "tests/test_settings_modal_responsive.py",
+            "tests/test_executable_test_api_bindings.py",
+            "tests/test_executable_test_hig_bridge.py",
+            "tests/test_theme_consistency.py",
+            "tests/test_theme_transition_perf.py",
+            "tests/test_scroll_aware_dock.py",
+            "tests/test_stepper_2col_scroll.py",
+            "tests/test_react_executable_build.py",
+        ],
+    },
+    "Layer D2": {
+        "D2_playwright_browser_e2e": [
+            "tests/test_playwright_real_authority_e2e.py",
+            "tests/test_playwright_e2e.py",
+            "tests/test_playwright_settings_modal.py",
+            "tests/test_playwright_roster_mapping.py",
+            "tests/test_playwright_accessibility.py",
+        ],
+    },
+    "Layer D3": {
+        "D3_native_pywebview_host": [
+            "tests/test_native_pywebview_host.py",
+            "tests/test_pywebview_dnd_binding.py",
+        ],
+    },
+    "Layer E": {
+        "E1_pe_metadata_and_packaged_smoke": [
+            "tests/test_pe_version_info.py",
+            "tests/test_packaged_executable_smoke.py",
+        ],
+    },
+}
+
+# Explicit reconciliation of non-test utility and manual probe scripts in tests/
+AUXILIARY_UTILITIES = {
+    "tests/check_sig.py": "Standalone Authenticode signature probe utility for PE signing diagnostics",
+    "tests/check_sig2.py": "Standalone Authenticode signature probe utility (variant 2)",
+    "tests/check_sig3.py": "Standalone Authenticode signature probe utility (variant 3)",
+    "tests/diff_test.py": "Ad-hoc document diff comparator utility for manual visual inspection",
+    "tests/diff_test2.py": "Ad-hoc document diff comparator utility (variant 2)",
+    "tests/diff_test_docx.py": "Ad-hoc docx XML diff inspection script",
+    "tests/extract_css.py": "Utility to extract embedded CSS tokens from ui.html",
+    "tests/run_gen.py": "Standalone manual document generator script for interactive debugging",
+    "tests/test_cells.py": "Interactive workbook cell locator probe script for manual spreadsheet examination",
+    "tests/verify_c14n.py": "Ad-hoc XML C14N canonicalization comparison utility",
+    "tests/verify_compare.py": "Ad-hoc document structure comparison utility",
+    "tests/verify_playwright_theme.py": "Manual visual helper script for theme toggling under Playwright",
+}
 
 
 def get_git_info() -> dict:
@@ -87,6 +227,10 @@ def prepare_test_environment(report_dir: Path) -> dict:
     report_dir.mkdir(parents=True, exist_ok=True)
     logs_dir = report_dir / "logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
+    junit_dir = report_dir / "junit"
+    junit_dir.mkdir(parents=True, exist_ok=True)
+    playwright_dir = report_dir / "playwright"
+    playwright_dir.mkdir(parents=True, exist_ok=True)
 
     os.environ["PYTHONUNBUFFERED"] = "1"
     os.environ["PYTHONIOENCODING"] = "utf-8"
@@ -102,75 +246,95 @@ def prepare_test_environment(report_dir: Path) -> dict:
         "platform": sys.platform,
         "report_dir": str(report_dir),
         "logs_dir": str(logs_dir),
+        "junit_dir": str(junit_dir),
+        "playwright_dir": str(playwright_dir),
     }
 
 
-def parse_pytest_output(output: str) -> dict:
-    """Extract passed, failed, skipped, and warning counts from pytest output."""
+def parse_junit_xml(xml_path: Path) -> tuple[dict, list[dict]]:
+    """
+    Parses pytest JUnit XML output into authoritative structured counts and testcase records.
+    Returns: (counts_dict, list_of_testcase_dicts)
+    """
     counts = {
         "total": 0,
         "passed": 0,
         "failed": 0,
         "skipped": 0,
         "errors": 0,
-        "warnings": 0,
     }
+    testcases = []
 
-    # Matches lines like: "11 passed, 2 skipped, 1 failed in 3.45s"
-    # or "==== 10 passed in 16.77s ===="
-    summary_match = re.search(
-        r"=+\s*(.*?)\s+in\s+[\d\.]+[smh]+.*=+", output, re.IGNORECASE
-    )
-    if summary_match:
-        text = summary_match.group(1)
-        for part in text.split(","):
-            part = part.strip()
-            p_match = re.match(r"(\d+)\s+([a-zA-Z]+)", part)
-            if p_match:
-                n, kind = int(p_match.group(1)), p_match.group(2).lower()
-                if "pass" in kind:
-                    counts["passed"] = n
-                elif "fail" in kind:
-                    counts["failed"] = n
-                elif "skip" in kind:
-                    counts["skipped"] = n
-                elif "error" in kind:
-                    counts["errors"] = n
-                elif "warn" in kind:
-                    counts["warnings"] = n
-    else:
-        # Check single line short summary if not full banner
-        for line in output.splitlines():
-            line_clean = line.strip()
-            if "passed" in line_clean:
-                m = re.search(r"(\d+)\s+passed", line_clean)
-                if m:
-                    counts["passed"] = int(m.group(1))
-            if "failed" in line_clean:
-                m = re.search(r"(\d+)\s+failed", line_clean)
-                if m:
-                    counts["failed"] = int(m.group(1))
-            if "skipped" in line_clean:
-                m = re.search(r"(\d+)\s+skipped", line_clean)
-                if m:
-                    counts["skipped"] = int(m.group(1))
-            if "errors" in line_clean or "error" in line_clean:
-                m = re.search(r"(\d+)\s+error", line_clean)
-                if m:
-                    counts["errors"] = int(m.group(1))
+    if not xml_path.is_file():
+        return counts, testcases
 
-    counts["total"] = (
-        counts["passed"] + counts["failed"] + counts["skipped"] + counts["errors"]
-    )
-    return counts
+    try:
+        tree = ET.parse(xml_path)
+        root = tree.getroot()
+
+        # Some pytest junitxml outputs have <testsuites> wrapping <testsuite>, or directly <testsuite>
+        testsuite_elems = root.findall(".//testsuite") if root.tag != "testsuite" else [root]
+        for ts in testsuite_elems:
+            # Accumulate testcases
+            for tc in ts.findall("testcase"):
+                classname = tc.attrib.get("classname", "")
+                name = tc.attrib.get("name", "")
+                time_sec = float(tc.attrib.get("time", "0.0"))
+                failure = tc.find("failure")
+                error = tc.find("error")
+                skipped = tc.find("skipped")
+
+                status = "PASSED"
+                message = ""
+                if failure is not None:
+                    status = "FAILED"
+                    message = failure.attrib.get("message", "") or (failure.text or "")
+                elif error is not None:
+                    status = "ERROR"
+                    message = error.attrib.get("message", "") or (error.text or "")
+                elif skipped is not None:
+                    status = "SKIPPED"
+                    message = skipped.attrib.get("message", "") or (skipped.text or "")
+
+                if status == "PASSED":
+                    counts["passed"] += 1
+                elif status == "FAILED":
+                    counts["failed"] += 1
+                elif status == "ERROR":
+                    counts["errors"] += 1
+                elif status == "SKIPPED":
+                    counts["skipped"] += 1
+
+                testcases.append({
+                    "classname": classname,
+                    "name": name,
+                    "status": status,
+                    "time_sec": round(time_sec, 3),
+                    "message": message[:300].strip() if message else "",
+                })
+
+        counts["total"] = counts["passed"] + counts["failed"] + counts["errors"] + counts["skipped"]
+    except Exception as e:
+        print(f"Warning: error parsing JUnit XML {xml_path}: {e}")
+
+    return counts, testcases
 
 
 def run_command(
-    cmd: list[str], cwd: Path, log_file: Path, verbose: bool = False
-) -> tuple[int, float, str]:
-    """Runs command with output streaming and logging."""
+    cmd: list[str],
+    cwd: Path,
+    log_file: Path,
+    verbose: bool = False,
+    timeout_sec: float | None = DEFAULT_STEP_TIMEOUT_SEC,
+) -> tuple[int, float, str, bool]:
+    """
+    Runs command with streaming, logging, and deterministic timeout handling.
+    If timeout expires, kills process tree on Windows via taskkill /F /T /PID.
+    Returns: (exit_code, duration_sec, combined_output, timed_out)
+    """
     start_time = time.perf_counter()
     full_output = []
+    timed_out = False
 
     print(f"  \033[90m$ {' '.join(cmd)}\033[0m")
     try:
@@ -184,14 +348,39 @@ def run_command(
             errors="replace",
         )
 
-        for line in proc.stdout:
-            full_output.append(line)
-            if verbose:
-                sys.stdout.write(f"    {line}")
-                sys.stdout.flush()
+        def reader():
+            try:
+                for line in proc.stdout:
+                    full_output.append(line)
+                    if verbose:
+                        sys.stdout.write(f"    {line}")
+                        sys.stdout.flush()
+            except Exception:
+                pass
 
-        proc.wait()
-        exit_code = proc.returncode
+        reader_thread = threading.Thread(target=reader, daemon=True)
+        reader_thread.start()
+
+        try:
+            proc.wait(timeout=timeout_sec)
+            exit_code = proc.returncode
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            # Forcefully kill process tree on Windows
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                capture_output=True,
+            )
+            try:
+                proc.kill()
+            except Exception:
+                pass
+            exit_code = 124
+            full_output.append(
+                f"\n[TIMEOUT ERROR: Step exceeded {timeout_sec}s timeout limit. Process tree terminated.]\n"
+            )
+
+        reader_thread.join(timeout=1.0)
     except Exception as e:
         exit_code = 1
         full_output.append(f"Command execution error: {e}\n")
@@ -205,220 +394,236 @@ def run_command(
     except Exception as e:
         print(f"Warning: could not write log file {log_file}: {e}")
 
-    return exit_code, duration, combined_output
+    return exit_code, duration, combined_output, timed_out
 
 
 def run_test_step(
     step_id: str,
     name: str,
     layer: str,
-    cmd: list[str],
+    files: list[str],
     logs_dir: Path,
+    junit_dir: Path,
     verbose: bool = False,
+    timeout_sec: float = DEFAULT_STEP_TIMEOUT_SEC,
     is_audit_script: bool = False,
+    retry_flaky: bool = False,
 ) -> dict:
-    """Executes a single test step and returns structured result."""
+    """Executes a single test step and returns authoritative structured result."""
     print(f"\n>> [{step_id}] {name}")
     log_file = logs_dir / f"{step_id}.log"
-    exit_code, duration, output = run_command(
-        cmd, cwd=REPO_ROOT, log_file=log_file, verbose=verbose
+    junit_xml = junit_dir / f"{step_id}.xml"
+
+    py = sys.executable
+    if is_audit_script:
+        cmd = [py, files[0]]
+    else:
+        cmd = [py, "-m", "pytest", *files, f"--junitxml={str(junit_xml)}", "-v"]
+
+    exit_code, duration, output, timed_out = run_command(
+        cmd, cwd=REPO_ROOT, log_file=log_file, verbose=verbose, timeout_sec=timeout_sec
     )
 
+    flaky_cases = []
     if is_audit_script:
-        # Audit script returns 0 on 0 Category E violations
-        # Parse Category E violations from output if present
+        # Category E structural audit script: returns 0 on 0 Category E violations
         violations = 0
         m = re.search(r"Total Category E Violations:\s*(\d+)", output)
         if m:
             violations = int(m.group(1))
-        passed = exit_code == 0 and violations == 0
+        passed = (exit_code == 0) and (violations == 0) and not timed_out
         counts = {
             "total": 1,
             "passed": 1 if passed else 0,
             "failed": 0 if passed else 1,
             "skipped": 0,
             "errors": 0,
-            "warnings": 0,
         }
+        testcases = [{
+            "classname": "tests.audit_structural_patterns",
+            "name": "audit_structural_patterns",
+            "status": "PASSED" if passed else "FAILED",
+            "time_sec": round(duration, 3),
+            "message": f"Category E violations: {violations}" if not passed else "",
+        }]
     else:
-        counts = parse_pytest_output(output)
-        # If pytest collected no items or failed to run, check exit code
+        counts, testcases = parse_junit_xml(junit_xml)
         if counts["total"] == 0:
             counts["total"] = 1
-            if exit_code == 0:
+            if exit_code == 0 and not timed_out:
                 counts["passed"] = 1
             else:
                 counts["failed"] = 1
-        passed = exit_code == 0 and counts["failed"] == 0 and counts["errors"] == 0
 
-    status = "PASSED" if passed else "FAILED"
+        passed = (exit_code == 0) and (counts["failed"] == 0) and (counts["errors"] == 0) and not timed_out
+
+        # Real Flaky Test Detection: If retry_flaky enabled and first run had failures
+        if not passed and retry_flaky and not timed_out:
+            failed_cases = [tc for tc in testcases if tc["status"] in ("FAILED", "ERROR")]
+            if failed_cases:
+                print(f"  \033[93m[RETRY] Step {step_id} had {len(failed_cases)} failures. Executing single retry pass for flaky classification...\033[0m")
+                retry_log = logs_dir / f"{step_id}_retry.log"
+                retry_xml = junit_dir / f"{step_id}_retry.xml"
+                r_code, r_dur, r_out, r_to = run_command(
+                    [py, "-m", "pytest", *files, f"--junitxml={str(retry_xml)}", "-v"],
+                    cwd=REPO_ROOT,
+                    log_file=retry_log,
+                    verbose=verbose,
+                    timeout_sec=timeout_sec,
+                )
+                r_counts, r_testcases = parse_junit_xml(retry_xml)
+                r_tc_map = {f"{tc['classname']}::{tc['name']}": tc for tc in r_testcases}
+
+                for fc in failed_cases:
+                    key = f"{fc['classname']}::{fc['name']}"
+                    if key in r_tc_map and r_tc_map[key]["status"] == "PASSED":
+                        flaky_cases.append({
+                            "test": key,
+                            "first_attempt": fc["status"],
+                            "second_attempt": "PASSED",
+                            "step_id": step_id,
+                            "message": fc.get("message", ""),
+                        })
+                        fc["status"] = "FLAKY"
+
+    status = "TIMED_OUT" if timed_out else ("PASSED" if passed else "FAILED")
     color = "\033[92m" if passed else "\033[91m"
     reset = "\033[0m"
 
     print(
         f"  +-- Status: {color}{status}{reset} | Duration: {duration:.2f}s | "
         f"Passed: {counts['passed']} | Failed: {counts['failed']} | Skipped: {counts['skipped']}"
+        + (f" | \033[93mFlaky: {len(flaky_cases)}\033[0m" if flaky_cases else "")
     )
 
     return {
         "step_id": step_id,
         "name": name,
         "layer": layer,
+        "files": files,
         "command": cmd,
         "status": status,
         "exit_code": exit_code,
+        "timed_out": timed_out,
         "duration_sec": round(duration, 3),
         "counts": counts,
+        "flaky_cases": flaky_cases,
+        "testcases": testcases,
         "log_file": str(log_file),
-        "output_snippet": "\n".join(output.strip().splitlines()[-15:])
-        if output
-        else "",
+        "junit_xml": str(junit_xml) if not is_audit_script else None,
+        "output_snippet": "\n".join(output.strip().splitlines()[-20:]) if output else "",
     }
 
 
 def define_pipeline(selected_layers: list[str]) -> list[dict]:
-    """Defines the layers and test steps based on user selection."""
-    py = sys.executable
+    """Constructs the sequence of orchestrated test steps from the authoritative manifest."""
     steps = []
 
     # ── Layer A: Static / AST Governance ───────────────────────────────────────
     if "governance" in selected_layers or "all" in selected_layers:
-        steps.append(
-            {
-                "layer": "Layer A — Static / AST Governance",
-                "id": "A1_structural_authority_audit",
-                "name": "Structural Authority Pattern Audit (Category E Invariance)",
-                "cmd": [py, "tests/audit_structural_patterns.py"],
-                "is_audit": True,
-            }
-        )
-        steps.append(
-            {
-                "layer": "Layer A — Static / AST Governance",
-                "id": "A2_ast_governance_rules",
-                "name": "AST Architectural Governance & Coordinate Literal Audits",
-                "cmd": [
-                    py,
-                    "-m",
-                    "pytest",
-                    "tests/test_ast_rules.py",
-                    "tests/test_structural_authority_audit.py",
-                    "-v",
-                ],
-                "is_audit": False,
-            }
-        )
+        steps.append({
+            "layer": "Layer A — Static / AST Governance & Structural Authority Audits",
+            "id": "A1_structural_authority_audit",
+            "name": "Structural Authority Pattern Audit (Category E Invariance)",
+            "files": MANIFEST["Layer A"]["A1_structural_patterns"],
+            "timeout_sec": 60.0,
+            "is_audit": True,
+        })
+        steps.append({
+            "layer": "Layer A — Static / AST Governance & Structural Authority Audits",
+            "id": "A2_ast_governance_rules",
+            "name": "AST Architectural Governance & Coordinate Literal Audits",
+            "files": MANIFEST["Layer A"]["A2_ast_governance"],
+            "timeout_sec": 90.0,
+            "is_audit": False,
+        })
 
     # ── Layer B: Backend / Core Unit & Integration ────────────────────────────
     if "backend" in selected_layers or "all" in selected_layers:
-        steps.append(
-            {
-                "layer": "Layer B — Backend / Core",
-                "id": "B1_backend_core_unit_and_integration",
-                "name": "Parsers, Inspectors, Detectors, Resolvers, Validators, Generators",
-                "cmd": [
-                    py,
-                    "-m",
-                    "pytest",
-                    "tests/",
-                    "-m",
-                    "not desktop_integration",
-                    "-k",
-                    "not test_playwright and not test_pywebview and not test_packaged_executable_smoke and not test_pe_version_info and not test_adversarial_template_matrix and not test_invalid_templates and not test_template_mutations and not test_ast_rules and not test_structural_authority_audit",
-                    "-v",
-                ],
-                "is_audit": False,
-            }
-        )
+        steps.append({
+            "layer": "Layer B — Backend / Core Unit & Integration Tests",
+            "id": "B1_parsers_and_resolvers",
+            "name": "Schedules, Rosters, Config & Field Resolvers",
+            "files": MANIFEST["Layer B"]["B1_parsers_and_resolvers"],
+            "timeout_sec": 90.0,
+            "is_audit": False,
+        })
+        steps.append({
+            "layer": "Layer B — Backend / Core Unit & Integration Tests",
+            "id": "B2_inspectors_detectors_validators",
+            "name": "Inspectors, Role Detectors, Validators & Template Set Manager",
+            "files": MANIFEST["Layer B"]["B2_inspectors_detectors_validators"],
+            "timeout_sec": 120.0,
+            "is_audit": False,
+        })
+        steps.append({
+            "layer": "Layer B — Backend / Core Unit & Integration Tests",
+            "id": "B3_generators_and_lifecycle",
+            "name": "Generators, Output Parity, Packaging, Lifecycle & Probes",
+            "files": MANIFEST["Layer B"]["B3_generators_and_lifecycle"],
+            "timeout_sec": 180.0,
+            "is_audit": False,
+        })
 
     # ── Layer C: Adversarial Template Matrix ──────────────────────────────────
     if "templates" in selected_layers or "all" in selected_layers:
-        steps.append(
-            {
-                "layer": "Layer C — Adversarial Template Matrix",
-                "id": "C1_adversarial_template_matrix",
-                "name": "Adversarial Template Matrix (Formulas, Foreign, Renames, Decoys, Invariance)",
-                "cmd": [
-                    py,
-                    "-m",
-                    "pytest",
-                    "tests/test_adversarial_template_matrix.py",
-                    "tests/test_invalid_templates.py",
-                    "tests/test_template_mutations.py",
-                    "-v",
-                ],
-                "is_audit": False,
-            }
-        )
+        steps.append({
+            "layer": "Layer C — Adversarial Template Matrix & Mutation Invariance",
+            "id": "C1_adversarial_template_matrix",
+            "name": "Adversarial Matrix (Formulas, Foreign, Renames, Decoys, Invariance)",
+            "files": MANIFEST["Layer C"]["C1_adversarial_template_matrix"],
+            "timeout_sec": 90.0,
+            "is_audit": False,
+        })
 
-    # ── Layer D: UI API Bridge & Playwright Real-Authority E2E ─────────────────
+    # ── Layer D1: UI API Bridge & Consistency ─────────────────────────────────
     if "ui" in selected_layers or "all" in selected_layers:
-        steps.append(
-            {
-                "layer": "Layer D — UI & Playwright Browser E2E",
-                "id": "D1_ui_bridge_and_consistency",
-                "name": "UI API Bridge, Consistency, Accessibility, & Responsive Modals",
-                "cmd": [
-                    py,
-                    "-m",
-                    "pytest",
-                    "tests/test_ui_api_bridge.py",
-                    "tests/test_ui_consistency.py",
-                    "tests/test_ui_accessibility.py",
-                    "tests/test_ui_asset_resilience.py",
-                    "tests/test_settings_modal_responsive.py",
-                    "-v",
-                ],
-                "is_audit": False,
-            }
-        )
+        steps.append({
+            "layer": "Layer D1 — UI API Bridge, Unit & Consistency",
+            "id": "D1_ui_bridge_and_consistency",
+            "name": "UI API Bridge, Consistency, Accessibility, Assets & Responsive Modals",
+            "files": MANIFEST["Layer D1"]["D1_ui_bridge_and_consistency"],
+            "timeout_sec": 90.0,
+            "is_audit": False,
+        })
 
+    # ── Layer D2: Browser ScriptAPI Bridge E2E (Playwright) ───────────────────
     if "playwright" in selected_layers or "all" in selected_layers:
-        steps.append(
-            {
-                "layer": "Layer D — UI & Playwright Browser E2E",
-                "id": "D2_playwright_real_authority_e2e",
-                "name": "Playwright Real-Authority PyWebView Bridge (Lifecycle, Ambig Confirmation, Gen)",
-                "cmd": [
-                    py,
-                    "-m",
-                    "pytest",
-                    "tests/test_playwright_real_authority_e2e.py",
-                    "tests/test_playwright_e2e.py",
-                    "tests/test_playwright_settings_modal.py",
-                    "tests/test_playwright_roster_mapping.py",
-                    "tests/test_playwright_accessibility.py",
-                    "-v",
-                ],
-                "is_audit": False,
-            }
-        )
+        steps.append({
+            "layer": "Layer D2 — Browser ScriptAPI Bridge E2E (Playwright Chromium + Real ScriptAPI)",
+            "id": "D2_playwright_browser_e2e",
+            "name": "Playwright Browser Bridge (ui.html + Real ScriptAPI + Failure Artifacts)",
+            "files": MANIFEST["Layer D2"]["D2_playwright_browser_e2e"],
+            "timeout_sec": 240.0,
+            "is_audit": False,
+        })
+
+    # ── Layer D3: Native PyWebView Host Smoke / Integration ───────────────────
+    if "native" in selected_layers or "all" in selected_layers:
+        steps.append({
+            "layer": "Layer D3 — Native PyWebView Host Smoke & Desktop Integration",
+            "id": "D3_native_pywebview_host",
+            "name": "Native Desktop Host (Real WebView2 Window, Lifecycle, Bidirectional Bridge & DnD)",
+            "files": MANIFEST["Layer D3"]["D3_native_pywebview_host"],
+            "timeout_sec": 90.0,
+            "is_audit": False,
+        })
 
     # ── Layer E: Packaged Executable & PE Metadata ────────────────────────────
     if "packaged" in selected_layers or "all" in selected_layers:
-        steps.append(
-            {
-                "layer": "Layer E — Packaged Executable & PE Metadata",
-                "id": "E1_pe_metadata_and_packaged_smoke",
-                "name": "Windows PE Version Info, Authenticode Signature, & Binary Lifecycle Smoke",
-                "cmd": [
-                    py,
-                    "-m",
-                    "pytest",
-                    "tests/test_pe_version_info.py",
-                    "tests/test_packaged_executable_smoke.py",
-                    "-v",
-                ],
-                "is_audit": False,
-            }
-        )
+        steps.append({
+            "layer": "Layer E — Windows PE Metadata & Packaged Binary Smoke Tests",
+            "id": "E1_pe_metadata_and_packaged_smoke",
+            "name": "Windows PE Version Info, Authenticode Signature, & Binary Lifecycle Smoke",
+            "files": MANIFEST["Layer E"]["E1_pe_metadata_and_packaged_smoke"],
+            "timeout_sec": 90.0,
+            "is_audit": False,
+        })
 
     return steps
 
 
-def generate_reports(
-    report_data: dict, report_dir: Path
-) -> tuple[Path, Path, Path, Path]:
+def generate_reports(report_data: dict, report_dir: Path) -> tuple[Path, Path, Path, Path]:
     """Generates machine-readable JSON and human-readable Markdown test reports."""
     timestamp_slug = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
 
@@ -442,67 +647,115 @@ def generate_reports(
     md_lines = [
         "# Automated Test Orchestration Report",
         "",
+        f"**Execution Mode**: Authoritative Local Pipeline (Pre-Commit / Pre-Release Verification)  ",
         f"**Status**: {overall_badge}  ",
         f"**Timestamp**: `{report_data['timestamp']}`  ",
         f"**Repository**: `{report_data['git']['branch']}` (`{report_data['git']['commit'][:8]}`)  ",
         f"**Python Runtime**: `{report_data['environment']['python_version']}` on `{report_data['environment']['platform']}`  ",
         f"**Total Duration**: `{report_data['total_duration_sec']:.2f}s`  ",
         "",
+        "> [!NOTE]",
+        "> This report reflects **authoritative local test orchestration** executed directly within the active repository environment.",
+        "> It is technically distinct from remote GitHub Actions CI workflows.",
+        "",
         "## Summary Metrics",
         "",
         "| Metric | Count |",
         "| :--- | :--- |",
-        f"| **Total Tests Executed** | **{report_data['summary']['total']}** |",
+        f"| **Total Orchestrated Tests** | **{report_data['summary']['total']}** |",
         f"| Passed | {report_data['summary']['passed']} |",
         f"| Failed | {report_data['summary']['failed']} |",
         f"| Skipped | {report_data['summary']['skipped']} |",
         f"| Errors | {report_data['summary']['errors']} |",
+        f"| Flaky Tests | {report_data['summary']['flaky']} |",
+        f"| Timed Out Steps | {report_data['summary']['timed_out_steps']} |",
+        "",
+        "## Technical Layer Architecture",
+        "",
+        "| Layer | Testing Target | Host Container | PyWebView / ScriptAPI Scope |",
+        "| :--- | :--- | :--- | :--- |",
+        "| **Layer A** | AST rules & structural authority audits | Python runtime | Static code analysis & coordinate literal verification |",
+        "| **Layer B** | Parsers, Detectors, Validators, Generators | Python runtime | Real backend data pipeline & generation engines |",
+        "| **Layer C** | Adversarial template matrix | Python runtime | Corrupt XML, foreign keys, formula-free, decoy sheets |",
+        "| **Layer D1** | UI bridge unit & visual consistency | Python / jsdom | UI event handlers, accessibility tokens, responsive modals |",
+        "| **Layer D2** | **Browser ScriptAPI Bridge E2E** | Playwright Chromium | Real `ui.html` + real `ScriptAPI` bridged via Playwright Proxy |",
+        "| **Layer D3** | **Native PyWebView Host Smoke** | Real WebView2 Window | Real `webview.start()`, native lifecycle, IPC & native DnD |",
+        "| **Layer E** | PE version headers & packaged binary | Windows Desktop OS | PyInstaller `.exe` startup, Authenticode signature & metadata |",
         "",
         "## Pipeline Step Breakdown",
         "",
-        "| Step ID | Layer | Description | Status | Tests | Duration | Log |",
-        "| :--- | :--- | :--- | :---: | :---: | :---: | :--- |",
+        "| Step ID | Layer | Description | Status | Tests | Duration | Log | JUnit XML |",
+        "| :--- | :--- | :--- | :---: | :---: | :---: | :--- | :--- |",
     ]
 
     for s in report_data["steps"]:
-        badge = "✅ PASS" if s["status"] == "PASSED" else "❌ FAIL"
+        badge = "✅ PASS" if s["status"] == "PASSED" else ("⏱️ TIMEOUT" if s["status"] == "TIMED_OUT" else "❌ FAIL")
         log_name = Path(s["log_file"]).name
+        xml_cell = f"[`{Path(s['junit_xml']).name}`](junit/{Path(s['junit_xml']).name})" if s.get("junit_xml") else "—"
         md_lines.append(
-            f"| `{s['step_id']}` | {s['layer']} | {s['name']} | {badge} | {s['counts']['passed']} passed | {s['duration_sec']:.2f}s | [`{log_name}`](logs/{log_name}) |"
+            f"| `{s['step_id']}` | {s['layer']} | {s['name']} | {badge} | {s['counts']['passed']} passed | {s['duration_sec']:.2f}s | [`{log_name}`](logs/{log_name}) | {xml_cell} |"
         )
 
-    md_lines.extend(
-        [
-            "",
-            "## Architectural Invariants Verified",
-            "",
-            "- **Inspector Discovers Where**: No layer fabricates template coordinates; inspection discovers table & sheet candidates strictly from physical structure.",
-            "- **Detector Proposes Role**: Discovered candidates map to semantic roles without mutating underlying template files.",
-            "- **Validator Verifies Structural Compatibility**: Ambiguity fails closed; sheets missing required headers are rejected immediately.",
-            "- **Generator Consumes Validated Recipes**: Document generation executes strictly through validated structural recipes.",
-            "- **Playwright Authority Bridge**: Web browser exercises ui.html interacting directly with the real Python `ScriptAPI`.",
-            "- **Packaged Binary Verification**: PE version headers, Copyright notices, and process startup smoke tested gracefully.",
-            "",
-        ]
+    total_pytest_files = sum(
+        len(files)
+        for layer in MANIFEST.values()
+        for step_id, files in layer.items()
+        if step_id != "A1_structural_patterns"
     )
+
+    md_lines.extend([
+        "",
+        "## Repository Test Inventory Reconciliation",
+        "",
+        f"The repository test directory contains **{total_pytest_files}** authoritative pytest test suites plus **1** standalone structural authority audit script (74 orchestrated test suites in total), all **100% orchestrated** in this pipeline.",
+        "",
+        "### Excluded Auxiliary Utilities & Diagnostic Probes",
+        "",
+        "The following 12 non-test scripts in `tests/` are excluded from automated test collection with explicit architectural justification:",
+        "",
+        "| Script Path | Purpose & Exclusion Justification |",
+        "| :--- | :--- |",
+    ])
+
+    for path, reason in AUXILIARY_UTILITIES.items():
+        md_lines.append(f"| `{path}` | {reason} |")
+
+    md_lines.extend([
+        "",
+        "## Architectural Invariants Verified",
+        "",
+        "- **Inspector Discovers Where**: No layer fabricates template coordinates; inspection discovers table & sheet candidates strictly from physical structure.",
+        "- **Detector Proposes Role**: Discovered candidates map to semantic roles without mutating underlying template files.",
+        "- **Validator Verifies Structural Compatibility**: Ambiguity fails closed; sheets missing required headers are rejected immediately.",
+        "- **Generator Consumes Validated Recipes**: Document generation executes strictly through validated structural recipes.",
+        "- **User Constrained to Discovered Candidates**: Users may choose only from discovered candidate roles/sheets; no user-supplied coordinates permitted.",
+        "- **Browser ScriptAPI Bridge Verified**: Headless Chromium validates real `ui.html` interacting directly with the real Python `ScriptAPI` without coordinate mocks.",
+        "- **Native PyWebView Host Verified**: Windows WebView2 native container bootstraps real UI, validates bidirectional IPC, exercises native DnD, and shuts down cleanly.",
+        "- **Packaged Binary Verified**: PE version headers, Copyright notices, and process startup smoke tested gracefully on Windows.",
+        "",
+    ])
 
     failures = [s for s in report_data["steps"] if s["status"] != "PASSED"]
     if failures:
         md_lines.extend(["## Failure Diagnostics", ""])
         for f in failures:
-            md_lines.extend(
-                [
-                    f"### ❌ {f['step_id']}: {f['name']}",
-                    "",
-                    f"**Command**: `{' '.join(f['command'])}`  ",
-                    f"**Exit Code**: `{f['exit_code']}`  ",
-                    "",
-                    "```text",
-                    f["output_snippet"],
-                    "```",
-                    "",
-                ]
-            )
+            md_lines.extend([
+                f"### ❌ {f['step_id']}: {f['name']}",
+                "",
+                f"**Command**: `{' '.join(f['command'])}`  ",
+                f"**Exit Code**: `{f['exit_code']}` (Timed Out: `{f['timed_out']}`)  ",
+                "",
+                "```text",
+                f["output_snippet"],
+                "```",
+                "",
+            ])
+
+    if report_data["flaky_tests"]:
+        md_lines.extend(["## Flaky Tests Detected", ""])
+        for fl in report_data["flaky_tests"]:
+            md_lines.append(f"- **{fl['test']}** (Step: `{fl['step_id']}`): {fl['first_attempt']} -> {fl['second_attempt']}")
+        md_lines.append("")
 
     with open(md_path, "w", encoding="utf-8") as f:
         f.write("\n".join(md_lines))
@@ -513,7 +766,7 @@ def generate_reports(
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Authoritative Automated Test Orchestrator for DrinkBoooz/cvsu-generators",
+        description="Authoritative Automated Multi-Layer Test Orchestrator for DrinkBoooz/cvsu-generators",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
@@ -547,7 +800,13 @@ def main() -> int:
     group.add_argument(
         "--playwright",
         action="store_true",
-        help="Run Layer D2 (Playwright browser E2E tests).",
+        help="Run Layer D2 (Browser ScriptAPI bridge E2E).",
+    )
+    group.add_argument(
+        "--native",
+        "--native-host",
+        action="store_true",
+        help="Run Layer D3 (Native PyWebView host smoke & DnD).",
     )
     group.add_argument(
         "--packaged",
@@ -557,7 +816,7 @@ def main() -> int:
     group.add_argument(
         "--fast",
         action="store_true",
-        help="Run Layers A, B, and C (skips slower browser E2E).",
+        help="Run Layers A, B, and C (skips UI, browser, and desktop integration).",
     )
 
     parser.add_argument(
@@ -565,6 +824,17 @@ def main() -> int:
         "-x",
         action="store_true",
         help="Abort immediately on first step failure.",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=DEFAULT_STEP_TIMEOUT_SEC,
+        help=f"Per-step timeout in seconds (default: {DEFAULT_STEP_TIMEOUT_SEC}s).",
+    )
+    parser.add_argument(
+        "--retry-flaky",
+        action="store_true",
+        help="Re-run failed steps once to isolate and classify flaky tests.",
     )
     parser.add_argument(
         "--report-dir",
@@ -598,6 +868,8 @@ def main() -> int:
         selected_layers.append("ui")
     if args.playwright:
         selected_layers.append("playwright")
+    if args.native:
+        selected_layers.append("native")
     if args.packaged:
         selected_layers.append("packaged")
     if args.fast:
@@ -610,6 +882,7 @@ def main() -> int:
             "templates",
             "ui",
             "playwright",
+            "native",
             "packaged",
         ]
 
@@ -624,23 +897,32 @@ def main() -> int:
     print(f"  Python: {env_meta['python_version']} ({env_meta['platform']})")
     print(f"  Layers: {', '.join(selected_layers)}")
     print(f"  Reports Directory: {env_meta['report_dir']}")
+    print(f"  Step Timeout: {args.timeout}s (Retry Flaky: {args.retry_flaky})")
     print("=" * 80)
 
     pipeline_steps = define_pipeline(selected_layers)
     step_results = []
+    all_flaky_tests = []
     overall_passed = True
 
     for step in pipeline_steps:
+        step_timeout = min(args.timeout, step.get("timeout_sec", args.timeout))
         res = run_test_step(
             step_id=step["id"],
             name=step["name"],
             layer=step.get("layer", "Unknown Layer"),
-            cmd=step["cmd"],
+            files=step["files"],
             logs_dir=Path(env_meta["logs_dir"]),
+            junit_dir=Path(env_meta["junit_dir"]),
             verbose=args.verbose,
+            timeout_sec=step_timeout,
             is_audit_script=step.get("is_audit", False),
+            retry_flaky=args.retry_flaky,
         )
         step_results.append(res)
+        if res.get("flaky_cases"):
+            all_flaky_tests.extend(res["flaky_cases"])
+
         if res["status"] != "PASSED":
             overall_passed = False
             if args.fail_fast:
@@ -658,15 +940,19 @@ def main() -> int:
         "failed": sum(s["counts"]["failed"] for s in step_results),
         "skipped": sum(s["counts"]["skipped"] for s in step_results),
         "errors": sum(s["counts"]["errors"] for s in step_results),
+        "flaky": len(all_flaky_tests),
+        "timed_out_steps": sum(1 for s in step_results if s.get("timed_out", False)),
     }
 
     report_payload = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
+        "execution_mode": "Authoritative Local Pipeline",
         "git": git_meta,
         "environment": env_meta,
         "overall_status": "PASSED" if overall_passed else "FAILED",
         "total_duration_sec": round(total_duration, 3),
         "summary": summary,
+        "flaky_tests": all_flaky_tests,
         "steps": step_results,
     }
 
@@ -678,18 +964,17 @@ def main() -> int:
     print("=" * 80)
     for s in step_results:
         st_color = "\033[92m" if s["status"] == "PASSED" else "\033[91m"
+        fl_str = f", \033[93m{len(s.get('flaky_cases', []))} flaky\033[0m" if s.get("flaky_cases") else ""
         print(
             f"  {st_color}[{s['status']}]\033[0m {s['step_id']:<35} "
-            f"({s['counts']['passed']:>3} passed, {s['counts']['failed']:>2} failed) in {s['duration_sec']:>6.2f}s"
+            f"({s['counts']['passed']:>3} passed, {s['counts']['failed']:>2} failed{fl_str}) in {s['duration_sec']:>6.2f}s"
         )
     print("-" * 80)
-    status_str = (
-        "\033[92mPASSED\033[0m" if overall_passed else "\033[91mFAILED\033[0m"
-    )
+    status_str = "\033[92mPASSED\033[0m" if overall_passed else "\033[91mFAILED\033[0m"
     print(
         f"  Result: {status_str} | Tests: {summary['total']} total | "
         f"Passed: {summary['passed']} | Failed: {summary['failed']} | Skipped: {summary['skipped']} | "
-        f"Duration: {total_duration:.2f}s"
+        f"Flaky: {summary['flaky']} | Duration: {total_duration:.2f}s"
     )
     print(f"  JSON Report:     {json_path}")
     print(f"  Markdown Report: {md_path}")

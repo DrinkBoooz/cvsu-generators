@@ -1,13 +1,32 @@
 """
-Comprehensive Real-Authority Playwright E2E Test Suite.
-Bridges ui.html in Chromium directly to the REAL Python ScriptAPI instance.
+Browser-Hosted ScriptAPI Bridge E2E Test Suite (Playwright Chromium).
+
+IMPORTANT ARCHITECTURAL DISTINCTION:
+  This suite tests ui.html hosted inside Playwright Chromium with a JavaScript
+  `window.pywebview.api` Proxy bridged directly to the real Python `ScriptAPI`.
+  It provides comprehensive end-to-end integration of the REAL Python backend
+  (parsers, inspectors, role detectors, recipe validators, generators)
+  with the REAL frontend UI.
+
+  This is DISTINCT from the Native PyWebView Host Smoke/Integration suite
+  (`tests/test_native_pywebview_host.py`), which launches the real Windows
+  WebView2 desktop container and native DnD event loop.
+
 Verifies:
-  1. Application startup, responsive controls, theme toggle, and settings navigation.
-  2. Template set creation, physical template inspection, and candidate discovery cards.
+  1. Application startup, release badge synchronization, dark/light theme toggle.
+  2. Template set creation, physical template inspection, and candidate cards discovery.
   3. XLSX ambiguous template manual sheet confirmation dropdowns (discovered candidates only).
   4. Blank formula-free template manual sheet confirmation and validation.
-  5. Invalid template rejection and fail-closed behavior.
-  6. Real end-to-end document generation workflow and generated file verification.
+  5. Invalid/corrupt template rejection and fail-closed UI behavior.
+
+Failure Artifacts:
+  If any test fails, complete failure artifacts are deterministically written to:
+    test_reports/playwright/<test-name>/
+      - screenshot.png
+      - trace.zip
+      - video.webm
+      - console.log
+      - page_errors.log
 """
 
 import os
@@ -17,6 +36,8 @@ import shutil
 import pytest
 import openpyxl
 import docx
+from pathlib import Path
+from contextlib import contextmanager
 from playwright.sync_api import sync_playwright, expect
 
 from executable_test.main import ScriptAPI
@@ -33,15 +54,101 @@ UI_HTML_PATH = os.path.join(WORKSPACE_DIR, "executable_test", "ui.html")
 FILE_URL = f"file:///{UI_HTML_PATH.replace(os.sep, '/')}"
 
 
+@contextmanager
+def playwright_browser_session(playwright_ctx, api_instance, test_name: str = "playwright_test"):
+    """
+    Launches headless Chromium, bridges window.pywebview.api to the real Python ScriptAPI,
+    and captures complete failure artifacts (screenshot, trace.zip, video.webm, console.log,
+    page_errors.log) into test_reports/playwright/<test-name>/ strictly upon test failure.
+    """
+    artifact_dir = Path(WORKSPACE_DIR) / "test_reports" / "playwright" / test_name
+    temp_video_dir = Path(WORKSPACE_DIR) / "test_reports" / "playwright" / ".temp_videos"
+    temp_video_dir.mkdir(parents=True, exist_ok=True)
+
+    browser = playwright_ctx.chromium.launch(headless=True)
+    context = browser.new_context(
+        record_video_dir=str(temp_video_dir),
+        record_video_size={"width": 1280, "height": 720},
+    )
+    context.tracing.start(screenshots=True, snapshots=True, sources=True)
+    page = context.new_page()
+
+    console_logs = []
+    page_errors = []
+    page.on("console", lambda msg: console_logs.append(f"[{msg.type}] {msg.text}"))
+    page.on("pageerror", lambda err: page_errors.append(str(err)))
+
+    # Route all pywebview.api calls to the real Python ScriptAPI instance
+    def handle_api_call(method_name, args):
+        if not hasattr(api_instance, method_name):
+            raise AttributeError(f"ScriptAPI has no method '{method_name}'")
+        method = getattr(api_instance, method_name)
+        return method(*args)
+
+    page.expose_function("pywebview_call", handle_api_call)
+    page.add_init_script("""
+        window.pywebview = {
+            api: new Proxy({}, {
+                get(target, prop) {
+                    return (...args) => window.pywebview_call(prop, args);
+                }
+            })
+        };
+    """)
+    page.goto(FILE_URL)
+    page.wait_for_load_state("domcontentloaded")
+
+    test_failed = False
+    try:
+        yield page
+    except Exception:
+        test_failed = True
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            page.screenshot(path=str(artifact_dir / "screenshot.png"), full_page=True)
+        except Exception:
+            pass
+        try:
+            context.tracing.stop(path=str(artifact_dir / "trace.zip"))
+        except Exception:
+            pass
+        try:
+            with open(artifact_dir / "console.log", "w", encoding="utf-8") as f:
+                f.write("\n".join(console_logs))
+        except Exception:
+            pass
+        try:
+            with open(artifact_dir / "page_errors.log", "w", encoding="utf-8") as f:
+                f.write("\n".join(page_errors))
+        except Exception:
+            pass
+        raise
+    finally:
+        video = page.video
+        video_path = video.path() if video else None
+        try:
+            context.close()
+            browser.close()
+        except Exception:
+            pass
+
+        if test_failed and video_path and os.path.exists(video_path):
+            try:
+                shutil.move(video_path, str(artifact_dir / "video.webm"))
+            except Exception:
+                pass
+        elif video_path and os.path.exists(video_path):
+            try:
+                os.remove(video_path)
+            except Exception:
+                pass
+
+
 def _setup_browser_page(playwright_ctx, api_instance):
-    """
-    Launches headless Chromium and bridges window.pywebview.api directly
-    to the real Python ScriptAPI instance.
-    """
+    """Backward-compatible helper for existing callers."""
     browser = playwright_ctx.chromium.launch(headless=True)
     page = browser.new_page()
 
-    # Route all pywebview.api calls to the Python ScriptAPI instance
     def handle_api_call(method_name, args):
         if not hasattr(api_instance, method_name):
             raise AttributeError(f"ScriptAPI has no method '{method_name}'")
@@ -69,8 +176,7 @@ def test_playwright_app_startup_and_ui_responsiveness():
     """Verify application startup, release badge, theme toggle, and navigation."""
     api = ScriptAPI()
     with sync_playwright() as p:
-        browser, page = _setup_browser_page(p, api)
-        try:
+        with playwright_browser_session(p, api, "startup_and_ui_responsiveness") as page:
             # 1. Release badge visible
             badge = page.locator("header .badge-version")
             expect(badge).to_be_visible()
@@ -96,8 +202,6 @@ def test_playwright_app_startup_and_ui_responsiveness():
             expect(modal).to_be_visible()
             page.click("#btnCloseSettingsModal")
             expect(modal).to_be_hidden()
-        finally:
-            browser.close()
 
 
 def test_playwright_template_set_lifecycle_and_discovery(tmp_path):
@@ -135,53 +239,52 @@ def test_playwright_template_set_lifecycle_and_discovery(tmp_path):
 
     api = ScriptAPI()
     with sync_playwright() as p:
-        browser, page = _setup_browser_page(p, api)
-        try:
-            # 1. Open settings modal and navigate to Template Sets tab
-            page.click("#btnOpenSettings")
-            page.click("#cfgTabTemplateSets")
-            sets_pane = page.locator("#cfgPaneTemplateSets")
-            expect(sets_pane).to_be_visible()
+        with playwright_browser_session(p, api, "template_set_lifecycle_and_discovery") as page:
+            try:
+                # 1. Open settings modal and navigate to Template Sets tab
+                page.click("#btnOpenSettings")
+                page.click("#cfgTabTemplateSets")
+                sets_pane = page.locator("#cfgPaneTemplateSets")
+                expect(sets_pane).to_be_visible()
 
-            # 2. Click Create Template Set
-            page.click("text=➕ Create Template Set")
-            editor_modal = page.locator("#templateSetEditorModal")
-            expect(editor_modal).to_be_visible()
+                # 2. Click Create Template Set
+                page.click("text=➕ Create Template Set")
+                editor_modal = page.locator("#templateSetEditorModal")
+                expect(editor_modal).to_be_visible()
 
-            # 3. Fill in name and description
-            page.fill("#templateSetNameInput", "Engineering Custom Set")
-            page.fill("#templateSetDescInput", "Department test template set")
+                # 3. Fill in name and description
+                page.fill("#templateSetNameInput", "Engineering Custom Set")
+                page.fill("#templateSetDescInput", "Department test template set")
 
-            # 4. Trigger inspection of template file via exposed bridge
-            page.evaluate(f"""async () => {{
-                const res = await window.pywebview.api.inspect_template_set_files(['{docx_path.replace(os.sep, "/")}']);
-                if (res && res.status === 'success') {{
-                    addInspectedFiles(res.inspections || []);
-                }}
-            }}""")
-            page.wait_for_timeout(300)
+                # 4. Trigger inspection of template file via exposed bridge
+                page.evaluate(f"""async () => {{
+                    const res = await window.pywebview.api.inspect_template_set_files(['{docx_path.replace(os.sep, "/")}']);
+                    if (res && res.status === 'success') {{
+                        addInspectedFiles(res.inspections || []);
+                    }}
+                }}""")
+                page.wait_for_timeout(300)
 
-            # Verify inspection card rendered
-            card_list = page.locator("#templateSetInspectedFilesList")
-            expect(card_list).to_contain_text("syllabus_template.docx")
-            expect(card_list).to_contain_text("Syllabus Acceptance")
+                # Verify inspection card rendered
+                card_list = page.locator("#templateSetInspectedFilesList")
+                expect(card_list).to_contain_text("syllabus_template.docx")
+                expect(card_list).to_contain_text("Syllabus Acceptance")
 
-            # 5. Save the template set
-            page.click("text=✓ Save Template Set")
-            page.wait_for_timeout(400)
-            expect(editor_modal).to_be_hidden()
+                # 5. Save the template set
+                page.click("text=✓ Save Template Set")
+                page.wait_for_timeout(400)
+                expect(editor_modal).to_be_hidden()
 
-            # 6. Verify newly saved set appears in Available Template Sets list
-            sets_list = page.locator("#templateSetsListContainer")
-            expect(sets_list).to_contain_text("Engineering Custom Set")
+                # 6. Verify newly saved set appears in Available Template Sets list
+                sets_list = page.locator("#templateSetsListContainer")
+                expect(sets_list).to_contain_text("Engineering Custom Set")
 
-            # 7. Verify persisted in backend TemplateSetManager
-            user_sets = [s.display_name for s in mgr.list_template_sets()]
-            assert "Engineering Custom Set" in user_sets
+                # 7. Verify persisted in backend TemplateSetManager
+                user_sets = [s.display_name for s in mgr.list_template_sets()]
+                assert "Engineering Custom Set" in user_sets
 
-        finally:
-            mgr.template_sets_dir = original_sets_dir
-            browser.close()
+            finally:
+                mgr.template_sets_dir = original_sets_dir
 
 
 def test_playwright_ambiguous_xlsx_sheet_confirmation_flow(tmp_path):
@@ -242,52 +345,51 @@ def test_playwright_ambiguous_xlsx_sheet_confirmation_flow(tmp_path):
 
     api = ScriptAPI()
     with sync_playwright() as p:
-        browser, page = _setup_browser_page(p, api)
-        try:
-            page.click("#btnOpenSettings")
-            page.click("#cfgTabTemplateSets")
-            page.click("text=➕ Create Template Set")
+        with playwright_browser_session(p, api, "ambiguous_xlsx_sheet_confirmation") as page:
+            try:
+                page.click("#btnOpenSettings")
+                page.click("#cfgTabTemplateSets")
+                page.click("text=➕ Create Template Set")
 
-            page.fill("#templateSetNameInput", "Ambiguous Set Test")
-            page.check("#templateSetFallbackCheck")
+                page.fill("#templateSetNameInput", "Ambiguous Set Test")
+                page.check("#templateSetFallbackCheck")
 
-            # Inspect ambiguous file
-            page.evaluate(f"""async () => {{
-                const res = await window.pywebview.api.inspect_template_set_files(['{xlsx_path.replace(os.sep, "/")}']);
-                if (res && res.status === 'success') {{
-                    addInspectedFiles(res.inspections || []);
-                }}
-            }}""")
-            page.wait_for_timeout(300)
+                # Inspect ambiguous file
+                page.evaluate(f"""async () => {{
+                    const res = await window.pywebview.api.inspect_template_set_files(['{xlsx_path.replace(os.sep, "/")}']);
+                    if (res && res.status === 'success') {{
+                        addInspectedFiles(res.inspections || []);
+                    }}
+                }}""")
+                page.wait_for_timeout(300)
 
-            # Verify card rendered with Discovered Sheet Confirmation
-            card_list = page.locator("#templateSetInspectedFilesList")
-            expect(card_list).to_contain_text("ambiguous_grade_sheet.xlsx")
-            expect(card_list).to_contain_text("Discovered Sheet Confirmation")
+                # Verify card rendered with Discovered Sheet Confirmation
+                card_list = page.locator("#templateSetInspectedFilesList")
+                expect(card_list).to_contain_text("ambiguous_grade_sheet.xlsx")
+                expect(card_list).to_contain_text("Discovered Sheet Confirmation")
 
-            # Verify dropdown options contain discovered roster candidates
-            roster_select = card_list.locator("select").filter(has_text="Lecture_Section_A")
-            expect(roster_select).to_be_visible()
+                # Verify dropdown options contain discovered roster candidates
+                roster_select = card_list.locator("select").filter(has_text="Lecture_Section_A")
+                expect(roster_select).to_be_visible()
 
-            # Select Lecture_Section_A explicitly
-            roster_select.select_option("Lecture_Section_A")
+                # Select Lecture_Section_A explicitly
+                roster_select.select_option("Lecture_Section_A")
 
-            # Assign role to Grade Sheet (Lecture)
-            role_select = card_list.locator("select").filter(has_text="-- Choose Canonical Role --")
-            role_select.select_option(ROLE_GRADE_SHEET_LECTURE)
+                # Assign role to Grade Sheet (Lecture)
+                role_select = card_list.locator("select").filter(has_text="-- Choose Canonical Role --")
+                role_select.select_option(ROLE_GRADE_SHEET_LECTURE)
 
-            # Save template set
-            page.click("text=✓ Save Template Set")
-            page.wait_for_timeout(500)
+                # Save template set
+                page.click("text=✓ Save Template Set")
+                page.wait_for_timeout(500)
 
-            # Backend verification: recipe was validated and assigned
-            user_set = next((s for s in mgr.list_template_sets() if s.display_name == "Ambiguous Set Test"), None)
-            assert user_set is not None
-            assert ROLE_GRADE_SHEET_LECTURE in user_set.templates
+                # Backend verification: recipe was validated and assigned
+                user_set = next((s for s in mgr.list_template_sets() if s.display_name == "Ambiguous Set Test"), None)
+                assert user_set is not None
+                assert ROLE_GRADE_SHEET_LECTURE in user_set.templates
 
-        finally:
-            mgr.template_sets_dir = original_sets_dir
-            browser.close()
+            finally:
+                mgr.template_sets_dir = original_sets_dir
 
 
 def test_playwright_blank_formula_free_template_flow(tmp_path):
@@ -333,45 +435,44 @@ def test_playwright_blank_formula_free_template_flow(tmp_path):
 
     api = ScriptAPI()
     with sync_playwright() as p:
-        browser, page = _setup_browser_page(p, api)
-        try:
-            page.click("#btnOpenSettings")
-            page.click("#cfgTabTemplateSets")
-            page.click("text=➕ Create Template Set")
-            page.fill("#templateSetNameInput", "Blank Formula-Free Set")
-            page.check("#templateSetFallbackCheck")
+        with playwright_browser_session(p, api, "blank_formula_free_template") as page:
+            try:
+                page.click("#btnOpenSettings")
+                page.click("#cfgTabTemplateSets")
+                page.click("text=➕ Create Template Set")
+                page.fill("#templateSetNameInput", "Blank Formula-Free Set")
+                page.check("#templateSetFallbackCheck")
 
-            page.evaluate(f"""async () => {{
-                const res = await window.pywebview.api.inspect_template_set_files(['{xlsx_path.replace(os.sep, "/")}']);
-                if (res && res.status === 'success') {{
-                    addInspectedFiles(res.inspections || []);
-                }}
-            }}""")
-            page.wait_for_timeout(300)
+                page.evaluate(f"""async () => {{
+                    const res = await window.pywebview.api.inspect_template_set_files(['{xlsx_path.replace(os.sep, "/")}']);
+                    if (res && res.status === 'success') {{
+                        addInspectedFiles(res.inspections || []);
+                    }}
+                }}""")
+                page.wait_for_timeout(300)
 
-            card_list = page.locator("#templateSetInspectedFilesList")
-            expect(card_list).to_contain_text("blank_custom_grading.xlsx")
+                card_list = page.locator("#templateSetInspectedFilesList")
+                expect(card_list).to_contain_text("blank_custom_grading.xlsx")
 
-            # Set role to Grade Sheet Lecture
-            role_select = card_list.locator("select").filter(has_text="-- Choose Canonical Role --")
-            role_select.select_option(ROLE_GRADE_SHEET_LECTURE)
+                # Set role to Grade Sheet Lecture
+                role_select = card_list.locator("select").filter(has_text="-- Choose Canonical Role --")
+                role_select.select_option(ROLE_GRADE_SHEET_LECTURE)
 
-            # Confirm discovered sheets
-            roster_sel = card_list.locator("select").filter(has_text="Lecture_Sheet")
-            roster_sel.select_option("Lecture_Sheet")
+                # Confirm discovered sheets
+                roster_sel = card_list.locator("select").filter(has_text="Lecture_Sheet")
+                roster_sel.select_option("Lecture_Sheet")
 
-            # Save
-            page.click("text=✓ Save Template Set")
-            page.wait_for_timeout(500)
+                # Save
+                page.click("text=✓ Save Template Set")
+                page.wait_for_timeout(500)
 
-            # Backend verification
-            user_set = next((s for s in mgr.list_template_sets() if s.display_name == "Blank Formula-Free Set"), None)
-            assert user_set is not None
-            assert ROLE_GRADE_SHEET_LECTURE in user_set.templates
+                # Backend verification
+                user_set = next((s for s in mgr.list_template_sets() if s.display_name == "Blank Formula-Free Set"), None)
+                assert user_set is not None
+                assert ROLE_GRADE_SHEET_LECTURE in user_set.templates
 
-        finally:
-            mgr.template_sets_dir = original_sets_dir
-            browser.close()
+            finally:
+                mgr.template_sets_dir = original_sets_dir
 
 
 def test_playwright_invalid_template_rejection(tmp_path):
@@ -382,8 +483,7 @@ def test_playwright_invalid_template_rejection(tmp_path):
 
     api = ScriptAPI()
     with sync_playwright() as p:
-        browser, page = _setup_browser_page(p, api)
-        try:
+        with playwright_browser_session(p, api, "invalid_template_rejection") as page:
             page.click("#btnOpenSettings")
             page.click("#cfgTabTemplateSets")
             page.click("text=➕ Create Template Set")
@@ -399,5 +499,3 @@ def test_playwright_invalid_template_rejection(tmp_path):
             card_list = page.locator("#templateSetInspectedFilesList")
             expect(card_list).to_contain_text("corrupt_template.docx")
             expect(card_list).to_contain_text("❌")
-        finally:
-            browser.close()
