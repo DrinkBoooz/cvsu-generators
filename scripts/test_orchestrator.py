@@ -70,113 +70,143 @@ DEFAULT_STEP_TIMEOUT_SEC = 180.0
 
 MANIFEST = {
     "Layer A": {
-        "A1_structural_patterns": [
-            "tests/audit_structural_patterns.py",
-        ],
-        "A2_ast_governance": [
-            "tests/test_ast_rules.py",
-            "tests/test_structural_authority_audit.py",
-            "tests/test_dependency_manifests.py",
-            "tests/test_obsidian_vault_integrity.py",
-            "tests/test_api_inventory.py",
-            "tests/test_manifest_integrity.py",
-        ],
+        "A1_structural_patterns": {
+            "type": "standalone_script",
+            "files": [
+                "tests/audit_structural_patterns.py",
+            ],
+        },
+        "A2_ast_governance": {
+            "type": "pytest",
+            "files": [
+                "tests/test_ast_rules.py",
+                "tests/test_structural_authority_audit.py",
+                "tests/test_dependency_manifests.py",
+                "tests/test_obsidian_vault_integrity.py",
+                "tests/test_api_inventory.py",
+                "tests/test_manifest_integrity.py",
+            ],
+        },
     },
     "Layer B": {
-        "B1_parsers_and_resolvers": [
-            "tests/test_modules_parsing.py",
-            "tests/test_roster_parser.py",
-            "tests/test_parser_user_config.py",
-            "tests/test_attendance_schedule_parsing.py",
-            "tests/test_canonical_schedule_room.py",
-            "tests/test_multi_row_roster_headers.py",
-            "tests/test_field_resolver.py",
-            "tests/test_compound_semantic_labels.py",
-        ],
-        "B2_inspectors_detectors_validators": [
-            "tests/test_template_inspector.py",
-            "tests/test_template_role_detector.py",
-            "tests/test_generalized_detection.py",
-            "tests/test_recipe_stage1.py",
-            "tests/test_xlsx_template_contract.py",
-            "tests/test_template_set_model.py",
-            "tests/test_template_set_manager.py",
-            "tests/test_template_set_orchestrator.py",
-            "tests/test_template_set_e2e.py",
-        ],
-        "B3_generators_and_lifecycle": [
-            "tests/test_modules_generation.py",
-            "tests/test_modules_integrity.py",
-            "tests/test_generic_doc_gen.py",
-            "tests/test_grade_generator.py",
-            "tests/test_grade_discussion_generator.py",
-            "tests/test_attendance_default_template.py",
-            "tests/test_attendance_name_scaling.py",
-            "tests/test_ceit_name_scaling.py",
-            "tests/test_custom_docx_typography.py",
-            "tests/test_custom_template_pipeline.py",
-            "tests/test_custom_template_routing.py",
-            "tests/test_docx_utils_retry.py",
-            "tests/test_replace_retry.py",
-            "tests/test_output_parity.py",
-            "tests/test_config_manager.py",
-            "tests/test_crash_logging_hooks.py",
-            "tests/test_executable_lifecycle.py",
-            "tests/test_executable_improvements.py",
-            "tests/test_executable_dnd_routing.py",
-            "tests/test_dnd_flow.py",
-            "tests/test_edge_cases.py",
-            "tests/test_regression.py",
-            "tests/test_diagnostic_probe.py",
-            "tests/test_ab_benchmark_probe.py",
-            "tests/test_localhost_stress_probe.py",
-        ],
+        "B1_parsers_and_resolvers": {
+            "type": "pytest",
+            "files": [
+                "tests/test_modules_parsing.py",
+                "tests/test_roster_parser.py",
+                "tests/test_parser_user_config.py",
+                "tests/test_attendance_schedule_parsing.py",
+                "tests/test_canonical_schedule_room.py",
+                "tests/test_multi_row_roster_headers.py",
+                "tests/test_field_resolver.py",
+                "tests/test_compound_semantic_labels.py",
+            ],
+        },
+        "B2_inspectors_detectors_validators": {
+            "type": "pytest",
+            "files": [
+                "tests/test_template_inspector.py",
+                "tests/test_template_role_detector.py",
+                "tests/test_generalized_detection.py",
+                "tests/test_recipe_stage1.py",
+                "tests/test_xlsx_template_contract.py",
+                "tests/test_template_set_model.py",
+                "tests/test_template_set_manager.py",
+                "tests/test_template_set_orchestrator.py",
+                "tests/test_template_set_e2e.py",
+            ],
+        },
+        "B3_generators_and_lifecycle": {
+            "type": "pytest",
+            "files": [
+                "tests/test_modules_generation.py",
+                "tests/test_modules_integrity.py",
+                "tests/test_generic_doc_gen.py",
+                "tests/test_grade_generator.py",
+                "tests/test_grade_discussion_generator.py",
+                "tests/test_attendance_default_template.py",
+                "tests/test_attendance_name_scaling.py",
+                "tests/test_ceit_name_scaling.py",
+                "tests/test_custom_docx_typography.py",
+                "tests/test_custom_template_pipeline.py",
+                "tests/test_custom_template_routing.py",
+                "tests/test_docx_utils_retry.py",
+                "tests/test_replace_retry.py",
+                "tests/test_output_parity.py",
+                "tests/test_config_manager.py",
+                "tests/test_crash_logging_hooks.py",
+                "tests/test_executable_lifecycle.py",
+                "tests/test_executable_improvements.py",
+                "tests/test_executable_dnd_routing.py",
+                "tests/test_dnd_flow.py",
+                "tests/test_edge_cases.py",
+                "tests/test_regression.py",
+                "tests/test_diagnostic_probe.py",
+                "tests/test_ab_benchmark_probe.py",
+                "tests/test_localhost_stress_probe.py",
+            ],
+        },
     },
     "Layer C": {
-        "C1_adversarial_template_matrix": [
-            "tests/test_adversarial_template_matrix.py",
-            "tests/test_invalid_templates.py",
-            "tests/test_template_mutations.py",
-            "tests/test_simulate_unknown.py",
-            "tests/test_synthetic_non_ceit_header.py",
-        ],
+        "C1_adversarial_template_matrix": {
+            "type": "pytest",
+            "files": [
+                "tests/test_adversarial_template_matrix.py",
+                "tests/test_invalid_templates.py",
+                "tests/test_template_mutations.py",
+                "tests/test_simulate_unknown.py",
+                "tests/test_synthetic_non_ceit_header.py",
+            ],
+        },
     },
     "Layer D1": {
-        "D1_ui_bridge_and_consistency": [
-            "tests/test_ui_api_bridge.py",
-            "tests/test_ui_consistency.py",
-            "tests/test_ui_accessibility.py",
-            "tests/test_ui_asset_resilience.py",
-            "tests/test_settings_modal_responsive.py",
-            "tests/test_executable_test_api_bindings.py",
-            "tests/test_executable_test_hig_bridge.py",
-            "tests/test_theme_consistency.py",
-            "tests/test_theme_transition_perf.py",
-            "tests/test_scroll_aware_dock.py",
-            "tests/test_stepper_2col_scroll.py",
-            "tests/test_react_executable_build.py",
-        ],
+        "D1_ui_bridge_and_consistency": {
+            "type": "pytest",
+            "files": [
+                "tests/test_ui_api_bridge.py",
+                "tests/test_ui_consistency.py",
+                "tests/test_ui_accessibility.py",
+                "tests/test_ui_asset_resilience.py",
+                "tests/test_settings_modal_responsive.py",
+                "tests/test_executable_test_api_bindings.py",
+                "tests/test_executable_test_hig_bridge.py",
+                "tests/test_theme_consistency.py",
+                "tests/test_theme_transition_perf.py",
+                "tests/test_scroll_aware_dock.py",
+                "tests/test_stepper_2col_scroll.py",
+                "tests/test_react_executable_build.py",
+            ],
+        },
     },
     "Layer D2": {
-        "D2_playwright_browser_e2e": [
-            "tests/test_playwright_real_authority_e2e.py",
-            "tests/test_playwright_e2e.py",
-            "tests/test_playwright_settings_modal.py",
-            "tests/test_playwright_roster_mapping.py",
-            "tests/test_playwright_accessibility.py",
-        ],
+        "D2_playwright_browser_e2e": {
+            "type": "pytest",
+            "files": [
+                "tests/test_playwright_real_authority_e2e.py",
+                "tests/test_playwright_e2e.py",
+                "tests/test_playwright_settings_modal.py",
+                "tests/test_playwright_roster_mapping.py",
+                "tests/test_playwright_accessibility.py",
+            ],
+        },
     },
     "Layer D3": {
-        "D3_native_pywebview_host": [
-            "tests/test_native_pywebview_host.py",
-            "tests/test_pywebview_dnd_binding.py",
-        ],
+        "D3_native_pywebview_host": {
+            "type": "pytest",
+            "files": [
+                "tests/test_native_pywebview_host.py",
+                "tests/test_pywebview_dnd_binding.py",
+            ],
+        },
     },
     "Layer E": {
-        "E1_pe_metadata_and_packaged_smoke": [
-            "tests/test_pe_version_info.py",
-            "tests/test_packaged_executable_smoke.py",
-        ],
+        "E1_pe_metadata_and_packaged_smoke": {
+            "type": "pytest",
+            "files": [
+                "tests/test_pe_version_info.py",
+                "tests/test_packaged_executable_smoke.py",
+            ],
+        },
     },
 }
 
@@ -202,42 +232,127 @@ DOCUMENTED_REPO_ARTIFACTS = {
 }
 
 
-def get_manifest_inventory() -> dict:
+def get_repository_test_inventory(root_dir: Path | None = None) -> dict:
     """
-    Programmatically calculates inventory counts from the authoritative MANIFEST structure.
-    Never uses hardcoded literals.
+    Authoritatively discovers all tests/*.py files on the filesystem and performs
+    a strict three-way partition reconciliation against MANIFEST, AUXILIARY_UTILITIES,
+    and DOCUMENTED_REPO_ARTIFACTS.
     """
+    root = Path(root_dir) if root_dir else REPO_ROOT
+    tests_dir = root / "tests"
+
+    discovered_files = sorted(p.relative_to(root).as_posix() for p in tests_dir.glob("*.py"))
+
+    orchestrated_pytest_files = []
+    standalone_audit_files = []
     layer_counts = {}
     layer_pytest_counts = {}
-    total_pytest_files = 0
-    standalone_audit_files = 0
+    manifest_seen = set()
+    duplicates = []
 
-    for layer_name, steps in MANIFEST.items():
-        files_in_layer = [f for step_files in steps.values() for f in step_files]
-        layer_counts[layer_name] = len(files_in_layer)
+    for layer_name, layer_steps in MANIFEST.items():
+        layer_total = 0
+        layer_pytest = 0
+        for step_id, step_meta in layer_steps.items():
+            step_type = step_meta.get("type", "pytest")
+            step_files = step_meta.get("files", [])
+            for f in step_files:
+                norm_f = Path(f).as_posix()
+                layer_total += 1
+                if norm_f in manifest_seen:
+                    duplicates.append(f"MANIFEST internal duplicate: {norm_f} in {step_id}")
+                manifest_seen.add(norm_f)
+                if step_type == "standalone_script":
+                    standalone_audit_files.append(norm_f)
+                else:
+                    orchestrated_pytest_files.append(norm_f)
+                    layer_pytest += 1
+        layer_counts[layer_name] = layer_total
+        layer_pytest_counts[layer_name] = layer_pytest
 
-        pytest_in_layer = [
-            f for step_id, step_files in steps.items()
-            if step_id != "A1_structural_patterns"
-            for f in step_files
-        ]
-        layer_pytest_counts[layer_name] = len(pytest_in_layer)
-        total_pytest_files += len(pytest_in_layer)
+    auxiliary_files = [Path(f).as_posix() for f in AUXILIARY_UTILITIES.keys()]
+    repo_artifacts = [Path(f).as_posix() for f in DOCUMENTED_REPO_ARTIFACTS.keys()]
 
-        if "A1_structural_patterns" in steps:
-            standalone_audit_files += len(steps["A1_structural_patterns"])
+    set_manifest = set(manifest_seen)
+    set_aux = set(auxiliary_files)
+    set_art = set(repo_artifacts)
 
-    total_orchestrated_files = total_pytest_files + standalone_audit_files
-    total_auxiliary_utilities = len(AUXILIARY_UTILITIES)
+    # 3-way pairwise disjointness check
+    for o in sorted(set_manifest & set_aux):
+        duplicates.append(f"MANIFEST / AUXILIARY overlap: {o}")
+    for o in sorted(set_manifest & set_art):
+        duplicates.append(f"MANIFEST / DOCUMENTED_REPO_ARTIFACTS overlap: {o}")
+    for o in sorted(set_aux & set_art):
+        duplicates.append(f"AUXILIARY / DOCUMENTED_REPO_ARTIFACTS overlap: {o}")
+
+    # Check physical existence of declared files
+    missing_on_disk = []
+    for f in sorted(set_manifest | set_aux | set_art):
+        if not (root / f).is_file():
+            missing_on_disk.append(f)
+
+    classified_files = sorted(set_manifest | set_aux | set_art)
+    missing = sorted(set(discovered_files) - set(classified_files))
+    extra = sorted(set(classified_files) - set(discovered_files))
+
+    is_reconciled = (
+        set(discovered_files) == set(classified_files)
+        and len(missing) == 0
+        and len(extra) == 0
+        and len(duplicates) == 0
+        and len(missing_on_disk) == 0
+    )
+
+    reconciliation_error = None
+    if not is_reconciled:
+        reconciliation_error = (
+            f"Missing unclassified files: {missing}; "
+            f"Phantom/extra files: {extra}; "
+            f"Duplicates/overlaps: {duplicates}; "
+            f"Missing on disk: {missing_on_disk}"
+        )
 
     return {
+        "discovered_files": discovered_files,
+        "classified_files": classified_files,
+        "orchestrated_pytest_files": sorted(orchestrated_pytest_files),
+        "standalone_audit_files": sorted(standalone_audit_files),
+        "auxiliary_utility_files": sorted(auxiliary_files),
+        "documented_repo_artifacts": sorted(repo_artifacts),
         "layer_counts": layer_counts,
         "layer_pytest_counts": layer_pytest_counts,
-        "total_pytest_files": total_pytest_files,
-        "standalone_audit_files": standalone_audit_files,
-        "total_orchestrated_files": total_orchestrated_files,
-        "total_auxiliary_utilities": total_auxiliary_utilities,
+        "total_discovered_files": len(discovered_files),
+        "total_classified_files": len(classified_files),
+        "total_pytest_files": len(orchestrated_pytest_files),
+        "standalone_audit_count": len(standalone_audit_files),
+        "total_orchestrated_files": len(orchestrated_pytest_files) + len(standalone_audit_files),
+        "total_auxiliary_utilities": len(auxiliary_files),
+        "total_repo_artifacts": len(repo_artifacts),
+        "missing": missing,
+        "extra": extra,
+        "duplicates": duplicates,
+        "missing_on_disk": missing_on_disk,
+        "is_reconciled": is_reconciled,
+        "reconciliation_error": reconciliation_error,
     }
+
+
+def get_manifest_inventory() -> dict:
+    """
+    Programmatically calculates inventory counts from the authoritative MANIFEST structure
+    and verifies reconciliation with the actual repository filesystem.
+    """
+    inv = get_repository_test_inventory(REPO_ROOT)
+    return {
+        "layer_counts": inv["layer_counts"],
+        "layer_pytest_counts": inv["layer_pytest_counts"],
+        "total_pytest_files": inv["total_pytest_files"],
+        "standalone_audit_files": inv["standalone_audit_count"],
+        "total_orchestrated_files": inv["total_orchestrated_files"],
+        "total_auxiliary_utilities": inv["total_auxiliary_utilities"],
+        "is_reconciled": inv["is_reconciled"],
+    }
+
 
 
 def get_git_info() -> dict:
@@ -687,103 +802,113 @@ def define_pipeline(selected_layers: list[str]) -> list[dict]:
 
     # ── Layer A: Static / AST Governance ───────────────────────────────────────
     if "governance" in selected_layers or "all" in selected_layers:
+        a1_meta = MANIFEST["Layer A"]["A1_structural_patterns"]
         steps.append({
             "layer": "Layer A — Static / AST Governance & Structural Authority Audits",
             "id": "A1_structural_authority_audit",
             "name": "Structural Authority Pattern Audit (Category E Invariance)",
-            "files": MANIFEST["Layer A"]["A1_structural_patterns"],
+            "files": a1_meta["files"],
             "timeout_sec": 60.0,
-            "is_audit": True,
+            "is_audit": a1_meta.get("type") == "standalone_script",
         })
+        a2_meta = MANIFEST["Layer A"]["A2_ast_governance"]
         steps.append({
             "layer": "Layer A — Static / AST Governance & Structural Authority Audits",
             "id": "A2_ast_governance_rules",
             "name": "AST Architectural Governance & Coordinate Literal Audits",
-            "files": MANIFEST["Layer A"]["A2_ast_governance"],
+            "files": a2_meta["files"],
             "timeout_sec": 90.0,
-            "is_audit": False,
+            "is_audit": a2_meta.get("type") == "standalone_script",
         })
 
     # ── Layer B: Backend / Core Unit & Integration ────────────────────────────
     if "backend" in selected_layers or "all" in selected_layers:
+        b1_meta = MANIFEST["Layer B"]["B1_parsers_and_resolvers"]
         steps.append({
             "layer": "Layer B — Backend / Core Unit & Integration Tests",
             "id": "B1_parsers_and_resolvers",
             "name": "Schedules, Rosters, Config & Field Resolvers",
-            "files": MANIFEST["Layer B"]["B1_parsers_and_resolvers"],
+            "files": b1_meta["files"],
             "timeout_sec": 90.0,
-            "is_audit": False,
+            "is_audit": b1_meta.get("type") == "standalone_script",
         })
+        b2_meta = MANIFEST["Layer B"]["B2_inspectors_detectors_validators"]
         steps.append({
             "layer": "Layer B — Backend / Core Unit & Integration Tests",
             "id": "B2_inspectors_detectors_validators",
             "name": "Inspectors, Role Detectors, Validators & Template Set Manager",
-            "files": MANIFEST["Layer B"]["B2_inspectors_detectors_validators"],
+            "files": b2_meta["files"],
             "timeout_sec": 120.0,
-            "is_audit": False,
+            "is_audit": b2_meta.get("type") == "standalone_script",
         })
+        b3_meta = MANIFEST["Layer B"]["B3_generators_and_lifecycle"]
         steps.append({
             "layer": "Layer B — Backend / Core Unit & Integration Tests",
             "id": "B3_generators_and_lifecycle",
             "name": "Generators, Output Parity, Packaging, Lifecycle & Probes",
-            "files": MANIFEST["Layer B"]["B3_generators_and_lifecycle"],
+            "files": b3_meta["files"],
             "timeout_sec": 180.0,
-            "is_audit": False,
+            "is_audit": b3_meta.get("type") == "standalone_script",
         })
 
     # ── Layer C: Adversarial Template Matrix ──────────────────────────────────
     if "templates" in selected_layers or "all" in selected_layers:
+        c1_meta = MANIFEST["Layer C"]["C1_adversarial_template_matrix"]
         steps.append({
             "layer": "Layer C — Adversarial Template Matrix & Mutation Invariance",
             "id": "C1_adversarial_template_matrix",
             "name": "Adversarial Matrix (Formulas, Foreign, Renames, Decoys, Invariance)",
-            "files": MANIFEST["Layer C"]["C1_adversarial_template_matrix"],
+            "files": c1_meta["files"],
             "timeout_sec": 90.0,
-            "is_audit": False,
+            "is_audit": c1_meta.get("type") == "standalone_script",
         })
 
     # ── Layer D1: UI API Bridge & Consistency ─────────────────────────────────
     if "ui" in selected_layers or "all" in selected_layers:
+        d1_meta = MANIFEST["Layer D1"]["D1_ui_bridge_and_consistency"]
         steps.append({
             "layer": "Layer D1 — UI API Bridge, Unit & Consistency",
             "id": "D1_ui_bridge_and_consistency",
             "name": "UI API Bridge, Consistency, Accessibility, Assets & Responsive Modals",
-            "files": MANIFEST["Layer D1"]["D1_ui_bridge_and_consistency"],
+            "files": d1_meta["files"],
             "timeout_sec": 90.0,
-            "is_audit": False,
+            "is_audit": d1_meta.get("type") == "standalone_script",
         })
 
     # ── Layer D2: Browser ScriptAPI Bridge E2E (Playwright) ───────────────────
     if "playwright" in selected_layers or "all" in selected_layers:
+        d2_meta = MANIFEST["Layer D2"]["D2_playwright_browser_e2e"]
         steps.append({
             "layer": "Layer D2 — Browser ScriptAPI Bridge E2E (Playwright Chromium + Real ScriptAPI)",
             "id": "D2_playwright_browser_e2e",
             "name": "Playwright Browser Bridge (ui.html + Real ScriptAPI + Failure Artifacts)",
-            "files": MANIFEST["Layer D2"]["D2_playwright_browser_e2e"],
+            "files": d2_meta["files"],
             "timeout_sec": 240.0,
-            "is_audit": False,
+            "is_audit": d2_meta.get("type") == "standalone_script",
         })
 
     # ── Layer D3: Native PyWebView Host Smoke / Integration ───────────────────
     if "native" in selected_layers or "all" in selected_layers:
+        d3_meta = MANIFEST["Layer D3"]["D3_native_pywebview_host"]
         steps.append({
             "layer": "Layer D3 — Native PyWebView Host Smoke & Desktop Integration",
             "id": "D3_native_pywebview_host",
             "name": "Native Desktop Host (Real WebView2 Window, Lifecycle, Bidirectional Bridge & DnD)",
-            "files": MANIFEST["Layer D3"]["D3_native_pywebview_host"],
+            "files": d3_meta["files"],
             "timeout_sec": 90.0,
-            "is_audit": False,
+            "is_audit": d3_meta.get("type") == "standalone_script",
         })
 
     # ── Layer E: Packaged Executable & PE Metadata ────────────────────────────
     if "packaged" in selected_layers or "all" in selected_layers:
+        e1_meta = MANIFEST["Layer E"]["E1_pe_metadata_and_packaged_smoke"]
         steps.append({
             "layer": "Layer E — Windows PE Metadata & Packaged Binary Smoke Tests",
             "id": "E1_pe_metadata_and_packaged_smoke",
             "name": "Windows PE Version Info, Authenticode Signature, & Binary Lifecycle Smoke",
-            "files": MANIFEST["Layer E"]["E1_pe_metadata_and_packaged_smoke"],
+            "files": e1_meta["files"],
             "timeout_sec": 90.0,
-            "is_audit": False,
+            "is_audit": e1_meta.get("type") == "standalone_script",
         })
 
     return steps
@@ -854,6 +979,13 @@ def generate_reports(report_data: dict, report_dir: Path) -> tuple[Path, Path, P
     """Generates machine-readable JSON and human-readable Markdown test reports."""
     validate_report_consistency(report_data)
 
+    repo_inv = get_repository_test_inventory(REPO_ROOT)
+    if not repo_inv["is_reconciled"]:
+        raise RuntimeError(
+            f"Repository test inventory reconciliation failed: {repo_inv['reconciliation_error']}"
+        )
+    report_data["inventory"] = repo_inv
+
     timestamp_slug = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
 
     # 1. JSON Report
@@ -872,14 +1004,6 @@ def generate_reports(report_data: dict, report_dir: Path) -> tuple[Path, Path, P
         if report_data["overall_status"] == "PASSED"
         else "🔴 **FAILURES DETECTED**"
     )
-
-    inv = report_data.get("inventory") or get_manifest_inventory()
-    total_pytest_files = inv["total_pytest_files"]
-    standalone_audit_files = inv["standalone_audit_files"]
-    total_orchestrated_files = inv["total_orchestrated_files"]
-    total_auxiliary_utilities = inv["total_auxiliary_utilities"]
-    total_repo_artifacts = len(DOCUMENTED_REPO_ARTIFACTS)
-    total_inventory = total_orchestrated_files + total_auxiliary_utilities + total_repo_artifacts
 
     md_lines = [
         "# Automated Test Orchestration Report",
@@ -939,27 +1063,29 @@ def generate_reports(report_data: dict, report_dir: Path) -> tuple[Path, Path, P
         "",
         "| Category | File Count | Scope / Execution Policy |",
         "| :--- | :---: | :--- |",
-        f"| **ORCHESTRATED TEST FILES** | **{total_pytest_files}** | Authoritative pytest test suites executed in Layers A2, B, C, D1, D2, D3, E |",
-        f"| **STANDALONE AUDIT SCRIPTS** | **{standalone_audit_files}** | Standalone AST / structural authority inspection (`tests/audit_structural_patterns.py`) executed in Layer A1 |",
-        f"| **DECLARED AUXILIARY UTILITIES** | **{total_auxiliary_utilities}** | Standalone diagnostic probes, diff utilities, and manual inspection tools excluded with architectural justification |",
-        f"| **DOCUMENTED REPOSITORY ARTIFACTS** | **{total_repo_artifacts}** | Root pytest configuration & fixture definition (`tests/conftest.py`) |",
-        f"| **TOTAL INVENTORY** | **{total_inventory}** | 100% of all Python files in `tests/` accounted for with zero unclassified files |",
+        f"| **DISCOVERED FILES** | **{repo_inv['total_discovered_files']}** | Total `*.py` files discovered in `tests/` on the physical filesystem |",
+        f"| **CLASSIFIED FILES** | **{repo_inv['total_classified_files']}** | Total files authoritatively classified into the three-way partition |",
+        f"| **ORCHESTRATED TEST FILES** | **{repo_inv['total_pytest_files']}** | Authoritative pytest test suites executed in Layers A2, B, C, D1, D2, D3, E |",
+        f"| **STANDALONE AUDIT SCRIPTS** | **{repo_inv['standalone_audit_count']}** | Standalone AST / structural authority inspection (`tests/audit_structural_patterns.py`) executed in Layer A1 |",
+        f"| **DECLARED AUXILIARY UTILITIES** | **{repo_inv['total_auxiliary_utilities']}** | Standalone diagnostic probes, diff utilities, and manual inspection tools excluded with architectural justification |",
+        f"| **DOCUMENTED REPOSITORY ARTIFACTS** | **{repo_inv['total_repo_artifacts']}** | Root pytest configuration & fixture definition (`tests/conftest.py`) |",
+        f"| **TOTAL INVENTORY** | **{repo_inv['total_classified_files']}** | 100% of all Python files in `tests/` accounted for with verified filesystem reconciliation (zero unclassified files) |",
         "",
         "### Breakdown of Orchestrated Test Suites by Layer",
         "",
         "| Layer | Pytest Suites | Standalone Audits | Total Files | Scope |",
         "| :--- | :---: | :---: | :---: | :--- |",
-        f"| **Layer A** | {inv['layer_pytest_counts']['Layer A']} | {standalone_audit_files} | {inv['layer_counts']['Layer A']} | Static AST Governance & Structural Authority |",
-        f"| **Layer B** | {inv['layer_pytest_counts']['Layer B']} | 0 | {inv['layer_counts']['Layer B']} | Parsers, Resolvers, Detectors, Validators, Generators, Probes |",
-        f"| **Layer C** | {inv['layer_pytest_counts']['Layer C']} | 0 | {inv['layer_counts']['Layer C']} | Adversarial Template Matrix & Mutation Invariance |",
-        f"| **Layer D1** | {inv['layer_pytest_counts']['Layer D1']} | 0 | {inv['layer_counts']['Layer D1']} | UI API Bridge, Theme, Layout, Accessibility |",
-        f"| **Layer D2** | {inv['layer_pytest_counts']['Layer D2']} | 0 | {inv['layer_counts']['Layer D2']} | Browser ScriptAPI Bridge E2E (Playwright Chromium) |",
-        f"| **Layer D3** | {inv['layer_pytest_counts']['Layer D3']} | 0 | {inv['layer_counts']['Layer D3']} | Native Desktop Host (Windows WebView2 Window) |",
-        f"| **Layer E** | {inv['layer_pytest_counts']['Layer E']} | 0 | {inv['layer_counts']['Layer E']} | Windows PE Metadata & Packaged Executable Smoke |",
+        f"| **Layer A** | {repo_inv['layer_pytest_counts']['Layer A']} | {repo_inv['standalone_audit_count']} | {repo_inv['layer_counts']['Layer A']} | Static AST Governance & Structural Authority |",
+        f"| **Layer B** | {repo_inv['layer_pytest_counts']['Layer B']} | 0 | {repo_inv['layer_counts']['Layer B']} | Parsers, Resolvers, Detectors, Validators, Generators, Probes |",
+        f"| **Layer C** | {repo_inv['layer_pytest_counts']['Layer C']} | 0 | {repo_inv['layer_counts']['Layer C']} | Adversarial Template Matrix & Mutation Invariance |",
+        f"| **Layer D1** | {repo_inv['layer_pytest_counts']['Layer D1']} | 0 | {repo_inv['layer_counts']['Layer D1']} | UI API Bridge, Theme, Layout, Accessibility |",
+        f"| **Layer D2** | {repo_inv['layer_pytest_counts']['Layer D2']} | 0 | {repo_inv['layer_counts']['Layer D2']} | Browser ScriptAPI Bridge E2E (Playwright Chromium) |",
+        f"| **Layer D3** | {repo_inv['layer_pytest_counts']['Layer D3']} | 0 | {repo_inv['layer_counts']['Layer D3']} | Native Desktop Host (Windows WebView2 Window) |",
+        f"| **Layer E** | {repo_inv['layer_pytest_counts']['Layer E']} | 0 | {repo_inv['layer_counts']['Layer E']} | Windows PE Metadata & Packaged Executable Smoke |",
         "",
-        f"### Declared Auxiliary Utilities & Diagnostic Probes ({total_auxiliary_utilities} files)",
+        f"### Declared Auxiliary Utilities & Diagnostic Probes ({repo_inv['total_auxiliary_utilities']} files)",
         "",
-        f"The following {total_auxiliary_utilities} non-test scripts in `tests/` are excluded from automated test collection with explicit architectural justification:",
+        f"The following {repo_inv['total_auxiliary_utilities']} non-test scripts in `tests/` are excluded from automated test collection with explicit architectural justification:",
         "",
         "| Script Path | Purpose & Exclusion Justification |",
         "| :--- | :--- |",

@@ -103,8 +103,11 @@ def test_native_pywebview_host_lifecycle():
     assert app_window is not None, "create_app() must return a valid webview Window"
     assert app_api is not None, "create_app() must return a valid ScriptAPI instance"
 
-    # Start native pywebview event loop
-    webview.start(runner, (app_window, app_api))
+    # Start native pywebview event loop requesting Windows WebView2 (edgechromium) backend
+    try:
+        webview.start(runner, (app_window, app_api), gui="edgechromium")
+    except Exception:
+        webview.start(runner, (app_window, app_api))
 
     # Assert no errors encountered inside the native thread
     assert not errors, f"Native host runner encountered errors: {errors}"

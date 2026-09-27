@@ -547,15 +547,16 @@ def test_playwright_invalid_template_rejection(tmp_path):
 def test_playwright_failure_artifact_infrastructure_verification():
     """
     Infrastructure self-test: Intentionally triggers a failure inside a controlled
-    playwright_browser_session and proves that:
-      1. Failure is caught.
-      2. screenshot.png is captured and non-empty.
-      3. trace.zip is captured and non-empty.
-      4. video.webm is finalized, moved, and non-empty.
-      5. console.log is captured with messages.
-      6. page_errors.log is captured.
+    playwright_browser_session and proves the explicit failure-artifact contract:
+      1. screenshot.png: REQUIRED + NON-EMPTY (valid PNG signature \x89PNG).
+      2. trace.zip: REQUIRED + NON-EMPTY (valid ZIP archive).
+      3. video.webm: REQUIRED + NON-EMPTY (valid EBML WebM header \x1a\x45\xdf\xa3).
+      4. console.log: REQUIRED + NON-EMPTY (captures browser console messages).
+      5. page_errors.log: REQUIRED + NON-EMPTY (captures unhandled browser page exceptions).
     Cleans up the test artifact directory upon completion so test suite remains clean.
     """
+    import zipfile
+
     test_session_name = "infra_failure_verification_test"
     artifact_dir = Path(WORKSPACE_DIR) / "test_reports" / "playwright" / test_session_name
     if artifact_dir.exists():
@@ -568,6 +569,8 @@ def test_playwright_failure_artifact_infrastructure_verification():
         try:
             with playwright_browser_session(p, api, test_session_name) as page:
                 page.evaluate("console.log('Artifact verification probe message')")
+                page.evaluate("setTimeout(() => { window.__artifact_probe_function_that_does_not_exist__(); }, 0)")
+                page.wait_for_timeout(150)
                 assert False, "Controlled assertion failure for artifact pipeline verification"
         except AssertionError as e:
             caught_failure = True
@@ -582,21 +585,36 @@ def test_playwright_failure_artifact_infrastructure_verification():
     console_path = artifact_dir / "console.log"
     page_errors_path = artifact_dir / "page_errors.log"
 
+    # 1. screenshot.png: required + non-empty + valid PNG signature
     assert screenshot_path.is_file(), "screenshot.png must exist on test failure"
     assert screenshot_path.stat().st_size > 0, "screenshot.png must not be empty"
+    with open(screenshot_path, "rb") as f:
+        assert f.read(8).startswith(b"\x89PNG"), "screenshot.png must have valid PNG magic bytes"
 
+    # 2. trace.zip: required + non-empty + valid ZIP archive
     assert trace_path.is_file(), "trace.zip must exist on test failure"
     assert trace_path.stat().st_size > 0, "trace.zip must not be empty"
+    assert zipfile.is_zipfile(str(trace_path)), "trace.zip must be a valid zip archive"
 
+    # 3. video.webm: required + non-empty + valid EBML header
     assert video_path.is_file(), "video.webm must exist and be finalized on test failure"
     assert video_path.stat().st_size > 0, "video.webm must not be empty"
+    with open(video_path, "rb") as f:
+        assert f.read(4) == b"\x1a\x45\xdf\xa3", "video.webm must have valid EBML header"
 
+    # 4. console.log: required + non-empty + contains probe message
     assert console_path.is_file(), "console.log must exist on test failure"
+    assert console_path.stat().st_size > 0, "console.log must not be empty"
     with open(console_path, "r", encoding="utf-8") as f:
         console_content = f.read()
     assert "Artifact verification probe message" in console_content
 
+    # 5. page_errors.log: required + non-empty + contains probe exception
     assert page_errors_path.is_file(), "page_errors.log must exist on test failure"
+    assert page_errors_path.stat().st_size > 0, "page_errors.log must not be empty"
+    with open(page_errors_path, "r", encoding="utf-8") as f:
+        page_errors_content = f.read()
+    assert "__artifact_probe_function_that_does_not_exist__" in page_errors_content
 
     # Clean up test artifact directory after successful verification
     shutil.rmtree(artifact_dir, ignore_errors=True)
