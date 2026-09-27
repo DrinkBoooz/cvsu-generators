@@ -496,6 +496,8 @@
         border: 1px solid var(--border-subtle);
         font-size: 13px;
         gap: 8px;
+        min-width: 0;
+        overflow-wrap: break-word;
         transition:
           border-color 0.15s ease,
           background-color 0.15s ease;
@@ -512,6 +514,7 @@
         justify-content: space-between;
         gap: 10px;
         width: 100%;
+        min-width: 0;
         flex-wrap: wrap;
       }
       .roster-row-actions {
@@ -550,10 +553,18 @@
       }
       .roster-title {
         font-weight: 600;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        font-size: 13px;
+        line-height: 1.4;
+        min-width: 0;
+        max-width: 100%;
+        word-break: break-word;
+        overflow-wrap: anywhere;
+        white-space: normal;
         flex-grow: 1;
+      }
+      .roster-title span {
+        word-break: break-word;
+        overflow-wrap: anywhere;
       }
       .badge-status {
         font-size: 11px;

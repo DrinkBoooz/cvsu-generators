@@ -93,6 +93,40 @@ def test_template_set_form_grid_responsive():
         html = f.read()
     assert 'class="template-set-form-grid"' in html, "ui.html must use template-set-form-grid class"
 
+def test_roster_title_responsive_text_wrapping():
+    """Verify that roster title items allow flexible wrapping without horizontal text clipping."""
+    comp_path = os.path.join(CSS_DIR, "components.css")
+    with open(comp_path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    assert ".roster-title" in content
+    assert "word-break: break-word;" in content
+    assert "overflow-wrap: anywhere;" in content
+    assert "min-width: 0;" in content
+    assert "white-space: normal;" in content
+
+def test_liquid_glass_theme_wavefront():
+    """Verify Option 1 & 2 combined: specular rim shadow and liquid glass wavefront."""
+    modals_path = os.path.join(CSS_DIR, "modals.css")
+    with open(modals_path, "r", encoding="utf-8") as f:
+        css = f.read()
+
+    # Option 1: Specular rim drop shadow on view transition
+    assert "drop-shadow" in css
+    assert "::view-transition-new(root)" in css
+
+    # Option 2: Liquid glass wavefront with backdrop blur
+    assert ".theme-glass-wavefront" in css
+    assert "backdrop-filter: blur(20px)" in css
+    assert "liquidGlassShockwave" in css
+
+    theme_js_path = os.path.join(JS_DIR, "theme.js")
+    with open(theme_js_path, "r", encoding="utf-8") as f:
+        js = f.read()
+
+    assert "theme-glass-wavefront" in js
+
+
 @pytest.mark.playwright
 def test_playwright_responsive_viewports():
     from playwright.sync_api import sync_playwright

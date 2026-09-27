@@ -67,6 +67,20 @@
           doc.style.setProperty("--vt-y", `${y}px`);
           doc.style.setProperty("--vt-radius", `${endRadius}px`);
 
+          // Spawn synchronized Liquid Glass Wavefront (Apple HIG Lens Wave)
+          try {
+            const wave = document.createElement("div");
+            wave.className = "theme-glass-wavefront";
+            wave.style.left = `${x}px`;
+            wave.style.top = `${y}px`;
+            document.body.appendChild(wave);
+            setTimeout(() => {
+              if (wave && wave.parentNode) {
+                wave.parentNode.removeChild(wave);
+              }
+            }, 700);
+          } catch (e) {}
+
           try {
             const transition = document.startViewTransition(() => {
               applyTheme();
