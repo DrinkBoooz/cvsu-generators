@@ -84,6 +84,9 @@
       #modalAppleConfirmBackdrop {
         z-index: 11000 !important;
       }
+      #templateSetEditorModal {
+        z-index: 10500 !important;
+      }
       .modal-dialog-custom {
         background: var(--surface-elevated);
         border: 1px solid var(--border-subtle);
