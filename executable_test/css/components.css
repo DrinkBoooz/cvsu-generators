@@ -19,14 +19,60 @@
       }
       @media (max-width: 600px) {
         .top-header {
-          padding: 10px 14px;
+          padding: 8px 12px;
+        }
+        .brand-lockup {
+          gap: 8px;
+        }
+        .brand-icon {
+          width: 30px;
+          height: 30px;
+          border-radius: 8px;
+        }
+        .brand-title {
+          font-size: 16px;
         }
         .brand-subtitle {
           display: none;
         }
-        .nav-btn {
-          padding: 6px 10px;
-          font-size: 12px;
+        .badge-version {
+          padding: 2px 6px;
+          font-size: 10px;
+        }
+        .header-actions {
+          gap: 6px;
+          flex-shrink: 0;
+        }
+        .header-actions .nav-btn {
+          padding: 6px;
+          min-width: 34px;
+          min-height: 34px;
+          justify-content: center;
+        }
+        .header-actions .nav-btn .nav-btn-label,
+        .header-actions .nav-btn #themeLabel {
+          display: none !important;
+        }
+      }
+      @media (max-width: 400px) {
+        .top-header {
+          padding: 8px 8px;
+        }
+        .brand-lockup {
+          gap: 6px;
+        }
+        .brand-lockup .badge-version {
+          display: none;
+        }
+        .header-actions {
+          gap: 4px;
+        }
+        .header-actions .nav-btn {
+          min-width: 32px;
+          min-height: 32px;
+          width: 32px;
+          height: 32px;
+          padding: 4px;
         }
       }
       .brand-lockup {
@@ -113,6 +159,12 @@
           box-shadow 0.2s ease,
           transform 0.2s ease;
       }
+      @media (max-width: 600px) {
+        .glass-card {
+          padding: 16px 14px;
+          border-radius: var(--radius-md);
+        }
+      }
       .glass-card:hover {
         border-color: rgba(16, 185, 129, 0.22);
       }
@@ -187,7 +239,7 @@
       .step-desc {
         font-size: 11.5px;
         font-weight: 600;
-        color: var(--accent-emerald);
+        color: var(--text-emerald);
         background: rgba(16, 185, 129, 0.08);
         border: 1px solid rgba(16, 185, 129, 0.2);
         padding: 2px 8px;
@@ -512,28 +564,42 @@
       }
       .badge-valid {
         background: rgba(16, 185, 129, 0.15);
-        color: var(--accent-emerald);
+        color: var(--text-emerald);
       }
       .badge-warning {
         background: rgba(245, 158, 11, 0.15);
-        color: var(--accent-amber);
+        color: var(--text-amber);
       }
       .badge-error {
         background: rgba(239, 68, 68, 0.15);
-        color: var(--accent-rose);
+        color: var(--text-rose);
       }
       .btn-remove-roster {
         background: transparent;
         border: none;
         color: var(--text-muted);
         cursor: pointer;
-        padding: 2px 6px;
+        padding: 4px 8px;
+        min-height: 28px;
+        min-width: 28px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
         font-size: 14px;
         border-radius: 6px;
+        transition: background-color 0.15s ease, color 0.15s ease;
       }
       .btn-remove-roster:hover {
         background: rgba(239, 68, 68, 0.12);
-        color: var(--accent-rose);
+        color: var(--text-rose);
+      }
+      @media (max-width: 768px), (pointer: coarse) {
+        .btn-remove-roster {
+          min-height: 38px;
+          min-width: 38px;
+          padding: 8px 10px;
+          font-size: 16px;
+        }
       }
 
       /* ── Document Engine Feature Tiles (Apple HIG) ─────────────────────── */
@@ -595,8 +661,15 @@
       /* ── Stepper Bar (Readiness Tracker - Apple HIG) ───────────────────────── */
       .stepper-bar {
         background: var(--header-bg);
-        padding: 2px 28px;
+        padding: 2px 24px;
         border-bottom: 1px solid var(--border-subtle);
+      }
+      @media (max-width: 880px) {
+        .stepper-bar {
+          padding: 2px 8px;
+          mask-image: linear-gradient(to right, black 85%, transparent 100%);
+          -webkit-mask-image: linear-gradient(to right, black 85%, transparent 100%);
+        }
       }
       .stepper-track {
         max-width: 1400px;

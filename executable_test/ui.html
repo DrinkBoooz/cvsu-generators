@@ -112,7 +112,7 @@
                 d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"
               ></path>
             </svg>
-            Settings
+            <span class="nav-btn-label">Settings</span>
           </button>
           <button
             class="nav-btn"
@@ -138,7 +138,7 @@
               <line x1="16" y1="13" x2="8" y2="13"></line>
               <line x1="16" y1="17" x2="8" y2="17"></line>
             </svg>
-            Logs
+            <span class="nav-btn-label">Logs</span>
           </button>
           <button
             id="btnOpenHelp"
@@ -161,7 +161,7 @@
               <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
               <line x1="12" y1="17" x2="12.01" y2="17"></line>
             </svg>
-            Guides
+            <span class="nav-btn-label">Guides</span>
           </button>
         </nav>
       </header>
@@ -636,14 +636,15 @@
                     >0 Students</span
                   >
                 </div>
-                <div style="display: flex; gap: 6px">
+                <div style="display: flex; gap: 6px; align-items: center;">
                   <input
                     type="text"
                     id="rosterSearchInput"
                     placeholder="Filter rosters..."
                     style="
-                      font-size: 11px;
-                      padding: 2px 8px;
+                      font-size: 12px;
+                      padding: 4px 10px;
+                      min-height: 28px;
                       border-radius: 8px;
                       border: 1px solid var(--border-subtle);
                       background: var(--surface-card);
@@ -654,7 +655,7 @@
                   <button
                     class="nav-btn"
                     id="btnClearAllRosters"
-                    style="padding: 2px 8px; font-size: 11px"
+                    style="padding: 4px 10px; font-size: 12px; min-height: 28px; display: inline-flex; align-items: center;"
                     aria-label="Remove all imported rosters"
                     onclick="clearAllRosters()"
                   >
@@ -3258,7 +3259,7 @@
         </div>
 
         <div style="padding: 20px; overflow-y: auto; flex: 1;">
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;">
+          <div class="template-set-form-grid">
             <div>
               <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 4px;">Template Set Name *</label>
               <input type="text" id="templateSetNameInput" class="form-control-custom" placeholder="e.g. College of Science Template Set" />

@@ -168,6 +168,7 @@ MANIFEST = {
                 "tests/test_ui_accessibility.py",
                 "tests/test_ui_asset_resilience.py",
                 "tests/test_settings_modal_responsive.py",
+                "tests/test_responsive_ui.py",
                 "tests/test_executable_test_api_bindings.py",
                 "tests/test_executable_test_hig_bridge.py",
                 "tests/test_theme_consistency.py",
