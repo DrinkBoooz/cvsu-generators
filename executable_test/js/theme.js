@@ -3,13 +3,6 @@
 
       const MOON_ICON_SVG = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>`;
 
-      function getPreferredSystemTheme() {
-        if (typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
-          return "dark";
-        }
-        return "light";
-      }
-
       function updateThemeButtonState(theme) {
         const btn = document.getElementById("btnToggleTheme");
         const iconSpan = document.getElementById("themeIcon");
@@ -37,9 +30,7 @@
 
         const btn = document.getElementById("btnToggleTheme");
         const iconSpan = document.getElementById("themeIcon");
-        const prefersReducedMotion = typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-        if (iconSpan && !prefersReducedMotion) {
+        if (iconSpan) {
           iconSpan.classList.add("spin-morph");
           setTimeout(() => iconSpan.classList.remove("spin-morph"), 400);
         }
@@ -55,7 +46,7 @@
           void doc.offsetHeight;
         };
 
-        if (document.startViewTransition && !prefersReducedMotion) {
+        if (document.startViewTransition) {
           let x = window.innerWidth - 80;
           let y = 30;
           if (event && typeof event.clientX === "number" && event.clientX > 0) {
@@ -116,22 +107,4 @@
         const theme = saved || "dark";
         document.documentElement.setAttribute("data-theme", theme);
         updateThemeButtonState(theme);
-      }
-
-      if (typeof window !== "undefined" && window.matchMedia) {
-        try {
-          const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-          const handleSchemeChange = (e) => {
-            if (!localStorage.getItem("cvsu_gen_theme")) {
-              const newSystemTheme = e.matches ? "dark" : "light";
-              document.documentElement.setAttribute("data-theme", newSystemTheme);
-              updateThemeButtonState(newSystemTheme);
-            }
-          };
-          if (mediaQuery.addEventListener) {
-            mediaQuery.addEventListener("change", handleSchemeChange);
-          } else if (mediaQuery.addListener) {
-            mediaQuery.addListener(handleSchemeChange);
-          }
-        } catch (e) {}
       }

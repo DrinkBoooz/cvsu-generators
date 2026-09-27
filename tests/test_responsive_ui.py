@@ -72,14 +72,14 @@ def test_responsive_step5_input_stacking():
     assert ".input-with-action" in content
     assert "flex-direction: column;" in content, "input-with-action must stack vertically on mobile"
 
-def test_theme_system_appearance_and_reduced_motion():
+def test_theme_view_transition_and_animation():
     theme_js_path = os.path.join(JS_DIR, "theme.js")
     with open(theme_js_path, "r", encoding="utf-8") as f:
         content = f.read()
 
-    assert "prefers-color-scheme: dark" in content, "theme.js must support system appearance detection"
-    assert "prefers-reduced-motion: reduce" in content, "theme.js must support prefers-reduced-motion"
-    assert "getPreferredSystemTheme" in content
+    assert "document.startViewTransition" in content, "theme.js must use View Transitions API"
+    assert "spin-morph" in content, "theme.js must trigger spin-morph icon animation"
+    assert "clipPath" in content, "theme.js must trigger circular iris animation"
 
 def test_template_set_form_grid_responsive():
     modals_path = os.path.join(CSS_DIR, "modals.css")
