@@ -44,11 +44,7 @@
           } catch (e) {}
         };
 
-        const prefersReducedMotion = window.matchMedia(
-          "(prefers-reduced-motion: reduce)",
-        ).matches;
-
-        if (document.startViewTransition && !prefersReducedMotion) {
+        if (document.startViewTransition) {
           let x = window.innerWidth - 80;
           let y = 30;
           if (event && typeof event.clientX === "number" && event.clientX > 0) {
