@@ -12,6 +12,7 @@ is the authoritative, self-checking source of truth for all tests in the reposit
 
 import os
 import sys
+import json
 from pathlib import Path
 import pytest
 
@@ -19,7 +20,14 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from scripts.test_orchestrator import MANIFEST, AUXILIARY_UTILITIES
+from scripts.test_orchestrator import (
+    MANIFEST,
+    AUXILIARY_UTILITIES,
+    DOCUMENTED_REPO_ARTIFACTS,
+    get_manifest_inventory,
+    resolve_python_executable,
+    validate_report_consistency,
+)
 
 
 def test_manifest_files_exist_on_disk():
@@ -194,3 +202,160 @@ def test_junit_authoritative_parsing_and_no_false_green(tmp_path):
     assert tc2[2]["status"] == "SKIPPED"
     assert tc2[3]["status"] == "ERROR"
 
+
+def test_every_non_test_python_file_is_authoritatively_classified():
+    """
+    Self-Checking Governance Invariant:
+    Every non-test_*.py Python file in tests/ must be:
+      1. Declared in MANIFEST (e.g. tests/audit_structural_patterns.py), OR
+      2. Explicitly listed in AUXILIARY_UTILITIES, OR
+      3. Explicitly declared in DOCUMENTED_REPO_ARTIFACTS (e.g. tests/conftest.py).
+    Guarantees ZERO unclassified Python scripts can exist in the tests/ directory.
+    """
+    manifest_files = set()
+    for steps in MANIFEST.values():
+        for file_list in steps.values():
+            for f in file_list:
+                manifest_files.add(str(Path(f).as_posix()))
+
+    aux_files = {str(Path(f).as_posix()) for f in AUXILIARY_UTILITIES}
+    repo_artifacts = {str(Path(f).as_posix()) for f in DOCUMENTED_REPO_ARTIFACTS}
+
+    tests_dir = REPO_ROOT / "tests"
+    all_non_test_scripts = sorted([
+        p for p in tests_dir.glob("*.py")
+        if not p.name.startswith("test_")
+    ])
+
+    unclassified = []
+    for script in all_non_test_scripts:
+        rel_posix = str(script.relative_to(REPO_ROOT).as_posix())
+        if (
+            rel_posix not in manifest_files
+            and rel_posix not in aux_files
+            and rel_posix not in repo_artifacts
+        ):
+            unclassified.append(rel_posix)
+
+    assert not unclassified, (
+        f"Unclassified non-test Python files found in tests/:\n"
+        + "\n".join(f"  - {f}" for f in unclassified)
+        + "\nEvery tests/*.py file must be in MANIFEST, AUXILIARY_UTILITIES, or DOCUMENTED_REPO_ARTIFACTS."
+    )
+
+
+def test_manifest_inventory_calculation_invariants():
+    """
+    Verifies that get_manifest_inventory() computes all counts programmatically
+    matching the exact underlying MANIFEST data structure:
+      1. reported_layer_file_count == len(manifest_layer_files)
+      2. reported_total_pytest_files == sum(all manifest pytest file counts)
+      3. standalone_audit_files == len(MANIFEST['Layer A']['A1_structural_patterns'])
+      4. total_auxiliary_utilities == len(AUXILIARY_UTILITIES)
+      5. total_orchestrated_files == total_pytest_files + standalone_audit_files
+    """
+    inv = get_manifest_inventory()
+
+    for layer_name, steps in MANIFEST.items():
+        expected_files = sum(len(fl) for fl in steps.values())
+        assert inv["layer_counts"][layer_name] == expected_files, (
+            f"Layer {layer_name} file count mismatch in get_manifest_inventory()"
+        )
+
+    expected_total_pytest = sum(
+        len(files)
+        for layer in MANIFEST.values()
+        for step_id, files in layer.items()
+        if step_id != "A1_structural_patterns"
+    )
+    assert inv["total_pytest_files"] == expected_total_pytest
+    assert inv["standalone_audit_files"] == len(MANIFEST["Layer A"]["A1_structural_patterns"])
+    assert inv["total_auxiliary_utilities"] == len(AUXILIARY_UTILITIES)
+    assert inv["total_orchestrated_files"] == expected_total_pytest + inv["standalone_audit_files"]
+
+
+def test_report_consistency_validation_fails_on_mismatched_counts():
+    """
+    Regression test: proves that validate_report_consistency rejects fabricated or
+    mismatched summary counts with ValueError, preventing false green reports.
+    """
+    valid_report = {
+        "summary": {
+            "total": 10,
+            "passed": 8,
+            "failed": 1,
+            "skipped": 1,
+            "errors": 0,
+            "flaky": 0,
+            "timed_out": 0,
+        },
+        "steps": [
+            {
+                "step_id": "step_1",
+                "status": "PASSED",
+                "counts": {
+                    "total": 5, "passed": 5, "failed": 0, "skipped": 0,
+                    "errors": 0, "flaky": 0, "timed_out": 0,
+                },
+            },
+            {
+                "step_id": "step_2",
+                "status": "FAILED",
+                "counts": {
+                    "total": 5, "passed": 3, "failed": 1, "skipped": 1,
+                    "errors": 0, "flaky": 0, "timed_out": 0,
+                },
+            },
+        ],
+    }
+
+    # Valid payload passes
+    validate_report_consistency(valid_report)
+
+    # Tampering 1: summary total inflated
+    bad_total = json.loads(json.dumps(valid_report))
+    bad_total["summary"]["total"] = 11
+    with pytest.raises(ValueError, match="step total sum.*!= summary total"):
+        validate_report_consistency(bad_total)
+
+    # Tampering 2: summary passed inflated (leaving summary total matching step sum)
+    bad_passed = json.loads(json.dumps(valid_report))
+    bad_passed["summary"]["passed"] = 9
+    bad_passed["summary"]["failed"] = 0
+    with pytest.raises(ValueError, match="step passed sum.*!= summary passed"):
+        validate_report_consistency(bad_passed)
+
+    # Tampering 3: internal arithmetic discrepancy in summary (step sums match summary fields, but fields don't sum to total)
+    bad_arith = json.loads(json.dumps(valid_report))
+    bad_arith["summary"]["total"] = 20
+    bad_arith["steps"][0]["counts"]["total"] = 15
+    # Here sum_total is 5 + 15 = 20 matching summary["total"], but passed(8) + failed(1) + skipped(1) = 10 != 20
+    with pytest.raises(ValueError, match="pipeline total.*does not equal"):
+        validate_report_consistency(bad_arith)
+
+
+def test_resolve_python_executable_portability_and_fallback():
+    """
+    Verifies that resolve_python_executable():
+      1. Returns an existing, functional Python interpreter.
+      2. Contains NO developer-specific paths or hardcoded usernames in its implementation.
+      3. Correctly falls back to a portable candidate when preferred_py does not exist.
+    """
+    import inspect
+    from scripts import test_orchestrator
+
+    py = resolve_python_executable()
+    assert Path(py).is_file(), f"Resolved Python does not exist: {py}"
+
+    src = inspect.getsource(test_orchestrator.resolve_python_executable)
+    assert "danjo" not in src.lower(), (
+        "resolve_python_executable must not contain developer-specific username 'danjo'"
+    )
+    assert "appdata" not in src.lower(), (
+        "resolve_python_executable must not contain developer-specific AppData paths"
+    )
+
+    fallback_py = resolve_python_executable(preferred_py="nonexistent_python_binary_xyz.exe")
+    assert Path(fallback_py).is_file(), (
+        f"Resolver failed to fall back to a valid interpreter when preferred was missing: {fallback_py}"
+    )

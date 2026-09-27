@@ -54,6 +54,36 @@ UI_HTML_PATH = os.path.join(WORKSPACE_DIR, "executable_test", "ui.html")
 FILE_URL = f"file:///{UI_HTML_PATH.replace(os.sep, '/')}"
 
 
+class ControlledWindowMock:
+    """
+    Controlled test seam providing simulated OS file selection to ScriptAPI._window
+    for browser-hosted Playwright tests.
+
+    Architectural boundary documentation:
+      - Browser-hosted D2: Real ui.html DOM + real JavaScript event handlers +
+        real window.pywebview.api bridge + real Python ScriptAPI + real template inspection/role detection.
+      - Native OS file picker: Not exercisable in headless Chromium without a native desktop window.
+        Simulated via ControlledWindowMock.create_file_dialog.
+      - Native desktop picker: Covered in Layer D3 / native host tests.
+    """
+
+    def __init__(self, selected_files: list[str]):
+        self.selected_files = selected_files
+
+    def create_file_dialog(self, dialog_type=None, allow_multiple=False, file_types=()):
+        return tuple(self.selected_files)
+
+
+def inject_test_file_selection(api_instance: ScriptAPI, file_paths: list[str]) -> None:
+    """
+    Named, controlled test seam: attaches ControlledWindowMock to api_instance._window.
+    Crucially, does NOT replace or monkeypatch ScriptAPI.browse_template_set_files,
+    allowing the real production browse implementation to execute its validation,
+    dialog invocation, and delegation to inspect_template_set_files().
+    """
+    api_instance._window = ControlledWindowMock(file_paths)
+
+
 @contextmanager
 def playwright_browser_session(playwright_ctx, api_instance, test_name: str = "playwright_test"):
     """
@@ -260,8 +290,8 @@ def test_playwright_template_set_lifecycle_and_discovery(tmp_path):
     doc.save(docx_path)
 
     api = ScriptAPI()
-    # Wire the real browse_template_set_files API to return the physical template inspection
-    api.browse_template_set_files = lambda: api.inspect_template_set_files([docx_path])
+    # Attach named controlled test seam: executes real production browse_template_set_files()
+    inject_test_file_selection(api, [docx_path])
 
     with sync_playwright() as p:
         with playwright_browser_session(p, api, "template_set_lifecycle_and_discovery") as page:
@@ -364,6 +394,7 @@ def test_playwright_ambiguous_xlsx_sheet_confirmation_flow(tmp_path):
     wb.save(xlsx_path)
 
     api = ScriptAPI()
+    inject_test_file_selection(api, [xlsx_path])
     with sync_playwright() as p:
         with playwright_browser_session(p, api, "ambiguous_xlsx_sheet_confirmation") as page:
             try:
@@ -374,14 +405,9 @@ def test_playwright_ambiguous_xlsx_sheet_confirmation_flow(tmp_path):
                 page.fill("#templateSetNameInput", "Ambiguous Set Test")
                 page.check("#templateSetFallbackCheck")
 
-                # Inspect ambiguous file
-                page.evaluate(f"""async () => {{
-                    const res = await window.pywebview.api.inspect_template_set_files(['{xlsx_path.replace(os.sep, "/")}']);
-                    if (res && res.status === 'success') {{
-                        addInspectedFiles(res.inspections || []);
-                    }}
-                }}""")
-                page.wait_for_timeout(300)
+                # Trigger real UI click on dropzone with injected test file selection
+                page.click("#templateSetDropzone")
+                page.wait_for_timeout(400)
 
                 # Verify card rendered with Discovered Sheet Confirmation
                 card_list = page.locator("#templateSetInspectedFilesList")
@@ -454,6 +480,7 @@ def test_playwright_blank_formula_free_template_flow(tmp_path):
     wb.save(xlsx_path)
 
     api = ScriptAPI()
+    inject_test_file_selection(api, [xlsx_path])
     with sync_playwright() as p:
         with playwright_browser_session(p, api, "blank_formula_free_template") as page:
             try:
@@ -463,13 +490,9 @@ def test_playwright_blank_formula_free_template_flow(tmp_path):
                 page.fill("#templateSetNameInput", "Blank Formula-Free Set")
                 page.check("#templateSetFallbackCheck")
 
-                page.evaluate(f"""async () => {{
-                    const res = await window.pywebview.api.inspect_template_set_files(['{xlsx_path.replace(os.sep, "/")}']);
-                    if (res && res.status === 'success') {{
-                        addInspectedFiles(res.inspections || []);
-                    }}
-                }}""")
-                page.wait_for_timeout(300)
+                # Trigger real UI click on dropzone with injected test file selection
+                page.click("#templateSetDropzone")
+                page.wait_for_timeout(400)
 
                 card_list = page.locator("#templateSetInspectedFilesList")
                 expect(card_list).to_contain_text("blank_custom_grading.xlsx")
@@ -577,3 +600,18 @@ def test_playwright_failure_artifact_infrastructure_verification():
 
     # Clean up test artifact directory after successful verification
     shutil.rmtree(artifact_dir, ignore_errors=True)
+
+
+def test_playwright_browse_function_not_monkeypatched():
+    """
+    Regression assertion:
+    Verifies that ScriptAPI.browse_template_set_files is the genuine production method
+    from TemplateMixin and has NOT been replaced or monkeypatched by an anonymous lambda.
+    """
+    from executable_test.api.templates import TemplateMixin
+
+    api = ScriptAPI()
+    assert api.browse_template_set_files.__func__ is TemplateMixin.browse_template_set_files, (
+        "ScriptAPI.browse_template_set_files must remain the authoritative production method "
+        "and not be monkeypatched with a test lambda."
+    )

@@ -196,6 +196,49 @@ AUXILIARY_UTILITIES = {
     "tests/verify_playwright_theme.py": "Manual visual helper script for theme toggling under Playwright",
 }
 
+# Root repository test infrastructure configuration files
+DOCUMENTED_REPO_ARTIFACTS = {
+    "tests/conftest.py": "Root pytest configuration, shared fixture definitions and session setup",
+}
+
+
+def get_manifest_inventory() -> dict:
+    """
+    Programmatically calculates inventory counts from the authoritative MANIFEST structure.
+    Never uses hardcoded literals.
+    """
+    layer_counts = {}
+    layer_pytest_counts = {}
+    total_pytest_files = 0
+    standalone_audit_files = 0
+
+    for layer_name, steps in MANIFEST.items():
+        files_in_layer = [f for step_files in steps.values() for f in step_files]
+        layer_counts[layer_name] = len(files_in_layer)
+
+        pytest_in_layer = [
+            f for step_id, step_files in steps.items()
+            if step_id != "A1_structural_patterns"
+            for f in step_files
+        ]
+        layer_pytest_counts[layer_name] = len(pytest_in_layer)
+        total_pytest_files += len(pytest_in_layer)
+
+        if "A1_structural_patterns" in steps:
+            standalone_audit_files += len(steps["A1_structural_patterns"])
+
+    total_orchestrated_files = total_pytest_files + standalone_audit_files
+    total_auxiliary_utilities = len(AUXILIARY_UTILITIES)
+
+    return {
+        "layer_counts": layer_counts,
+        "layer_pytest_counts": layer_pytest_counts,
+        "total_pytest_files": total_pytest_files,
+        "standalone_audit_files": standalone_audit_files,
+        "total_orchestrated_files": total_orchestrated_files,
+        "total_auxiliary_utilities": total_auxiliary_utilities,
+    }
+
 
 def get_git_info() -> dict:
     """Collect git branch and commit hash for reporting."""
@@ -223,29 +266,73 @@ def get_git_info() -> dict:
     return info
 
 
-def resolve_python_executable() -> str:
+def resolve_python_executable(preferred_py: str | None = None) -> str:
     """
     Returns the authoritative Python executable containing required test packages (pytest).
-    Falls back gracefully if invoked from an incomplete/unconfigured virtual environment.
+    Resolution order (strictly portable):
+      1. Explicitly supplied interpreter (preferred_py or CVSU_PYTHON env var).
+      2. Repository-local .venv interpreter (.venv/Scripts/python.exe or .venv/bin/python).
+      3. Active Python executable / current runtime (sys.executable).
+      4. Python executables discovered on system PATH (python, python3, py).
+      5. Fail closed with RuntimeError if no executable with pytest is available.
+    Does NOT contain developer-specific or hardcoded user directory paths.
     """
-    candidates = [
-        sys.executable,
-        shutil.which("python"),
-        r"C:\Users\danjo\AppData\Local\Python\bin\python.exe",
-        r"C:\Users\danjo\AppData\Local\Python\pythoncore-3.14-64\python.exe",
-    ]
+    candidates = []
+
+    # 1. Explicitly supplied interpreter
+    if preferred_py:
+        candidates.append(preferred_py)
+    env_py = os.environ.get("CVSU_PYTHON")
+    if env_py:
+        candidates.append(env_py)
+
+    # 2. Repository-local .venv interpreter
+    venv_scripts = REPO_ROOT / ".venv" / "Scripts" / "python.exe"
+    venv_bin = REPO_ROOT / ".venv" / "bin" / "python"
+    candidates.extend([str(venv_scripts), str(venv_bin)])
+
+    # 3. Active runtime interpreter
+    candidates.append(sys.executable)
+
+    # 4. PATH discovered executables
+    for name in ("python", "python3", "py"):
+        which_path = shutil.which(name)
+        if which_path:
+            candidates.append(which_path)
+
+    tried = []
+    seen = set()
     for cand in candidates:
-        if cand and Path(cand).is_file():
+        if not cand:
+            continue
+        cand_str = str(cand)
+        if cand_str in seen:
+            continue
+        seen.add(cand_str)
+
+        cand_path = Path(cand)
+        if cand_path.is_file():
+            tried.append(cand_str)
             try:
-                res = subprocess.run([cand, "-m", "pytest", "--version"], capture_output=True, text=True, timeout=5)
+                res = subprocess.run(
+                    [cand_str, "-m", "pytest", "--version"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
                 if res.returncode == 0:
-                    return str(Path(cand).resolve())
+                    return str(cand_path.resolve())
             except Exception:
                 pass
-    return sys.executable
+
+    raise RuntimeError(
+        f"Unable to resolve a portable Python interpreter with pytest installed.\n"
+        f"Candidate interpreters checked:\n  " + "\n  ".join(tried) + "\n"
+        f"Please activate a valid virtual environment or configure CVSU_PYTHON."
+    )
 
 
-def prepare_test_environment(report_dir: Path) -> dict:
+def prepare_test_environment(report_dir: Path, preferred_py: str | None = None) -> dict:
     """Prepares clean, deterministic test environment and returns metadata."""
     report_dir.mkdir(parents=True, exist_ok=True)
     logs_dir = report_dir / "logs"
@@ -262,7 +349,7 @@ def prepare_test_environment(report_dir: Path) -> dict:
         except Exception:
             pass
 
-    resolved_py = resolve_python_executable()
+    resolved_py = resolve_python_executable(preferred_py)
 
     os.environ["PYTHONUNBUFFERED"] = "1"
     os.environ["PYTHONIOENCODING"] = "utf-8"
@@ -542,6 +629,21 @@ def run_test_step(
                 counts["errors"] = sum(1 for tc in testcases if tc["status"] == "ERROR")
                 counts["passed"] = sum(1 for tc in testcases if tc["status"] == "PASSED")
 
+    counts.setdefault("flaky", len(flaky_cases))
+    counts.setdefault("timed_out", 1 if timed_out else 0)
+    counts.setdefault("errors", 0)
+    counts.setdefault("skipped", 0)
+    if timed_out and counts.get("failed", 0) == 1 and counts.get("passed", 0) == 0:
+        counts["failed"] = 0
+    counts["total"] = (
+        counts["passed"]
+        + counts["failed"]
+        + counts["skipped"]
+        + counts["flaky"]
+        + counts["timed_out"]
+        + counts["errors"]
+    )
+
     if timed_out:
         status = "TIMED_OUT"
     elif not passed and len(flaky_cases) > 0 and counts.get("failed", 0) == 0 and counts.get("errors", 0) == 0:
@@ -557,6 +659,7 @@ def run_test_step(
         f"  +-- Status: {color}{status}{reset} | Duration: {duration:.2f}s | "
         f"Passed: {counts['passed']} | Failed: {counts['failed']} | Skipped: {counts['skipped']}"
         + (f" | \033[93mFlaky: {len(flaky_cases)}\033[0m" if flaky_cases else "")
+        + (f" | \033[91mTimed Out: {counts['timed_out']}\033[0m" if counts["timed_out"] else "")
     )
 
     return {
@@ -686,8 +789,71 @@ def define_pipeline(selected_layers: list[str]) -> list[dict]:
     return steps
 
 
+def validate_report_consistency(report_data: dict) -> None:
+    """
+    Validates mathematical self-consistency across all step results and summary aggregates.
+    Fails closed immediately if report arithmetic contains any discrepancy or fabrication.
+    """
+    summary = report_data["summary"]
+    steps = report_data["steps"]
+
+    sum_total = sum(s["counts"]["total"] for s in steps)
+    sum_passed = sum(s["counts"]["passed"] for s in steps)
+    sum_failed = sum(s["counts"]["failed"] for s in steps)
+    sum_skipped = sum(s["counts"]["skipped"] for s in steps)
+    sum_errors = sum(s["counts"].get("errors", 0) for s in steps)
+    sum_flaky = sum(s["counts"].get("flaky", 0) for s in steps)
+    sum_timed_out = sum(s["counts"].get("timed_out", 0) for s in steps)
+
+    if sum_total != summary["total"]:
+        raise ValueError(
+            f"Report arithmetic inconsistency: step total sum ({sum_total}) != summary total ({summary['total']})"
+        )
+    if sum_passed != summary["passed"]:
+        raise ValueError(
+            f"Report arithmetic inconsistency: step passed sum ({sum_passed}) != summary passed ({summary['passed']})"
+        )
+    if sum_failed != summary["failed"]:
+        raise ValueError(
+            f"Report arithmetic inconsistency: step failed sum ({sum_failed}) != summary failed ({summary['failed']})"
+        )
+    if sum_skipped != summary["skipped"]:
+        raise ValueError(
+            f"Report arithmetic inconsistency: step skipped sum ({sum_skipped}) != summary skipped ({summary['skipped']})"
+        )
+    if sum_errors != summary["errors"]:
+        raise ValueError(
+            f"Report arithmetic inconsistency: step errors sum ({sum_errors}) != summary errors ({summary['errors']})"
+        )
+    if sum_flaky != summary["flaky"]:
+        raise ValueError(
+            f"Report arithmetic inconsistency: step flaky sum ({sum_flaky}) != summary flaky ({summary['flaky']})"
+        )
+    if sum_timed_out != summary["timed_out"]:
+        raise ValueError(
+            f"Report arithmetic inconsistency: step timed_out sum ({sum_timed_out}) != summary timed_out ({summary['timed_out']})"
+        )
+
+    calculated_total = (
+        summary["passed"]
+        + summary["failed"]
+        + summary["skipped"]
+        + summary["flaky"]
+        + summary["timed_out"]
+        + summary["errors"]
+    )
+    if summary["total"] != calculated_total:
+        raise ValueError(
+            f"Report arithmetic inconsistency: pipeline total ({summary['total']}) does not equal "
+            f"passed ({summary['passed']}) + failed ({summary['failed']}) + skipped ({summary['skipped']}) + "
+            f"flaky ({summary['flaky']}) + timed_out ({summary['timed_out']}) + errors ({summary['errors']}) = {calculated_total}"
+        )
+
+
 def generate_reports(report_data: dict, report_dir: Path) -> tuple[Path, Path, Path, Path]:
     """Generates machine-readable JSON and human-readable Markdown test reports."""
+    validate_report_consistency(report_data)
+
     timestamp_slug = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
 
     # 1. JSON Report
@@ -706,6 +872,14 @@ def generate_reports(report_data: dict, report_dir: Path) -> tuple[Path, Path, P
         if report_data["overall_status"] == "PASSED"
         else "🔴 **FAILURES DETECTED**"
     )
+
+    inv = report_data.get("inventory") or get_manifest_inventory()
+    total_pytest_files = inv["total_pytest_files"]
+    standalone_audit_files = inv["standalone_audit_files"]
+    total_orchestrated_files = inv["total_orchestrated_files"]
+    total_auxiliary_utilities = inv["total_auxiliary_utilities"]
+    total_repo_artifacts = len(DOCUMENTED_REPO_ARTIFACTS)
+    total_inventory = total_orchestrated_files + total_auxiliary_utilities + total_repo_artifacts
 
     md_lines = [
         "# Automated Test Orchestration Report",
@@ -731,7 +905,7 @@ def generate_reports(report_data: dict, report_dir: Path) -> tuple[Path, Path, P
         f"| Skipped | {report_data['summary']['skipped']} |",
         f"| Errors | {report_data['summary']['errors']} |",
         f"| Flaky Tests | {report_data['summary']['flaky']} |",
-        f"| Timed Out Steps | {report_data['summary']['timed_out_steps']} |",
+        f"| Timed Out | {report_data['summary']['timed_out']} |",
         "",
         "## Technical Layer Architecture",
         "",
@@ -759,22 +933,33 @@ def generate_reports(report_data: dict, report_dir: Path) -> tuple[Path, Path, P
             f"| `{s['step_id']}` | {s['layer']} | {s['name']} | {badge} | {s['counts']['passed']} passed | {s['duration_sec']:.2f}s | [`{log_name}`](logs/{log_name}) | {xml_cell} |"
         )
 
-    total_pytest_files = sum(
-        len(files)
-        for layer in MANIFEST.values()
-        for step_id, files in layer.items()
-        if step_id != "A1_structural_patterns"
-    )
-
     md_lines.extend([
         "",
         "## Repository Test Inventory Reconciliation",
         "",
-        f"The repository test directory contains **{total_pytest_files}** authoritative pytest test suites plus **1** standalone structural authority audit script (74 orchestrated test suites in total), all **100% orchestrated** in this pipeline.",
+        "| Category | File Count | Scope / Execution Policy |",
+        "| :--- | :---: | :--- |",
+        f"| **ORCHESTRATED TEST FILES** | **{total_pytest_files}** | Authoritative pytest test suites executed in Layers A2, B, C, D1, D2, D3, E |",
+        f"| **STANDALONE AUDIT SCRIPTS** | **{standalone_audit_files}** | Standalone AST / structural authority inspection (`tests/audit_structural_patterns.py`) executed in Layer A1 |",
+        f"| **DECLARED AUXILIARY UTILITIES** | **{total_auxiliary_utilities}** | Standalone diagnostic probes, diff utilities, and manual inspection tools excluded with architectural justification |",
+        f"| **DOCUMENTED REPOSITORY ARTIFACTS** | **{total_repo_artifacts}** | Root pytest configuration & fixture definition (`tests/conftest.py`) |",
+        f"| **TOTAL INVENTORY** | **{total_inventory}** | 100% of all Python files in `tests/` accounted for with zero unclassified files |",
         "",
-        "### Excluded Auxiliary Utilities & Diagnostic Probes",
+        "### Breakdown of Orchestrated Test Suites by Layer",
         "",
-        "The following 12 non-test scripts in `tests/` are excluded from automated test collection with explicit architectural justification:",
+        "| Layer | Pytest Suites | Standalone Audits | Total Files | Scope |",
+        "| :--- | :---: | :---: | :---: | :--- |",
+        f"| **Layer A** | {inv['layer_pytest_counts']['Layer A']} | {standalone_audit_files} | {inv['layer_counts']['Layer A']} | Static AST Governance & Structural Authority |",
+        f"| **Layer B** | {inv['layer_pytest_counts']['Layer B']} | 0 | {inv['layer_counts']['Layer B']} | Parsers, Resolvers, Detectors, Validators, Generators, Probes |",
+        f"| **Layer C** | {inv['layer_pytest_counts']['Layer C']} | 0 | {inv['layer_counts']['Layer C']} | Adversarial Template Matrix & Mutation Invariance |",
+        f"| **Layer D1** | {inv['layer_pytest_counts']['Layer D1']} | 0 | {inv['layer_counts']['Layer D1']} | UI API Bridge, Theme, Layout, Accessibility |",
+        f"| **Layer D2** | {inv['layer_pytest_counts']['Layer D2']} | 0 | {inv['layer_counts']['Layer D2']} | Browser ScriptAPI Bridge E2E (Playwright Chromium) |",
+        f"| **Layer D3** | {inv['layer_pytest_counts']['Layer D3']} | 0 | {inv['layer_counts']['Layer D3']} | Native Desktop Host (Windows WebView2 Window) |",
+        f"| **Layer E** | {inv['layer_pytest_counts']['Layer E']} | 0 | {inv['layer_counts']['Layer E']} | Windows PE Metadata & Packaged Executable Smoke |",
+        "",
+        f"### Declared Auxiliary Utilities & Diagnostic Probes ({total_auxiliary_utilities} files)",
+        "",
+        f"The following {total_auxiliary_utilities} non-test scripts in `tests/` are excluded from automated test collection with explicit architectural justification:",
         "",
         "| Script Path | Purpose & Exclusion Justification |",
         "| :--- | :--- |",
@@ -792,7 +977,7 @@ def generate_reports(report_data: dict, report_dir: Path) -> tuple[Path, Path, P
         "- **Validator Verifies Structural Compatibility**: Ambiguity fails closed; sheets missing required headers are rejected immediately.",
         "- **Generator Consumes Validated Recipes**: Document generation executes strictly through validated structural recipes.",
         "- **User Constrained to Discovered Candidates**: Users may choose only from discovered candidate roles/sheets; no user-supplied coordinates permitted.",
-        "- **Browser ScriptAPI Bridge Verified**: Headless Chromium validates real `ui.html` interacting directly with the real Python `ScriptAPI` without coordinate mocks.",
+        "- **Browser ScriptAPI Bridge Verified**: Headless Chromium validates real `ui.html` interacting directly with the real Python `ScriptAPI` without coordinate mocks (utilizing named controlled test seam `inject_test_file_selection` for simulated OS file dialog selection).",
         "- **Native PyWebView Host Verified**: Windows WebView2 native container bootstraps real UI, validates bidirectional IPC, exercises native DnD, and shuts down cleanly.",
         "- **Packaged Binary Verified**: PE version headers, Copyright notices, and process startup smoke tested gracefully on Windows.",
         "",
@@ -883,6 +1068,12 @@ def main() -> int:
     )
 
     parser.add_argument(
+        "--python",
+        type=str,
+        default=None,
+        help="Explicit Python interpreter to execute tests.",
+    )
+    parser.add_argument(
         "--fail-fast",
         "-x",
         action="store_true",
@@ -951,7 +1142,7 @@ def main() -> int:
 
     # Initialize environment
     start_total_time = time.perf_counter()
-    env_meta = prepare_test_environment(args.report_dir)
+    env_meta = prepare_test_environment(args.report_dir, preferred_py=args.python)
     git_meta = get_git_info()
 
     print("=" * 80)
@@ -1003,9 +1194,9 @@ def main() -> int:
         "passed": sum(s["counts"]["passed"] for s in step_results),
         "failed": sum(s["counts"]["failed"] for s in step_results),
         "skipped": sum(s["counts"]["skipped"] for s in step_results),
-        "errors": sum(s["counts"]["errors"] for s in step_results),
-        "flaky": len(all_flaky_tests),
-        "timed_out_steps": sum(1 for s in step_results if s.get("timed_out", False)),
+        "errors": sum(s["counts"].get("errors", 0) for s in step_results),
+        "flaky": sum(s["counts"].get("flaky", 0) for s in step_results),
+        "timed_out": sum(s["counts"].get("timed_out", 0) for s in step_results),
     }
 
     report_payload = {
@@ -1013,12 +1204,16 @@ def main() -> int:
         "execution_mode": "Authoritative Local Pipeline",
         "git": git_meta,
         "environment": env_meta,
+        "inventory": get_manifest_inventory(),
         "overall_status": "PASSED" if overall_passed else "FAILED",
         "total_duration_sec": round(total_duration, 3),
         "summary": summary,
         "flaky_tests": all_flaky_tests,
         "steps": step_results,
     }
+
+    # Validate mathematical self-consistency before generating reports (fails closed if discrepancy found)
+    validate_report_consistency(report_payload)
 
     json_path, _, md_path, _ = generate_reports(report_payload, args.report_dir)
 
@@ -1038,7 +1233,7 @@ def main() -> int:
     print(
         f"  Result: {status_str} | Tests: {summary['total']} total | "
         f"Passed: {summary['passed']} | Failed: {summary['failed']} | Skipped: {summary['skipped']} | "
-        f"Flaky: {summary['flaky']} | Duration: {total_duration:.2f}s"
+        f"Flaky: {summary['flaky']} | Timed Out: {summary['timed_out']} | Errors: {summary['errors']} | Duration: {total_duration:.2f}s"
     )
     print(f"  JSON Report:     {json_path}")
     print(f"  Markdown Report: {md_path}")
