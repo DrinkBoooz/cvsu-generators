@@ -42,11 +42,13 @@
           try {
             localStorage.setItem("cvsu_gen_theme", newTheme);
           } catch (e) {}
-          // Force layout flush so new styles are registered in snapshot
-          void doc.offsetHeight;
         };
 
-        if (document.startViewTransition) {
+        const prefersReducedMotion = window.matchMedia(
+          "(prefers-reduced-motion: reduce)",
+        ).matches;
+
+        if (document.startViewTransition && !prefersReducedMotion) {
           let x = window.innerWidth - 80;
           let y = 30;
           if (event && typeof event.clientX === "number" && event.clientX > 0) {
@@ -73,12 +75,14 @@
             wave.className = "theme-glass-wavefront";
             wave.style.left = `${x}px`;
             wave.style.top = `${y}px`;
+            wave.style.width = `${endRadius * 2.2}px`;
+            wave.style.height = `${endRadius * 2.2}px`;
             document.body.appendChild(wave);
             setTimeout(() => {
               if (wave && wave.parentNode) {
                 wave.parentNode.removeChild(wave);
               }
-            }, 700);
+            }, 460);
           } catch (e) {}
 
           try {
@@ -96,8 +100,8 @@
                 ],
               },
               {
-                duration: 650,
-                easing: "cubic-bezier(0.25, 1, 0.5, 1)",
+                duration: 420,
+                easing: "cubic-bezier(0.2, 0, 0, 1)",
                 pseudoElement: "::view-transition-new(root)",
               },
             );

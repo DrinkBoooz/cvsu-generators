@@ -106,18 +106,15 @@ def test_roster_title_responsive_text_wrapping():
     assert "white-space: normal;" in content
 
 def test_liquid_glass_theme_wavefront():
-    """Verify Option 1 & 2 combined: specular rim shadow and liquid glass wavefront."""
+    """Verify Apple Liquid Glass annular wavefront with specular edge refraction."""
     modals_path = os.path.join(CSS_DIR, "modals.css")
     with open(modals_path, "r", encoding="utf-8") as f:
         css = f.read()
 
-    # Option 1: Specular rim drop shadow on view transition
-    assert "drop-shadow" in css
-    assert "::view-transition-new(root)" in css
-
-    # Option 2: Liquid glass wavefront with backdrop blur
+    # Annular edge wave with backdrop blur and specular refraction
     assert ".theme-glass-wavefront" in css
-    assert "backdrop-filter: blur(20px)" in css
+    assert "mask-image" in css
+    assert "backdrop-filter" in css
     assert "liquidGlassShockwave" in css
 
     theme_js_path = os.path.join(JS_DIR, "theme.js")
