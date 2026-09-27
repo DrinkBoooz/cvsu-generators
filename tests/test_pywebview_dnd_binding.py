@@ -1,3 +1,17 @@
+"""
+Native PyWebView Drag-and-Drop Binding Integration Test.
+
+Verifies:
+  1. Windows Forms AllowDrop and pywebview drop listener handlers attach to the native WebView2 window.
+  2. Global JavaScript callbacks (window.onScheduleLoaded, window.onRostersLoaded) exist in ui.html.
+  3. PyWebView internal DOM event listener state reflects active drop registration.
+
+Architectural Boundary:
+  This proves native DnD handler attachment and binding inside the live pywebview desktop host.
+  Actual OS-level OLE mouse drag-and-drop delivery is not automated via synthetic mouse coordinates.
+  Event routing from drop payloads into ScriptAPI is independently tested in test_executable_dnd_routing.py.
+"""
+
 import os
 import sys
 import webview

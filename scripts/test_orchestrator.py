@@ -79,6 +79,7 @@ MANIFEST = {
             "tests/test_dependency_manifests.py",
             "tests/test_obsidian_vault_integrity.py",
             "tests/test_api_inventory.py",
+            "tests/test_manifest_integrity.py",
         ],
     },
     "Layer B": {
@@ -222,6 +223,28 @@ def get_git_info() -> dict:
     return info
 
 
+def resolve_python_executable() -> str:
+    """
+    Returns the authoritative Python executable containing required test packages (pytest).
+    Falls back gracefully if invoked from an incomplete/unconfigured virtual environment.
+    """
+    candidates = [
+        sys.executable,
+        shutil.which("python"),
+        r"C:\Users\danjo\AppData\Local\Python\bin\python.exe",
+        r"C:\Users\danjo\AppData\Local\Python\pythoncore-3.14-64\python.exe",
+    ]
+    for cand in candidates:
+        if cand and Path(cand).is_file():
+            try:
+                res = subprocess.run([cand, "-m", "pytest", "--version"], capture_output=True, text=True, timeout=5)
+                if res.returncode == 0:
+                    return str(Path(cand).resolve())
+            except Exception:
+                pass
+    return sys.executable
+
+
 def prepare_test_environment(report_dir: Path) -> dict:
     """Prepares clean, deterministic test environment and returns metadata."""
     report_dir.mkdir(parents=True, exist_ok=True)
@@ -231,6 +254,15 @@ def prepare_test_environment(report_dir: Path) -> dict:
     junit_dir.mkdir(parents=True, exist_ok=True)
     playwright_dir = report_dir / "playwright"
     playwright_dir.mkdir(parents=True, exist_ok=True)
+
+    # Clean stale junit xml files from previous runs to prevent stale metric leakage
+    for old_xml in junit_dir.glob("*.xml"):
+        try:
+            old_xml.unlink()
+        except Exception:
+            pass
+
+    resolved_py = resolve_python_executable()
 
     os.environ["PYTHONUNBUFFERED"] = "1"
     os.environ["PYTHONIOENCODING"] = "utf-8"
@@ -243,6 +275,7 @@ def prepare_test_environment(report_dir: Path) -> dict:
     return {
         "repo_root": str(REPO_ROOT),
         "python_version": sys.version.split()[0],
+        "python_executable": resolved_py,
         "platform": sys.platform,
         "report_dir": str(report_dir),
         "logs_dir": str(logs_dir),
@@ -408,13 +441,19 @@ def run_test_step(
     timeout_sec: float = DEFAULT_STEP_TIMEOUT_SEC,
     is_audit_script: bool = False,
     retry_flaky: bool = False,
+    py_executable: str | None = None,
 ) -> dict:
     """Executes a single test step and returns authoritative structured result."""
     print(f"\n>> [{step_id}] {name}")
     log_file = logs_dir / f"{step_id}.log"
     junit_xml = junit_dir / f"{step_id}.xml"
+    if junit_xml.is_file():
+        try:
+            junit_xml.unlink()
+        except Exception:
+            pass
 
-    py = sys.executable
+    py = py_executable or sys.executable
     if is_audit_script:
         cmd = [py, files[0]]
     else:
@@ -447,15 +486,22 @@ def run_test_step(
             "message": f"Category E violations: {violations}" if not passed else "",
         }]
     else:
+        xml_exists = junit_xml.is_file()
         counts, testcases = parse_junit_xml(junit_xml)
-        if counts["total"] == 0:
-            counts["total"] = 1
-            if exit_code == 0 and not timed_out:
-                counts["passed"] = 1
-            else:
-                counts["failed"] = 1
-
-        passed = (exit_code == 0) and (counts["failed"] == 0) and (counts["errors"] == 0) and not timed_out
+        if not xml_exists or counts["total"] == 0:
+            counts["total"] = max(counts["total"], 1)
+            counts["failed"] = max(counts["failed"], 1)
+            passed = False
+        else:
+            if exit_code != 0 and counts["failed"] == 0 and counts["errors"] == 0:
+                counts["errors"] = 1
+                counts["total"] = counts["passed"] + counts["failed"] + counts["skipped"] + counts["errors"]
+            passed = (
+                (exit_code == 0)
+                and (counts["failed"] == 0)
+                and (counts["errors"] == 0)
+                and not timed_out
+            )
 
         # Real Flaky Test Detection: If retry_flaky enabled and first run had failures
         if not passed and retry_flaky and not timed_out:
@@ -464,6 +510,11 @@ def run_test_step(
                 print(f"  \033[93m[RETRY] Step {step_id} had {len(failed_cases)} failures. Executing single retry pass for flaky classification...\033[0m")
                 retry_log = logs_dir / f"{step_id}_retry.log"
                 retry_xml = junit_dir / f"{step_id}_retry.xml"
+                if retry_xml.is_file():
+                    try:
+                        retry_xml.unlink()
+                    except Exception:
+                        pass
                 r_code, r_dur, r_out, r_to = run_command(
                     [py, "-m", "pytest", *files, f"--junitxml={str(retry_xml)}", "-v"],
                     cwd=REPO_ROOT,
@@ -486,7 +537,19 @@ def run_test_step(
                         })
                         fc["status"] = "FLAKY"
 
-    status = "TIMED_OUT" if timed_out else ("PASSED" if passed else "FAILED")
+                counts["flaky"] = len(flaky_cases)
+                counts["failed"] = sum(1 for tc in testcases if tc["status"] == "FAILED")
+                counts["errors"] = sum(1 for tc in testcases if tc["status"] == "ERROR")
+                counts["passed"] = sum(1 for tc in testcases if tc["status"] == "PASSED")
+
+    if timed_out:
+        status = "TIMED_OUT"
+    elif not passed and len(flaky_cases) > 0 and counts.get("failed", 0) == 0 and counts.get("errors", 0) == 0:
+        status = "FLAKY"
+    elif passed:
+        status = "PASSED"
+    else:
+        status = "FAILED"
     color = "\033[92m" if passed else "\033[91m"
     reset = "\033[0m"
 
@@ -918,6 +981,7 @@ def main() -> int:
             timeout_sec=step_timeout,
             is_audit_script=step.get("is_audit", False),
             retry_flaky=args.retry_flaky,
+            py_executable=env_meta.get("python_executable", sys.executable),
         )
         step_results.append(res)
         if res.get("flaky_cases"):

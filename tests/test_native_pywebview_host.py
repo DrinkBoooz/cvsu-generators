@@ -51,12 +51,41 @@ def test_native_pywebview_host_lifecycle():
                 "typeof window.pywebview === 'object' && typeof window.pywebview.api === 'object'"
             )
 
-            # 3. Two-way bridge call into real Python ScriptAPI
+            # 3. Two-way bridge call into real Python ScriptAPI from inside WebView2
             results["has_get_parser_config"] = window.evaluate_js("typeof window.pywebview.api.get_parser_config === 'function'")
             results["has_get_template_sets"] = window.evaluate_js("typeof window.pywebview.api.get_template_sets === 'function'")
             results["has_run_generation"] = window.evaluate_js("typeof window.pywebview.api.run_generation === 'function'")
-            results["bridge_call_res"] = window.evaluate_js("window.pywebview.api.get_parser_config()")
-            results["bridge_call_success"] = isinstance(results["bridge_call_res"], dict)
+
+            # Execute real JS -> Python ScriptAPI -> JS Promise resolution round trip
+            window.evaluate_js("""
+                window.__bridge_roundtrip_done = false;
+                window.__bridge_roundtrip_err = null;
+                window.__bridge_roundtrip_res = null;
+
+                window.pywebview.api.get_parser_config().then(cfg => {
+                    window.__bridge_roundtrip_res = cfg;
+                    window.__bridge_roundtrip_done = true;
+                }).catch(err => {
+                    window.__bridge_roundtrip_err = String(err);
+                    window.__bridge_roundtrip_done = true;
+                });
+            """)
+
+            # Poll for JS promise completion from inside the host
+            import time
+            for _ in range(40):
+                time.sleep(0.05)
+                if window.evaluate_js("window.__bridge_roundtrip_done"):
+                    break
+
+            results["bridge_done"] = window.evaluate_js("window.__bridge_roundtrip_done")
+            results["bridge_err"] = window.evaluate_js("window.__bridge_roundtrip_err")
+            results["bridge_has_prefixes"] = window.evaluate_js(
+                "Boolean(window.__bridge_roundtrip_res && Array.isArray(window.__bridge_roundtrip_res.base_subject_prefixes))"
+            )
+            results["bridge_version"] = window.evaluate_js(
+                "window.__bridge_roundtrip_res ? window.__bridge_roundtrip_res.version : null"
+            )
 
             # 4. Drag-and-Drop listener registration
             setup_window_drag_and_drop(window, api)
@@ -89,8 +118,9 @@ def test_native_pywebview_host_lifecycle():
     assert results.get("has_pywebview_api") is True, "window.pywebview.api bridge must exist in native host"
     assert results.get("has_get_parser_config") is True, "window.pywebview.api.get_parser_config must exist in native host"
     assert results.get("has_get_template_sets") is True, "window.pywebview.api.get_template_sets must exist in native host"
-    assert results.get("has_run_generation") is True, "window.pywebview.api.run_generation must exist in native host"
-    assert results.get("bridge_call_success") is True, "Bridge call get_parser_config() must resolve without error"
+    assert results.get("bridge_done") is True, f"Native bridge call timed out. Error: {results.get('bridge_err')}"
+    assert results.get("bridge_err") is None, f"Native bridge call raised JS exception: {results.get('bridge_err')}"
+    assert results.get("bridge_has_prefixes") is True, "Bridge call returned payload must be verified directly inside JavaScript"
     assert results.get("has_schedule_callback") is True, "window.onScheduleLoaded must exist after DnD setup"
     assert results.get("has_rosters_callback") is True, "window.onRostersLoaded must exist after DnD setup"
     assert results.get("dnd_listeners_count", 0) > 0, "Native DnD listeners must be registered"

@@ -98,6 +98,7 @@ def playwright_browser_session(playwright_ctx, api_instance, test_name: str = "p
     page.goto(FILE_URL)
     page.wait_for_load_state("domcontentloaded")
 
+    artifact_errors = []
     test_failed = False
     try:
         yield page
@@ -106,37 +107,58 @@ def playwright_browser_session(playwright_ctx, api_instance, test_name: str = "p
         artifact_dir.mkdir(parents=True, exist_ok=True)
         try:
             page.screenshot(path=str(artifact_dir / "screenshot.png"), full_page=True)
-        except Exception:
-            pass
+        except Exception as e:
+            artifact_errors.append(f"screenshot: {e}")
         try:
             context.tracing.stop(path=str(artifact_dir / "trace.zip"))
-        except Exception:
-            pass
+        except Exception as e:
+            artifact_errors.append(f"trace: {e}")
         try:
             with open(artifact_dir / "console.log", "w", encoding="utf-8") as f:
                 f.write("\n".join(console_logs))
-        except Exception:
-            pass
+        except Exception as e:
+            artifact_errors.append(f"console: {e}")
         try:
             with open(artifact_dir / "page_errors.log", "w", encoding="utf-8") as f:
                 f.write("\n".join(page_errors))
-        except Exception:
-            pass
+        except Exception as e:
+            artifact_errors.append(f"page_errors: {e}")
         raise
     finally:
         video = page.video
-        video_path = video.path() if video else None
+        video_path = None
         try:
-            context.close()
-            browser.close()
+            if video:
+                video_path = video.path()
         except Exception:
             pass
 
-        if test_failed and video_path and os.path.exists(video_path):
-            try:
-                shutil.move(video_path, str(artifact_dir / "video.webm"))
-            except Exception:
-                pass
+        try:
+            context.close()
+        except Exception as e:
+            if test_failed:
+                artifact_errors.append(f"context_close: {e}")
+        try:
+            browser.close()
+        except Exception as e:
+            if test_failed:
+                artifact_errors.append(f"browser_close: {e}")
+
+        if test_failed:
+            if video_path and os.path.exists(video_path):
+                try:
+                    shutil.move(video_path, str(artifact_dir / "video.webm"))
+                except Exception as e:
+                    artifact_errors.append(f"video_move: {e}")
+            else:
+                artifact_errors.append("video: path not created or missing on failure")
+
+            if artifact_errors:
+                try:
+                    with open(artifact_dir / "artifact_errors.log", "w", encoding="utf-8") as f:
+                        f.write("\n".join(artifact_errors))
+                except Exception:
+                    pass
         elif video_path and os.path.exists(video_path):
             try:
                 os.remove(video_path)
@@ -238,6 +260,9 @@ def test_playwright_template_set_lifecycle_and_discovery(tmp_path):
     doc.save(docx_path)
 
     api = ScriptAPI()
+    # Wire the real browse_template_set_files API to return the physical template inspection
+    api.browse_template_set_files = lambda: api.inspect_template_set_files([docx_path])
+
     with sync_playwright() as p:
         with playwright_browser_session(p, api, "template_set_lifecycle_and_discovery") as page:
             try:
@@ -256,14 +281,9 @@ def test_playwright_template_set_lifecycle_and_discovery(tmp_path):
                 page.fill("#templateSetNameInput", "Engineering Custom Set")
                 page.fill("#templateSetDescInput", "Department test template set")
 
-                # 4. Trigger inspection of template file via exposed bridge
-                page.evaluate(f"""async () => {{
-                    const res = await window.pywebview.api.inspect_template_set_files(['{docx_path.replace(os.sep, "/")}']);
-                    if (res && res.status === 'success') {{
-                        addInspectedFiles(res.inspections || []);
-                    }}
-                }}""")
-                page.wait_for_timeout(300)
+                # 4. Trigger inspection via REAL user UI click on #templateSetDropzone
+                page.click("#templateSetDropzone")
+                page.wait_for_timeout(400)
 
                 # Verify inspection card rendered
                 card_list = page.locator("#templateSetInspectedFilesList")
@@ -499,3 +519,61 @@ def test_playwright_invalid_template_rejection(tmp_path):
             card_list = page.locator("#templateSetInspectedFilesList")
             expect(card_list).to_contain_text("corrupt_template.docx")
             expect(card_list).to_contain_text("❌")
+
+
+def test_playwright_failure_artifact_infrastructure_verification():
+    """
+    Infrastructure self-test: Intentionally triggers a failure inside a controlled
+    playwright_browser_session and proves that:
+      1. Failure is caught.
+      2. screenshot.png is captured and non-empty.
+      3. trace.zip is captured and non-empty.
+      4. video.webm is finalized, moved, and non-empty.
+      5. console.log is captured with messages.
+      6. page_errors.log is captured.
+    Cleans up the test artifact directory upon completion so test suite remains clean.
+    """
+    test_session_name = "infra_failure_verification_test"
+    artifact_dir = Path(WORKSPACE_DIR) / "test_reports" / "playwright" / test_session_name
+    if artifact_dir.exists():
+        shutil.rmtree(artifact_dir, ignore_errors=True)
+
+    api = ScriptAPI()
+    caught_failure = False
+
+    with sync_playwright() as p:
+        try:
+            with playwright_browser_session(p, api, test_session_name) as page:
+                page.evaluate("console.log('Artifact verification probe message')")
+                assert False, "Controlled assertion failure for artifact pipeline verification"
+        except AssertionError as e:
+            caught_failure = True
+            assert "Controlled assertion failure" in str(e)
+
+    assert caught_failure is True, "Controlled failure must be raised and caught"
+    assert artifact_dir.is_dir(), "Artifact directory must be created on test failure"
+
+    screenshot_path = artifact_dir / "screenshot.png"
+    trace_path = artifact_dir / "trace.zip"
+    video_path = artifact_dir / "video.webm"
+    console_path = artifact_dir / "console.log"
+    page_errors_path = artifact_dir / "page_errors.log"
+
+    assert screenshot_path.is_file(), "screenshot.png must exist on test failure"
+    assert screenshot_path.stat().st_size > 0, "screenshot.png must not be empty"
+
+    assert trace_path.is_file(), "trace.zip must exist on test failure"
+    assert trace_path.stat().st_size > 0, "trace.zip must not be empty"
+
+    assert video_path.is_file(), "video.webm must exist and be finalized on test failure"
+    assert video_path.stat().st_size > 0, "video.webm must not be empty"
+
+    assert console_path.is_file(), "console.log must exist on test failure"
+    with open(console_path, "r", encoding="utf-8") as f:
+        console_content = f.read()
+    assert "Artifact verification probe message" in console_content
+
+    assert page_errors_path.is_file(), "page_errors.log must exist on test failure"
+
+    # Clean up test artifact directory after successful verification
+    shutil.rmtree(artifact_dir, ignore_errors=True)
