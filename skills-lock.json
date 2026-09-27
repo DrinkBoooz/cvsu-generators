@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "skills": {
+    "apple-design": {
+      "source": "dickwu/apple-design-skill",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "1d50548823a11269581e27242f9cdad2e01be9097680e861cca45abbc2ce6ca5"
+    },
+    "apple-hig-designer": {
+      "source": "jamesrochabrun/skills",
+      "ref": "main",
+      "sourceType": "github",
+      "skillPath": "skills/apple-hig-designer/SKILL.md",
+      "computedHash": "fc2be0668901c29b6879c6cceaf11adb6e3730545cf1db8bad272984f345c860"
+    },
+    "daisyui": {
+      "source": "saadeghi/daisyui",
+      "sourceType": "github",
+      "skillPath": "skills/daisyui/SKILL.md",
+      "computedHash": "51be9420b195cc8935591595c315d5bca38f889f3750942d816134bd70f72a6b"
+    }
+  }
+}
