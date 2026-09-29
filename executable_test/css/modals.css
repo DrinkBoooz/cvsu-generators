@@ -492,8 +492,26 @@
       :root {
         --vt-duration: 450ms;
         --vt-easing: cubic-bezier(0.2, 0, 0, 1);
+
+        /* Apple HIG Liquid Glass edge glow — dark theme defaults.
+           No inherent color: monochrome specular only (liquid-glass.md § Color on glass).
+           Single hairline + one soft ambient glow. NO stacked drop-shadows. */
+        --vt-edge-specular: drop-shadow(0 0 1px rgba(255, 255, 255, 0.80))
+                            drop-shadow(0 0 6px rgba(255, 255, 255, 0.20));
+
+        /* Wavefront glass material — Apple HIG cross-platform spec:
+           Regular variant: blur ~20–40px, saturate ~1.2–1.5 (liquid-glass.md § Cross-platform) */
+        --vt-glass-blur: 20px;
+        --vt-glass-saturate: 1.4;
       }
 
+      /* Light theme reverses the specular to a subtle dark-on-light edge */
+      [data-theme="light"] {
+        --vt-edge-specular: drop-shadow(0 0 1px rgba(0, 0, 0, 0.18))
+                            drop-shadow(0 0 6px rgba(4, 120, 87, 0.14));
+      }
+
+      /* Kill all DOM transitions during a VT to prevent cascade storms */
       .theme-transitioning,
       .theme-transitioning *,
       .theme-transitioning *::before,
@@ -501,28 +519,27 @@
         transition: none !important;
       }
 
+      /* ── View Transition pseudo-element layer ─────────────────────────────── */
+      /* Reset both snapshots; let only ::view-transition-new be animated */
       ::view-transition-old(root),
       ::view-transition-new(root) {
         animation: none;
         mix-blend-mode: normal !important;
       }
 
+      /* Old page stays flat beneath the new iris reveal */
       ::view-transition-old(root) {
         z-index: 1;
       }
 
+      /* New page: circular iris reveal with a restrained glass-edge specular.
+         HIG: Liquid Glass has no inherent color; specular stays monochrome.
+         Single drop-shadow only — multiple stacked filters are GPU-expensive. */
       ::view-transition-new(root) {
         z-index: 2;
-        filter: drop-shadow(0 0 1.5px rgba(255, 255, 255, 0.9))
-                drop-shadow(0 0 8px rgba(255, 255, 255, 0.35))
-                drop-shadow(0 0 20px rgba(52, 211, 153, 0.25));
-        animation: var(--vt-duration, 450ms) var(--vt-easing, cubic-bezier(0.2, 0, 0, 1)) both appleThemeIrisReveal;
-      }
-
-      [data-theme="light"]::view-transition-new(root) {
-        filter: drop-shadow(0 0 1.5px rgba(255, 255, 255, 0.9))
-                drop-shadow(0 0 8px rgba(4, 120, 87, 0.3))
-                drop-shadow(0 0 20px rgba(4, 120, 87, 0.15));
+        filter: var(--vt-edge-specular);
+        animation: var(--vt-duration, 450ms) var(--vt-easing, cubic-bezier(0.2, 0, 0, 1))
+                   both appleThemeIrisReveal;
       }
 
       @keyframes appleThemeIrisReveal {
@@ -536,72 +553,167 @@
         }
       }
 
-      /* ── Apple Liquid Glass Transition Wavefront (Annular Edge Wave) ────── */
+      /* ── Apple Liquid Glass Annular Wavefront ─────────────────────────────── */
+      /*
+       * Architectural note (Part 1 investigation, commit 194):
+       *
+       * A named view-transition-name layer was investigated and rejected for the
+       * wavefront for two reasons:
+       *
+       * 1. VT named layers snapshot element pixels. Once snapshotted, backdrop-filter
+       *    operates on the frozen image, not live composited content. The annular glass
+       *    ring requires live backdrop-filter against the transitioning iris — a snapshot
+       *    would destroy the material effect.
+       *
+       * 2. The wavefront must grow beyond its initial bounding box (scale 0 → 1 from the
+       *    click origin to the screen edge). VT pseudo-elements are sized to their
+       *    snapshotted element; a scale-0 element produces a zero-size snapshot that
+       *    cannot grow to fill the screen.
+       *
+       * Therefore the wavefront remains a fixed-position DOM overlay. It is appended to
+       * document.documentElement (<html>) rather than <body> to ensure it sits in the
+       * same stacking root as the VT host pseudo-element (::view-transition). The z-index
+       * is set to 2147483646 — one below the Chromium-reported maximum int (2147483647)
+       * reserved for the VT host itself — so the wavefront composites immediately behind
+       * the VT layer, never above it.
+       *
+       * This is the least-fragile supported architecture for this runtime (PyWebView /
+       * Chromium). The glass edge is an independent visual layer that does not depend on
+       * being a named VT participant.
+       */
       .theme-glass-wavefront {
         position: fixed;
+        top: 0;
+        left: 0;
         pointer-events: none;
         border-radius: 50%;
-        z-index: 999999;
-        transform: translate(-50%, -50%) scale(0);
+
+        /* One below VT host max-int stacking context.
+           The VT host (::view-transition) uses z-index INT_MAX in Chromium. */
+        z-index: 2147483646;
+
+        /* GPU layer promotion — composited independently from the iris */
         will-change: transform, opacity;
+        contain: layout style;
+
+        /* Annular mask: opaque only in the thin ring at the iris edge.
+           Transparent center (existing content shows through) and outer fade
+           (seamless blend into the page). Apple HIG: Regular variant glass. */
         -webkit-mask-image: radial-gradient(
           circle,
           transparent 0%,
-          transparent 80%,
-          black 88%,
-          black 98.5%,
+          transparent 82%,
+          black 89%,
+          black 97%,
           transparent 100%
         );
         mask-image: radial-gradient(
           circle,
           transparent 0%,
-          transparent 80%,
-          black 88%,
-          black 98.5%,
+          transparent 82%,
+          black 89%,
+          black 97%,
           transparent 100%
         );
-        backdrop-filter: blur(14px) saturate(160%);
-        -webkit-backdrop-filter: blur(14px) saturate(160%);
+
+        /* Apple HIG Regular Glass material:
+           backdrop-filter: blur(20px) saturate(1.4) — liquid-glass.md § Cross-platform.
+           No background color: the ring is pure refraction + highlight. */
+        -webkit-backdrop-filter: blur(var(--vt-glass-blur, 20px)) saturate(var(--vt-glass-saturate, 1.4));
+        backdrop-filter: blur(var(--vt-glass-blur, 20px)) saturate(var(--vt-glass-saturate, 1.4));
+
+        /* Translucent white highlight ring — hairline specular, not opaque fill.
+           HIG: no inherent color; monochrome specular only.
+           Fill uses ~15-60% opacity white only in the thin ring. */
         background: radial-gradient(
           circle,
           transparent 0%,
-          transparent 80%,
-          rgba(255, 255, 255, 0.06) 86%,
-          rgba(255, 255, 255, 0.24) 93%,
-          rgba(255, 255, 255, 0.7) 98%,
-          rgba(255, 255, 255, 0.15) 100%
+          transparent 82%,
+          rgba(255, 255, 255, 0.04) 87%,
+          rgba(255, 255, 255, 0.18) 93%,
+          rgba(255, 255, 255, 0.60) 97%,
+          rgba(255, 255, 255, 0.08) 100%
         );
-        box-shadow: 0 0 20px rgba(255, 255, 255, 0.25);
-        animation: liquidGlassShockwave var(--vt-duration, 450ms) var(--vt-easing, cubic-bezier(0.2, 0, 0, 1)) forwards;
+
+        /* Soft ambient glow only — single shadow, not stacked */
+        box-shadow: 0 0 12px rgba(255, 255, 255, 0.18);
+
+        /* Origin: JS sets left/top on element. Start collapsed at click origin. */
+        transform: translate(-50%, -50%) scale(0);
+
+        animation: liquidGlassShockwave var(--vt-duration, 450ms)
+                   var(--vt-easing, cubic-bezier(0.2, 0, 0, 1)) forwards;
       }
 
+      /* Light-theme ring: hairline dark-on-bright specular */
       [data-theme="light"] .theme-glass-wavefront {
         background: radial-gradient(
           circle,
           transparent 0%,
-          transparent 80%,
-          rgba(4, 120, 87, 0.05) 86%,
-          rgba(4, 120, 87, 0.2) 93%,
-          rgba(255, 255, 255, 0.8) 98%,
-          rgba(4, 120, 87, 0.12) 100%
+          transparent 82%,
+          rgba(4, 120, 87, 0.03) 87%,
+          rgba(4, 120, 87, 0.12) 93%,
+          rgba(255, 255, 255, 0.72) 97%,
+          rgba(4, 120, 87, 0.06) 100%
         );
-        box-shadow: 0 0 20px rgba(4, 120, 87, 0.2);
+        box-shadow: 0 0 12px rgba(4, 120, 87, 0.14);
       }
 
       @keyframes liquidGlassShockwave {
         0% {
           transform: translate(-50%, -50%) scale(0);
-          opacity: 0.95;
+          opacity: 1;
         }
-        70% {
-          opacity: 0.7;
+        65% {
+          opacity: 0.75;
         }
         100% {
-          transform: translate(-50%, -50%) scale(1.02);
+          transform: translate(-50%, -50%) scale(1);
           opacity: 0;
         }
       }
 
+      /* ── Reduced Motion: Apple HIG accessibility requirement ─────────────── */
+      /*
+       * accessibility.md § Cognitive: "Avoiding animating into and out of blurs"
+       * motion.md § Best practices: "Make motion optional."
+       * liquid-glass.md § Review checklist #5: "Reduce Motion drops morphing and
+       *   refraction animation."
+       *
+       * When prefers-reduced-motion is active:
+       * - Drop the iris clip-path grow animation entirely.
+       * - Drop the glass wavefront (it is motion-only decoration).
+       * - Fall back to a simple opacity crossfade between old and new snapshots.
+       */
+      @media (prefers-reduced-motion: reduce) {
+        ::view-transition-old(root),
+        ::view-transition-new(root) {
+          animation: none !important;
+          filter: none !important;
+        }
+
+        ::view-transition-old(root) {
+          animation: vt-fade-out 200ms ease both !important;
+        }
+
+        ::view-transition-new(root) {
+          animation: vt-fade-in 200ms ease both !important;
+        }
+
+        .theme-glass-wavefront {
+          display: none !important;
+        }
+      }
+
+      @keyframes vt-fade-out {
+        to { opacity: 0; }
+      }
+
+      @keyframes vt-fade-in {
+        from { opacity: 0; }
+      }
+
+      /* ── Theme button icon animation ─────────────────────────────────────── */
       .theme-icon-container {
         display: inline-flex;
         align-items: center;

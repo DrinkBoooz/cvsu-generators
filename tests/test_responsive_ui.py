@@ -74,11 +74,17 @@ def test_responsive_step5_input_stacking():
 
 def test_theme_view_transition_and_animation():
     """
-    Verify the unified CSS-owns-animation architecture.
+    Verify the unified CSS-owns-animation architecture (commit 193/194).
 
     CSS (appleThemeIrisReveal @keyframes) is the SOLE owner of the iris clip-path.
     JS must NOT independently animate clipPath on ::view-transition-new(root) via WAAPI.
     JS supplies dynamic CSS custom properties and calls startViewTransition().
+
+    Commit 194 additions:
+    - CSS uses --vt-edge-specular custom property (HIG: no inherent color, monochrome only)
+    - CSS provides prefers-reduced-motion fallback (HIG: accessibility.md, motion.md)
+    - JS respects prefers-reduced-motion before spawning wavefront
+    - JS appends wavefront to documentElement (not body) for correct VT stacking
     """
     theme_js_path = os.path.join(JS_DIR, "theme.js")
     with open(theme_js_path, "r", encoding="utf-8") as f:
@@ -116,6 +122,24 @@ def test_theme_view_transition_and_animation():
     assert "THEME_TRANSITION_DURATION_MS" in js_content, \
         "theme.js must define a single shared THEME_TRANSITION_DURATION_MS constant"
 
+    # Apple HIG: glass has no inherent color — specular driven by CSS custom property
+    assert "--vt-edge-specular" in css_content, \
+        "modals.css must use --vt-edge-specular custom property (HIG: monochrome specular only)"
+
+    # HIG accessibility: prefers-reduced-motion must drop iris animation and wavefront
+    assert "prefers-reduced-motion" in css_content, \
+        "modals.css must handle prefers-reduced-motion (HIG: motion.md, accessibility.md)"
+    assert "vt-fade-in" in css_content, \
+        "modals.css must provide vt-fade-in crossfade fallback for reduced-motion"
+
+    # JS must respect prefers-reduced-motion before spawning wavefront
+    assert "prefers-reduced-motion" in js_content, \
+        "theme.js must check prefers-reduced-motion before creating wavefront"
+
+    # JS must use documentElement (not body) for correct VT stacking
+    assert "document.documentElement.appendChild" in js_content, \
+        "theme.js must append wavefront to documentElement for VT stacking context"
+
 def test_template_set_form_grid_responsive():
     modals_path = os.path.join(CSS_DIR, "modals.css")
     with open(modals_path, "r", encoding="utf-8") as f:
@@ -141,22 +165,46 @@ def test_roster_title_responsive_text_wrapping():
     assert "white-space: normal;" in content
 
 def test_liquid_glass_theme_wavefront():
-    """Verify Apple Liquid Glass annular wavefront with specular edge refraction."""
+    """
+    Verify Apple Liquid Glass annular wavefront with specular edge refraction (commit 194).
+
+    HIG spec adherence:
+    - liquid-glass.md: Regular variant blur ~20-40px, saturate ~1.2-1.5
+    - liquid-glass.md: No inherent color — monochrome specular only
+    - accessibility.md + motion.md: prefers-reduced-motion hides wavefront entirely
+    - Architecture: wavefront is DOM fixed-position (not named VT layer — VT snapshots
+      freeze backdrop-filter pixels, destroying the live glass material effect)
+    """
     modals_path = os.path.join(CSS_DIR, "modals.css")
     with open(modals_path, "r", encoding="utf-8") as f:
         css = f.read()
 
     # Annular edge wave with backdrop blur and specular refraction
-    assert ".theme-glass-wavefront" in css
-    assert "mask-image" in css
-    assert "backdrop-filter" in css
-    assert "liquidGlassShockwave" in css
+    assert ".theme-glass-wavefront" in css, "theme-glass-wavefront element must be defined"
+    assert "mask-image" in css, "wavefront must use mask-image for annular ring shape"
+    assert "backdrop-filter" in css, "wavefront must use backdrop-filter for glass material"
+    assert "liquidGlassShockwave" in css, "wavefront animation must be defined"
+
+    # Apple HIG Regular Glass material values (liquid-glass.md § Cross-platform)
+    assert "20px" in css, "wavefront must use ~20px blur (HIG Regular Glass)"
+    assert "1.4" in css, "wavefront must use ~1.4 saturation (HIG glass saturate ~1.2-1.5)"
+
+    # HIG accessibility: reduced-motion hides wavefront via CSS
+    assert "prefers-reduced-motion" in css, "CSS must disable wavefront under prefers-reduced-motion"
+
+    # The 2147483646 z-index documents the VT stacking model
+    assert "2147483646" in css, \
+        "wavefront z-index must be 2147483646 (below Chromium VT host INT_MAX, above page content)"
 
     theme_js_path = os.path.join(JS_DIR, "theme.js")
     with open(theme_js_path, "r", encoding="utf-8") as f:
         js = f.read()
 
-    assert "theme-glass-wavefront" in js
+    assert "theme-glass-wavefront" in js, "theme.js must create the glass wavefront element"
+    assert "document.documentElement.appendChild" in js, \
+        "theme.js must append wavefront to documentElement (not body) for correct VT stacking"
+    assert "prefers-reduced-motion" in js, \
+        "theme.js must check prefers-reduced-motion before creating wavefront (HIG: motion optional)"
 
 
 @pytest.mark.playwright
