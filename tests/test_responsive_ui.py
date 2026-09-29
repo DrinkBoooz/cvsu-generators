@@ -73,13 +73,48 @@ def test_responsive_step5_input_stacking():
     assert "flex-direction: column;" in content, "input-with-action must stack vertically on mobile"
 
 def test_theme_view_transition_and_animation():
+    """
+    Verify the unified CSS-owns-animation architecture.
+
+    CSS (appleThemeIrisReveal @keyframes) is the SOLE owner of the iris clip-path.
+    JS must NOT independently animate clipPath on ::view-transition-new(root) via WAAPI.
+    JS supplies dynamic CSS custom properties and calls startViewTransition().
+    """
     theme_js_path = os.path.join(JS_DIR, "theme.js")
     with open(theme_js_path, "r", encoding="utf-8") as f:
-        content = f.read()
+        js_content = f.read()
 
-    assert "document.startViewTransition" in content, "theme.js must use View Transitions API"
-    assert "spin-morph" in content, "theme.js must trigger spin-morph icon animation"
-    assert "clipPath" in content, "theme.js must trigger circular iris animation"
+    modals_path = os.path.join(CSS_DIR, "modals.css")
+    with open(modals_path, "r", encoding="utf-8") as f:
+        css_content = f.read()
+
+    # JS must use the View Transitions API
+    assert "document.startViewTransition" in js_content, \
+        "theme.js must use View Transitions API"
+
+    # JS must trigger the icon spin-morph animation
+    assert "spin-morph" in js_content, \
+        "theme.js must trigger spin-morph icon animation"
+
+    # JS must supply dynamic CSS custom properties for the iris origin
+    assert "--vt-x" in js_content, "theme.js must set --vt-x custom property"
+    assert "--vt-y" in js_content, "theme.js must set --vt-y custom property"
+    assert "--vt-radius" in js_content, "theme.js must set --vt-radius custom property"
+
+    # CSS must be the single authoritative owner of the iris clip-path animation
+    assert "appleThemeIrisReveal" in css_content, \
+        "modals.css must define appleThemeIrisReveal @keyframes as the CSS-owned iris animation"
+    assert "clip-path" in css_content.lower(), \
+        "modals.css appleThemeIrisReveal must use clip-path for the iris reveal"
+
+    # JS must NOT independently animate clipPath on ::view-transition-new(root) via WAAPI
+    # The dual-ownership anti-pattern causes choppy, competing animations
+    assert "pseudoElement" not in js_content or "::view-transition-new(root)" not in js_content, \
+        "theme.js must not independently animate ::view-transition-new(root) via WAAPI (CSS is sole owner)"
+
+    # One shared duration token must exist
+    assert "THEME_TRANSITION_DURATION_MS" in js_content, \
+        "theme.js must define a single shared THEME_TRANSITION_DURATION_MS constant"
 
 def test_template_set_form_grid_responsive():
     modals_path = os.path.join(CSS_DIR, "modals.css")

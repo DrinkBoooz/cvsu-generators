@@ -22,6 +22,8 @@
         }
       }
 
+      const THEME_TRANSITION_DURATION_MS = 450;
+
       async function toggleTheme(event) {
         const doc = document.documentElement;
         doc.classList.add("theme-transitioning");
@@ -64,21 +66,22 @@
           doc.style.setProperty("--vt-x", `${x}px`);
           doc.style.setProperty("--vt-y", `${y}px`);
           doc.style.setProperty("--vt-radius", `${endRadius}px`);
+          doc.style.setProperty("--vt-duration", `${THEME_TRANSITION_DURATION_MS}ms`);
 
-          // Spawn synchronized Liquid Glass Wavefront (Apple HIG Lens Wave)
+          // Spawn synchronized Liquid Glass Wavefront (Apple HIG Annular Wave)
           try {
             const wave = document.createElement("div");
             wave.className = "theme-glass-wavefront";
             wave.style.left = `${x}px`;
             wave.style.top = `${y}px`;
-            wave.style.width = `${endRadius * 2.2}px`;
-            wave.style.height = `${endRadius * 2.2}px`;
+            wave.style.width = `${endRadius * 2}px`;
+            wave.style.height = `${endRadius * 2}px`;
             document.body.appendChild(wave);
             setTimeout(() => {
               if (wave && wave.parentNode) {
                 wave.parentNode.removeChild(wave);
               }
-            }, 460);
+            }, THEME_TRANSITION_DURATION_MS + 60);
           } catch (e) {}
 
           try {
@@ -86,23 +89,7 @@
               applyTheme();
             });
 
-            await transition.ready;
-
-            const animation = doc.animate(
-              {
-                clipPath: [
-                  `circle(0px at ${x}px ${y}px)`,
-                  `circle(${endRadius}px at ${x}px ${y}px)`,
-                ],
-              },
-              {
-                duration: 420,
-                easing: "cubic-bezier(0.2, 0, 0, 1)",
-                pseudoElement: "::view-transition-new(root)",
-              },
-            );
-
-            await animation.finished;
+            await transition.finished;
           } catch (err) {
             applyTheme();
           } finally {

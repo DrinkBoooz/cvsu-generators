@@ -489,6 +489,11 @@
       }
 
       /* ── Theme Transition Performance & Apple HIG View Transitions Engine ─── */
+      :root {
+        --vt-duration: 450ms;
+        --vt-easing: cubic-bezier(0.2, 0, 0, 1);
+      }
+
       .theme-transitioning,
       .theme-transitioning *,
       .theme-transitioning *::before,
@@ -508,16 +513,16 @@
 
       ::view-transition-new(root) {
         z-index: 2;
-        filter: drop-shadow(0 0 1.5px rgba(255, 255, 255, 0.95))
-                drop-shadow(0 0 10px rgba(255, 255, 255, 0.6))
-                drop-shadow(0 0 24px rgba(52, 211, 153, 0.45));
-        animation: 0.45s cubic-bezier(0.2, 0, 0, 1) both appleThemeIrisReveal;
+        filter: drop-shadow(0 0 1.5px rgba(255, 255, 255, 0.9))
+                drop-shadow(0 0 8px rgba(255, 255, 255, 0.35))
+                drop-shadow(0 0 20px rgba(52, 211, 153, 0.25));
+        animation: var(--vt-duration, 450ms) var(--vt-easing, cubic-bezier(0.2, 0, 0, 1)) both appleThemeIrisReveal;
       }
 
       [data-theme="light"]::view-transition-new(root) {
-        filter: drop-shadow(0 0 1.5px rgba(255, 255, 255, 0.95))
-                drop-shadow(0 0 10px rgba(4, 120, 87, 0.5))
-                drop-shadow(0 0 24px rgba(4, 120, 87, 0.25));
+        filter: drop-shadow(0 0 1.5px rgba(255, 255, 255, 0.9))
+                drop-shadow(0 0 8px rgba(4, 120, 87, 0.3))
+                drop-shadow(0 0 20px rgba(4, 120, 87, 0.15));
       }
 
       @keyframes appleThemeIrisReveal {
@@ -542,45 +547,45 @@
         -webkit-mask-image: radial-gradient(
           circle,
           transparent 0%,
-          transparent 78%,
-          black 86%,
-          black 98%,
+          transparent 80%,
+          black 88%,
+          black 98.5%,
           transparent 100%
         );
         mask-image: radial-gradient(
           circle,
           transparent 0%,
-          transparent 78%,
-          black 86%,
-          black 98%,
+          transparent 80%,
+          black 88%,
+          black 98.5%,
           transparent 100%
         );
-        backdrop-filter: blur(12px) saturate(160%);
-        -webkit-backdrop-filter: blur(12px) saturate(160%);
+        backdrop-filter: blur(14px) saturate(160%);
+        -webkit-backdrop-filter: blur(14px) saturate(160%);
         background: radial-gradient(
           circle,
           transparent 0%,
-          transparent 78%,
-          rgba(255, 255, 255, 0.08) 84%,
-          rgba(255, 255, 255, 0.35) 92%,
-          rgba(255, 255, 255, 0.85) 97%,
-          rgba(255, 255, 255, 0.2) 100%
+          transparent 80%,
+          rgba(255, 255, 255, 0.06) 86%,
+          rgba(255, 255, 255, 0.24) 93%,
+          rgba(255, 255, 255, 0.7) 98%,
+          rgba(255, 255, 255, 0.15) 100%
         );
-        box-shadow: 0 0 28px rgba(255, 255, 255, 0.35);
-        animation: liquidGlassShockwave 0.42s cubic-bezier(0.2, 0, 0, 1) forwards;
+        box-shadow: 0 0 20px rgba(255, 255, 255, 0.25);
+        animation: liquidGlassShockwave var(--vt-duration, 450ms) var(--vt-easing, cubic-bezier(0.2, 0, 0, 1)) forwards;
       }
 
       [data-theme="light"] .theme-glass-wavefront {
         background: radial-gradient(
           circle,
           transparent 0%,
-          transparent 78%,
-          rgba(4, 120, 87, 0.08) 84%,
-          rgba(4, 120, 87, 0.25) 92%,
-          rgba(255, 255, 255, 0.9) 97%,
-          rgba(4, 120, 87, 0.2) 100%
+          transparent 80%,
+          rgba(4, 120, 87, 0.05) 86%,
+          rgba(4, 120, 87, 0.2) 93%,
+          rgba(255, 255, 255, 0.8) 98%,
+          rgba(4, 120, 87, 0.12) 100%
         );
-        box-shadow: 0 0 28px rgba(4, 120, 87, 0.28);
+        box-shadow: 0 0 20px rgba(4, 120, 87, 0.2);
       }
 
       @keyframes liquidGlassShockwave {
@@ -589,10 +594,10 @@
           opacity: 0.95;
         }
         70% {
-          opacity: 0.75;
+          opacity: 0.7;
         }
         100% {
-          transform: translate(-50%, -50%) scale(1);
+          transform: translate(-50%, -50%) scale(1.02);
           opacity: 0;
         }
       }
