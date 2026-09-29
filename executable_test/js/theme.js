@@ -63,32 +63,20 @@
             Math.max(y, window.innerHeight - y),
           );
 
+          // JS responsibility: compute origin geometry and inject CSS custom properties.
+          // CSS owns all animation: appleThemeIrisReveal (clip-path) and the VT-native
+          // glass edge (filter: drop-shadow on ::view-transition-new(root)).
+          //
+          // The glass edge drop-shadow is applied inside the View Transition pseudo-element
+          // tree — after clip-path — so it traces the iris circle boundary as it expands.
+          // No separate DOM element is needed or correct for the edge effect.
+          //
+          // Reduced-motion: CSS handles the prefers-reduced-motion fallback entirely
+          // (crossfade with filter cleared). No JS intervention required.
           doc.style.setProperty("--vt-x", `${x}px`);
           doc.style.setProperty("--vt-y", `${y}px`);
           doc.style.setProperty("--vt-radius", `${endRadius}px`);
           doc.style.setProperty("--vt-duration", `${THEME_TRANSITION_DURATION_MS}ms`);
-
-          // Spawn synchronized Liquid Glass Wavefront (Apple HIG Annular Wave).
-          //
-          // Appended to document.documentElement (<html>) — the same root that hosts
-          // the ::view-transition pseudo-element — so the wavefront sits in the correct
-          // stacking context relative to the VT compositor layer (CSS z-index 2147483646).
-          //
-          // prefers-reduced-motion: skip wavefront entirely (motion.md § Best practices:
-          // "Make motion optional." / accessibility.md § Cognitive: avoid blur animation).
-          const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-          let wave = null;
-          if (!reduceMotion) {
-            try {
-              wave = document.createElement("div");
-              wave.className = "theme-glass-wavefront";
-              wave.style.left = `${x}px`;
-              wave.style.top = `${y}px`;
-              wave.style.width = `${endRadius * 2}px`;
-              wave.style.height = `${endRadius * 2}px`;
-              document.documentElement.appendChild(wave);
-            } catch (e) {}
-          }
 
           try {
             const transition = document.startViewTransition(() => {
@@ -100,10 +88,6 @@
             applyTheme();
           } finally {
             doc.classList.remove("theme-transitioning");
-            // Remove wavefront after transition completes
-            if (wave && wave.parentNode) {
-              wave.parentNode.removeChild(wave);
-            }
           }
 
         } else {
