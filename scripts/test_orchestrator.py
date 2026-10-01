@@ -175,6 +175,7 @@ MANIFEST = {
                 "tests/test_theme_transition_perf.py",
                 "tests/test_iris_runtime.py",
                 "tests/test_vt_rendering_investigation.py",
+                "tests/test_captured_glass_investigation.py",
                 "tests/test_scroll_aware_dock.py",
                 "tests/test_stepper_2col_scroll.py",
                 "tests/test_react_executable_build.py",
