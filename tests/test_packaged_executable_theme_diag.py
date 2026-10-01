@@ -80,6 +80,18 @@ def test_packaged_executable_theme_runtime_diagnosis():
     assert "natural_toggle" in diag
     assert diag["natural_toggle"]["theme"] == "light"
 
+    # 7b. Verify Distinct Top-Level Telemetry Keys (Commit 202)
+    assert "storedMotionPreference" in diag
+    assert "effectiveMotionPreference" in diag
+    assert "storedTransparencyPreference" in diag
+    assert "effectiveTransparencyPreference" in diag
+    assert "systemReducedMotion" in diag
+    assert "systemReducedTransparency" in diag
+    assert diag["storedMotionPreference"] in ("system", "reduce", "full")
+    assert diag["effectiveMotionPreference"] in ("reduce", "no-preference")
+    assert diag["storedTransparencyPreference"] in ("system", "reduce", "glass")
+    assert diag["effectiveTransparencyPreference"] in ("reduce", "glass")
+
     # 8. Verify Accessibility Settings in Packaged DOM & Runtime (Commit 201)
     a11y_ui = diag.get("accessibility_ui", {})
     assert a11y_ui.get("hasTab") is True, "Packaged EXE must include cfgTabAccessibility button"

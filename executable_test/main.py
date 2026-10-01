@@ -285,6 +285,12 @@ def _run_theme_diagnostics_probe(window, api):
         report["supportsVTName"] = window.evaluate_js("typeof CSS !== 'undefined' && CSS.supports('view-transition-name: root')")
         report["supportsClipPath"] = window.evaluate_js("typeof CSS !== 'undefined' && CSS.supports('clip-path: circle(10px at 10px 10px)')")
         report["prefersReducedMotion"] = window.evaluate_js("window.matchMedia('(prefers-reduced-motion: reduce)').matches")
+        report["systemReducedMotion"] = window.evaluate_js("window.matchMedia('(prefers-reduced-motion: reduce)').matches")
+        report["systemReducedTransparency"] = window.evaluate_js("window.matchMedia('(prefers-reduced-transparency: reduce)').matches")
+        report["storedMotionPreference"] = window.evaluate_js("window.getStoredAccessibilityMotion ? window.getStoredAccessibilityMotion() : null")
+        report["effectiveMotionPreference"] = window.evaluate_js("window.getEffectiveMotionPreference ? window.getEffectiveMotionPreference() : null")
+        report["storedTransparencyPreference"] = window.evaluate_js("window.getStoredAccessibilityTransparency ? window.getStoredAccessibilityTransparency() : null")
+        report["effectiveTransparencyPreference"] = window.evaluate_js("window.getEffectiveTransparencyPreference ? window.getEffectiveTransparencyPreference() : null")
 
         window.evaluate_js("""
             window.__diag_controlled_promise = null;

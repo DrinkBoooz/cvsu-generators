@@ -3218,7 +3218,7 @@
                       Interface Motion &amp; Transitions
                     </label>
                     <span class="apple-hig-caption" id="accMotionCaption">
-                      Governs viewport View Transition iris reveals and morph animations
+                      Controls viewport View Transition reveals and morph animations. Full Motion enables animations even when the operating system requests reduced motion.
                     </span>
                   </div>
                 </div>
@@ -3232,7 +3232,7 @@
                   >
                     <option value="system">Follow System (Default)</option>
                     <option value="reduce">Reduced Motion (Suppress transitions)</option>
-                    <option value="full">Full Motion (Enable iris reveals)</option>
+                    <option value="full">Full Motion (Override system preference)</option>
                   </select>
                 </div>
               </div>
@@ -3248,7 +3248,7 @@
                       Surface Transparency &amp; Materials
                     </label>
                     <span class="apple-hig-caption" id="accTransparencyCaption">
-                      Controls Liquid Glass translucency on headers, docks, and dialogs
+                      Controls surface translucency on cards, headers, docks, and dialogs. Reduced Transparency applies solid opaque backgrounds for higher legibility.
                     </span>
                   </div>
                 </div>
@@ -3262,14 +3262,14 @@
                   >
                     <option value="system">Follow System (Default)</option>
                     <option value="reduce">Reduced Transparency (Solid opaque)</option>
-                    <option value="glass">Liquid Glass (Translucent materials)</option>
+                    <option value="glass">Standard Transparency (Frosted glass)</option>
                   </select>
                 </div>
               </div>
             </div>
 
             <p class="apple-hig-footnote">
-              By default, CvSU Gen automatically aligns with Windows accessibility preferences (Settings → Accessibility → Visual effects). Custom overrides apply immediately and persist in local storage.
+              By default, CvSU Gen aligns with Windows accessibility preferences (Settings → Accessibility → Visual effects). Choosing 'Full Motion' or 'Standard Transparency' explicitly overrides system preferences for this application.
             </p>
 
             <!-- Live Environment Diagnostics Card -->

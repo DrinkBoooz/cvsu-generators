@@ -694,7 +694,7 @@
           elVTEngine.style.color = hasVT ? "var(--accent-emerald)" : "var(--accent-amber)";
         }
         if (elEffectiveSurface) {
-          elEffectiveSurface.textContent = effectiveTrans === "reduce" ? "Solid (Reduced Transparency)" : "Liquid Glass (Translucent)";
+          elEffectiveSurface.textContent = effectiveTrans === "reduce" ? "Solid Opaque (Reduced Transparency)" : "Standard (Frosted Glass)";
           elEffectiveSurface.style.color = effectiveTrans === "reduce" ? "var(--accent-blue)" : "var(--accent-emerald)";
         }
       }
@@ -708,7 +708,7 @@
         }
         updateAccessibilitySettingsUI();
         if (typeof showToast === "function") {
-          const label = val === "system" ? "Follow System" : (val === "reduce" ? "Reduced Motion" : "Full Motion");
+          const label = val === "system" ? "Follow System" : (val === "reduce" ? "Reduced Motion" : "Full Motion (Override)");
           showToast("Accessibility Updated", `Motion preference set to: ${label}`, "info");
         }
       }
@@ -722,7 +722,7 @@
         }
         updateAccessibilitySettingsUI();
         if (typeof showToast === "function") {
-          const label = val === "system" ? "Follow System" : (val === "reduce" ? "Solid Opaque" : "Liquid Glass");
+          const label = val === "system" ? "Follow System" : (val === "reduce" ? "Reduced Transparency (Solid)" : "Standard Transparency (Frosted Glass)");
           showToast("Accessibility Updated", `Transparency preference set to: ${label}`, "info");
         }
       }
