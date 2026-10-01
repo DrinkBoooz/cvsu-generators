@@ -173,6 +173,7 @@ MANIFEST = {
                 "tests/test_executable_test_hig_bridge.py",
                 "tests/test_theme_consistency.py",
                 "tests/test_theme_transition_perf.py",
+                "tests/test_iris_runtime.py",
                 "tests/test_scroll_aware_dock.py",
                 "tests/test_stepper_2col_scroll.py",
                 "tests/test_react_executable_build.py",

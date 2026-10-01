@@ -493,22 +493,23 @@
         --vt-duration: 450ms;
         --vt-easing: cubic-bezier(0.2, 0, 0, 1);
 
-        /* Apple HIG Liquid Glass edge glow — dark theme defaults.
-           Applied VT-natively on ::view-transition-new(root): filter is evaluated AFTER
-           clip-path in the VT pseudo-element render pass, so the drop-shadow draws
-           outside the iris circle boundary as it expands — no separate DOM element needed.
+        /* Apple HIG Liquid Glass edge — dark theme defaults.
+           Applied as a restrained specular/glass-like treatment on the VT
+           pseudo-element. The View Transition pseudo-element receives this
+           filter styling while WAAPI owns the circular reveal geometry.
            No inherent color: monochrome specular only (liquid-glass.md § Color on glass). */
-        --vt-edge-specular: drop-shadow(0 0 1px rgba(255, 255, 255, 0.80))
-                            drop-shadow(0 0 6px rgba(255, 255, 255, 0.20));
+        --vt-edge-specular: drop-shadow(0 0 1px rgba(255, 255, 255, 0.75))
+                            drop-shadow(0 0 5px rgba(255, 255, 255, 0.18));
       }
 
-      /* Light theme reverses the specular to a subtle dark-on-light edge */
+      /* Light theme: subtle dark-on-light hairline specular */
       [data-theme="light"] {
-        --vt-edge-specular: drop-shadow(0 0 1px rgba(0, 0, 0, 0.18))
-                            drop-shadow(0 0 6px rgba(4, 120, 87, 0.14));
+        --vt-edge-specular: drop-shadow(0 0 1px rgba(0, 0, 0, 0.15))
+                            drop-shadow(0 0 5px rgba(0, 0, 0, 0.08));
       }
 
-      /* Kill all DOM transitions during a VT to prevent cascade storms */
+      /* Kill all DOM transitions during a VT to prevent cascade storms.
+         Without this, 700+ transitionstart events fire on every toggle. */
       .theme-transitioning,
       .theme-transitioning *,
       .theme-transitioning *::before,
@@ -516,42 +517,39 @@
         transition: none !important;
       }
 
-      /* ── View Transition pseudo-element layer ─────────────────────────────── */
+      /* ── View Transition pseudo-element setup ───────────────────────────── */
       /*
-       * Architecture (commit 193–195):
+       * Architecture (commit 196):
        *
-       * The CSS View Transitions rendering model defines a dedicated VT layer that
-       * is painted by the browser AFTER the normal document is fully composited.
-       * No DOM element — regardless of z-index — can be placed into or alongside
-       * this layer. Normal DOM z-index has no defined relationship to the VT layer.
+       *   WAAPI  — sole owner of the circular iris clip-path animation.
+       *            Starts only after transition.ready resolves (pseudo-elements exist).
+       *            document.documentElement.animate({ clipPath: [...] }, {
+       *                pseudoElement: "::view-transition-new(root)" })
        *
-       * The DOM wavefront overlay (commit 194) was eliminated for three reasons:
+       *   CSS    — owns static specular/glass-like styling on VT pseudo-elements.
+       *            Does NOT compete with WAAPI on clip-path or animation property.
        *
-       * 1. Created BEFORE document.startViewTransition(): Chromium snapshots the
-       *    document state at the moment startViewTransition() is called. A DOM element
-       *    created before this call is captured in ::view-transition-old(root) as part
-       *    of the old-page snapshot — not a live overlay above the transition.
+       *   DOM    — no wavefront overlay. DOM elements created before
+       *            startViewTransition() are captured in the old-page snapshot.
        *
-       * 2. The z-index: 2147483646 claim was incorrect: the comment stated it was
-       *    "one below the Chromium VT host INT_MAX", implying compositor adjacency.
-       *    The VT layer is a separate rendering pass; DOM z-index cannot express
-       *    a relationship to it.
-       *
-       * 3. backdrop-filter on a snapshotted DOM element blurs frozen pixels from
-       *    the old-page capture, not live composited content beneath the iris.
-       *
-       * The correct architecture (commit 195): the glass edge is produced VT-natively
-       * by filter: drop-shadow(...) on ::view-transition-new(root). The CSS filter
-       * function is evaluated INSIDE the VT pseudo-element render pass, AFTER clip-path,
-       * so the drop-shadow draws outside the iris circle boundary as the circle grows.
-       * The specular glow therefore traces the iris edge with zero extra DOM elements.
+       * The VT layer is a dedicated rendering pass that occurs after the normal
+       * document is composited. DOM z-index values have no defined relationship
+       * to the VT rendering layer.
        */
 
-      /* Reset both snapshots; let only ::view-transition-new be animated */
+      /* Prevent the default cross-fade on the image pair container.
+         isolation: auto allows the new snapshot to wipe over the old. */
+      ::view-transition-image-pair(root) {
+        isolation: auto;
+      }
+
+      /* Reset default browser animations on both snapshots.
+         WAAPI drives the iris; CSS provides only the static filter treatment. */
       ::view-transition-old(root),
       ::view-transition-new(root) {
         animation: none;
         mix-blend-mode: normal !important;
+        display: block;
       }
 
       /* Old page stays flat beneath the new iris reveal */
@@ -559,41 +557,32 @@
         z-index: 1;
       }
 
-      /* New page: circular iris reveal with a VT-native glass-edge specular.
-         filter: drop-shadow is evaluated after clip-path in the VT render pass,
-         so the glow draws outside the iris circle boundary as it expands.
-         HIG: Liquid Glass has no inherent color; specular stays monochrome.
-         (liquid-glass.md § Color on glass) */
+      /* New page: WAAPI drives the iris clip-path reveal (see theme.js).
+         CSS applies a restrained specular filter as a glass-like edge treatment.
+         The View Transition pseudo-element receives this filter while WAAPI
+         owns the circular reveal geometry.
+         HIG: monochrome specular only, no inherent color. (liquid-glass.md § Color on glass) */
       ::view-transition-new(root) {
         z-index: 2;
         filter: var(--vt-edge-specular);
-        animation: var(--vt-duration, 450ms) var(--vt-easing, cubic-bezier(0.2, 0, 0, 1))
-                   both appleThemeIrisReveal;
+        /* NO animation property here — WAAPI is the sole iris owner. */
       }
 
-      @keyframes appleThemeIrisReveal {
-        from {
-          clip-path: circle(0px at var(--vt-x, 90vw) var(--vt-y, 30px));
-        }
-        to {
-          clip-path: circle(
-            var(--vt-radius, 2000px) at var(--vt-x, 90vw) var(--vt-y, 30px)
-          );
-        }
-      }
-
-      /* ── Reduced Motion: Apple HIG accessibility requirement ─────────────── */
+      /* ── Reduced Motion ────────────────────────────────────────────── */
       /*
-       * accessibility.md § Cognitive: "Avoiding animating into and out of blurs"
-       * motion.md § Best practices: "Make motion optional."
-       * liquid-glass.md § Review checklist #5: "Reduce Motion drops morphing and
-       *   refraction animation."
+       * The iris animation is now WAAPI-owned (theme.js). JS evaluates
+       * prefers-reduced-motion BEFORE starting the View Transition and
+       * bypasses the WAAPI iris entirely when motion is reduced.
        *
-       * When prefers-reduced-motion is active:
-       * - Drop the iris clip-path grow animation entirely.
-       * - Drop the VT-native specular edge filter (decorative motion).
-       * - Fall back to a simple opacity crossfade between old and new snapshots.
-       * CSS owns this fallback entirely — no JS intervention required.
+       * This CSS block handles the VT pseudo-element presentation for any
+       * path where a VT is started under reduced-motion conditions:
+       * - Clears the specular filter (decorative, motion-adjacent).
+       * - Allows a simple opacity crossfade as a fallback.
+       *
+       * HIG references:
+       * - accessibility.md § Cognitive: "Avoiding animating into and out of blurs"
+       * - motion.md § Best practices: "Make motion optional."
+       * - liquid-glass.md § Review checklist #5: Reduce Motion drops refraction.
        */
       @media (prefers-reduced-motion: reduce) {
         ::view-transition-old(root),
@@ -608,6 +597,41 @@
 
         ::view-transition-new(root) {
           animation: vt-fade-in 200ms ease both !important;
+        }
+      }
+
+      /* ── Reduced Transparency ─────────────────────────────────────── */
+      /*
+       * When the user prefers reduced transparency, the specular edge should
+       * be made more opaque and the translucent decoration removed.
+       * The iris geometry is unaffected — only the aesthetic treatment changes.
+       * Note: prefers-reduced-transparency is a proposed CSS media feature;
+       * support varies by platform and runtime.
+       */
+      @media (prefers-reduced-transparency: reduce) {
+        :root {
+          /* Replace translucent specular with a solid, opaque edge indicator.
+             No transparency — clear edge separation maintained. */
+          --vt-edge-specular: drop-shadow(0 0 2px rgba(255, 255, 255, 0.95));
+        }
+        [data-theme="light"] {
+          --vt-edge-specular: drop-shadow(0 0 2px rgba(0, 0, 0, 0.90));
+        }
+      }
+
+      /* ── Increased Contrast ────────────────────────────────────────── */
+      /*
+       * When the user requests more contrast, increase edge visibility:
+       * stronger specular, reduced soft glow, clearer boundary.
+       */
+      @media (prefers-contrast: more) {
+        :root {
+          --vt-edge-specular: drop-shadow(0 0 2px rgba(255, 255, 255, 1.0))
+                              drop-shadow(0 0 1px rgba(255, 255, 255, 0.90));
+        }
+        [data-theme="light"] {
+          --vt-edge-specular: drop-shadow(0 0 2px rgba(0, 0, 0, 1.0))
+                              drop-shadow(0 0 1px rgba(0, 0, 0, 0.85));
         }
       }
 

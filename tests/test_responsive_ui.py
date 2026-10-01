@@ -107,16 +107,17 @@ def test_theme_view_transition_and_animation():
     assert "--vt-y" in js_content, "theme.js must set --vt-y custom property"
     assert "--vt-radius" in js_content, "theme.js must set --vt-radius custom property"
 
-    # CSS must be the single authoritative owner of the iris clip-path animation
-    assert "appleThemeIrisReveal" in css_content, \
-        "modals.css must define appleThemeIrisReveal @keyframes as the CSS-owned iris animation"
-    assert "clip-path" in css_content.lower(), \
-        "modals.css appleThemeIrisReveal must use clip-path for the iris reveal"
+    # CSS must be the sole specular/styling owner; WAAPI is the iris clip-path owner (commit 196)
+    # The @keyframes appleThemeIrisReveal has been removed — WAAPI handles geometry
+    assert "clip-path" in css_content.lower() or "clip-path" in js_content.lower(), \
+        "clip-path must appear in the theme subsystem (WAAPI iris uses clipPath)"
 
-    # JS must NOT independently animate clipPath on ::view-transition-new(root) via WAAPI
-    # The dual-ownership anti-pattern causes choppy, competing animations
-    assert "pseudoElement" not in js_content or "::view-transition-new(root)" not in js_content, \
-        "theme.js must not independently animate ::view-transition-new(root) via WAAPI (CSS is sole owner)"
+    # WAAPI must be the sole iris owner in JS, waiting for transition.ready (commit 196)
+    # This is the inverse of the commit-193 anti-pattern where CSS and WAAPI competed
+    assert "pseudoElement" in js_content and "::view-transition-new(root)" in js_content, \
+        "theme.js must animate ::view-transition-new(root) via WAAPI (WAAPI is sole iris owner in commit 196)"
+    assert "await transition.ready" in js_content, \
+        "theme.js must await transition.ready before WAAPI iris animation"
 
     # One shared duration token must exist
     assert "THEME_TRANSITION_DURATION_MS" in js_content, \
@@ -132,11 +133,12 @@ def test_theme_view_transition_and_animation():
     assert "vt-fade-in" in css_content, \
         "modals.css must provide vt-fade-in crossfade fallback for reduced-motion"
 
-    # Commit 195: DOM wavefront eliminated — JS must NOT create it or check reduced-motion
+    # Commit 196: DOM wavefront eliminated — JS must NOT create it
+    # (DOM elements created before startViewTransition() are snapshotted into the old-page capture)
     assert "theme-glass-wavefront" not in js_content, \
-        "theme.js must NOT create DOM wavefront (eliminated in commit 195: captured in old-page VT snapshot)"
+        "theme.js must NOT create DOM wavefront"
     assert "documentElement.appendChild" not in js_content, \
-        "theme.js must NOT append any wavefront (DOM wavefront eliminated in commit 195)"
+        "theme.js must NOT append any wavefront"
 
 
 def test_template_set_form_grid_responsive():
@@ -163,20 +165,22 @@ def test_roster_title_responsive_text_wrapping():
     assert "min-width: 0;" in content
     assert "white-space: normal;" in content
 
-def test_vt_native_glass_edge_architecture():
+def test_waapi_iris_and_glass_edge_architecture():
     """
-    Verify the VT-native glass edge architecture (commit 195).
+    Verify the commit-196 WAAPI iris architecture:
+    - WAAPI is the sole iris animation owner (theme.js, pseudoElement on ::view-transition-new(root))
+    - CSS has NO competing iris animation on ::view-transition-new(root)
+    - Glass edge is a restrained CSS specular filter on the VT pseudo-element
+    - DOM wavefront is completely absent
+    - JS evaluates prefers-reduced-motion before VT (WAAPI iris is JS-controlled)
+    - CSS provides accessibility fallback for VT pseudo-elements under reduced-motion
+    - ::view-transition-image-pair(root) isolation and display:block present
+    - prefers-reduced-transparency and prefers-contrast:more media queries present
 
-    The DOM wavefront overlay (commit 194) was eliminated because:
-    1. Created BEFORE document.startViewTransition(): Chromium snapshotted it into
-       ::view-transition-old(root) as part of the old-page capture, not a live overlay.
-    2. z-index: 2147483646 was a false claim: DOM z-index has no defined relationship
-       to the VT rendering layer (a separate post-compositing pass).
-    3. backdrop-filter on a snapshotted element blurs frozen pixels, not live content.
-
-    Correct architecture: filter: drop-shadow on ::view-transition-new(root).
-    CSS filter is evaluated INSIDE the VT pseudo-element render pass, AFTER clip-path,
-    so the drop-shadow traces the iris circle boundary as it expands. Zero extra DOM.
+    Architecture split (commit 196):
+      WAAPI  = sole owner of circular iris clip-path (theme.js)
+      CSS    = static specular/glass-like styling on VT pseudo-elements
+      DOM    = no wavefront overlay
 
     HIG sources:
     - liquid-glass.md § Color on glass: no inherent color, monochrome specular only
@@ -186,50 +190,78 @@ def test_vt_native_glass_edge_architecture():
     with open(modals_path, "r", encoding="utf-8") as f:
         css = f.read()
 
-    # Glass edge must be VT-native: filter on ::view-transition-new(root)
+    # CSS specular filter must be on ::view-transition-new(root)
     assert "::view-transition-new(root)" in css, \
         "modals.css must define ::view-transition-new(root) rules"
     assert "filter: var(--vt-edge-specular)" in css, \
-        "::view-transition-new(root) must apply VT-native edge via filter: var(--vt-edge-specular)"
+        "::view-transition-new(root) must apply restrained edge via filter: var(--vt-edge-specular)"
     assert "drop-shadow" in css, \
-        "--vt-edge-specular must use drop-shadow for the VT-native iris edge glow"
+        "--vt-edge-specular must use drop-shadow for the glass-like edge treatment"
 
-    # CSS iris animation must exist
-    assert "appleThemeIrisReveal" in css, \
-        "modals.css must define appleThemeIrisReveal @keyframes"
+    # PART 2: CSS must NOT have any iris animation — WAAPI is sole owner (commit 196)
+    assert "appleThemeIrisReveal" not in css, \
+        "modals.css must NOT contain appleThemeIrisReveal (WAAPI is sole iris owner in commit 196)"
+
+    # PART 3: VT wipe setup must be present
+    assert "::view-transition-image-pair(root)" in css, \
+        "modals.css must configure ::view-transition-image-pair(root) for wipe behavior"
+    assert "display: block" in css, \
+        "modals.css must set display:block on VT pseudo-elements"
 
     # DOM wavefront must be completely absent
     assert ".theme-glass-wavefront" not in css, \
-        "modals.css must NOT contain .theme-glass-wavefront (eliminated in commit 195)"
+        "modals.css must NOT contain .theme-glass-wavefront"
     assert "liquidGlassShockwave" not in css, \
-        "modals.css must NOT contain liquidGlassShockwave (wavefront animation eliminated)"
+        "modals.css must NOT contain liquidGlassShockwave"
 
-    # False stacking claim must not be present as an active CSS rule in the theme-transition section.
-    # Comments may reference the value to document the historical incorrect claim — that's intentional.
-    # Only the active CSS declaration z-index: 2147483646; (with semicolon) must not appear.
+    # Active z-index stacking claim must not appear as a CSS rule in the VT section
     vt_section_start = css.find("Theme Transition Performance")
     vt_section_end = css.find("Theme button icon animation", vt_section_start)
     vt_section = css[vt_section_start:vt_section_end] if vt_section_start != -1 else ""
     assert "z-index: 2147483646;" not in vt_section, \
-        "Theme-transition CSS must NOT use z-index: 2147483646 as an active CSS rule (incorrect VT rendering model)"
+        "Theme-transition CSS must NOT use z-index: 2147483646 as an active CSS rule"
 
-    # Reduced-motion: CSS clears filter (drops VT-native specular) and crossfades
+    # PART 5: Incorrect filter-order claims must not exist
+    assert "filter is evaluated AFTER" not in css, \
+        "modals.css must NOT claim 'filter is evaluated AFTER clip-path' (incorrect)"
+    assert "filter is evaluated INSIDE" not in css, \
+        "modals.css must NOT claim 'filter is evaluated INSIDE' (incorrect)"
+
+    # PARTS 8 + 9: Accessibility media queries
     assert "prefers-reduced-motion" in css, \
-        "modals.css must handle prefers-reduced-motion (HIG: motion.md, accessibility.md)"
+        "modals.css must handle prefers-reduced-motion"
     assert "filter: none" in css, \
-        "prefers-reduced-motion block must set filter: none to clear the VT-native specular"
+        "prefers-reduced-motion block must clear the specular filter"
+    assert "prefers-reduced-transparency" in css, \
+        "modals.css must handle prefers-reduced-transparency (opaque fallback)"
+    assert "prefers-contrast: more" in css, \
+        "modals.css must handle prefers-contrast: more (stronger edge)"
 
     theme_js_path = os.path.join(JS_DIR, "theme.js")
     with open(theme_js_path, "r", encoding="utf-8") as f:
         js = f.read()
 
-    # JS must NOT create the DOM wavefront
+    # PART 1: WAAPI must be the sole iris owner in JS
+    assert "pseudoElement" in js, \
+        "theme.js must use WAAPI with pseudoElement to animate ::view-transition-new(root)"
+    assert "::view-transition-new(root)" in js, \
+        "theme.js must target ::view-transition-new(root) in WAAPI animate call"
+    assert "await transition.ready" in js, \
+        "theme.js must await transition.ready before WAAPI iris (pseudo-elements not available before ready)"
+    assert "clipPath" in js, \
+        "theme.js WAAPI animate call must use clipPath for the iris geometry"
+
+    # PART 6/7: reduceMotion must be checked in JS (WAAPI iris is JS-owned)
+    assert "reduceMotion" in js, \
+        "theme.js must check prefers-reduced-motion (WAAPI iris is JS-owned, not CSS-owned)"
+    assert "spin-morph" in js, \
+        "theme.js must reference spin-morph for icon animation"
+
+    # DOM wavefront must be absent from JS
     assert "theme-glass-wavefront" not in js, \
-        "theme.js must NOT create .theme-glass-wavefront (DOM wavefront eliminated in commit 195)"
+        "theme.js must NOT create .theme-glass-wavefront"
     assert "documentElement.appendChild" not in js, \
-        "theme.js must NOT append a wavefront element (eliminated in commit 195)"
-    assert "reduceMotion" not in js, \
-        "theme.js must NOT check prefers-reduced-motion (CSS owns reduced-motion fallback entirely)"
+        "theme.js must NOT append any wavefront DOM element"
 
 
 @pytest.mark.playwright
