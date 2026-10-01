@@ -22,5 +22,8 @@ window.addEventListener('pywebviewready', () => {
   if (typeof syncInitialStateWithPython === 'function') {
     syncInitialStateWithPython();
   }
+  if (typeof syncUserPreferencesWithNative === 'function') {
+    syncUserPreferencesWithNative();
+  }
 });
 

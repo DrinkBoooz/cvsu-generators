@@ -577,13 +577,6 @@
               if (res.validation) state.rosterReports = res.validation;
               if (res.detected_classes)
                 state.detectedClasses = res.detected_classes;
-              try {
-                localStorage.setItem("cvsu_acc_motion", "system");
-                localStorage.setItem("cvsu_acc_transparency", "system");
-              } catch (e) {}
-              if (typeof applyAccessibilityPreferences === "function") {
-                applyAccessibilityPreferences();
-              }
               renderConfigUI();
               renderRosterStatus();
               renderClassesSection();
@@ -707,6 +700,9 @@
           applyAccessibilityPreferences();
         }
         updateAccessibilitySettingsUI();
+        if (typeof syncCurrentPreferencesToNative === "function") {
+          syncCurrentPreferencesToNative();
+        }
         if (typeof showToast === "function") {
           const label = val === "system" ? "Follow System" : (val === "reduce" ? "Reduced Motion" : "Full Motion (Override)");
           showToast("Accessibility Updated", `Motion preference set to: ${label}`, "info");
@@ -721,9 +717,26 @@
           applyAccessibilityPreferences();
         }
         updateAccessibilitySettingsUI();
+        if (typeof syncCurrentPreferencesToNative === "function") {
+          syncCurrentPreferencesToNative();
+        }
         if (typeof showToast === "function") {
           const label = val === "system" ? "Follow System" : (val === "reduce" ? "Reduced Transparency (Solid)" : "Standard Transparency (Frosted Glass)");
           showToast("Accessibility Updated", `Transparency preference set to: ${label}`, "info");
+        }
+      }
+
+      function resetAccessibilityPreferences() {
+        try {
+          localStorage.setItem("cvsu_acc_motion", "system");
+          localStorage.setItem("cvsu_acc_transparency", "system");
+        } catch (e) {}
+        if (typeof applyAccessibilityPreferences === "function") {
+          applyAccessibilityPreferences();
+        }
+        updateAccessibilitySettingsUI();
+        if (typeof syncCurrentPreferencesToNative === "function") {
+          syncCurrentPreferencesToNative();
         }
       }
 
@@ -731,3 +744,4 @@
       window.updateAccessibilitySettingsUI = updateAccessibilitySettingsUI;
       window.onAccessibilityMotionChange = onAccessibilityMotionChange;
       window.onAccessibilityTransparencyChange = onAccessibilityTransparencyChange;
+      window.resetAccessibilityPreferences = resetAccessibilityPreferences;

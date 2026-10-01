@@ -394,6 +394,86 @@ def _run_theme_diagnostics_probe(window, api):
     if os.environ.get("CVSU_DIAGNOSTIC_EXIT") == "1":
         window.destroy()
 
+def _run_persistence_diagnostics_probe(window, api):
+    """
+    Automated diagnostic probe for verifying persistence across runs in packaged CvSU Gen.exe.
+    Collects preferences, tests write-through, verifies restart recovery, and outputs JSON.
+    """
+    import json
+    import time
+    import tempfile
+
+    report = {
+        "timestamp": time.time(),
+        "is_frozen": getattr(sys, "frozen", False),
+    }
+
+    try:
+        time.sleep(0.5)
+        initial_theme = window.evaluate_js("document.documentElement.getAttribute('data-theme')")
+        initial_motion = window.evaluate_js("window.getStoredAccessibilityMotion ? window.getStoredAccessibilityMotion() : localStorage.getItem('cvsu_acc_motion')")
+        initial_trans = window.evaluate_js("window.getStoredAccessibilityTransparency ? window.getStoredAccessibilityTransparency() : localStorage.getItem('cvsu_acc_transparency')")
+
+        py_prefs = api.get_user_preferences()
+        py_parser = api.get_parser_config()
+
+        report["initial"] = {
+            "dom_theme": initial_theme,
+            "dom_motion": initial_motion,
+            "dom_trans": initial_trans,
+            "py_prefs": py_prefs,
+            "py_parser_prefixes_count": len(py_parser.get("base_subject_prefixes", [])),
+        }
+
+        probe_action = os.environ.get("CVSU_PERSISTENCE_ACTION")
+        if probe_action == "mutate_and_exit":
+            window.evaluate_js("""
+                if (typeof onAccessibilityMotionChange === 'function') onAccessibilityMotionChange('reduce');
+                if (typeof onAccessibilityTransparencyChange === 'function') onAccessibilityTransparencyChange('glass');
+                const btn = document.getElementById('btnToggleTheme');
+                if (btn) btn.click();
+            """)
+            time.sleep(0.6)
+            custom_cfg = api.get_parser_config()
+            custom_cfg["base_subject_prefixes"].append("PACKAGEDTEST")
+            api.save_parser_config(custom_cfg)
+
+            report["post_mutation"] = {
+                "dom_theme": window.evaluate_js("document.documentElement.getAttribute('data-theme')"),
+                "dom_motion": window.evaluate_js("window.getStoredAccessibilityMotion()"),
+                "dom_trans": window.evaluate_js("window.getStoredAccessibilityTransparency()"),
+                "py_prefs": api.get_user_preferences(),
+                "has_test_prefix": "PACKAGEDTEST" in api.get_parser_config().get("base_subject_prefixes", []),
+            }
+
+        elif probe_action == "verify_and_reset":
+            api.reset_parser_config()
+            report["after_parser_reset"] = {
+                "py_prefs": api.get_user_preferences(),
+                "has_test_prefix": "PACKAGEDTEST" in api.get_parser_config().get("base_subject_prefixes", []),
+            }
+            api.reset_user_preferences()
+            report["after_prefs_reset"] = {
+                "py_prefs": api.get_user_preferences(),
+            }
+
+    except Exception as e:
+        report["error"] = str(e)
+
+    out_path = os.environ.get(
+        "CVSU_DIAGNOSTIC_OUTPUT",
+        os.path.join(tempfile.gettempdir(), "cvsu_persistence_diagnostic_report.json")
+    )
+    try:
+        with open(out_path, "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2)
+        print(f"[DIAGNOSTIC] Persistence report written to: {out_path}")
+    except Exception as err:
+        print(f"[DIAGNOSTIC] Error writing report: {err}")
+
+    if os.environ.get("CVSU_DIAGNOSTIC_EXIT") == "1":
+        window.destroy()
+
 if __name__ == '__main__':
     if os.environ.get('CVSU_REMOTE_DEBUG_PORT'):
         try:
@@ -407,5 +487,7 @@ if __name__ == '__main__':
         setup_window_drag_and_drop(window, api)
         if os.environ.get('CVSU_THEME_DIAGNOSTIC') == '1':
             _run_theme_diagnostics_probe(window, api)
+        if os.environ.get('CVSU_PERSISTENCE_DIAGNOSTIC') == '1':
+            _run_persistence_diagnostics_probe(window, api)
 
     webview.start(_startup_handler, (app_window, app_api))

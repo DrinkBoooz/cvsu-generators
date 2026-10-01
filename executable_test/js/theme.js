@@ -137,6 +137,9 @@
           try {
             localStorage.setItem("cvsu_gen_theme", newTheme);
           } catch (e) {}
+          if (typeof syncCurrentPreferencesToNative === "function") {
+            syncCurrentPreferencesToNative();
+          }
         };
 
         if (!document.startViewTransition || reduceMotion) {
@@ -372,3 +375,76 @@
       window.getStoredAccessibilityTransparency = getStoredAccessibilityTransparency;
       window.getEffectiveTransparencyPreference = getEffectiveTransparencyPreference;
       window.applyAccessibilityPreferences = applyAccessibilityPreferences;
+
+      // ── Two-Tier Native Preferences Write-Through & Synchronization ──────────
+      function syncCurrentPreferencesToNative() {
+        if (!window.pywebview || !window.pywebview.api || typeof window.pywebview.api.save_user_preferences !== "function") return;
+        const currentTheme = document.documentElement.getAttribute("data-theme") || "dark";
+        const prefs = {
+          version: "1.0",
+          theme: currentTheme,
+          accessibility: {
+            motion: getStoredAccessibilityMotion(),
+            transparency: getStoredAccessibilityTransparency()
+          }
+        };
+        window.pywebview.api.save_user_preferences(prefs).catch((e) => {
+          console.warn("[Preferences] Write-through to native failed:", e);
+        });
+      }
+
+      async function syncUserPreferencesWithNative() {
+        if (!window.pywebview || !window.pywebview.api || typeof window.pywebview.api.get_user_preferences !== "function") return;
+        try {
+          const nativePrefs = await window.pywebview.api.get_user_preferences();
+          const localTheme = localStorage.getItem("cvsu_gen_theme");
+          const localMotion = localStorage.getItem(CVSU_ACC_MOTION_KEY);
+          const localTrans = localStorage.getItem(CVSU_ACC_TRANSPARENCY_KEY);
+
+          if (nativePrefs && nativePrefs.theme && nativePrefs.accessibility) {
+            // Check if upward migration is needed (legacy user with custom localStorage but fresh default Python store)
+            const hasLocalCustom = (localTheme && localTheme !== "dark") ||
+                                   (localMotion && localMotion !== "system") ||
+                                   (localTrans && localTrans !== "system");
+            const isNativeDefault = (nativePrefs.theme === "dark" &&
+                                     nativePrefs.accessibility.motion === "system" &&
+                                     nativePrefs.accessibility.transparency === "system");
+
+            if (hasLocalCustom && isNativeDefault) {
+              const upwardPrefs = {
+                version: "1.0",
+                theme: localTheme || "dark",
+                accessibility: {
+                  motion: localMotion || "system",
+                  transparency: localTrans || "system"
+                }
+              };
+              await window.pywebview.api.save_user_preferences(upwardPrefs);
+            } else {
+              // Authoritative native store updates local cache if different
+              if (nativePrefs.theme && nativePrefs.theme !== localTheme) {
+                localStorage.setItem("cvsu_gen_theme", nativePrefs.theme);
+                document.documentElement.setAttribute("data-theme", nativePrefs.theme);
+                updateThemeButtonState(nativePrefs.theme);
+              }
+              if (nativePrefs.accessibility) {
+                if (nativePrefs.accessibility.motion && nativePrefs.accessibility.motion !== localMotion) {
+                  localStorage.setItem(CVSU_ACC_MOTION_KEY, nativePrefs.accessibility.motion);
+                }
+                if (nativePrefs.accessibility.transparency && nativePrefs.accessibility.transparency !== localTrans) {
+                  localStorage.setItem(CVSU_ACC_TRANSPARENCY_KEY, nativePrefs.accessibility.transparency);
+                }
+                applyAccessibilityPreferences();
+                if (typeof updateAccessibilitySettingsUI === "function") {
+                  updateAccessibilitySettingsUI();
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.warn("[Preferences] Sync with native failed:", e);
+        }
+      }
+
+      window.syncCurrentPreferencesToNative = syncCurrentPreferencesToNative;
+      window.syncUserPreferencesWithNative = syncUserPreferencesWithNative;

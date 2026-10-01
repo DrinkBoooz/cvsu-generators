@@ -93,3 +93,45 @@ class ConfigMixin:
             res["detected_classes"] = detected_classes
             return res
         return {"status": "cancelled"}
+
+    # ── User Preferences Bridge (Theme & Accessibility) ───────────────────────
+    def get_user_preferences(self):
+        from modules.common.preferences_manager import preferences_manager
+        return preferences_manager.get_preferences()
+
+    def save_user_preferences(self, prefs_dict):
+        from modules.common.preferences_manager import preferences_manager
+        return preferences_manager.save_preferences(prefs_dict)
+
+    def reset_user_preferences(self):
+        from modules.common.preferences_manager import preferences_manager
+        return preferences_manager.reset_preferences()
+
+    def export_user_preferences(self):
+        if not self._window:
+            return {"status": "error", "message": "Window context unavailable"}
+        result = self._window.create_file_dialog(
+            webview.SAVE_DIALOG,
+            save_filename="cvsu_user_preferences.json",
+            file_types=('JSON files (*.json)', 'All files (*.*)')
+        )
+        if result:
+            save_path = result if isinstance(result, str) else result[0]
+            from modules.common.preferences_manager import preferences_manager
+            return preferences_manager.export_preferences(save_path)
+        return {"status": "cancelled"}
+
+    def import_user_preferences(self):
+        if not self._window:
+            return {"status": "error", "message": "Window context unavailable"}
+        result = self._window.create_file_dialog(
+            webview.OPEN_DIALOG,
+            allow_multiple=False,
+            file_types=('JSON files (*.json)', 'All files (*.*)')
+        )
+        if result and len(result) > 0:
+            import_path = result[0]
+            from modules.common.preferences_manager import preferences_manager
+            return preferences_manager.import_preferences(import_path)
+        return {"status": "cancelled"}
+
