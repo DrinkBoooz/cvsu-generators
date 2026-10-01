@@ -22,9 +22,10 @@
         }
       }
 
-      // ── Single shared duration token ──────────────────────────────────────
-      // All timing (WAAPI iris, CSS custom property, icon animation) derives
-      // from this one constant. Do NOT duplicate or hardcode elsewhere.
+      // ── WAAPI iris duration token ──────────────────────────────────────────
+      // This constant is the sole authoritative duration for the WAAPI circular
+      // iris clip-path animation on ::view-transition-new(root).
+      // It does NOT govern the icon animation (280ms @keyframes, modals.css).
       const THEME_TRANSITION_DURATION_MS = 450;
 
       async function toggleTheme(event) {

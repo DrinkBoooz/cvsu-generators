@@ -74,17 +74,19 @@ def test_responsive_step5_input_stacking():
 
 def test_theme_view_transition_and_animation():
     """
-    Verify the unified CSS-owns-animation architecture (commit 193/195).
+    Verify the WAAPI-sole-owner iris architecture (commit 196/197).
 
-    CSS (appleThemeIrisReveal @keyframes) is the SOLE owner of the iris clip-path.
-    JS must NOT independently animate clipPath on ::view-transition-new(root) via WAAPI.
-    JS supplies dynamic CSS custom properties and calls startViewTransition().
+    WAAPI (theme.js) is the SOLE owner of the iris clip-path.
+    CSS provides static specular/material styling on VT pseudo-elements.
+    DOM has no wavefront overlay.
 
-    Commit 195 corrections over 194:
-    - DOM wavefront eliminated (was captured into old-page VT snapshot, not a live overlay)
-    - z-index: 2147483646 stacking claim removed (DOM z-index cannot reference VT render layer)
-    - Glass edge is VT-native: filter: drop-shadow on ::view-transition-new(root)
-    - CSS owns prefers-reduced-motion fallback entirely; no JS intervention required
+    Commit 197 corrections over 196:
+    - spin-morph is now a CSS @keyframes animation (not a CSS transition).
+      transition: none !important (theme-transitioning guard) suppresses CSS
+      transitions, but does NOT suppress keyframe animations. The icon was
+      previously never animating because its transition was always suppressed.
+    - THEME_TRANSITION_DURATION_MS now governs ONLY the WAAPI iris (450ms).
+      The icon animation (280ms) is a separate, independent CSS @keyframes.
     """
     theme_js_path = os.path.join(JS_DIR, "theme.js")
     with open(theme_js_path, "r", encoding="utf-8") as f:
@@ -107,34 +109,51 @@ def test_theme_view_transition_and_animation():
     assert "--vt-y" in js_content, "theme.js must set --vt-y custom property"
     assert "--vt-radius" in js_content, "theme.js must set --vt-radius custom property"
 
-    # CSS must be the sole specular/styling owner; WAAPI is the iris clip-path owner (commit 196)
-    # The @keyframes appleThemeIrisReveal has been removed — WAAPI handles geometry
-    assert "clip-path" in css_content.lower() or "clip-path" in js_content.lower(), \
-        "clip-path must appear in the theme subsystem (WAAPI iris uses clipPath)"
-
     # WAAPI must be the sole iris owner in JS, waiting for transition.ready (commit 196)
-    # This is the inverse of the commit-193 anti-pattern where CSS and WAAPI competed
     assert "pseudoElement" in js_content and "::view-transition-new(root)" in js_content, \
-        "theme.js must animate ::view-transition-new(root) via WAAPI (WAAPI is sole iris owner in commit 196)"
+        "theme.js must animate ::view-transition-new(root) via WAAPI (WAAPI is sole iris owner)"
     assert "await transition.ready" in js_content, \
         "theme.js must await transition.ready before WAAPI iris animation"
 
-    # One shared duration token must exist
+    # THEME_TRANSITION_DURATION_MS is the WAAPI iris duration only (commit 197)
     assert "THEME_TRANSITION_DURATION_MS" in js_content, \
-        "theme.js must define a single shared THEME_TRANSITION_DURATION_MS constant"
+        "theme.js must define THEME_TRANSITION_DURATION_MS for the WAAPI iris duration"
+    # The comment before THEME_TRANSITION_DURATION_MS must describe WAAPI iris, not icon animation.
+    # Acceptable patterns: 'WAAPI iris duration', 'iris clip-path animation', etc.
+    # We verify the constant comment mentions 'iris' (the actual subject of the token).
+    token_idx = js_content.find("THEME_TRANSITION_DURATION_MS")
+    comment_before = js_content[max(0, token_idx-300):token_idx]
+    assert "iris" in comment_before.lower(), (
+        "THEME_TRANSITION_DURATION_MS comment must describe it as the iris animation "
+        "duration (WAAPI iris), not a generic shared timing token."
+    )
+
+    # CSS spin-morph: @keyframes animation (NOT a CSS transition) — commit 197
+    assert "@keyframes spin-morph-kf" in css_content, \
+        "modals.css must define @keyframes spin-morph-kf (not a CSS transition)"
+    assert "animation: spin-morph-kf" in css_content, \
+        "modals.css must apply spin-morph-kf animation to .theme-icon-container.spin-morph"
+    # The old CSS transition on .theme-icon-container must NOT exist (suppressed by theme-transitioning)
+    # Note: we only check the direct property, not the absence of any 'transition' keyword in the file.
+    # We check that .theme-icon-container no longer has 'transition: transform'
+    icon_section_start = css_content.find(".theme-icon-container")
+    icon_section = css_content[icon_section_start:icon_section_start + 300] if icon_section_start != -1 else ""
+    assert "transition: transform" not in icon_section, (
+        ".theme-icon-container must NOT have 'transition: transform' (commit 197: "
+        "icon uses @keyframes spin-morph-kf; CSS transitions are suppressed during theme-transitioning)"
+    )
 
     # Apple HIG: glass has no inherent color — specular driven by CSS custom property
     assert "--vt-edge-specular" in css_content, \
         "modals.css must use --vt-edge-specular custom property (HIG: monochrome specular only)"
 
-    # HIG accessibility: CSS owns prefers-reduced-motion fallback entirely (no JS wavefront to guard)
+    # HIG accessibility: CSS owns prefers-reduced-motion fallback
     assert "prefers-reduced-motion" in css_content, \
         "modals.css must handle prefers-reduced-motion (HIG: motion.md, accessibility.md)"
     assert "vt-fade-in" in css_content, \
         "modals.css must provide vt-fade-in crossfade fallback for reduced-motion"
 
-    # Commit 196: DOM wavefront eliminated — JS must NOT create it
-    # (DOM elements created before startViewTransition() are snapshotted into the old-page capture)
+    # Commit 196/197: DOM wavefront eliminated — JS must NOT create it
     assert "theme-glass-wavefront" not in js_content, \
         "theme.js must NOT create DOM wavefront"
     assert "documentElement.appendChild" not in js_content, \
@@ -167,7 +186,7 @@ def test_roster_title_responsive_text_wrapping():
 
 def test_waapi_iris_and_glass_edge_architecture():
     """
-    Verify the commit-196 WAAPI iris architecture:
+    Verify the commit-197 WAAPI iris + keyframe icon architecture:
     - WAAPI is the sole iris animation owner (theme.js, pseudoElement on ::view-transition-new(root))
     - CSS has NO competing iris animation on ::view-transition-new(root)
     - Glass edge is a restrained CSS specular filter on the VT pseudo-element
@@ -176,11 +195,14 @@ def test_waapi_iris_and_glass_edge_architecture():
     - CSS provides accessibility fallback for VT pseudo-elements under reduced-motion
     - ::view-transition-image-pair(root) isolation and display:block present
     - prefers-reduced-transparency and prefers-contrast:more media queries present
+    - spin-morph is a CSS @keyframes animation, NOT a CSS transition (commit 197)
+    - THEME_TRANSITION_DURATION_MS governs ONLY the WAAPI iris (not the icon animation)
 
-    Architecture split (commit 196):
-      WAAPI  = sole owner of circular iris clip-path (theme.js)
-      CSS    = static specular/glass-like styling on VT pseudo-elements
-      DOM    = no wavefront overlay
+    Architecture split (commit 197):
+      WAAPI        = sole owner of circular iris clip-path (theme.js)
+      CSS @kframes = spin-morph-kf icon accent animation (280ms, independent)
+      CSS          = static specular/glass-like styling on VT pseudo-elements
+      DOM          = no wavefront overlay
 
     HIG sources:
     - liquid-glass.md § Color on glass: no inherent color, monochrome specular only
@@ -200,7 +222,7 @@ def test_waapi_iris_and_glass_edge_architecture():
 
     # PART 2: CSS must NOT have any iris animation — WAAPI is sole owner (commit 196)
     assert "appleThemeIrisReveal" not in css, \
-        "modals.css must NOT contain appleThemeIrisReveal (WAAPI is sole iris owner in commit 196)"
+        "modals.css must NOT contain appleThemeIrisReveal (WAAPI is sole iris owner)"
 
     # PART 3: VT wipe setup must be present
     assert "::view-transition-image-pair(root)" in css, \
@@ -237,6 +259,20 @@ def test_waapi_iris_and_glass_edge_architecture():
     assert "prefers-contrast: more" in css, \
         "modals.css must handle prefers-contrast: more (stronger edge)"
 
+    # Commit 197: spin-morph is a CSS @keyframes animation, NOT a CSS transition
+    assert "@keyframes spin-morph-kf" in css, (
+        "modals.css must define @keyframes spin-morph-kf (commit 197: "
+        "CSS transitions are suppressed by theme-transitioning; "
+        "keyframe animations are NOT suppressed)."
+    )
+    assert "animation: spin-morph-kf" in css, \
+        "modals.css must apply spin-morph-kf animation to .spin-morph"
+    # Defense-in-depth: @media (prefers-reduced-motion) must disable the keyframe animation.
+    # Search for 'spin-morph' in the reduced-motion section.
+    reduced_motion_idx = css.find("prefers-reduced-motion", css.find("spin-morph-kf"))
+    assert reduced_motion_idx != -1 and "animation: none" in css[reduced_motion_idx:reduced_motion_idx+200], \
+        "@media (prefers-reduced-motion) block after spin-morph-kf must contain 'animation: none'"
+
     theme_js_path = os.path.join(JS_DIR, "theme.js")
     with open(theme_js_path, "r", encoding="utf-8") as f:
         js = f.read()
@@ -250,6 +286,17 @@ def test_waapi_iris_and_glass_edge_architecture():
         "theme.js must await transition.ready before WAAPI iris (pseudo-elements not available before ready)"
     assert "clipPath" in js, \
         "theme.js WAAPI animate call must use clipPath for the iris geometry"
+
+    # Commit 197: THEME_TRANSITION_DURATION_MS governs WAAPI iris ONLY, not icon animation
+    assert "THEME_TRANSITION_DURATION_MS" in js, \
+        "theme.js must define THEME_TRANSITION_DURATION_MS (WAAPI iris duration)"
+    # The comment must reference 'iris' to confirm it's the WAAPI iris duration constant.
+    token_idx = js.find("THEME_TRANSITION_DURATION_MS")
+    comment_region = js[max(0, token_idx-300):token_idx]
+    assert "iris" in comment_region.lower(), (
+        "THEME_TRANSITION_DURATION_MS comment must reference 'iris' to indicate "
+        "it governs the WAAPI iris (not the icon animation)."
+    )
 
     # PART 6/7: reduceMotion must be checked in JS (WAAPI iris is JS-owned)
     assert "reduceMotion" in js, \

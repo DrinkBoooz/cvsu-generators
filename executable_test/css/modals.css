@@ -644,14 +644,41 @@
       }
 
       /* ── Theme button icon animation ─────────────────────────────────────── */
+      /*
+       * Option A (commit 197): spin-morph uses a CSS @keyframes animation,
+       * NOT a CSS transition. The theme-transitioning guard sets
+       * 'transition: none !important' on all descendants — this suppresses
+       * CSS transitions but does NOT suppress keyframe animations.
+       *
+       * Intentional duration: 280ms with spring-like easing. Independent of
+       * THEME_TRANSITION_DURATION_MS (450ms). The icon animation is a brief
+       * accent, not a phase of the iris reveal.
+       *
+       * Reduced motion: JS does NOT add 'spin-morph' when prefers-reduced-motion
+       * is active. The @media block below is a defense-in-depth fallback.
+       */
+      @keyframes spin-morph-kf {
+        0%   { transform: rotate(0deg)   scale(1.0); }
+        40%  { transform: rotate(40deg)  scale(0.82); }
+        70%  { transform: rotate(20deg)  scale(0.90); }
+        100% { transform: rotate(0deg)   scale(1.0); }
+      }
+
       .theme-icon-container {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+        /* No CSS transition on transform — animation uses @keyframes. */
       }
+
       .theme-icon-container.spin-morph {
-        transform: rotate(45deg) scale(0.85);
+        animation: spin-morph-kf 280ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .theme-icon-container.spin-morph {
+          animation: none;
+        }
       }
 
       /* ── Parser & Curriculum Settings Modal Styling (Apple HIG) ────────── */
