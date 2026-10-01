@@ -245,6 +245,129 @@ def _setup_diagnostics(window, doc_url, api=None):
     except Exception:
         return None
 
+def _run_theme_diagnostics_probe(window, api):
+    """
+    Executes controlled runtime diagnostics inside the native PyWebView/WebView2 host.
+    Collects renderer identification, browser version, API availability,
+    promise resolutions, WAAPI pseudoElement metrics, and reduced-motion states.
+    Writes output to CVSU_DIAGNOSTIC_OUTPUT or %TEMP%/cvsu_theme_diagnostic_report.json.
+    """
+    import json
+    import tempfile
+    import time
+
+    time.sleep(1.0)
+
+    report = {
+        "timestamp": time.time(),
+        "pid": os.getpid(),
+        "is_frozen": getattr(sys, "frozen", False),
+        "pywebview_version": "6.2.1",
+        "renderer": getattr(webview, "renderer", "unknown"),
+    }
+
+    try:
+        import clr
+        from Microsoft.Web.WebView2.Core import CoreWebView2Environment
+        report["webview2_runtime_version"] = CoreWebView2Environment.GetAvailableBrowserVersionString()
+    except Exception as e:
+        report["webview2_runtime_version_error"] = str(e)
+
+    try:
+        report["url"] = window.evaluate_js("window.location.href")
+        report["userAgent"] = window.evaluate_js("navigator.userAgent")
+        report["platform"] = window.evaluate_js("navigator.platform")
+        report["userAgentData_brands"] = window.evaluate_js("navigator.userAgentData ? navigator.userAgentData.brands : null")
+        report["userAgentData_platform"] = window.evaluate_js("navigator.userAgentData ? navigator.userAgentData.platform : null")
+        report["hasStartViewTransition"] = window.evaluate_js("typeof document.startViewTransition === 'function'")
+        report["hasElementAnimate"] = window.evaluate_js("typeof Element.prototype.animate === 'function'")
+        report["hasCSSSupports"] = window.evaluate_js("typeof CSS !== 'undefined' && typeof CSS.supports === 'function'")
+        report["supportsVTName"] = window.evaluate_js("typeof CSS !== 'undefined' && CSS.supports('view-transition-name: root')")
+        report["supportsClipPath"] = window.evaluate_js("typeof CSS !== 'undefined' && CSS.supports('clip-path: circle(10px at 10px 10px)')")
+        report["prefersReducedMotion"] = window.evaluate_js("window.matchMedia('(prefers-reduced-motion: reduce)').matches")
+
+        window.evaluate_js("""
+            window.__diag_controlled_promise = null;
+            if (typeof window.__runControlledThemeTransition === 'function') {
+                window.__runControlledThemeTransition().then(res => {
+                    window.__diag_controlled_promise = res;
+                }).catch(err => {
+                    window.__diag_controlled_promise = { error: String(err) };
+                });
+            }
+        """)
+
+        for _ in range(40):
+            time.sleep(0.1)
+            done = window.evaluate_js("Boolean(window.__diag_controlled_promise)")
+            if done:
+                break
+        time.sleep(0.5)
+        report["controlled_transition"] = window.evaluate_js("window.__diag_controlled_promise")
+
+        window.evaluate_js("""
+            window.__captured_errors = [];
+            const origErr = console.error;
+            console.error = function(...args) {
+                window.__captured_errors.push(args.map(a => String(a)).join(' '));
+                origErr.apply(console, args);
+            };
+            const btn = document.getElementById('btnToggleTheme');
+            if (btn) btn.click();
+        """)
+        time.sleep(0.6)
+        report["natural_toggle"] = {
+            "theme": window.evaluate_js("document.documentElement.getAttribute('data-theme')"),
+            "captured_errors": window.evaluate_js("window.__captured_errors")
+        }
+
+        window.evaluate_js("""
+            window.__captured_errors = [];
+            const origMM = window.matchMedia;
+            window.matchMedia = function(q) {
+                if (q === '(prefers-reduced-motion: reduce)') {
+                    return { matches: false, addEventListener: () => {}, removeEventListener: () => {} };
+                }
+                return origMM.call(window, q);
+            };
+            const btn = document.getElementById('btnToggleTheme');
+            if (btn) btn.click();
+        """)
+        time.sleep(0.6)
+        report["bypassed_reduced_motion_toggle"] = {
+            "theme": window.evaluate_js("document.documentElement.getAttribute('data-theme')"),
+            "captured_errors": window.evaluate_js("window.__captured_errors")
+        }
+
+    except Exception as e:
+        report["probe_error"] = str(e)
+
+    out_path = os.environ.get(
+        "CVSU_DIAGNOSTIC_OUTPUT",
+        os.path.join(tempfile.gettempdir(), "cvsu_theme_diagnostic_report.json")
+    )
+    try:
+        with open(out_path, "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2)
+        print(f"[DIAGNOSTIC] Report written to: {out_path}")
+    except Exception as err:
+        print(f"[DIAGNOSTIC] Error writing report: {err}")
+
+    if os.environ.get("CVSU_DIAGNOSTIC_EXIT") == "1":
+        window.destroy()
+
 if __name__ == '__main__':
+    if os.environ.get('CVSU_REMOTE_DEBUG_PORT'):
+        try:
+            webview.settings['REMOTE_DEBUGGING_PORT'] = int(os.environ['CVSU_REMOTE_DEBUG_PORT'])
+        except Exception:
+            pass
+
     app_window, app_api = create_app()
-    webview.start(setup_window_drag_and_drop, (app_window, app_api))
+
+    def _startup_handler(window, api):
+        setup_window_drag_and_drop(window, api)
+        if os.environ.get('CVSU_THEME_DIAGNOSTIC') == '1':
+            _run_theme_diagnostics_probe(window, api)
+
+    webview.start(_startup_handler, (app_window, app_api))

@@ -64,6 +64,11 @@
         };
 
         if (!document.startViewTransition || reduceMotion) {
+          if (reduceMotion) {
+            console.warn(
+              "[CvSU Gen][ThemeTransition] prefers-reduced-motion is active (reduceMotion=true); skipping animation per accessibility preference"
+            );
+          }
           // Fallback 1: No VT API support.
           // Fallback 2: Reduced motion — apply theme directly, no animation.
           // (theme-transitioning already added above; remove after paint)
@@ -111,8 +116,6 @@
         doc.style.setProperty("--vt-radius", `${endRadius}px`);
         doc.style.setProperty("--vt-duration", `${THEME_TRANSITION_DURATION_MS}ms`);
 
-
-
         try {
           // Start the View Transition. The callback runs synchronously to swap
           // the theme before the new snapshot is taken.
@@ -147,6 +150,12 @@
           // Wait for the transition to fully complete before cleanup.
           await transition.finished;
         } catch (err) {
+          console.error(
+            "[CvSU Gen][ThemeTransition]",
+            err?.name,
+            err?.message,
+            err?.stack
+          );
           // If VT or WAAPI fails for any reason, ensure theme is still applied.
           applyTheme();
         } finally {
@@ -162,6 +171,112 @@
           });
         }
       }
+
+      // ── Diagnostic probe for controlled execution inside native host ────────
+      window.__runControlledThemeTransition = async function() {
+        const result = {
+          hasStartViewTransition: typeof document.startViewTransition === "function",
+          hasElementAnimate: typeof Element.prototype.animate === "function",
+          hasCSSSupports: typeof CSS !== "undefined" && typeof CSS.supports === "function",
+          prefersReducedMotion: window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+          userAgent: navigator.userAgent,
+          brands: navigator.userAgentData?.brands || null,
+          platform: navigator.platform,
+          platformData: navigator.userAgentData?.platform || null,
+          supportsVTName: typeof CSS !== "undefined" && CSS.supports("view-transition-name: root"),
+          supportsClipPath: typeof CSS !== "undefined" && CSS.supports("clip-path: circle(10px at 10px 10px)"),
+          transitionCreated: false,
+          updateCallbackDone: { resolved: false, rejected: false, errorName: null, errorMessage: null },
+          ready: { resolved: false, rejected: false, errorName: null, errorMessage: null },
+          waapi: { created: false, errorName: null, errorMessage: null, playState: null, currentTime: null, timing: null },
+          pseudoComputedStyle: null,
+          finished: { resolved: false, rejected: false, errorName: null, errorMessage: null }
+        };
+
+        if (!result.hasStartViewTransition) return result;
+
+        try {
+          const transition = document.startViewTransition(() => {});
+          result.transitionCreated = !!transition;
+
+          try {
+            await transition.updateCallbackDone;
+            result.updateCallbackDone.resolved = true;
+          } catch (e) {
+            result.updateCallbackDone.rejected = true;
+            result.updateCallbackDone.errorName = e?.name || "Error";
+            result.updateCallbackDone.errorMessage = e?.message || String(e);
+          }
+
+          try {
+            await transition.ready;
+            result.ready.resolved = true;
+
+            // Inspect pseudo-element styling during ready
+            try {
+              const ps = getComputedStyle(document.documentElement, "::view-transition-new(root)");
+              result.pseudoComputedStyle = {
+                display: ps.display,
+                opacity: ps.opacity,
+                clipPath: ps.clipPath,
+                filter: ps.filter
+              };
+            } catch (psErr) {
+              result.pseudoComputedStyle = { error: String(psErr) };
+            }
+
+            // Test WAAPI animate on ::view-transition-new(root)
+            try {
+              const anim = document.documentElement.animate(
+                {
+                  clipPath: ["circle(0px at 500px 300px)", "circle(1000px at 500px 300px)"]
+                },
+                {
+                  duration: 450,
+                  easing: "cubic-bezier(0.2, 0, 0, 1)",
+                  fill: "both",
+                  pseudoElement: "::view-transition-new(root)"
+                }
+              );
+              result.waapi.created = !!anim;
+              if (anim) {
+                result.waapi.playState = anim.playState;
+                result.waapi.currentTime = anim.currentTime;
+                if (anim.effect && typeof anim.effect.getComputedTiming === "function") {
+                  const timing = anim.effect.getComputedTiming();
+                  result.waapi.timing = {
+                    duration: timing.duration,
+                    easing: timing.easing,
+                    fill: timing.fill
+                  };
+                }
+              }
+            } catch (animErr) {
+              result.waapi.errorName = animErr?.name || "Error";
+              result.waapi.errorMessage = animErr?.message || String(animErr);
+            }
+
+          } catch (readyErr) {
+            result.ready.rejected = true;
+            result.ready.errorName = readyErr?.name || "Error";
+            result.ready.errorMessage = readyErr?.message || String(readyErr);
+          }
+
+          try {
+            await transition.finished;
+            result.finished.resolved = true;
+          } catch (finErr) {
+            result.finished.rejected = true;
+            result.finished.errorName = finErr?.name || "Error";
+            result.finished.errorMessage = finErr?.message || String(finErr);
+          }
+
+        } catch (err) {
+          result.error = String(err);
+        }
+
+        return result;
+      };
 
       function loadSavedTheme() {
         const saved = localStorage.getItem("cvsu_gen_theme");
