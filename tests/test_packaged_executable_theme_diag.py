@@ -77,10 +77,27 @@ def test_packaged_executable_theme_runtime_diagnosis():
 
     # 7. Expose Root Cause: prefers-reduced-motion status
     # The actual OS on this system has Animation effects disabled, which sets prefersReducedMotion to True.
-    # When bypassed, theme toggling succeeds with full animation.
     assert "natural_toggle" in diag
+    assert diag["natural_toggle"]["theme"] == "light"
+
+    # 8. Verify Accessibility Settings in Packaged DOM & Runtime (Commit 201)
+    a11y_ui = diag.get("accessibility_ui", {})
+    assert a11y_ui.get("hasTab") is True, "Packaged EXE must include cfgTabAccessibility button"
+    assert a11y_ui.get("hasPane") is True, "Packaged EXE must include cfgPaneAccessibility pane"
+    assert a11y_ui.get("hasMotionSelect") is True, "Packaged EXE must include accMotionSelect control"
+    assert a11y_ui.get("hasTransparencySelect") is True, "Packaged EXE must include accTransparencySelect control"
+    assert a11y_ui.get("dataAccMotion") in ("reduce", "no-preference")
+    assert a11y_ui.get("dataAccTransparency") in ("reduce", "glass")
+
+    # 9. Verify App-Level Override in Packaged Runtime
+    assert "app_override_full_motion_toggle" in diag
+    override = diag["app_override_full_motion_toggle"]
+    assert override.get("effective_motion") == "no-preference", "Setting app motion to full must set effective motion to no-preference"
+    assert override["theme"] == "dark", f"App override toggle must switch to dark, got {override['theme']}"
+
+    # 10. Verify Bypassed Reduced Motion Toggle
     assert "bypassed_reduced_motion_toggle" in diag
-    assert diag["bypassed_reduced_motion_toggle"]["theme"] != diag["natural_toggle"]["theme"]
+    assert diag["bypassed_reduced_motion_toggle"]["theme"] == "light", f"Bypassed toggle must switch to light, got {diag['bypassed_reduced_motion_toggle']['theme']}"
 
     # Cleanup report file
     try:

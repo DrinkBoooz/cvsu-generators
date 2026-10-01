@@ -26,6 +26,7 @@ IMPORT_TO_DIST = {
     "docx": "python-docx",
     "playwright": "playwright",
     "PyInstaller": "pyinstaller",
+    "Microsoft": "pythonnet",
 }
 
 INTERNAL_MODULE_NAMES = {

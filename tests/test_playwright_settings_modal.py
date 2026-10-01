@@ -122,7 +122,39 @@ def test_playwright_parser_settings_modal_flow():
         page.click("text=Discard")
         assert result_card.is_hidden(), "Result card must be hidden after discard"
 
-        # 9. Close Modal
+        # 9. Check Accessibility Tab
+        page.click("#cfgTabAccessibility")
+        acc_pane = page.locator("#cfgPaneAccessibility")
+        assert acc_pane.is_visible(), "Accessibility pane must be visible"
+
+        motion_select = page.locator("#accMotionSelect")
+        assert motion_select.is_visible(), "Motion select must be visible"
+        assert motion_select.input_value() == "system", "Default motion should be system"
+
+        # Change motion to reduce and verify persistence
+        motion_select.select_option("reduce")
+        page.wait_for_timeout(100)
+        stored_motion = page.evaluate("() => localStorage.getItem('cvsu_acc_motion')")
+        assert stored_motion == "reduce", "Setting motion to reduce must persist in localStorage"
+        eff_motion = page.evaluate("() => document.documentElement.getAttribute('data-acc-motion')")
+        assert eff_motion == "reduce"
+
+        # Change transparency to reduce (solid opaque)
+        trans_select = page.locator("#accTransparencySelect")
+        assert trans_select.is_visible(), "Transparency select must be visible"
+        trans_select.select_option("reduce")
+        page.wait_for_timeout(100)
+        stored_trans = page.evaluate("() => localStorage.getItem('cvsu_acc_transparency')")
+        assert stored_trans == "reduce", "Setting transparency to reduce must persist in localStorage"
+        eff_trans = page.evaluate("() => document.documentElement.getAttribute('data-acc-transparency')")
+        assert eff_trans == "reduce"
+
+        # Reset back to system
+        motion_select.select_option("system")
+        trans_select.select_option("system")
+        page.wait_for_timeout(100)
+
+        # 10. Close Modal
         page.click("#btnCloseSettingsModal")
         page.wait_for_timeout(200)
         assert modal.is_hidden(), "Modal must be hidden after clicking close"

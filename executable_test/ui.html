@@ -2360,6 +2360,14 @@
             >
               📄 Custom Forms
             </button>
+            <button
+              class="settings-nav-tab"
+              id="cfgTabAccessibility"
+              type="button"
+              onclick="switchConfigTab('Accessibility')"
+            >
+              ♿ Accessibility
+            </button>
           </div>
 
           <!-- Tab 1: Subject Prefixes & Departments -->
@@ -3188,6 +3196,104 @@
                 style="display: flex; flex-direction: column; gap: 8px"
               >
                 <!-- Dynamically rendered custom template cards -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab 8: Accessibility & Motion Preferences (Apple HIG Grouped List) -->
+          <div id="cfgPaneAccessibility" class="settings-tab-pane d-none">
+            <div class="apple-hig-section-header">
+              Accessibility &amp; Visual Preferences
+            </div>
+
+            <div class="apple-hig-group">
+              <!-- Row 1: Motion & Transitions -->
+              <div class="apple-hig-row">
+                <div class="apple-hig-row-meta">
+                  <div class="apple-hig-icon-tile icon-tile-blue" aria-hidden="true">
+                    🎬
+                  </div>
+                  <div class="apple-hig-text-stack">
+                    <label for="accMotionSelect" class="apple-hig-label">
+                      Interface Motion &amp; Transitions
+                    </label>
+                    <span class="apple-hig-caption" id="accMotionCaption">
+                      Governs viewport View Transition iris reveals and morph animations
+                    </span>
+                  </div>
+                </div>
+                <div class="apple-hig-input-wrap">
+                  <select
+                    id="accMotionSelect"
+                    class="form-control-custom apple-hig-select"
+                    onchange="onAccessibilityMotionChange(this.value)"
+                    aria-label="Interface Motion and Transitions"
+                    aria-describedby="accMotionCaption"
+                  >
+                    <option value="system">Follow System (Default)</option>
+                    <option value="reduce">Reduced Motion (Suppress transitions)</option>
+                    <option value="full">Full Motion (Enable iris reveals)</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Row 2: Surface Transparency / Glass -->
+              <div class="apple-hig-row">
+                <div class="apple-hig-row-meta">
+                  <div class="apple-hig-icon-tile icon-tile-emerald" aria-hidden="true">
+                    🪟
+                  </div>
+                  <div class="apple-hig-text-stack">
+                    <label for="accTransparencySelect" class="apple-hig-label">
+                      Surface Transparency &amp; Materials
+                    </label>
+                    <span class="apple-hig-caption" id="accTransparencyCaption">
+                      Controls Liquid Glass translucency on headers, docks, and dialogs
+                    </span>
+                  </div>
+                </div>
+                <div class="apple-hig-input-wrap">
+                  <select
+                    id="accTransparencySelect"
+                    class="form-control-custom apple-hig-select"
+                    onchange="onAccessibilityTransparencyChange(this.value)"
+                    aria-label="Surface Transparency and Materials"
+                    aria-describedby="accTransparencyCaption"
+                  >
+                    <option value="system">Follow System (Default)</option>
+                    <option value="reduce">Reduced Transparency (Solid opaque)</option>
+                    <option value="glass">Liquid Glass (Translucent materials)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <p class="apple-hig-footnote">
+              By default, CvSU Gen automatically aligns with Windows accessibility preferences (Settings → Accessibility → Visual effects). Custom overrides apply immediately and persist in local storage.
+            </p>
+
+            <!-- Live Environment Diagnostics Card -->
+            <div class="apple-hig-section-header" style="margin-top: 14px;">
+              System Accessibility Status
+            </div>
+            <div class="apple-hig-group" id="accDiagnosticsCard" style="padding: 12px 16px; font-size: 12px;">
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+                <div>
+                  <div style="color: var(--text-secondary); font-size: 11px; margin-bottom: 2px;">Windows Animation Effects</div>
+                  <div id="accStatusSysMotion" style="font-weight: 600; color: var(--text-primary);">Detecting...</div>
+                </div>
+                <div>
+                  <div style="color: var(--text-secondary); font-size: 11px; margin-bottom: 2px;">Effective Motion State</div>
+                  <div id="accStatusEffectiveMotion" style="font-weight: 600; color: var(--text-primary);">Detecting...</div>
+                </div>
+                <div>
+                  <div style="color: var(--text-secondary); font-size: 11px; margin-bottom: 2px;">View Transition Engine</div>
+                  <div id="accStatusVTEngine" style="font-weight: 600; color: var(--text-primary);">Detecting...</div>
+                </div>
+                <div>
+                  <div style="color: var(--text-secondary); font-size: 11px; margin-bottom: 2px;">Effective Material Surface</div>
+                  <div id="accStatusEffectiveSurface" style="font-weight: 600; color: var(--text-primary);">Detecting...</div>
+                </div>
               </div>
             </div>
           </div>

@@ -305,6 +305,15 @@ def _run_theme_diagnostics_probe(window, api):
         time.sleep(0.5)
         report["controlled_transition"] = window.evaluate_js("window.__diag_controlled_promise")
 
+        report["accessibility_ui"] = window.evaluate_js("""({
+            hasTab: Boolean(document.getElementById('cfgTabAccessibility')),
+            hasPane: Boolean(document.getElementById('cfgPaneAccessibility')),
+            hasMotionSelect: Boolean(document.getElementById('accMotionSelect')),
+            hasTransparencySelect: Boolean(document.getElementById('accTransparencySelect')),
+            dataAccMotion: document.documentElement.getAttribute('data-acc-motion'),
+            dataAccTransparency: document.documentElement.getAttribute('data-acc-transparency')
+        })""")
+
         window.evaluate_js("""
             window.__captured_errors = [];
             const origErr = console.error;
@@ -320,6 +329,29 @@ def _run_theme_diagnostics_probe(window, api):
             "theme": window.evaluate_js("document.documentElement.getAttribute('data-theme')"),
             "captured_errors": window.evaluate_js("window.__captured_errors")
         }
+
+        # Test app-level override: setting motion to "full" overrides OS reduceMotion
+        window.evaluate_js("""
+            window.__captured_errors = [];
+            if (typeof onAccessibilityMotionChange === 'function') {
+                onAccessibilityMotionChange('full');
+            }
+            const btn = document.getElementById('btnToggleTheme');
+            if (btn) btn.click();
+        """)
+        time.sleep(0.6)
+        report["app_override_full_motion_toggle"] = {
+            "theme": window.evaluate_js("document.documentElement.getAttribute('data-theme')"),
+            "effective_motion": window.evaluate_js("document.documentElement.getAttribute('data-acc-motion')"),
+            "captured_errors": window.evaluate_js("window.__captured_errors")
+        }
+
+        # Reset back to system default
+        window.evaluate_js("""
+            if (typeof onAccessibilityMotionChange === 'function') {
+                onAccessibilityMotionChange('system');
+            }
+        """)
 
         window.evaluate_js("""
             window.__captured_errors = [];

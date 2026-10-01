@@ -28,6 +28,84 @@
       // It does NOT govern the icon animation (280ms @keyframes, modals.css).
       const THEME_TRANSITION_DURATION_MS = 450;
 
+      // ── Accessibility Preferences State & Resolution ───────────────────────
+      const CVSU_ACC_MOTION_KEY = "cvsu_acc_motion";
+      const CVSU_ACC_TRANSPARENCY_KEY = "cvsu_acc_transparency";
+
+      function getStoredAccessibilityMotion() {
+        try {
+          return localStorage.getItem(CVSU_ACC_MOTION_KEY) || "system";
+        } catch (e) {
+          return "system";
+        }
+      }
+
+      function getEffectiveMotionPreference() {
+        const userPref = getStoredAccessibilityMotion();
+        if (userPref === "reduce") return "reduce";
+        if (userPref === "full") return "no-preference";
+        // "system" default: strictly respect OS media query
+        const systemReduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        return systemReduce ? "reduce" : "no-preference";
+      }
+
+      function getStoredAccessibilityTransparency() {
+        try {
+          return localStorage.getItem(CVSU_ACC_TRANSPARENCY_KEY) || "system";
+        } catch (e) {
+          return "system";
+        }
+      }
+
+      function getEffectiveTransparencyPreference() {
+        const userPref = getStoredAccessibilityTransparency();
+        if (userPref === "reduce") return "reduce";
+        if (userPref === "glass") return "glass";
+        // "system" default: check prefers-reduced-transparency
+        try {
+          const sysReduced = window.matchMedia("(prefers-reduced-transparency: reduce)").matches;
+          return sysReduced ? "reduce" : "glass";
+        } catch (e) {
+          return "glass";
+        }
+      }
+
+      function applyAccessibilityPreferences() {
+        const doc = document.documentElement;
+        const effectiveMotion = getEffectiveMotionPreference();
+        const effectiveTrans = getEffectiveTransparencyPreference();
+
+        doc.setAttribute("data-acc-motion", effectiveMotion);
+        doc.setAttribute("data-acc-transparency", effectiveTrans);
+      }
+
+      // Initialize synchronously on script load
+      try {
+        applyAccessibilityPreferences();
+      } catch (e) {}
+
+      // Dynamically react if OS accessibility preferences change at runtime
+      try {
+        const sysMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+        if (sysMotionQuery && typeof sysMotionQuery.addEventListener === "function") {
+          sysMotionQuery.addEventListener("change", () => {
+            applyAccessibilityPreferences();
+            if (typeof updateAccessibilitySettingsUI === "function") {
+              updateAccessibilitySettingsUI();
+            }
+          });
+        }
+        const sysTransQuery = window.matchMedia("(prefers-reduced-transparency: reduce)");
+        if (sysTransQuery && typeof sysTransQuery.addEventListener === "function") {
+          sysTransQuery.addEventListener("change", () => {
+            applyAccessibilityPreferences();
+            if (typeof updateAccessibilitySettingsUI === "function") {
+              updateAccessibilitySettingsUI();
+            }
+          });
+        }
+      } catch (e) {}
+
       async function toggleTheme(event) {
         const doc = document.documentElement;
         const currentTheme = doc.getAttribute("data-theme") || "dark";
@@ -36,12 +114,10 @@
         const btn = document.getElementById("btnToggleTheme");
         const iconSpan = document.getElementById("themeIcon");
 
-        // ── PART 6/7: Evaluate motion preference FIRST before any animation ──
-        // The iris animation is JS-owned (WAAPI), so accessibility must be
-        // evaluated in JS, not CSS.
-        const reduceMotion = window.matchMedia(
-          "(prefers-reduced-motion: reduce)"
-        ).matches;
+        // ── PART 6/7: Evaluate effective motion preference FIRST ───────────────
+        // Precedence: explicit app setting (reduce/full) > system preference (system).
+        // Evaluated in JS before starting any View Transition or WAAPI animation.
+        const reduceMotion = getEffectiveMotionPreference() === "reduce";
 
         // Suppress all DOM CSS transitions FIRST — before any class changes
         // that would trigger transitions (e.g. spin-morph → transform transition).
@@ -66,7 +142,7 @@
         if (!document.startViewTransition || reduceMotion) {
           if (reduceMotion) {
             console.warn(
-              "[CvSU Gen][ThemeTransition] prefers-reduced-motion is active (reduceMotion=true); skipping animation per accessibility preference"
+              `[CvSU Gen][ThemeTransition] Effective motion preference is reduce (stored: ${getStoredAccessibilityMotion()}); skipping animation per accessibility preference`
             );
           }
           // Fallback 1: No VT API support.
@@ -179,6 +255,10 @@
           hasElementAnimate: typeof Element.prototype.animate === "function",
           hasCSSSupports: typeof CSS !== "undefined" && typeof CSS.supports === "function",
           prefersReducedMotion: window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+          storedMotionPreference: getStoredAccessibilityMotion(),
+          effectiveMotionPreference: getEffectiveMotionPreference(),
+          storedTransparencyPreference: getStoredAccessibilityTransparency(),
+          effectiveTransparencyPreference: getEffectiveTransparencyPreference(),
           userAgent: navigator.userAgent,
           brands: navigator.userAgentData?.brands || null,
           platform: navigator.platform,
@@ -283,4 +363,12 @@
         const theme = saved || "dark";
         document.documentElement.setAttribute("data-theme", theme);
         updateThemeButtonState(theme);
+        applyAccessibilityPreferences();
       }
+
+      // Expose accessibility interfaces globally for UI controls and tests
+      window.getStoredAccessibilityMotion = getStoredAccessibilityMotion;
+      window.getEffectiveMotionPreference = getEffectiveMotionPreference;
+      window.getStoredAccessibilityTransparency = getStoredAccessibilityTransparency;
+      window.getEffectiveTransparencyPreference = getEffectiveTransparencyPreference;
+      window.applyAccessibilityPreferences = applyAccessibilityPreferences;
