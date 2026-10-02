@@ -339,6 +339,7 @@ class PreferencesManager:
         """
         Imports and validates user preferences from an external JSON file.
         Safely normalizes schema and strips any unknown fields or metadata.
+        Enforces complete canonical document contract.
         """
         if not os.path.exists(source_path):
             return {"status": "error", "message": f"File not found: {source_path}"}
@@ -348,10 +349,24 @@ class PreferencesManager:
             if not isinstance(raw_data, dict):
                 return {"status": "error", "message": "Import file must contain a JSON object"}
 
-            if "theme" not in raw_data and "accessibility" not in raw_data:
+            # Enforce complete canonical document contract
+            if "theme" not in raw_data or "accessibility" not in raw_data:
                 return {
                     "status": "error",
-                    "message": "Invalid user preferences: file contains neither theme nor accessibility settings"
+                    "message": (
+                        "Incomplete preferences document: import requires a complete preference document "
+                        "containing 'theme' and 'accessibility' ('motion', 'transparency')."
+                    )
+                }
+
+            acc = raw_data.get("accessibility")
+            if not isinstance(acc, dict) or "motion" not in acc or "transparency" not in acc:
+                return {
+                    "status": "error",
+                    "message": (
+                        "Incomplete preferences document: 'accessibility' must include both 'motion' "
+                        "and 'transparency'."
+                    )
                 }
 
             validated = validate_preferences(raw_data)

@@ -404,15 +404,29 @@ class ParserConfigManager:
             if not isinstance(imported_data, dict):
                 return {"status": "error", "message": "Import file must contain a JSON object"}
 
-            parser_keys = {
+            required_keys = {
                 "ceit_prefix_map", "base_subject_prefixes", "known_lab_subjects",
                 "program_aliases", "roster_keywords", "schedule_config"
             }
-            if not any(k in imported_data for k in parser_keys):
+            missing_keys = required_keys - set(imported_data.keys())
+            if missing_keys:
                 return {
                     "status": "error",
-                    "message": "Invalid parser configuration: file contains no recognized parser configuration keys"
+                    "message": f"Incomplete parser configuration document. Missing required keys: {sorted(list(missing_keys))}"
                 }
+
+            if not isinstance(imported_data["ceit_prefix_map"], dict):
+                return {"status": "error", "message": "Invalid parser configuration: 'ceit_prefix_map' must be a JSON object"}
+            if not isinstance(imported_data["base_subject_prefixes"], list):
+                return {"status": "error", "message": "Invalid parser configuration: 'base_subject_prefixes' must be a list"}
+            if not isinstance(imported_data["known_lab_subjects"], list):
+                return {"status": "error", "message": "Invalid parser configuration: 'known_lab_subjects' must be a list"}
+            if not isinstance(imported_data["program_aliases"], dict):
+                return {"status": "error", "message": "Invalid parser configuration: 'program_aliases' must be a JSON object"}
+            if not isinstance(imported_data["roster_keywords"], dict):
+                return {"status": "error", "message": "Invalid parser configuration: 'roster_keywords' must be a JSON object"}
+            if not isinstance(imported_data["schedule_config"], dict):
+                return {"status": "error", "message": "Invalid parser configuration: 'schedule_config' must be a JSON object"}
 
             return self.save_config(imported_data)
         except Exception as e:
