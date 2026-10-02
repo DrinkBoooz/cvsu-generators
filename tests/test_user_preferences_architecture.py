@@ -9,6 +9,7 @@ Safe Fallbacks, Migration, and Reset Isolation.
 import os
 import sys
 import json
+from copy import deepcopy
 import pytest
 from pathlib import Path
 from modules.common.preferences_manager import (
@@ -314,4 +315,242 @@ def test_user_preference_reset_preserves_parser_config_scenario_d(tmp_path, monk
     assert post_prefs["accessibility"]["motion"] == "system"
     assert post_prefs["accessibility"]["transparency"] == "system"
     assert "SCENARIOD" in api.get_parser_config()["base_subject_prefixes"]
+
+
+# ── 5. Finalized Persistence Contract Tests (Commit 205) ─────────────────────
+
+def test_export_preferences_produces_exact_canonical_schema_without_metadata(tmp_path):
+    """
+    Issue A:
+    Exported user preferences must strictly match the canonical schema.
+    _persisted and diagnostic metadata must NEVER be exported or written to disk.
+    """
+    mgr = PreferencesManager(config_dir=str(tmp_path))
+    mgr.save_preferences({
+        "version": "1.0",
+        "theme": "light",
+        "accessibility": {"motion": "reduce", "transparency": "glass"}
+    })
+
+    # 1. Verify get_preferences() is pure canonical
+    active = mgr.get_preferences()
+    assert "_persisted" not in active
+    assert set(active.keys()) == {"version", "theme", "accessibility"}
+    assert set(active["accessibility"].keys()) == {"motion", "transparency"}
+
+    # 2. Verify get_preferences_with_metadata() includes metadata
+    meta_prefs = mgr.get_preferences_with_metadata()
+    assert meta_prefs.get("_persisted") is True
+
+    # 3. Export to file and inspect raw JSON on disk
+    export_path = str(tmp_path / "exported_canonical.json")
+    res = mgr.export_preferences(export_path)
+    assert res["status"] == "success"
+
+    with open(export_path, "r", encoding="utf-8") as f:
+        exported = json.load(f)
+
+    assert "_persisted" not in exported
+    assert exported == {
+        "version": "1.0",
+        "theme": "light",
+        "accessibility": {
+            "motion": "reduce",
+            "transparency": "glass"
+        }
+    }
+
+    # 4. Verify disk store itself also has zero _persisted
+    with open(mgr.preferences_file, "r", encoding="utf-8") as f:
+        disk_content = json.load(f)
+    assert "_persisted" not in disk_content
+
+
+def test_save_preferences_enforces_complete_document_contract(tmp_path):
+    """
+    Issue B:
+    save_preferences() represents a complete validated document replacement.
+    Partial documents missing required fields must be explicitly rejected.
+    """
+    mgr = PreferencesManager(config_dir=str(tmp_path))
+
+    # Reject missing accessibility
+    err1 = mgr.save_preferences({"theme": "light"})
+    assert err1["status"] == "error"
+    assert "Incomplete preferences document" in err1["message"]
+
+    # Reject missing accessibility.transparency
+    err2 = mgr.save_preferences({
+        "theme": "light",
+        "accessibility": {"motion": "reduce"}
+    })
+    assert err2["status"] == "error"
+    assert "Incomplete preferences document" in err2["message"]
+
+    # Reject non-dict payload
+    err3 = mgr.save_preferences(["not", "a", "dict"])
+    assert err3["status"] == "error"
+
+
+def test_update_preferences_merges_partial_update_correctly(tmp_path):
+    """
+    Issue B:
+    update_preferences() is the explicit contract for partial updates,
+    merging onto active preferences without destroying sibling fields.
+    """
+    mgr = PreferencesManager(config_dir=str(tmp_path))
+
+    # Initial state is default dark / system / system
+    assert mgr.get_preferences()["theme"] == "dark"
+
+    # Update only theme
+    up1 = mgr.update_preferences({"theme": "light"})
+    assert up1["status"] == "success"
+    p1 = mgr.get_preferences()
+    assert p1["theme"] == "light"
+    assert p1["accessibility"]["motion"] == "system"
+    assert p1["accessibility"]["transparency"] == "system"
+
+    # Update only motion
+    up2 = mgr.update_preferences({"accessibility": {"motion": "reduce"}})
+    assert up2["status"] == "success"
+    p2 = mgr.get_preferences()
+    assert p2["theme"] == "light"
+    assert p2["accessibility"]["motion"] == "reduce"
+    assert p2["accessibility"]["transparency"] == "system"
+
+
+def test_schema_version_handling():
+    """
+    Issue E:
+    Schema version handling: missing version defaults to "1.0",
+    valid version is preserved, and unknown version safely normalizes to "1.0".
+    """
+    # 1. Missing version
+    p_missing = validate_preferences({
+        "theme": "dark",
+        "accessibility": {"motion": "system", "transparency": "system"}
+    })
+    assert p_missing["version"] == "1.0"
+
+    # 2. Valid current version
+    p_valid = validate_preferences({
+        "version": "1.0",
+        "theme": "light",
+        "accessibility": {"motion": "reduce", "transparency": "glass"}
+    })
+    assert p_valid["version"] == "1.0"
+
+    # 3. Unknown future version safely normalized to supported version
+    p_unknown = validate_preferences({
+        "version": "2.5-beta",
+        "theme": "light",
+        "accessibility": {"motion": "reduce", "transparency": "glass"}
+    })
+    assert p_unknown["version"] == "1.0"
+    assert p_unknown["theme"] == "light"
+
+
+def test_import_strips_unknown_metadata(tmp_path):
+    """
+    Issue H:
+    Importing preferences containing unknown metadata or _persisted
+    must safely normalize them away without corrupting durable state.
+    """
+    mgr = PreferencesManager(config_dir=str(tmp_path))
+    dirty_import_path = str(tmp_path / "dirty_import.json")
+
+    dirty_payload = {
+        "version": "1.0",
+        "theme": "light",
+        "accessibility": {"motion": "full", "transparency": "glass"},
+        "_persisted": True,
+        "phantom_field": "corrupt",
+        "internal_token": 12345
+    }
+    with open(dirty_import_path, "w", encoding="utf-8") as f:
+        json.dump(dirty_payload, f)
+
+    res = mgr.import_preferences(dirty_import_path)
+    assert res["status"] == "success"
+
+    imported = mgr.get_preferences()
+    assert imported["theme"] == "light"
+    assert imported["accessibility"]["motion"] == "full"
+    assert imported["accessibility"]["transparency"] == "glass"
+    assert "_persisted" not in imported
+    assert "phantom_field" not in imported
+    assert "internal_token" not in imported
+
+
+def test_listener_concurrency_and_exception_safety(tmp_path):
+    """
+    Issue 10 & 11:
+    Preference listeners must receive canonical deep copies,
+    exceptions in one listener must not abort persistence or other listeners,
+    and listeners cannot mutate manager's internal cached state.
+    """
+    mgr = PreferencesManager(config_dir=str(tmp_path))
+    received_payloads = []
+
+    def failing_listener(prefs):
+        raise RuntimeError("Listener exploded!")
+
+    def good_listener(prefs):
+        # Attempt to mutate payload passed to listener
+        prefs["theme"] = "mutated_by_listener"
+        prefs["tampered"] = True
+        received_payloads.append(deepcopy(prefs))
+
+    mgr.register_listener(failing_listener)
+    mgr.register_listener(good_listener)
+
+    # Save preferences - must succeed despite failing_listener
+    res = mgr.save_preferences({
+        "version": "1.0",
+        "theme": "light",
+        "accessibility": {"motion": "reduce", "transparency": "reduce"}
+    })
+    assert res["status"] == "success"
+
+    # Verify good_listener received notification
+    assert len(received_payloads) == 1
+    assert received_payloads[0]["theme"] == "mutated_by_listener"
+
+    # Verify manager's internal cached preferences were NOT corrupted by listener mutation
+    cached = mgr.get_preferences()
+    assert cached["theme"] == "light"
+    assert "tampered" not in cached
+
+
+def test_reset_lifecycle_prevents_stale_local_storage_resurrection(tmp_path, monkeypatch):
+    """
+    Issue G:
+    Reset user preferences removes disk file and leaves memory in factory defaults.
+    Subsequent cold boot starts with defaults without resurrecting deleted preferences.
+    """
+    config_dir = tmp_path / "reset_test"
+    mgr1 = PreferencesManager(config_dir=str(config_dir))
+
+    # 1. User had custom settings
+    mgr1.save_preferences({
+        "version": "1.0",
+        "theme": "light",
+        "accessibility": {"motion": "reduce", "transparency": "glass"}
+    })
+    assert os.path.exists(mgr1.preferences_file)
+
+    # 2. User clicks Reset User Preferences
+    reset_res = mgr1.reset_preferences()
+    assert reset_res["status"] == "success"
+    assert not os.path.exists(mgr1.preferences_file)
+
+    # 3. Simulate process termination and cold restart
+    mgr2 = PreferencesManager(config_dir=str(config_dir))
+    fresh = mgr2.get_preferences()
+    assert fresh["theme"] == "dark"
+    assert fresh["accessibility"]["motion"] == "system"
+    assert fresh["accessibility"]["transparency"] == "system"
+    assert mgr2.has_persisted_file() is False
+
 

@@ -15,13 +15,16 @@ Enforces:
 import os
 import json
 import tempfile
+import threading
 from copy import deepcopy
 from typing import Dict, Any, Optional
 
 from modules.common.logger import logger
 
+SUPPORTED_SCHEMA_VERSION = "1.0"
+
 DEFAULT_USER_PREFERENCES: Dict[str, Any] = {
-    "version": "1.0",
+    "version": SUPPORTED_SCHEMA_VERSION,
     "theme": "dark",
     "accessibility": {
         "motion": "system",
@@ -41,8 +44,9 @@ def get_default_preferences_dict() -> Dict[str, Any]:
 
 def validate_preferences(raw_data: Any) -> Dict[str, Any]:
     """
-    Validates and normalizes raw preferences data against the schema.
+    Validates and normalizes raw preferences data against the canonical schema.
     Safely falls back invalid or missing keys without discarding valid sibling fields.
+    Strips any internal or unknown metadata (such as '_persisted').
     """
     defaults = get_default_preferences_dict()
     if not isinstance(raw_data, dict):
@@ -50,9 +54,21 @@ def validate_preferences(raw_data: Any) -> Dict[str, Any]:
 
     validated = deepcopy(defaults)
 
-    # 1. Version
-    if "version" in raw_data and isinstance(raw_data["version"], (str, int, float)):
-        validated["version"] = str(raw_data["version"]).strip() or "1.0"
+    # 1. Version validation
+    # Reserved for future schema migrations. Currently supports version "1.0".
+    raw_version = raw_data.get("version")
+    if isinstance(raw_version, (str, int, float)):
+        v_str = str(raw_version).strip()
+        if v_str == SUPPORTED_SCHEMA_VERSION:
+            validated["version"] = SUPPORTED_SCHEMA_VERSION
+        else:
+            logger.info(
+                f"Unrecognized user preferences schema version '{v_str}', "
+                f"defaulting to supported version '{SUPPORTED_SCHEMA_VERSION}'"
+            )
+            validated["version"] = SUPPORTED_SCHEMA_VERSION
+    else:
+        validated["version"] = SUPPORTED_SCHEMA_VERSION
 
     # 2. Theme validation
     theme_val = raw_data.get("theme")
@@ -85,9 +101,11 @@ class PreferencesManager:
     """
     Authoritative manager for user preferences (theme, accessibility).
     Persists to %APPDATA%/CVSU_Generators/config/user_preferences.json.
+    Thread-safe and guaranteed to maintain pure canonical schema on disk and in exports.
     """
 
     def __init__(self, config_dir: Optional[str] = None):
+        self._lock = threading.RLock()
         if config_dir:
             self.config_dir = os.path.abspath(config_dir)
         else:
@@ -101,13 +119,18 @@ class PreferencesManager:
 
     def register_listener(self, callback):
         """Register a callback invoked when preferences change."""
-        if callback not in self._listeners:
-            self._listeners.append(callback)
+        with self._lock:
+            if callback not in self._listeners:
+                self._listeners.append(callback)
 
     def _notify_listeners(self):
-        for cb in self._listeners:
+        """Notify registered listeners with an immutable copy of canonical preferences."""
+        with self._lock:
+            payload = deepcopy(self._cached_preferences)
+            listeners = list(self._listeners)
+        for cb in listeners:
             try:
-                cb(self._cached_preferences)
+                cb(deepcopy(payload))
             except Exception as e:
                 logger.error(f"Error in preferences listener callback: {e}")
 
@@ -115,83 +138,161 @@ class PreferencesManager:
         """
         Loads user preferences from disk.
         Returns defaults if file is missing, corrupt, or invalid.
+        Guarantees thread safety and atomic memory caching.
         """
         defaults = get_default_preferences_dict()
-        if not os.path.exists(self.preferences_file):
-            self._cached_preferences = defaults
-            self._notify_listeners()
-            return self._cached_preferences
-
-        try:
-            with open(self.preferences_file, "r", encoding="utf-8") as f:
-                raw_data = json.load(f)
-            self._cached_preferences = validate_preferences(raw_data)
-        except Exception as e:
-            logger.warning(
-                f"Failed to parse user preferences from {self.preferences_file}, using defaults: {e}"
-            )
-            self._cached_preferences = defaults
+        with self._lock:
+            if not os.path.exists(self.preferences_file):
+                self._cached_preferences = defaults
+            else:
+                try:
+                    with open(self.preferences_file, "r", encoding="utf-8") as f:
+                        raw_data = json.load(f)
+                    self._cached_preferences = validate_preferences(raw_data)
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to parse user preferences from {self.preferences_file}, using defaults: {e}"
+                    )
+                    self._cached_preferences = defaults
+            result = deepcopy(self._cached_preferences)
 
         self._notify_listeners()
-        return self._cached_preferences
+        return result
 
     def has_persisted_file(self) -> bool:
         """Returns True if user_preferences.json physically exists on disk."""
-        return os.path.exists(self.preferences_file)
+        with self._lock:
+            return os.path.exists(self.preferences_file)
 
     def get_preferences(self) -> Dict[str, Any]:
-        """Returns the active cached preferences."""
+        """
+        Returns the active cached preferences as a pure canonical document.
+        Free of diagnostic metadata or internal tracking flags.
+        """
+        with self._lock:
+            if self._cached_preferences is None:
+                # load_preferences manages its own locking
+                pass
         if self._cached_preferences is None:
             self.load_preferences()
-        prefs = deepcopy(self._cached_preferences)
+        with self._lock:
+            return deepcopy(self._cached_preferences)
+
+    def get_preferences_with_metadata(self) -> Dict[str, Any]:
+        """
+        Returns the canonical preference document enriched with diagnostic metadata.
+        Used strictly by diagnostic probes and startup reconciliation hooks.
+        """
+        prefs = self.get_preferences()
         prefs["_persisted"] = self.has_persisted_file()
         return prefs
 
     def save_preferences(self, new_prefs: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Validates, atomically writes to disk, and updates memory cache.
+        Complete validated document replacement.
+        Requires all canonical keys ('theme' and 'accessibility' with 'motion' and 'transparency').
+        Rejects partial updates with an error directing callers to update_preferences().
+        Atomically writes to disk and updates memory cache.
         """
+        if not isinstance(new_prefs, dict):
+            return {"status": "error", "message": "Preferences payload must be a JSON object"}
+
+        # Enforce complete document contract
+        if "theme" not in new_prefs or "accessibility" not in new_prefs:
+            return {
+                "status": "error",
+                "message": (
+                    "Incomplete preferences document. Complete replacement requires 'theme' "
+                    "and 'accessibility' ('motion', 'transparency'). Use update_preferences() for partial updates."
+                )
+            }
+
+        acc = new_prefs.get("accessibility")
+        if not isinstance(acc, dict) or "motion" not in acc or "transparency" not in acc:
+            return {
+                "status": "error",
+                "message": (
+                    "Incomplete preferences document. 'accessibility' must include both 'motion' "
+                    "and 'transparency'. Use update_preferences() for partial updates."
+                )
+            }
+
         try:
             os.makedirs(self.config_dir, exist_ok=True)
             validated = validate_preferences(new_prefs)
 
-            # Atomic write via tempfile
+            # Atomic write via tempfile + os.replace
             temp_fd, temp_path = tempfile.mkstemp(
                 dir=self.config_dir, prefix="prefs_tmp_", suffix=".json"
             )
             with os.fdopen(temp_fd, "w", encoding="utf-8") as f:
                 json.dump(validated, f, indent=2, ensure_ascii=False)
 
-            if os.path.exists(self.preferences_file):
-                os.replace(temp_path, self.preferences_file)
-            else:
-                os.rename(temp_path, self.preferences_file)
+            with self._lock:
+                if os.path.exists(self.preferences_file):
+                    os.replace(temp_path, self.preferences_file)
+                else:
+                    os.rename(temp_path, self.preferences_file)
 
-            self._cached_preferences = validated
+                self._cached_preferences = validated
+
             self._notify_listeners()
             logger.info("Successfully updated and persisted user preferences.")
-            return {"status": "success", "preferences": validated}
+            return {"status": "success", "preferences": deepcopy(validated)}
         except Exception as e:
             logger.error(f"Error saving user preferences: {e}")
             return {"status": "error", "message": str(e)}
 
+    def update_preferences(self, partial_prefs: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Explicit partial preference update.
+        Merges provided keys into the active canonical document, validates,
+        and atomically persists the replacement document.
+        """
+        if not isinstance(partial_prefs, dict):
+            return {"status": "error", "message": "Partial preferences must be a JSON object"}
+
+        current = self.get_preferences()
+        merged = deepcopy(current)
+
+        if "version" in partial_prefs:
+            merged["version"] = partial_prefs["version"]
+
+        if "theme" in partial_prefs:
+            merged["theme"] = partial_prefs["theme"]
+
+        if "accessibility" in partial_prefs and isinstance(partial_prefs["accessibility"], dict):
+            acc_partial = partial_prefs["accessibility"]
+            if "motion" in acc_partial:
+                merged["accessibility"]["motion"] = acc_partial["motion"]
+            if "transparency" in acc_partial:
+                merged["accessibility"]["transparency"] = acc_partial["transparency"]
+
+        return self.save_preferences(merged)
+
     def reset_preferences(self) -> Dict[str, Any]:
         """
-        Removes custom preferences file and resets to factory defaults.
+        Removes custom preferences file and resets in-memory state to factory defaults.
+        Guarantees subsequent get_preferences() returns pure canonical defaults.
         """
         try:
-            if os.path.exists(self.preferences_file):
-                os.remove(self.preferences_file)
-            self._cached_preferences = get_default_preferences_dict()
+            with self._lock:
+                if os.path.exists(self.preferences_file):
+                    os.remove(self.preferences_file)
+                self._cached_preferences = get_default_preferences_dict()
+
             self._notify_listeners()
             logger.info("Reset user preferences to factory defaults.")
-            return {"status": "success", "preferences": self._cached_preferences}
+            return {"status": "success", "preferences": self.get_preferences()}
         except Exception as e:
             logger.error(f"Error resetting user preferences: {e}")
             return {"status": "error", "message": str(e)}
 
     def export_preferences(self, target_path: str) -> Dict[str, Any]:
-        """Exports user preferences to a JSON file."""
+        """
+        Exports user preferences to a JSON file.
+        Guaranteed to export ONLY the pure canonical schema without diagnostic metadata.
+        """
         try:
             prefs = self.get_preferences()
             with open(target_path, "w", encoding="utf-8") as f:
@@ -202,13 +303,19 @@ class PreferencesManager:
             return {"status": "error", "message": str(e)}
 
     def import_preferences(self, source_path: str) -> Dict[str, Any]:
-        """Imports and validates user preferences from an external JSON file."""
+        """
+        Imports and validates user preferences from an external JSON file.
+        Safely normalizes schema and strips any unknown fields or metadata.
+        """
         if not os.path.exists(source_path):
             return {"status": "error", "message": f"File not found: {source_path}"}
         try:
             with open(source_path, "r", encoding="utf-8") as f:
                 raw_data = json.load(f)
-            return self.save_preferences(raw_data)
+            if not isinstance(raw_data, dict):
+                return {"status": "error", "message": "Import file must contain a JSON object"}
+            validated = validate_preferences(raw_data)
+            return self.save_preferences(validated)
         except Exception as e:
             logger.error(f"Failed to import preferences from {source_path}: {e}")
             return {"status": "error", "message": str(e)}

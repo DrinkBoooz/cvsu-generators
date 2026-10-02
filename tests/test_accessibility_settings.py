@@ -447,16 +447,21 @@ def test_playwright_disk_authority_wins_over_local_storage_scenario_a():
             localStorage.setItem('cvsu_gen_theme', 'light');
             document.documentElement.setAttribute('data-theme', 'light');
 
+            window.__save_user_prefs_called = false;
+
             // 2. Mock authoritative native disk preferences with 'dark'
             window.pywebview = {
                 api: {
-                    get_user_preferences: async () => ({
+                    get_user_preferences: async (meta) => ({
                         version: '1.0',
                         theme: 'dark',
                         accessibility: { motion: 'system', transparency: 'system' },
                         _persisted: true
                     }),
-                    save_user_preferences: async (p) => ({ status: 'success', preferences: p })
+                    save_user_preferences: async (p) => {
+                        window.__save_user_prefs_called = true;
+                        return { status: 'success', preferences: p };
+                    }
                 }
             };
 
@@ -466,12 +471,16 @@ def test_playwright_disk_authority_wins_over_local_storage_scenario_a():
             return {
                 dom_theme: document.documentElement.getAttribute('data-theme'),
                 local_theme: localStorage.getItem('cvsu_gen_theme'),
+                migrated_marker: localStorage.getItem('cvsu_prefs_migrated'),
+                save_called: window.__save_user_prefs_called,
                 btn_title: document.getElementById('btnToggleTheme').title
             };
         }""")
 
         assert res["dom_theme"] == "dark", f"DOM data-theme should be 'dark', got {res['dom_theme']}"
         assert res["local_theme"] == "dark", f"localStorage cvsu_gen_theme should be 'dark', got {res['local_theme']}"
+        assert res["migrated_marker"] == "true", "cvsu_prefs_migrated marker must be stamped"
+        assert res["save_called"] is False, "save_user_preferences must NOT be called when authoritative disk store exists"
         assert "Switch to Light Mode" in res["btn_title"]
 
         browser.close()

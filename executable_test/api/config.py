@@ -95,8 +95,10 @@ class ConfigMixin:
         return {"status": "cancelled"}
 
     # ── User Preferences Bridge (Theme & Accessibility) ───────────────────────
-    def get_user_preferences(self):
+    def get_user_preferences(self, include_metadata: bool = False):
         from modules.common.preferences_manager import preferences_manager
+        if include_metadata:
+            return preferences_manager.get_preferences_with_metadata()
         return preferences_manager.get_preferences()
 
     def save_user_preferences(self, prefs_dict):
@@ -105,7 +107,19 @@ class ConfigMixin:
 
     def reset_user_preferences(self):
         from modules.common.preferences_manager import preferences_manager
-        return preferences_manager.reset_preferences()
+        res = preferences_manager.reset_preferences()
+        # Synchronize UI presentation layer and localStorage cache if window is active
+        if getattr(self, "_window", None) and not getattr(self, "_is_window_closed", False):
+            try:
+                js_code = """
+                if (typeof window.applyUserPreferencesReset === 'function') {
+                    window.applyUserPreferencesReset();
+                }
+                """
+                self._window.evaluate_js(js_code)
+            except Exception:
+                pass
+        return res
 
     def export_user_preferences(self):
         if not self._window:

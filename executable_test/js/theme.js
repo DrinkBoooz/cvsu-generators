@@ -396,7 +396,8 @@
       async function syncUserPreferencesWithNative() {
         if (!window.pywebview || !window.pywebview.api || typeof window.pywebview.api.get_user_preferences !== "function") return;
         try {
-          const nativePrefs = await window.pywebview.api.get_user_preferences();
+          // Request preferences with diagnostic metadata (_persisted) for migration gating
+          const nativePrefs = await window.pywebview.api.get_user_preferences(true);
           const localTheme = localStorage.getItem("cvsu_gen_theme");
           const localMotion = localStorage.getItem(CVSU_ACC_MOTION_KEY);
           const localTrans = localStorage.getItem(CVSU_ACC_TRANSPARENCY_KEY);
@@ -449,5 +450,21 @@
         }
       }
 
+      function applyUserPreferencesReset() {
+        try {
+          localStorage.setItem("cvsu_gen_theme", "dark");
+          localStorage.setItem(CVSU_ACC_MOTION_KEY, "system");
+          localStorage.setItem(CVSU_ACC_TRANSPARENCY_KEY, "system");
+          localStorage.setItem("cvsu_prefs_migrated", "true");
+        } catch (e) {}
+        document.documentElement.setAttribute("data-theme", "dark");
+        updateThemeButtonState("dark");
+        applyAccessibilityPreferences();
+        if (typeof updateAccessibilitySettingsUI === "function") {
+          updateAccessibilitySettingsUI();
+        }
+      }
+
       window.syncCurrentPreferencesToNative = syncCurrentPreferencesToNative;
       window.syncUserPreferencesWithNative = syncUserPreferencesWithNative;
+      window.applyUserPreferencesReset = applyUserPreferencesReset;

@@ -14,6 +14,7 @@ Architectural Boundary:
 
 import os
 import sys
+import pytest
 import webview
 from webview.dom import _dnd_state
 
@@ -23,6 +24,7 @@ if WORKSPACE_DIR not in sys.path:
 
 from executable_test.main import ScriptAPI, setup_window_drag_and_drop
 
+@pytest.mark.desktop_integration
 def test_pywebview_setup_window_drag_and_drop():
     html_path = os.path.join(WORKSPACE_DIR, "executable_test", "ui.html")
     assert os.path.exists(html_path)

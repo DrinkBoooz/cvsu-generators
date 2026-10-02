@@ -730,6 +730,7 @@
         try {
           localStorage.setItem("cvsu_acc_motion", "system");
           localStorage.setItem("cvsu_acc_transparency", "system");
+          localStorage.setItem("cvsu_prefs_migrated", "true");
         } catch (e) {}
         if (typeof applyAccessibilityPreferences === "function") {
           applyAccessibilityPreferences();
