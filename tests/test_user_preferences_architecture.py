@@ -7,6 +7,7 @@ Safe Fallbacks, Migration, and Reset Isolation.
 """
 
 import os
+import sys
 import json
 import pytest
 from pathlib import Path
@@ -206,3 +207,111 @@ def test_script_api_user_preferences_lifecycle(tmp_path, monkeypatch):
     reset_res = api.reset_user_preferences()
     assert reset_res["status"] == "success"
     assert api.get_user_preferences()["theme"] == "dark"
+
+
+# ── 4. Additional Hardening Tests (Scenarios A, B, C, D) ──────────────────────
+
+def test_corrupted_user_preferences_file_starts_with_defaults_scenario_b(tmp_path, monkeypatch):
+    """
+    Scenario B:
+    Corrupted user_preferences.json on disk must cause application to start with defaults.
+    """
+    config_dir = tmp_path / "corrupt_config"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    corrupt_file = config_dir / "user_preferences.json"
+    corrupt_file.write_text("{\n  \"theme\": \"light\",\n  BROKEN_UNTERMINATED_SYNTAX", encoding="utf-8")
+
+    test_mgr = PreferencesManager(config_dir=str(config_dir))
+    monkeypatch.setattr("modules.common.preferences_manager.preferences_manager", test_mgr)
+
+    api = ScriptAPI()
+    prefs = api.get_user_preferences()
+
+    # Must start with defaults cleanly without raising
+    assert prefs["theme"] == "dark"
+    assert prefs["accessibility"]["motion"] == "system"
+    assert prefs["accessibility"]["transparency"] == "system"
+
+
+def test_parser_reset_preserves_preferences_removes_prefix_scenario_c(tmp_path, monkeypatch):
+    """
+    Scenario C:
+    Parser reset:
+      Before: theme=light, motion=reduce, custom prefix exists
+      After: theme=light, motion=reduce, custom prefix removed
+    """
+    config_dir = tmp_path / "scenario_c"
+    config_dir.mkdir(parents=True, exist_ok=True)
+
+    test_prefs_mgr = PreferencesManager(config_dir=str(config_dir))
+    test_parser_mgr = ParserConfigManager(config_dir=str(config_dir))
+    monkeypatch.setattr(sys.modules["modules.common.preferences_manager"], "preferences_manager", test_prefs_mgr)
+    monkeypatch.setattr(sys.modules["modules.common.config_manager"], "config_manager", test_parser_mgr)
+
+    api = ScriptAPI()
+
+    # Before: Set theme=light, motion=reduce, and add custom prefix
+    api.save_user_preferences({
+        "theme": "light",
+        "accessibility": {"motion": "reduce", "transparency": "system"}
+    })
+    cfg = api.get_parser_config()
+    cfg["base_subject_prefixes"].append("SCENARIOC")
+    api.save_parser_config(cfg)
+
+    # Verify precondition
+    assert api.get_user_preferences()["theme"] == "light"
+    assert api.get_user_preferences()["accessibility"]["motion"] == "reduce"
+    assert "SCENARIOC" in api.get_parser_config()["base_subject_prefixes"]
+
+    # Action: Reset parser configuration
+    api.reset_parser_config()
+
+    # After: theme=light, motion=reduce preserved; custom prefix removed
+    post_prefs = api.get_user_preferences()
+    assert post_prefs["theme"] == "light"
+    assert post_prefs["accessibility"]["motion"] == "reduce"
+    assert "SCENARIOC" not in api.get_parser_config()["base_subject_prefixes"]
+
+
+def test_user_preference_reset_preserves_parser_config_scenario_d(tmp_path, monkeypatch):
+    """
+    Scenario D:
+    User preference reset:
+      Before: theme=light, motion=full, custom prefix exists
+      After: theme=dark, motion=system, parser configuration untouched
+    """
+    config_dir = tmp_path / "scenario_d"
+    config_dir.mkdir(parents=True, exist_ok=True)
+
+    test_prefs_mgr = PreferencesManager(config_dir=str(config_dir))
+    test_parser_mgr = ParserConfigManager(config_dir=str(config_dir))
+    monkeypatch.setattr(sys.modules["modules.common.preferences_manager"], "preferences_manager", test_prefs_mgr)
+    monkeypatch.setattr(sys.modules["modules.common.config_manager"], "config_manager", test_parser_mgr)
+
+    api = ScriptAPI()
+
+    # Before: Set theme=light, motion=full, and add custom prefix
+    api.save_user_preferences({
+        "theme": "light",
+        "accessibility": {"motion": "full", "transparency": "glass"}
+    })
+    cfg = api.get_parser_config()
+    cfg["base_subject_prefixes"].append("SCENARIOD")
+    api.save_parser_config(cfg)
+
+    # Verify precondition
+    assert api.get_user_preferences()["theme"] == "light"
+    assert api.get_user_preferences()["accessibility"]["motion"] == "full"
+    assert "SCENARIOD" in api.get_parser_config()["base_subject_prefixes"]
+
+    # Action: Reset user preferences
+    api.reset_user_preferences()
+
+    # After: theme=dark, motion=system; parser configuration completely untouched
+    post_prefs = api.get_user_preferences()
+    assert post_prefs["theme"] == "dark"
+    assert post_prefs["accessibility"]["motion"] == "system"
+    assert post_prefs["accessibility"]["transparency"] == "system"
+    assert "SCENARIOD" in api.get_parser_config()["base_subject_prefixes"]
+

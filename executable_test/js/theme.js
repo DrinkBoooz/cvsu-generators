@@ -402,15 +402,16 @@
           const localTrans = localStorage.getItem(CVSU_ACC_TRANSPARENCY_KEY);
 
           if (nativePrefs && nativePrefs.theme && nativePrefs.accessibility) {
-            // Check if upward migration is needed (legacy user with custom localStorage but fresh default Python store)
+            const hasPersistedStore = nativePrefs._persisted === true;
+            const alreadyMigrated = localStorage.getItem("cvsu_prefs_migrated") === "true";
+
+            // Upward migration runs ONLY if Python disk store did not exist and migration hasn't run yet
+            const canMigrate = !hasPersistedStore && !alreadyMigrated;
             const hasLocalCustom = (localTheme && localTheme !== "dark") ||
                                    (localMotion && localMotion !== "system") ||
                                    (localTrans && localTrans !== "system");
-            const isNativeDefault = (nativePrefs.theme === "dark" &&
-                                     nativePrefs.accessibility.motion === "system" &&
-                                     nativePrefs.accessibility.transparency === "system");
 
-            if (hasLocalCustom && isNativeDefault) {
+            if (canMigrate && hasLocalCustom) {
               const upwardPrefs = {
                 version: "1.0",
                 theme: localTheme || "dark",
@@ -419,9 +420,11 @@
                   transparency: localTrans || "system"
                 }
               };
+              localStorage.setItem("cvsu_prefs_migrated", "true");
               await window.pywebview.api.save_user_preferences(upwardPrefs);
             } else {
               // Authoritative native store updates local cache if different
+              localStorage.setItem("cvsu_prefs_migrated", "true");
               if (nativePrefs.theme && nativePrefs.theme !== localTheme) {
                 localStorage.setItem("cvsu_gen_theme", nativePrefs.theme);
                 document.documentElement.setAttribute("data-theme", nativePrefs.theme);

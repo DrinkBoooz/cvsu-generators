@@ -26,6 +26,15 @@ def test_packaged_executable_theme_runtime_diagnosis():
     # Pre-clean lingering processes to prevent file locking
     subprocess.run(["taskkill", "/F", "/IM", "CvSU Gen.exe"], capture_output=True, check=False)
 
+    # Ensure clean default user preferences for deterministic initial theme state
+    prefs_file = os.path.join(os.environ.get("APPDATA", ""), "CVSU_Generators", "config", "user_preferences.json")
+    if os.path.exists(prefs_file):
+        try:
+            with open(prefs_file, "w", encoding="utf-8") as f:
+                json.dump({"version": "1.0", "theme": "dark", "accessibility": {"motion": "system", "transparency": "system"}}, f, indent=2)
+        except Exception:
+            pass
+
     report_path = os.path.join(tempfile.gettempdir(), f"test_cvsu_diag_{os.getpid()}.json")
     if os.path.exists(report_path):
         os.remove(report_path)

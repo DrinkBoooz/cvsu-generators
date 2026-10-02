@@ -5,6 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CvSU Gen — Document Automation Suite</title>
 
+    <!-- ── Fast 0ms Startup Cache Synchronizer (Tier 2) ── -->
+    <script>
+      (function() {
+        try {
+          var t = localStorage.getItem('cvsu_gen_theme');
+          if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+          var m = localStorage.getItem('cvsu_acc_motion');
+          if (m === 'reduce') document.documentElement.setAttribute('data-acc-motion', 'reduce');
+          else if (m === 'full') document.documentElement.setAttribute('data-acc-motion', 'no-preference');
+          var tr = localStorage.getItem('cvsu_acc_transparency');
+          if (tr === 'reduce') document.documentElement.setAttribute('data-acc-transparency', 'reduce');
+          else if (tr === 'glass') document.documentElement.setAttribute('data-acc-transparency', 'glass');
+        } catch (e) {}
+      })();
+    </script>
+
     <!-- ── Critical Visibility Failsafe ── -->
     <style>
       .d-none {

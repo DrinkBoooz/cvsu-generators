@@ -135,11 +135,17 @@ class PreferencesManager:
         self._notify_listeners()
         return self._cached_preferences
 
+    def has_persisted_file(self) -> bool:
+        """Returns True if user_preferences.json physically exists on disk."""
+        return os.path.exists(self.preferences_file)
+
     def get_preferences(self) -> Dict[str, Any]:
         """Returns the active cached preferences."""
         if self._cached_preferences is None:
             self.load_preferences()
-        return deepcopy(self._cached_preferences)
+        prefs = deepcopy(self._cached_preferences)
+        prefs["_persisted"] = self.has_persisted_file()
+        return prefs
 
     def save_preferences(self, new_prefs: Dict[str, Any]) -> Dict[str, Any]:
         """

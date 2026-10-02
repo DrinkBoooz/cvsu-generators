@@ -428,3 +428,51 @@ def test_playwright_accessibility_multi_viewport_responsive(viewport):
         assert pane_info["transVisible"] is True, "Transparency select must be visible and sized"
 
         browser.close()
+
+
+def test_playwright_disk_authority_wins_over_local_storage_scenario_a():
+    """
+    Scenario A:
+    localStorage contains: theme=light
+    Disk contains: theme=dark
+    Expected: disk authority wins after pywebviewready (syncUserPreferencesWithNative).
+    """
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": 1120, "height": 780})
+        page.goto(FILE_URL)
+
+        res = page.evaluate("""async () => {
+            // 1. Seed stale localStorage with 'light'
+            localStorage.setItem('cvsu_gen_theme', 'light');
+            document.documentElement.setAttribute('data-theme', 'light');
+
+            // 2. Mock authoritative native disk preferences with 'dark'
+            window.pywebview = {
+                api: {
+                    get_user_preferences: async () => ({
+                        version: '1.0',
+                        theme: 'dark',
+                        accessibility: { motion: 'system', transparency: 'system' },
+                        _persisted: true
+                    }),
+                    save_user_preferences: async (p) => ({ status: 'success', preferences: p })
+                }
+            };
+
+            // 3. Trigger native synchronization hook (fired on pywebviewready)
+            await syncUserPreferencesWithNative();
+
+            return {
+                dom_theme: document.documentElement.getAttribute('data-theme'),
+                local_theme: localStorage.getItem('cvsu_gen_theme'),
+                btn_title: document.getElementById('btnToggleTheme').title
+            };
+        }""")
+
+        assert res["dom_theme"] == "dark", f"DOM data-theme should be 'dark', got {res['dom_theme']}"
+        assert res["local_theme"] == "dark", f"localStorage cvsu_gen_theme should be 'dark', got {res['local_theme']}"
+        assert "Switch to Light Mode" in res["btn_title"]
+
+        browser.close()
+
