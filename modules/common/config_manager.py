@@ -404,6 +404,18 @@ class ParserConfigManager:
             if not isinstance(imported_data, dict):
                 return {"status": "error", "message": "Import file must contain a JSON object"}
 
+            # If an explicit schema version is provided, ensure it is supported
+            if "version" in imported_data and imported_data["version"] is not None:
+                v_str = str(imported_data["version"]).strip()
+                if v_str != "1.0":
+                    return {
+                        "status": "error",
+                        "message": (
+                            f"Unsupported parser configuration schema version '{v_str}'. "
+                            "Only version '1.0' is supported."
+                        )
+                    }
+
             required_keys = {
                 "ceit_prefix_map", "base_subject_prefixes", "known_lab_subjects",
                 "program_aliases", "roster_keywords", "schedule_config"

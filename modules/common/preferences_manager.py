@@ -239,6 +239,17 @@ class PreferencesManager:
                 )
             }
 
+        if "version" in new_prefs and new_prefs["version"] is not None:
+            raw_v = new_prefs["version"]
+            if not isinstance(raw_v, (str, int, float)) or str(raw_v).strip() != SUPPORTED_SCHEMA_VERSION:
+                return {
+                    "status": "error",
+                    "message": (
+                        f"Unsupported preferences schema version '{raw_v}'. "
+                        f"Version '{SUPPORTED_SCHEMA_VERSION}' is the only supported version."
+                    )
+                }
+
         acc = new_prefs.get("accessibility")
         if not isinstance(acc, dict) or "motion" not in acc or "transparency" not in acc:
             return {
@@ -349,6 +360,18 @@ class PreferencesManager:
             if not isinstance(raw_data, dict):
                 return {"status": "error", "message": "Import file must contain a JSON object"}
 
+            # Enforce supported schema version when version is explicitly present
+            if "version" in raw_data and raw_data["version"] is not None:
+                raw_v = raw_data["version"]
+                if not isinstance(raw_v, (str, int, float)) or str(raw_v).strip() != SUPPORTED_SCHEMA_VERSION:
+                    return {
+                        "status": "error",
+                        "message": (
+                            f"Unsupported preferences schema version '{raw_v}'. "
+                            f"Version '{SUPPORTED_SCHEMA_VERSION}' is the only supported version."
+                        )
+                    }
+
             # Enforce complete canonical document contract
             if "theme" not in raw_data or "accessibility" not in raw_data:
                 return {
@@ -359,6 +382,14 @@ class PreferencesManager:
                     )
                 }
 
+            # Validate theme value explicitly for import
+            theme_val = raw_data.get("theme")
+            if not isinstance(theme_val, str) or theme_val.strip().lower() not in VALID_THEMES:
+                return {
+                    "status": "error",
+                    "message": f"Invalid theme '{theme_val}'. Supported themes: {', '.join(sorted(VALID_THEMES))}."
+                }
+
             acc = raw_data.get("accessibility")
             if not isinstance(acc, dict) or "motion" not in acc or "transparency" not in acc:
                 return {
@@ -366,6 +397,27 @@ class PreferencesManager:
                     "message": (
                         "Incomplete preferences document: 'accessibility' must include both 'motion' "
                         "and 'transparency'."
+                    )
+                }
+
+            # Validate accessibility values explicitly for import
+            motion_val = acc.get("motion")
+            if not isinstance(motion_val, str) or motion_val.strip().lower() not in VALID_MOTION_PREFERENCES:
+                return {
+                    "status": "error",
+                    "message": (
+                        f"Invalid motion preference '{motion_val}'. "
+                        f"Supported: {', '.join(sorted(VALID_MOTION_PREFERENCES))}."
+                    )
+                }
+
+            trans_val = acc.get("transparency")
+            if not isinstance(trans_val, str) or trans_val.strip().lower() not in VALID_TRANSPARENCY_PREFERENCES:
+                return {
+                    "status": "error",
+                    "message": (
+                        f"Invalid transparency preference '{trans_val}'. "
+                        f"Supported: {', '.join(sorted(VALID_TRANSPARENCY_PREFERENCES))}."
                     )
                 }
 
