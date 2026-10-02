@@ -485,3 +485,152 @@ def test_playwright_disk_authority_wins_over_local_storage_scenario_a():
 
         browser.close()
 
+
+def test_playwright_invalid_local_storage_cache_sanitization_scenario_b():
+    """
+    Scenario B (Phase 5 / Phase 4):
+    localStorage contains invalid/untrusted cache values:
+      cvsu_gen_theme = 'banana'
+      cvsu_acc_motion = 'banana'
+      cvsu_acc_transparency = 'banana'
+    Native disk store is missing (_persisted: false).
+    Expected:
+    - No crash or exception during startup or synchronization.
+    - DOM data-theme converges to 'dark'.
+    - DOM data-acc-motion converges to 'no-preference' or 'system' (never 'banana').
+    - DOM data-acc-transparency converges to 'glass' (never 'banana').
+    - localStorage cache is normalized in-place to supported values ('dark', 'system', 'system').
+    - Native save_user_preferences is NOT invoked (malformed cache must not migrate to disk).
+    """
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": 1120, "height": 780})
+        page.goto(FILE_URL)
+
+        res = page.evaluate("""async () => {
+            // 1. Seed corrupt/untrusted cache
+            localStorage.setItem('cvsu_gen_theme', 'banana');
+            localStorage.setItem('cvsu_acc_motion', 'banana');
+            localStorage.setItem('cvsu_acc_transparency', 'banana');
+            localStorage.removeItem('cvsu_prefs_migrated');
+
+            // Force DOM attributes to invalid state to test normalization
+            document.documentElement.setAttribute('data-theme', 'banana');
+            document.documentElement.setAttribute('data-acc-motion', 'banana');
+            document.documentElement.setAttribute('data-acc-transparency', 'banana');
+
+            window.__save_user_prefs_called = false;
+            window.__saved_prefs_payload = null;
+
+            // 2. Mock native backend with missing disk store
+            window.pywebview = {
+                api: {
+                    get_user_preferences: async (meta) => ({
+                        version: '1.0',
+                        theme: 'dark',
+                        accessibility: { motion: 'system', transparency: 'system' },
+                        _persisted: false
+                    }),
+                    save_user_preferences: async (p) => {
+                        window.__save_user_prefs_called = true;
+                        window.__saved_prefs_payload = p;
+                        return { status: 'success', preferences: p };
+                    }
+                }
+            };
+
+            // 3. Trigger native synchronization
+            await syncUserPreferencesWithNative();
+
+            return {
+                dom_theme: document.documentElement.getAttribute('data-theme'),
+                dom_motion: document.documentElement.getAttribute('data-acc-motion'),
+                dom_trans: document.documentElement.getAttribute('data-acc-transparency'),
+                local_theme: localStorage.getItem('cvsu_gen_theme'),
+                local_motion: localStorage.getItem('cvsu_acc_motion'),
+                local_trans: localStorage.getItem('cvsu_acc_transparency'),
+                save_called: window.__save_user_prefs_called,
+                saved_payload: window.__saved_prefs_payload
+            };
+        }""")
+
+        assert res["dom_theme"] == "dark", f"DOM data-theme should be sanitized to 'dark', got {res['dom_theme']}"
+        assert res["dom_motion"] in ("no-preference", "reduce", "system"), f"DOM motion should be sanitized, got {res['dom_motion']}"
+        assert res["dom_trans"] in ("glass", "reduce"), f"DOM transparency should be sanitized to valid surface state, got {res['dom_trans']}"
+        assert res["local_theme"] == "dark", f"localStorage theme should be normalized to 'dark', got {res['local_theme']}"
+        assert res["local_motion"] == "system", f"localStorage motion should be normalized to 'system', got {res['local_motion']}"
+        assert res["local_trans"] == "system", f"localStorage transparency should be normalized to 'system', got {res['local_trans']}"
+        assert res["save_called"] is False, "Malformed cache must not trigger upward migration to native disk"
+
+        browser.close()
+
+
+def test_playwright_corrupt_disk_store_falls_back_to_defaults_scenario_c():
+    """
+    Scenario C (Phase 5):
+    Disk exists physically but its content was corrupted, causing backend to return safe canonical defaults
+    with _persisted: true.
+    localStorage contains stale legacy custom values ('light', 'reduce', 'glass').
+    Expected:
+    - Backend fallback defaults determine authority because disk store exists.
+    - Deterministic fallback to canonical defaults (dark / system / system).
+    - localStorage converges to defaults ('dark', 'system', 'system').
+    - DOM converges to defaults ('dark', etc.).
+    - No resurrection of stale legacy cache to native store (save_user_preferences not called).
+    """
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": 1120, "height": 780})
+        page.goto(FILE_URL)
+
+        res = page.evaluate("""async () => {
+            // 1. Seed stale legacy cache
+            localStorage.setItem('cvsu_gen_theme', 'light');
+            localStorage.setItem('cvsu_acc_motion', 'reduce');
+            localStorage.setItem('cvsu_acc_transparency', 'glass');
+            localStorage.removeItem('cvsu_prefs_migrated');
+
+            window.__save_user_prefs_called = false;
+
+            // 2. Mock native backend where disk store exists physically (_persisted: true)
+            // but returned safe canonical fallback defaults due to corruption.
+            window.pywebview = {
+                api: {
+                    get_user_preferences: async (meta) => ({
+                        version: '1.0',
+                        theme: 'dark',
+                        accessibility: { motion: 'system', transparency: 'system' },
+                        _persisted: true
+                    }),
+                    save_user_preferences: async (p) => {
+                        window.__save_user_prefs_called = true;
+                        return { status: 'success', preferences: p };
+                    }
+                }
+            };
+
+            // 3. Trigger native sync
+            await syncUserPreferencesWithNative();
+
+            return {
+                dom_theme: document.documentElement.getAttribute('data-theme'),
+                dom_motion: document.documentElement.getAttribute('data-acc-motion'),
+                dom_trans: document.documentElement.getAttribute('data-acc-transparency'),
+                local_theme: localStorage.getItem('cvsu_gen_theme'),
+                local_motion: localStorage.getItem('cvsu_acc_motion'),
+                local_trans: localStorage.getItem('cvsu_acc_transparency'),
+                save_called: window.__save_user_prefs_called,
+                migrated_marker: localStorage.getItem('cvsu_prefs_migrated')
+            };
+        }""")
+
+        assert res["dom_theme"] == "dark", f"DOM data-theme must converge to disk default 'dark', got {res['dom_theme']}"
+        assert res["dom_motion"] in ("no-preference", "reduce", "system"), f"DOM motion must converge to disk default, got {res['dom_motion']}"
+        assert res["dom_trans"] in ("glass", "reduce"), f"DOM transparency must converge to disk default, got {res['dom_trans']}"
+        assert res["local_theme"] == "dark", f"localStorage theme must be overwritten with disk default, got {res['local_theme']}"
+        assert res["local_motion"] == "system", f"localStorage motion must be overwritten with disk default, got {res['local_motion']}"
+        assert res["local_trans"] == "system", f"localStorage transparency must be overwritten with disk default, got {res['local_trans']}"
+        assert res["save_called"] is False, "save_user_preferences must NOT be called; stale cache must not resurrect"
+        assert res["migrated_marker"] == "true"
+
+        browser.close()

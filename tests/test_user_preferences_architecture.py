@@ -9,6 +9,7 @@ Safe Fallbacks, Migration, and Reset Isolation.
 import os
 import sys
 import json
+import threading
 from copy import deepcopy
 import pytest
 from pathlib import Path
@@ -403,7 +404,7 @@ def test_update_preferences_merges_partial_update_correctly(tmp_path):
     # Initial state is default dark / system / system
     assert mgr.get_preferences()["theme"] == "dark"
 
-    # Update only theme
+    # 1. Update only theme
     up1 = mgr.update_preferences({"theme": "light"})
     assert up1["status"] == "success"
     p1 = mgr.get_preferences()
@@ -411,7 +412,7 @@ def test_update_preferences_merges_partial_update_correctly(tmp_path):
     assert p1["accessibility"]["motion"] == "system"
     assert p1["accessibility"]["transparency"] == "system"
 
-    # Update only motion
+    # 2. Update only motion
     up2 = mgr.update_preferences({"accessibility": {"motion": "reduce"}})
     assert up2["status"] == "success"
     p2 = mgr.get_preferences()
@@ -419,41 +420,163 @@ def test_update_preferences_merges_partial_update_correctly(tmp_path):
     assert p2["accessibility"]["motion"] == "reduce"
     assert p2["accessibility"]["transparency"] == "system"
 
+    # 3. Update only transparency
+    up3 = mgr.update_preferences({"accessibility": {"transparency": "glass"}})
+    assert up3["status"] == "success"
+    p3 = mgr.get_preferences()
+    assert p3["theme"] == "light"
+    assert p3["accessibility"]["motion"] == "reduce"
+    assert p3["accessibility"]["transparency"] == "glass"
+
+    # 4. Update combined theme and motion
+    up4 = mgr.update_preferences({"theme": "dark", "accessibility": {"motion": "full"}})
+    assert up4["status"] == "success"
+    p4 = mgr.get_preferences()
+    assert p4["theme"] == "dark"
+    assert p4["accessibility"]["motion"] == "full"
+    assert p4["accessibility"]["transparency"] == "glass"
+
+    # 5. Invalid partial update (non-dict)
+    up_inv = mgr.update_preferences("not a dict")
+    assert up_inv["status"] == "error"
+
+    # 6. Verify canonical disk file after operations
+    with open(mgr.preferences_file, "r", encoding="utf-8") as f:
+        disk_data = json.load(f)
+    assert disk_data == p4
+
+
+def test_concurrent_partial_updates_do_not_lose_independent_fields(tmp_path):
+    """
+    Phase 2:
+    update_preferences() must be a serialized read-modify-write transaction under self._lock.
+    Concurrent partial updates from separate threads targeting independent fields
+    (theme, accessibility.motion, accessibility.transparency) must NOT overwrite or lose each other.
+    """
+    mgr = PreferencesManager(config_dir=str(tmp_path))
+    barrier = threading.Barrier(3)
+    results = {}
+    errors = []
+
+    def update_theme():
+        try:
+            barrier.wait()
+            results["theme"] = mgr.update_preferences({"theme": "light"})
+        except Exception as e:
+            errors.append(f"theme error: {e}")
+
+    def update_motion():
+        try:
+            barrier.wait()
+            results["motion"] = mgr.update_preferences({"accessibility": {"motion": "reduce"}})
+        except Exception as e:
+            errors.append(f"motion error: {e}")
+
+    def update_transparency():
+        try:
+            barrier.wait()
+            results["transparency"] = mgr.update_preferences({"accessibility": {"transparency": "glass"}})
+        except Exception as e:
+            errors.append(f"transparency error: {e}")
+
+    threads = [
+        threading.Thread(target=update_theme),
+        threading.Thread(target=update_motion),
+        threading.Thread(target=update_transparency),
+    ]
+
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=5.0)
+
+    assert not errors, f"Encountered concurrency worker errors: {errors}"
+    assert results["theme"]["status"] == "success"
+    assert results["motion"]["status"] == "success"
+    assert results["transparency"]["status"] == "success"
+
+    # Final in-memory state must retain all three independent fields
+    final_prefs = mgr.get_preferences()
+    assert final_prefs["theme"] == "light"
+    assert final_prefs["accessibility"]["motion"] == "reduce"
+    assert final_prefs["accessibility"]["transparency"] == "glass"
+
+    # Final disk state on a fresh manager must also retain all three independent fields
+    reloaded_mgr = PreferencesManager(config_dir=str(tmp_path))
+    reloaded_prefs = reloaded_mgr.get_preferences()
+    assert reloaded_prefs["theme"] == "light"
+    assert reloaded_prefs["accessibility"]["motion"] == "reduce"
+    assert reloaded_prefs["accessibility"]["transparency"] == "glass"
+
 
 def test_schema_version_handling():
     """
-    Issue E:
-    Schema version handling: missing version defaults to "1.0",
-    valid version is preserved, and unknown version safely normalizes to "1.0".
+    Phase 6:
+    Schema version handling policy:
+    - missing version -> current supported schema (1.0), theme and accessibility preserved.
+    - exact supported version (1.0) -> version 1.0, theme and accessibility preserved.
+    - unsupported/future version (2.0, 2.5-beta) -> safe canonical defaults.
+    - invalid type (list, dict) -> safe canonical defaults.
     """
-    # 1. Missing version
+    # 1. Missing version: assumes supported schema version, preserves valid fields
     p_missing = validate_preferences({
-        "theme": "dark",
-        "accessibility": {"motion": "system", "transparency": "system"}
+        "theme": "light",
+        "accessibility": {"motion": "reduce", "transparency": "glass"}
     })
     assert p_missing["version"] == "1.0"
+    assert p_missing["theme"] == "light"
+    assert p_missing["accessibility"]["motion"] == "reduce"
+    assert p_missing["accessibility"]["transparency"] == "glass"
 
-    # 2. Valid current version
+    # 2. Exact current supported version "1.0"
     p_valid = validate_preferences({
         "version": "1.0",
         "theme": "light",
         "accessibility": {"motion": "reduce", "transparency": "glass"}
     })
     assert p_valid["version"] == "1.0"
+    assert p_valid["theme"] == "light"
 
-    # 3. Unknown future version safely normalized to supported version
-    p_unknown = validate_preferences({
+    # 3. Unsupported future version "2.0": conservative fallback to safe canonical defaults
+    p_v2 = validate_preferences({
+        "version": "2.0",
+        "theme": "light",
+        "accessibility": {"motion": "reduce", "transparency": "glass"}
+    })
+    assert p_v2["version"] == "1.0"
+    assert p_v2["theme"] == "dark"
+    assert p_v2["accessibility"]["motion"] == "system"
+    assert p_v2["accessibility"]["transparency"] == "system"
+
+    # 4. Future beta version "2.5-beta": conservative fallback to safe canonical defaults
+    p_beta = validate_preferences({
         "version": "2.5-beta",
         "theme": "light",
         "accessibility": {"motion": "reduce", "transparency": "glass"}
     })
-    assert p_unknown["version"] == "1.0"
-    assert p_unknown["theme"] == "light"
+    assert p_beta["version"] == "1.0"
+    assert p_beta["theme"] == "dark"
+    assert p_beta["accessibility"]["motion"] == "system"
+
+    # 5. Invalid type for version: list or dict
+    p_invalid_type_list = validate_preferences({
+        "version": [1, 0],
+        "theme": "light"
+    })
+    assert p_invalid_type_list["version"] == "1.0"
+    assert p_invalid_type_list["theme"] == "dark"
+
+    p_invalid_type_dict = validate_preferences({
+        "version": {"major": 1, "minor": 0},
+        "theme": "light"
+    })
+    assert p_invalid_type_dict["version"] == "1.0"
+    assert p_invalid_type_dict["theme"] == "dark"
 
 
 def test_import_strips_unknown_metadata(tmp_path):
     """
-    Issue H:
+    Issue H & Phase 9:
     Importing preferences containing unknown metadata or _persisted
     must safely normalize them away without corrupting durable state.
     """
@@ -483,49 +606,65 @@ def test_import_strips_unknown_metadata(tmp_path):
     assert "internal_token" not in imported
 
 
-def test_listener_concurrency_and_exception_safety(tmp_path):
+def test_listener_defensive_copies_and_exception_safety(tmp_path):
     """
-    Issue 10 & 11:
-    Preference listeners must receive canonical deep copies,
-    exceptions in one listener must not abort persistence or other listeners,
-    and listeners cannot mutate manager's internal cached state.
+    Phase 3:
+    Listeners receive independent defensive copies of the canonical preference document.
+    Mutating a listener payload cannot mutate manager state or affect other listeners.
+    Listener exceptions must be caught and isolated without interrupting persistence.
     """
     mgr = PreferencesManager(config_dir=str(tmp_path))
-    received_payloads = []
+    listener_a_payloads = []
+    listener_b_payloads = []
 
     def failing_listener(prefs):
         raise RuntimeError("Listener exploded!")
 
-    def good_listener(prefs):
-        # Attempt to mutate payload passed to listener
-        prefs["theme"] = "mutated_by_listener"
+    def mutating_listener_a(prefs):
+        # Mutate the received dictionary directly
+        prefs["theme"] = "mutated_by_listener_a"
         prefs["tampered"] = True
-        received_payloads.append(deepcopy(prefs))
+        prefs["accessibility"]["motion"] = "mutated_motion"
+        listener_a_payloads.append(deepcopy(prefs))
+
+    def observer_listener_b(prefs):
+        listener_b_payloads.append(deepcopy(prefs))
 
     mgr.register_listener(failing_listener)
-    mgr.register_listener(good_listener)
+    mgr.register_listener(mutating_listener_a)
+    mgr.register_listener(observer_listener_b)
 
     # Save preferences - must succeed despite failing_listener
     res = mgr.save_preferences({
         "version": "1.0",
         "theme": "light",
-        "accessibility": {"motion": "reduce", "transparency": "reduce"}
+        "accessibility": {"motion": "reduce", "transparency": "glass"}
     })
     assert res["status"] == "success"
 
-    # Verify good_listener received notification
-    assert len(received_payloads) == 1
-    assert received_payloads[0]["theme"] == "mutated_by_listener"
+    # 1. Verify mutating_listener_a received notification and modified its copy
+    assert len(listener_a_payloads) == 1
+    assert listener_a_payloads[0]["theme"] == "mutated_by_listener_a"
+    assert listener_a_payloads[0]["tampered"] is True
 
-    # Verify manager's internal cached preferences were NOT corrupted by listener mutation
+    # 2. Verify observer_listener_b received an unaffected canonical copy
+    assert len(listener_b_payloads) == 1
+    assert listener_b_payloads[0]["theme"] == "light"
+    assert listener_b_payloads[0]["accessibility"]["motion"] == "reduce"
+    assert listener_b_payloads[0]["accessibility"]["transparency"] == "glass"
+    assert "tampered" not in listener_b_payloads[0]
+
+    # 3. Verify manager's internal cached preferences were NOT mutated
     cached = mgr.get_preferences()
     assert cached["theme"] == "light"
+    assert cached["accessibility"]["motion"] == "reduce"
+    assert cached["accessibility"]["transparency"] == "glass"
     assert "tampered" not in cached
 
 
-def test_reset_lifecycle_prevents_stale_local_storage_resurrection(tmp_path, monkeypatch):
+def test_reset_lifecycle_prevents_stale_local_storage_resurrection(tmp_path):
     """
-    Issue G:
+    Phase 10:
     Reset user preferences removes disk file and leaves memory in factory defaults.
     Subsequent cold boot starts with defaults without resurrecting deleted preferences.
     """
@@ -554,3 +693,46 @@ def test_reset_lifecycle_prevents_stale_local_storage_resurrection(tmp_path, mon
     assert mgr2.has_persisted_file() is False
 
 
+def test_disk_store_state_distinction_missing_valid_corrupt(tmp_path):
+    """
+    Phase 5 / Forensic:
+    Explicitly proves that the system distinguishes between:
+      1. Missing disk store
+      2. Valid disk store
+      3. Corrupt disk store
+    """
+    config_dir = tmp_path / "state_distinction"
+    mgr = PreferencesManager(config_dir=str(config_dir))
+
+    # 1. Missing disk store
+    assert not os.path.exists(mgr.preferences_file)
+    assert mgr.has_persisted_file() is False
+    meta_missing = mgr.get_preferences_with_metadata()
+    assert meta_missing["_persisted"] is False
+    assert meta_missing["theme"] == "dark"
+
+    # 2. Valid disk store
+    mgr.save_preferences({
+        "version": "1.0",
+        "theme": "light",
+        "accessibility": {"motion": "reduce", "transparency": "glass"}
+    })
+    assert os.path.exists(mgr.preferences_file)
+    assert mgr.has_persisted_file() is True
+    meta_valid = mgr.get_preferences_with_metadata()
+    assert meta_valid["_persisted"] is True
+    assert meta_valid["theme"] == "light"
+
+    # 3. Corrupt disk store (file physically exists on disk, but content is corrupt)
+    with open(mgr.preferences_file, "w", encoding="utf-8") as f:
+        f.write("{ INVALID_JSON_DATA_CORRUPTED: [ }")
+
+    # Reload from disk
+    reloaded = mgr.load_preferences()
+    assert os.path.exists(mgr.preferences_file)
+    assert mgr.has_persisted_file() is True, "Physical file still exists"
+    meta_corrupt = mgr.get_preferences_with_metadata()
+    assert meta_corrupt["_persisted"] is True, "_persisted metadata reflects physical file presence"
+    assert meta_corrupt["theme"] == "dark", "Corrupt disk store deterministically falls back to defaults"
+    assert meta_corrupt["accessibility"]["motion"] == "system"
+    assert meta_corrupt["accessibility"]["transparency"] == "system"

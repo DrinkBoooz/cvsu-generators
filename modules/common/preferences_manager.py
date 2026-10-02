@@ -56,18 +56,26 @@ def validate_preferences(raw_data: Any) -> Dict[str, Any]:
 
     # 1. Version validation
     # Reserved for future schema migrations. Currently supports version "1.0".
-    raw_version = raw_data.get("version")
-    if isinstance(raw_version, (str, int, float)):
-        v_str = str(raw_version).strip()
-        if v_str == SUPPORTED_SCHEMA_VERSION:
+    if "version" in raw_data and raw_data["version"] is not None:
+        raw_version = raw_data["version"]
+        if isinstance(raw_version, (str, int, float)):
+            v_str = str(raw_version).strip()
+            if v_str != SUPPORTED_SCHEMA_VERSION:
+                logger.warning(
+                    f"Unsupported user preferences schema version '{v_str}'. "
+                    f"Version '{SUPPORTED_SCHEMA_VERSION}' is the only supported version. "
+                    "Reverting to safe canonical defaults."
+                )
+                return defaults
             validated["version"] = SUPPORTED_SCHEMA_VERSION
         else:
-            logger.info(
-                f"Unrecognized user preferences schema version '{v_str}', "
-                f"defaulting to supported version '{SUPPORTED_SCHEMA_VERSION}'"
+            logger.warning(
+                f"Invalid type for schema version: {type(raw_version).__name__}. "
+                "Reverting to safe canonical defaults."
             )
-            validated["version"] = SUPPORTED_SCHEMA_VERSION
+            return defaults
     else:
+        # Missing version: assume current supported schema and validate fields
         validated["version"] = SUPPORTED_SCHEMA_VERSION
 
     # 2. Theme validation
@@ -124,7 +132,10 @@ class PreferencesManager:
                 self._listeners.append(callback)
 
     def _notify_listeners(self):
-        """Notify registered listeners with an immutable copy of canonical preferences."""
+        """
+        Notify registered listeners with an independent defensive copy of canonical preferences.
+        Mutating a listener payload cannot mutate manager state.
+        """
         with self._lock:
             payload = deepcopy(self._cached_preferences)
             listeners = list(self._listeners)
@@ -134,27 +145,31 @@ class PreferencesManager:
             except Exception as e:
                 logger.error(f"Error in preferences listener callback: {e}")
 
+    def _load_under_lock(self) -> Dict[str, Any]:
+        """Loads preferences under lock without triggering listeners."""
+        defaults = get_default_preferences_dict()
+        if not os.path.exists(self.preferences_file):
+            self._cached_preferences = defaults
+        else:
+            try:
+                with open(self.preferences_file, "r", encoding="utf-8") as f:
+                    raw_data = json.load(f)
+                self._cached_preferences = validate_preferences(raw_data)
+            except Exception as e:
+                logger.warning(
+                    f"Failed to parse user preferences from {self.preferences_file}, using defaults: {e}"
+                )
+                self._cached_preferences = defaults
+        return deepcopy(self._cached_preferences)
+
     def load_preferences(self) -> Dict[str, Any]:
         """
         Loads user preferences from disk.
         Returns defaults if file is missing, corrupt, or invalid.
         Guarantees thread safety and atomic memory caching.
         """
-        defaults = get_default_preferences_dict()
         with self._lock:
-            if not os.path.exists(self.preferences_file):
-                self._cached_preferences = defaults
-            else:
-                try:
-                    with open(self.preferences_file, "r", encoding="utf-8") as f:
-                        raw_data = json.load(f)
-                    self._cached_preferences = validate_preferences(raw_data)
-                except Exception as e:
-                    logger.warning(
-                        f"Failed to parse user preferences from {self.preferences_file}, using defaults: {e}"
-                    )
-                    self._cached_preferences = defaults
-            result = deepcopy(self._cached_preferences)
+            result = self._load_under_lock()
 
         self._notify_listeners()
         return result
@@ -168,14 +183,11 @@ class PreferencesManager:
         """
         Returns the active cached preferences as a pure canonical document.
         Free of diagnostic metadata or internal tracking flags.
+        Returns an independent defensive copy.
         """
         with self._lock:
             if self._cached_preferences is None:
-                # load_preferences manages its own locking
-                pass
-        if self._cached_preferences is None:
-            self.load_preferences()
-        with self._lock:
+                self._load_under_lock()
             return deepcopy(self._cached_preferences)
 
     def get_preferences_with_metadata(self) -> Dict[str, Any]:
@@ -186,6 +198,26 @@ class PreferencesManager:
         prefs = self.get_preferences()
         prefs["_persisted"] = self.has_persisted_file()
         return prefs
+
+    def _persist_locked(self, validated: Dict[str, Any]) -> None:
+        """
+        Internal persistence helper.
+        MUST be called while self._lock is acquired.
+        Atomically writes to disk and updates in-memory cache.
+        """
+        os.makedirs(self.config_dir, exist_ok=True)
+        temp_fd, temp_path = tempfile.mkstemp(
+            dir=self.config_dir, prefix="prefs_tmp_", suffix=".json"
+        )
+        with os.fdopen(temp_fd, "w", encoding="utf-8") as f:
+            json.dump(validated, f, indent=2, ensure_ascii=False)
+
+        if os.path.exists(self.preferences_file):
+            os.replace(temp_path, self.preferences_file)
+        else:
+            os.rename(temp_path, self.preferences_file)
+
+        self._cached_preferences = validated
 
     def save_preferences(self, new_prefs: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -218,57 +250,58 @@ class PreferencesManager:
             }
 
         try:
-            os.makedirs(self.config_dir, exist_ok=True)
-            validated = validate_preferences(new_prefs)
-
-            # Atomic write via tempfile + os.replace
-            temp_fd, temp_path = tempfile.mkstemp(
-                dir=self.config_dir, prefix="prefs_tmp_", suffix=".json"
-            )
-            with os.fdopen(temp_fd, "w", encoding="utf-8") as f:
-                json.dump(validated, f, indent=2, ensure_ascii=False)
-
             with self._lock:
-                if os.path.exists(self.preferences_file):
-                    os.replace(temp_path, self.preferences_file)
-                else:
-                    os.rename(temp_path, self.preferences_file)
-
-                self._cached_preferences = validated
+                validated = validate_preferences(new_prefs)
+                self._persist_locked(validated)
+                saved_copy = deepcopy(validated)
 
             self._notify_listeners()
             logger.info("Successfully updated and persisted user preferences.")
-            return {"status": "success", "preferences": deepcopy(validated)}
+            return {"status": "success", "preferences": saved_copy}
         except Exception as e:
             logger.error(f"Error saving user preferences: {e}")
             return {"status": "error", "message": str(e)}
 
     def update_preferences(self, partial_prefs: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Explicit partial preference update.
+        Explicit partial preference update executed as a single atomic transaction.
         Merges provided keys into the active canonical document, validates,
-        and atomically persists the replacement document.
+        and atomically persists the replacement document under self._lock.
         """
         if not isinstance(partial_prefs, dict):
             return {"status": "error", "message": "Partial preferences must be a JSON object"}
 
-        current = self.get_preferences()
-        merged = deepcopy(current)
+        try:
+            with self._lock:
+                if self._cached_preferences is None:
+                    self._load_under_lock()
 
-        if "version" in partial_prefs:
-            merged["version"] = partial_prefs["version"]
+                current = deepcopy(self._cached_preferences)
+                merged = deepcopy(current)
 
-        if "theme" in partial_prefs:
-            merged["theme"] = partial_prefs["theme"]
+                if "version" in partial_prefs:
+                    merged["version"] = partial_prefs["version"]
 
-        if "accessibility" in partial_prefs and isinstance(partial_prefs["accessibility"], dict):
-            acc_partial = partial_prefs["accessibility"]
-            if "motion" in acc_partial:
-                merged["accessibility"]["motion"] = acc_partial["motion"]
-            if "transparency" in acc_partial:
-                merged["accessibility"]["transparency"] = acc_partial["transparency"]
+                if "theme" in partial_prefs:
+                    merged["theme"] = partial_prefs["theme"]
 
-        return self.save_preferences(merged)
+                if "accessibility" in partial_prefs and isinstance(partial_prefs["accessibility"], dict):
+                    acc_partial = partial_prefs["accessibility"]
+                    if "motion" in acc_partial:
+                        merged["accessibility"]["motion"] = acc_partial["motion"]
+                    if "transparency" in acc_partial:
+                        merged["accessibility"]["transparency"] = acc_partial["transparency"]
+
+                validated = validate_preferences(merged)
+                self._persist_locked(validated)
+                saved_copy = deepcopy(validated)
+
+            self._notify_listeners()
+            logger.info("Successfully merged and persisted partial user preferences.")
+            return {"status": "success", "preferences": saved_copy}
+        except Exception as e:
+            logger.error(f"Error updating user preferences: {e}")
+            return {"status": "error", "message": str(e)}
 
     def reset_preferences(self) -> Dict[str, Any]:
         """

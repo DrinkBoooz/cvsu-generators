@@ -32,9 +32,34 @@
       const CVSU_ACC_MOTION_KEY = "cvsu_acc_motion";
       const CVSU_ACC_TRANSPARENCY_KEY = "cvsu_acc_transparency";
 
+      // ── Cache Sanitizers for Untrusted localStorage Data ───────────────────
+      function sanitizeThemePreference(val) {
+        if (typeof val === "string") {
+          const clean = val.trim().toLowerCase();
+          if (clean === "light" || clean === "dark") return clean;
+        }
+        return "dark";
+      }
+
+      function sanitizeMotionPreference(val) {
+        if (typeof val === "string") {
+          const clean = val.trim().toLowerCase();
+          if (clean === "reduce" || clean === "full" || clean === "system") return clean;
+        }
+        return "system";
+      }
+
+      function sanitizeTransparencyPreference(val) {
+        if (typeof val === "string") {
+          const clean = val.trim().toLowerCase();
+          if (clean === "reduce" || clean === "glass" || clean === "system") return clean;
+        }
+        return "system";
+      }
+
       function getStoredAccessibilityMotion() {
         try {
-          return localStorage.getItem(CVSU_ACC_MOTION_KEY) || "system";
+          return sanitizeMotionPreference(localStorage.getItem(CVSU_ACC_MOTION_KEY));
         } catch (e) {
           return "system";
         }
@@ -51,7 +76,7 @@
 
       function getStoredAccessibilityTransparency() {
         try {
-          return localStorage.getItem(CVSU_ACC_TRANSPARENCY_KEY) || "system";
+          return sanitizeTransparencyPreference(localStorage.getItem(CVSU_ACC_TRANSPARENCY_KEY));
         } catch (e) {
           return "system";
         }
@@ -362,14 +387,20 @@
       };
 
       function loadSavedTheme() {
-        const saved = localStorage.getItem("cvsu_gen_theme");
-        const theme = saved || "dark";
+        let theme = "dark";
+        try {
+          const saved = localStorage.getItem("cvsu_gen_theme");
+          theme = sanitizeThemePreference(saved);
+        } catch (e) {}
         document.documentElement.setAttribute("data-theme", theme);
         updateThemeButtonState(theme);
         applyAccessibilityPreferences();
       }
 
-      // Expose accessibility interfaces globally for UI controls and tests
+      // Expose accessibility interfaces and sanitizers globally for UI controls and tests
+      window.sanitizeThemePreference = sanitizeThemePreference;
+      window.sanitizeMotionPreference = sanitizeMotionPreference;
+      window.sanitizeTransparencyPreference = sanitizeTransparencyPreference;
       window.getStoredAccessibilityMotion = getStoredAccessibilityMotion;
       window.getEffectiveMotionPreference = getEffectiveMotionPreference;
       window.getStoredAccessibilityTransparency = getStoredAccessibilityTransparency;
@@ -382,7 +413,7 @@
         const currentTheme = document.documentElement.getAttribute("data-theme") || "dark";
         const prefs = {
           version: "1.0",
-          theme: currentTheme,
+          theme: sanitizeThemePreference(currentTheme),
           accessibility: {
             motion: getStoredAccessibilityMotion(),
             transparency: getStoredAccessibilityTransparency()
@@ -398,9 +429,24 @@
         try {
           // Request preferences with diagnostic metadata (_persisted) for migration gating
           const nativePrefs = await window.pywebview.api.get_user_preferences(true);
-          const localTheme = localStorage.getItem("cvsu_gen_theme");
-          const localMotion = localStorage.getItem(CVSU_ACC_MOTION_KEY);
-          const localTrans = localStorage.getItem(CVSU_ACC_TRANSPARENCY_KEY);
+          const rawTheme = localStorage.getItem("cvsu_gen_theme");
+          const rawMotion = localStorage.getItem(CVSU_ACC_MOTION_KEY);
+          const rawTrans = localStorage.getItem(CVSU_ACC_TRANSPARENCY_KEY);
+
+          const localTheme = sanitizeThemePreference(rawTheme);
+          const localMotion = sanitizeMotionPreference(rawMotion);
+          const localTrans = sanitizeTransparencyPreference(rawTrans);
+
+          // If raw cache contains invalid values, normalize cache immediately
+          if (rawTheme !== null && rawTheme !== localTheme) {
+            try { localStorage.setItem("cvsu_gen_theme", localTheme); } catch (e) {}
+          }
+          if (rawMotion !== null && rawMotion !== localMotion) {
+            try { localStorage.setItem(CVSU_ACC_MOTION_KEY, localMotion); } catch (e) {}
+          }
+          if (rawTrans !== null && rawTrans !== localTrans) {
+            try { localStorage.setItem(CVSU_ACC_TRANSPARENCY_KEY, localTrans); } catch (e) {}
+          }
 
           if (nativePrefs && nativePrefs.theme && nativePrefs.accessibility) {
             const hasPersistedStore = nativePrefs._persisted === true;
@@ -408,34 +454,34 @@
 
             // Upward migration runs ONLY if Python disk store did not exist and migration hasn't run yet
             const canMigrate = !hasPersistedStore && !alreadyMigrated;
-            const hasLocalCustom = (localTheme && localTheme !== "dark") ||
-                                   (localMotion && localMotion !== "system") ||
-                                   (localTrans && localTrans !== "system");
+            const hasLocalCustom = (localTheme !== "dark") ||
+                                   (localMotion !== "system") ||
+                                   (localTrans !== "system");
 
             if (canMigrate && hasLocalCustom) {
               const upwardPrefs = {
                 version: "1.0",
-                theme: localTheme || "dark",
+                theme: localTheme,
                 accessibility: {
-                  motion: localMotion || "system",
-                  transparency: localTrans || "system"
+                  motion: localMotion,
+                  transparency: localTrans
                 }
               };
               localStorage.setItem("cvsu_prefs_migrated", "true");
               await window.pywebview.api.save_user_preferences(upwardPrefs);
             } else {
-              // Authoritative native store updates local cache if different
+              // Authoritative native store updates local cache and presentation state
               localStorage.setItem("cvsu_prefs_migrated", "true");
-              if (nativePrefs.theme && nativePrefs.theme !== localTheme) {
+              if (nativePrefs.theme) {
                 localStorage.setItem("cvsu_gen_theme", nativePrefs.theme);
                 document.documentElement.setAttribute("data-theme", nativePrefs.theme);
                 updateThemeButtonState(nativePrefs.theme);
               }
               if (nativePrefs.accessibility) {
-                if (nativePrefs.accessibility.motion && nativePrefs.accessibility.motion !== localMotion) {
+                if (nativePrefs.accessibility.motion) {
                   localStorage.setItem(CVSU_ACC_MOTION_KEY, nativePrefs.accessibility.motion);
                 }
-                if (nativePrefs.accessibility.transparency && nativePrefs.accessibility.transparency !== localTrans) {
+                if (nativePrefs.accessibility.transparency) {
                   localStorage.setItem(CVSU_ACC_TRANSPARENCY_KEY, nativePrefs.accessibility.transparency);
                 }
                 applyAccessibilityPreferences();

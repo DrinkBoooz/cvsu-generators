@@ -693,8 +693,9 @@
       }
 
       function onAccessibilityMotionChange(val) {
+        const cleanVal = typeof sanitizeMotionPreference === "function" ? sanitizeMotionPreference(val) : (val || "system");
         try {
-          localStorage.setItem("cvsu_acc_motion", val);
+          localStorage.setItem("cvsu_acc_motion", cleanVal);
         } catch (e) {}
         if (typeof applyAccessibilityPreferences === "function") {
           applyAccessibilityPreferences();
@@ -704,14 +705,15 @@
           syncCurrentPreferencesToNative();
         }
         if (typeof showToast === "function") {
-          const label = val === "system" ? "Follow System" : (val === "reduce" ? "Reduced Motion" : "Full Motion (Override)");
+          const label = cleanVal === "system" ? "Follow System" : (cleanVal === "reduce" ? "Reduced Motion" : "Full Motion (Override)");
           showToast("Accessibility Updated", `Motion preference set to: ${label}`, "info");
         }
       }
 
       function onAccessibilityTransparencyChange(val) {
+        const cleanVal = typeof sanitizeTransparencyPreference === "function" ? sanitizeTransparencyPreference(val) : (val || "system");
         try {
-          localStorage.setItem("cvsu_acc_transparency", val);
+          localStorage.setItem("cvsu_acc_transparency", cleanVal);
         } catch (e) {}
         if (typeof applyAccessibilityPreferences === "function") {
           applyAccessibilityPreferences();
@@ -721,7 +723,7 @@
           syncCurrentPreferencesToNative();
         }
         if (typeof showToast === "function") {
-          const label = val === "system" ? "Follow System" : (val === "reduce" ? "Reduced Transparency (Solid)" : "Standard Transparency (Frosted Glass)");
+          const label = cleanVal === "system" ? "Follow System" : (cleanVal === "reduce" ? "Reduced Transparency (Solid)" : "Standard Transparency (Frosted Glass)");
           showToast("Accessibility Updated", `Transparency preference set to: ${label}`, "info");
         }
       }
