@@ -347,6 +347,13 @@ class PreferencesManager:
                 raw_data = json.load(f)
             if not isinstance(raw_data, dict):
                 return {"status": "error", "message": "Import file must contain a JSON object"}
+
+            if "theme" not in raw_data and "accessibility" not in raw_data:
+                return {
+                    "status": "error",
+                    "message": "Invalid user preferences: file contains neither theme nor accessibility settings"
+                }
+
             validated = validate_preferences(raw_data)
             return self.save_preferences(validated)
         except Exception as e:

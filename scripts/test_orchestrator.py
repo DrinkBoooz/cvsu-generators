@@ -85,6 +85,7 @@ MANIFEST = {
                 "tests/test_obsidian_vault_integrity.py",
                 "tests/test_api_inventory.py",
                 "tests/test_manifest_integrity.py",
+                "tests/test_persistent_state_authority_inventory.py",
             ],
         },
     },

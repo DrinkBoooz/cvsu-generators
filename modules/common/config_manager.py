@@ -401,6 +401,19 @@ class ParserConfigManager:
         try:
             with open(source_path, "r", encoding="utf-8") as f:
                 imported_data = json.load(f)
+            if not isinstance(imported_data, dict):
+                return {"status": "error", "message": "Import file must contain a JSON object"}
+
+            parser_keys = {
+                "ceit_prefix_map", "base_subject_prefixes", "known_lab_subjects",
+                "program_aliases", "roster_keywords", "schedule_config"
+            }
+            if not any(k in imported_data for k in parser_keys):
+                return {
+                    "status": "error",
+                    "message": "Invalid parser configuration: file contains no recognized parser configuration keys"
+                }
+
             return self.save_config(imported_data)
         except Exception as e:
             logger.error(f"Failed to import config from {source_path}: {e}")
