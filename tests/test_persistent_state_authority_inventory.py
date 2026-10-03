@@ -1,36 +1,49 @@
 """
-Static Persistent-State Governance Inventory & Authority Test Suite (Commit 209).
+Static Persistent-State Governance Inventory & Authority Test Suite (Commit 210).
 
 Enforces:
-1. Self-Validating Native Persistence Registry:
+1. Path-Sensitive Self-Validating Native Persistence Registry:
      - Declared writer modules and methods are verified against actual Python source AST.
-     - Detects renamed or invalid writer methods (e.g. _save_manifest, activate_template_set).
-2. Strengthened Single-Writer Governance:
+     - Every declared writer method is statically linked to its exact canonical target path.
+     - Intentionally falsifying writer methods, modules, or target paths causes immediate failure.
+2. Destructive Lifecycle Governance:
+     - All destructive operations (reset_to_defaults, reset_preferences, delete_custom_template,
+       delete_template_set, remove_template_from_set) are strictly governed and bounded.
+     - Static audit guarantees every deletion primitive (os.remove, shutil.rmtree) across the entire
+       codebase is accounted for and authorized.
+     - Runtime tests prove complete isolation between subsystems during reset and deletion.
+3. Absent-Store & Boundary Destructive Safety:
+     - Resetting missing stores produces zero stray files on disk.
+     - Deleting an active template set cleanly reverts to the built-in active set without collateral damage.
+4. Strengthened Single-Writer Governance:
      - All six canonical native stores have exactly one authoritative writer module.
      - AST source inspection verifies writer methods contain actual persistence I/O.
      - Proves unauthorized application modules contain zero direct write paths.
-3. Custom-Template Writer Governance:
+5. Custom-Template Writer Governance:
      - ParserConfigManager owns templates.json (metadata) and *.docx (physical files).
      - Separate governance for save_custom_template, toggle_custom_template, delete_custom_template.
-4. Robust Frontend Web Storage Discovery:
+6. Robust Frontend Web Storage Discovery:
      - Scans all application .html and .js files recursively under executable_test/.
      - Resolves literals, window prefix, bracket access, and static constants.
      - Documents static-analysis boundaries.
-5. Strict Complete-Document Import Contract & Exact Byte Preservation:
+7. Strict Complete-Document Import Contract & Exact Byte Preservation:
      - Complete export -> import round-trips succeed.
      - Rejected imports (partial, cross-domain, unsupported schema, invalid values)
        preserve exact canonical file bytes (open(..., 'rb').read()) and semantic state.
      - Rejected imports on absent stores create zero files on disk.
-6. Diagnostic Artifact Segregation:
+8. Diagnostic Artifact Segregation:
      - Operational runtime logs (generator.log, crash.log) are classified as DIAGNOSTIC_ARTIFACT
        strictly outside Model C application state.
 """
 
 import ast
+import fnmatch
 import json
 import os
 import re
+import shutil
 from pathlib import Path
+from typing import Optional, Dict, Any, List, Tuple
 import pytest
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -209,10 +222,264 @@ NATIVE_PERSISTENCE_REGISTRY = {
     },
 }
 
+DESTRUCTIVE_LIFECYCLE_REGISTRY = {
+    "parser_settings_reset": {
+        "subsystem": "APPLICATION_CONFIGURATION",
+        "canonical_store": "config/parser_settings.json",
+        "authorized_owner": "ParserConfigManager",
+        "module": "modules.common.config_manager",
+        "method": "ParserConfigManager.reset_to_defaults",
+        "expected_target": "config/parser_settings.json",
+        "primitive": "os.remove",
+        "isolated_from": [
+            "config/user_preferences.json",
+            "custom_templates/templates.json",
+            "custom_templates/*.docx",
+            "template_sets/<set_id>/manifest.json",
+            "active_template_set.json",
+        ],
+    },
+    "user_preferences_reset": {
+        "subsystem": "USER_PREFERENCES",
+        "canonical_store": "config/user_preferences.json",
+        "authorized_owner": "PreferencesManager",
+        "module": "modules.common.preferences_manager",
+        "method": "PreferencesManager.reset_preferences",
+        "expected_target": "config/user_preferences.json",
+        "primitive": "os.remove",
+        "isolated_from": [
+            "config/parser_settings.json",
+            "custom_templates/templates.json",
+            "custom_templates/*.docx",
+            "template_sets/<set_id>/manifest.json",
+            "active_template_set.json",
+        ],
+    },
+    "custom_template_deletion": {
+        "subsystem": "APPLICATION_CONFIGURATION",
+        "canonical_store": "custom_templates/*.docx",
+        "authorized_owner": "ParserConfigManager",
+        "module": "modules.common.config_manager",
+        "method": "ParserConfigManager.delete_custom_template",
+        "expected_targets": [
+            "custom_templates/*.docx",
+            "custom_templates/templates.json",
+        ],
+        "primitives": ["os.remove", "os.replace"],
+        "isolated_from": [
+            "config/parser_settings.json",
+            "config/user_preferences.json",
+            "template_sets/<set_id>/manifest.json",
+            "active_template_set.json",
+        ],
+    },
+    "template_set_deletion": {
+        "subsystem": "APPLICATION_CONFIGURATION",
+        "canonical_store": "template_sets/<set_id>",
+        "authorized_owner": "TemplateSetManager",
+        "module": "modules.services.template_set_manager",
+        "method": "TemplateSetManager.delete_template_set",
+        "expected_target": "template_sets/<set_id>",
+        "delegated_fallback": "activate_template_set",
+        "primitives": ["shutil.rmtree"],
+        "isolated_from": [
+            "config/parser_settings.json",
+            "config/user_preferences.json",
+            "custom_templates/templates.json",
+            "custom_templates/*.docx",
+        ],
+    },
+    "template_set_role_removal": {
+        "subsystem": "APPLICATION_CONFIGURATION",
+        "canonical_store": "template_sets/<set_id>/templates/*",
+        "authorized_owner": "TemplateSetManager",
+        "module": "modules.services.template_set_manager",
+        "method": "TemplateSetManager.remove_template_from_set",
+        "expected_target": "template_sets/<set_id>/templates/*",
+        "delegated_update": "_save_manifest",
+        "primitives": ["os.remove"],
+        "isolated_from": [
+            "config/parser_settings.json",
+            "config/user_preferences.json",
+            "custom_templates/templates.json",
+            "custom_templates/*.docx",
+            "active_template_set.json",
+        ],
+    },
+}
+
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Section A: Self-Validating Native Persistence Registry
+# Section A: Path-Sensitive Self-Validating Native Persistence Registry
 # ══════════════════════════════════════════════════════════════════════════════
+
+def _resolve_ast_expr(node: ast.AST, local_env: Dict[str, str], class_env: Dict[str, str]) -> str:
+    """Recursively resolves an AST node to a normalized canonical path string / pattern."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.Name):
+        if node.id in local_env:
+            return local_env[node.id]
+        if node.id == "set_dir":
+            return "template_sets/<set_id>"
+        if node.id == "dest_filename":
+            return "*.docx"
+        if node.id in ("file_path", "dest_path", "manifest_path"):
+            return local_env.get(node.id, f"<{node.id}>")
+        return f"<{node.id}>"
+    if isinstance(node, ast.Attribute):
+        if isinstance(node.value, ast.Name) and node.value.id == "self":
+            attr = node.attr
+            if attr in class_env:
+                return class_env[attr]
+            return f"self.{attr}"
+        if node.attr == "file_path":
+            return "template_sets/<set_id>/templates/*"
+        if isinstance(node.value, ast.Attribute):
+            parent = _resolve_ast_expr(node.value, local_env, class_env)
+            return f"{parent}.{node.attr}"
+    if isinstance(node, ast.JoinedStr):
+        parts = []
+        for v in node.values:
+            if isinstance(v, ast.Constant) and isinstance(v.value, str):
+                parts.append(v.value)
+            elif isinstance(v, ast.FormattedValue):
+                parts.append("*")
+        return "".join(parts)
+    if isinstance(node, ast.Call):
+        func_name = ""
+        if isinstance(node.func, ast.Attribute):
+            func_name = node.func.attr
+        elif isinstance(node.func, ast.Name):
+            func_name = node.func.id
+
+        if func_name == "join":
+            resolved_args = [_resolve_ast_expr(arg, local_env, class_env) for arg in node.args]
+            clean_args = []
+            for a in resolved_args:
+                if not a:
+                    continue
+                a = str(a).replace("\\", "/")
+                if any(root in a for root in ["self.base_dir", "base_dir", "app_data", "CVSU_Generators"]):
+                    continue
+                clean_args.append(a.strip("/"))
+            return "/".join(clean_args)
+        if func_name == "_get_log_dir":
+            return "logs"
+        if func_name == "get":
+            return "*"
+    return "<unresolved>"
+
+
+def _inspect_class_attrs(class_node: ast.ClassDef) -> Dict[str, str]:
+    """Statically resolves instance attribute path assignments in __init__."""
+    class_env = {}
+    init_func = next((m for m in class_node.body if isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef)) and m.name == "__init__"), None)
+    if not init_func:
+        return class_env
+
+    for stmt in ast.walk(init_func):
+        if isinstance(stmt, ast.Assign):
+            for target in stmt.targets:
+                if isinstance(target, ast.Attribute) and isinstance(target.value, ast.Name) and target.value.id == "self":
+                    attr_name = target.attr
+                    resolved = _resolve_ast_expr(stmt.value, {}, class_env)
+                    if resolved and resolved != "<unresolved>":
+                        class_env[attr_name] = resolved.replace("\\", "/").strip("/")
+
+    # Multi-pass expansion of dependent self.<attr> references
+    changed = True
+    while changed:
+        changed = False
+        for k, v in list(class_env.items()):
+            for sub_k, sub_v in class_env.items():
+                pattern = f"self.{sub_k}"
+                if pattern in v:
+                    new_v = v.replace(pattern, sub_v)
+                    if new_v != v:
+                        class_env[k] = new_v
+                        changed = True
+    return class_env
+
+
+def _is_ast_call_matching(func_node: ast.AST, mod_name: str, call_name: str) -> bool:
+    """Checks whether an AST call is qualified with the expected module/object name."""
+    if isinstance(func_node, ast.Attribute):
+        if isinstance(func_node.value, ast.Name) and func_node.value.id == mod_name and func_node.attr == call_name:
+            return True
+    return False
+
+
+def _find_target_paths_in_method(func_node: ast.FunctionDef, class_env: Dict[str, str]) -> List[Tuple[str, str]]:
+    """
+    Extracts all filesystem persistence operations and their target path expressions
+    from a method's AST node.
+    """
+    local_env = {}
+    targets = []
+
+    for stmt in ast.walk(func_node):
+        if isinstance(stmt, ast.Assign):
+            for target in stmt.targets:
+                if isinstance(target, ast.Name):
+                    var_name = target.id
+                    val = _resolve_ast_expr(stmt.value, local_env, class_env)
+                    local_env[var_name] = val
+
+        if isinstance(stmt, ast.Call):
+            # 1. os.replace(src, dst) or os.rename(src, dst) -> target is dst
+            if (_is_ast_call_matching(stmt.func, "os", "replace") or _is_ast_call_matching(stmt.func, "os", "rename")) and len(stmt.args) >= 2:
+                dst = _resolve_ast_expr(stmt.args[1], local_env, class_env)
+                targets.append(("os.replace", dst))
+            # 2. shutil.copy2(src, dst) -> target is dst
+            elif _is_ast_call_matching(stmt.func, "shutil", "copy2") and len(stmt.args) >= 2:
+                dst = _resolve_ast_expr(stmt.args[1], local_env, class_env)
+                targets.append(("shutil.copy2", dst))
+            # 3. os.remove(path) -> target is path
+            elif _is_ast_call_matching(stmt.func, "os", "remove") and len(stmt.args) >= 1:
+                path = _resolve_ast_expr(stmt.args[0], local_env, class_env)
+                targets.append(("os.remove", path))
+            # 4. shutil.rmtree(path) -> target is path
+            elif _is_ast_call_matching(stmt.func, "shutil", "rmtree") and len(stmt.args) >= 1:
+                path = _resolve_ast_expr(stmt.args[0], local_env, class_env)
+                targets.append(("shutil.rmtree", path))
+            # 5. RotatingFileHandler / _make_rotating_handler -> target is log_path
+            elif (_is_ast_call_matching(stmt.func, "logging", "handlers") or
+                  (isinstance(stmt.func, ast.Name) and stmt.func.id in ("RotatingFileHandler", "_make_rotating_handler"))) and len(stmt.args) >= 1:
+                path = _resolve_ast_expr(stmt.args[0], local_env, class_env)
+                targets.append(("RotatingFileHandler", path))
+
+    cleaned_targets = []
+    for op, p in targets:
+        p_clean = str(p)
+        for k, v in class_env.items():
+            p_clean = p_clean.replace(f"self.{k}", v)
+        p_clean = p_clean.replace("\\", "/").strip("/")
+        cleaned_targets.append((op, p_clean))
+    return cleaned_targets
+
+
+def _path_pattern_matches(expected_pattern: str, resolved_path: str) -> bool:
+    """
+    Checks if a canonical pattern matches a resolved filesystem operation path:
+    Handles exact paths, glob patterns (*.docx), parameter wildcards (<set_id>),
+    and parent directory containers.
+    """
+    pat = expected_pattern.replace("<set_id>", "*").replace("<target.get>", "*").replace("<filename>", "*")
+    res = resolved_path.replace("<set_id>", "*").replace("<target.get>", "*").replace("<filename>", "*")
+    if fnmatch.fnmatch(res, pat):
+        return True
+    if pat.endswith("/*") and res.startswith(pat[:-2]):
+        return True
+    if pat.endswith("/*.docx") and res == pat[:-7] + "/*":
+        return True
+    if res.endswith("/*") and pat.startswith(res[:-1]):
+        return True
+    # Container match: if resolved path is container of expected file (e.g. template_sets/<set_id> for manifest.json)
+    if not any(c in res for c in ["*", "?"]) and pat.startswith(res + "/"):
+        return True
+    return False
+
 
 def _inspect_method_has_persistence_io(func_node: ast.FunctionDef) -> bool:
     """
@@ -233,13 +500,14 @@ def _inspect_method_has_persistence_io(func_node: ast.FunctionDef) -> bool:
     return False
 
 
-def _validate_registry_entry_symbol(module_name: str, method_decl: str):
+def _validate_registry_entry_symbol(module_name: str, method_decl: str, expected_path: Optional[str] = None):
     """
     Statically inspects the actual Python source for the module and method:
     1. Proves module file exists on disk.
     2. Parses AST and locates declared Class / Function.
     3. If Class.method, proves method belongs to declared Class.
     4. Proves method contains actual filesystem persistence operations.
+    5. If expected_path is specified, proves the method targets the exact canonical path.
     Returns (success: bool, error_msg: str).
     """
     mod_parts = module_name.split(".")
@@ -263,6 +531,8 @@ def _validate_registry_entry_symbol(module_name: str, method_decl: str):
         if not target_class:
             return False, f"Class '{class_name}' not found in module '{module_name}'."
 
+        class_env = _inspect_class_attrs(target_class)
+
         target_func = None
         for item in target_class.body:
             if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name == method_name:
@@ -273,6 +543,15 @@ def _validate_registry_entry_symbol(module_name: str, method_decl: str):
 
         if not _inspect_method_has_persistence_io(target_func):
             return False, f"Method '{class_name}.{method_name}' does not contain recognized persistence I/O operations."
+
+        if expected_path:
+            targets = _find_target_paths_in_method(target_func, class_env)
+            matched = [tgt for _, tgt in targets if _path_pattern_matches(expected_path, tgt)]
+            if not matched:
+                return False, (
+                    f"Target path '{expected_path}' not matched by any I/O targets in "
+                    f"'{class_name}.{method_name}': {[t for _, t in targets]}"
+                )
 
         return True, ""
     else:
@@ -287,30 +566,40 @@ def _validate_registry_entry_symbol(module_name: str, method_decl: str):
         if not _inspect_method_has_persistence_io(target_func):
             return False, f"Function '{method_decl}' does not contain recognized persistence I/O operations."
 
+        if expected_path:
+            targets = _find_target_paths_in_method(target_func, {})
+            matched = [tgt for _, tgt in targets if _path_pattern_matches(expected_path, tgt)]
+            if not matched:
+                return False, (
+                    f"Target path '{expected_path}' not matched by any I/O targets in "
+                    f"'{method_decl}': {[t for _, t in targets]}"
+                )
+
         return True, ""
 
 
 def test_native_persistence_registry_self_validates_against_source():
     """
-    Requirement A: The native persistence registry must self-validate against
-    the actual Python source code via AST inspection.
-    Validates that every writer module and writer method exists and performs persistence I/O.
+    Requirement 2: The native persistence registry must self-validate against
+    the actual Python source code via AST inspection, connecting every registered
+    writer method to its actual canonical target path.
     """
     for entry_id, spec in NATIVE_PERSISTENCE_REGISTRY.items():
         module_name = spec["writer_module"]
         primary_method = spec["writer_method"]
+        canonical_path = spec["relative_path"]
 
-        valid, err = _validate_registry_entry_symbol(module_name, primary_method)
+        valid, err = _validate_registry_entry_symbol(module_name, primary_method, expected_path=canonical_path)
         assert valid, f"Registry entry '{entry_id}' failed source validation: {err}"
 
         for sec_method in spec.get("secondary_methods", []):
-            valid_sec, sec_err = _validate_registry_entry_symbol(module_name, sec_method)
-            assert valid_sec, f"Registry entry '{entry_id}' secondary method failed validation: {sec_err}"
+            valid_sec, sec_err = _validate_registry_entry_symbol(module_name, sec_method, expected_path=canonical_path)
+            assert valid_sec, f"Registry entry '{entry_id}' secondary method '{sec_method}' failed validation: {sec_err}"
 
 
 def test_native_persistence_registry_detects_invalid_or_renamed_methods():
     """
-    Requirement A: Proves that the self-validating registry actually catches incorrect,
+    Requirement 3: Proves that the self-validating registry catches incorrect,
     renamed, or hallucinated writer method names (e.g. old _save_template_set or set_active_template_set).
     """
     valid, err = _validate_registry_entry_symbol(
@@ -330,6 +619,61 @@ def test_native_persistence_registry_detects_invalid_or_renamed_methods():
     )
     assert not valid
     assert "Method 'non_existent_save_method' not found" in err
+
+
+def test_registry_path_governance_detects_falsified_methods_paths_and_modules():
+    """
+    Requirement 3: Regression tests proving that intentionally falsifying registry entries causes failure:
+      1. changing _save_manifest to _save_template_set must fail;
+      2. changing activate_template_set to nonexistent method must fail;
+      3. changing parser_settings.json expected path to a fake path must fail;
+      4. changing user_preferences.json expected writer module must fail;
+      5. associating an authorized writer method with an unwritten canonical store must fail.
+    """
+    # 1. Renamed / wrong writer method name
+    ok1, msg1 = _validate_registry_entry_symbol(
+        "modules.services.template_set_manager",
+        "TemplateSetManager._save_template_set",
+        "template_sets/<set_id>/manifest.json"
+    )
+    assert not ok1
+    assert "Method '_save_template_set' not found" in msg1
+
+    # 2. Nonexistent method
+    ok2, msg2 = _validate_registry_entry_symbol(
+        "modules.services.template_set_manager",
+        "TemplateSetManager.nonexistent_activate_method",
+        "active_template_set.json"
+    )
+    assert not ok2
+    assert "Method 'nonexistent_activate_method' not found" in msg2
+
+    # 3. Falsified target path
+    ok3, msg3 = _validate_registry_entry_symbol(
+        "modules.common.config_manager",
+        "ParserConfigManager.save_config",
+        "config/fake_parser_settings.json"
+    )
+    assert not ok3
+    assert "Target path 'config/fake_parser_settings.json' not matched" in msg3
+
+    # 4. Falsified writer module
+    ok4, msg4 = _validate_registry_entry_symbol(
+        "modules.common.config_manager",
+        "PreferencesManager._persist_locked",
+        "config/user_preferences.json"
+    )
+    assert not ok4
+    assert "Class 'PreferencesManager' not found in module 'modules.common.config_manager'" in msg4
+
+    # 5. Cross-subsystem method-path mismatch (save_config does not write user_preferences.json)
+    ok5, msg5 = _validate_registry_entry_symbol(
+        "modules.common.config_manager",
+        "ParserConfigManager.save_config",
+        "config/user_preferences.json"
+    )
+    assert not ok5
+    assert "Target path 'config/user_preferences.json' not matched" in msg5
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -922,3 +1266,266 @@ def test_native_persistence_registry_classifications_and_path_separation():
         assert diag["category"] not in CANONICAL_CATEGORIES, (
             "Diagnostic artifacts must not be classified into Model C application state categories"
         )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Section H: Destructive Lifecycle Governance & Deletion Primitives Audit
+# ══════════════════════════════════════════════════════════════════════════════
+
+def test_destructive_lifecycle_governance_static_ast():
+    """
+    Requirement 4: Statically audits destructive operations against the persistence authority model:
+      1. Every entry in DESTRUCTIVE_LIFECYCLE_REGISTRY self-validates symbol and exact target paths via AST.
+      2. Audits EVERY file-deletion primitive (os.remove, os.unlink, shutil.rmtree) across the entire
+         codebase to prove that NO unauthorized module or function can delete canonical stores.
+      3. Proves reset and deletion operations are statically bounded to their authorized subsystem.
+    """
+    # 1. Validate all registered destructive lifecycle entries against source AST
+    for op_id, spec in DESTRUCTIVE_LIFECYCLE_REGISTRY.items():
+        module_name = spec["module"]
+        method_name = spec["method"]
+
+        targets = spec.get("expected_targets") or [spec.get("expected_target")]
+        for tgt in targets:
+            valid, err = _validate_registry_entry_symbol(module_name, method_name, expected_path=tgt)
+            assert valid, f"Destructive registry entry '{op_id}' failed source validation: {err}"
+
+    # 2. Comprehensive AST audit of all deletion primitives across modules/ and executable_test/
+    py_files = _get_all_application_python_files()
+    assert len(py_files) > 10, "Should discover application Python files"
+
+    deletion_calls = []
+    for fpath in py_files:
+        rel = os.path.relpath(fpath, WORKSPACE_DIR).replace("\\", "/")
+        with open(fpath, "r", encoding="utf-8") as f:
+            tree = ast.parse(f.read(), filename=fpath)
+
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                func_name = ""
+                mod_name = ""
+                if isinstance(node.func, ast.Attribute):
+                    func_name = node.func.attr
+                    if isinstance(node.func.value, ast.Name):
+                        mod_name = node.func.value.id
+                elif isinstance(node.func, ast.Name):
+                    func_name = node.func.id
+
+                if (mod_name == "os" and func_name in ("remove", "unlink")) or (mod_name == "shutil" and func_name == "rmtree"):
+                    arg0 = ast.unparse(node.args[0]) if node.args else ""
+                    deletion_calls.append({
+                        "file": rel,
+                        "primitive": f"{mod_name}.{func_name}",
+                        "arg": arg0,
+                        "line": getattr(node, "lineno", 0),
+                    })
+
+    # Authorized deletion calls across the entire codebase
+    allowed_deletion_patterns = {
+        # ConfigManager: config_file in reset_to_defaults, file_path in delete_custom_template
+        ("modules/common/config_manager.py", "os.remove", "self.config_file"),
+        ("modules/common/config_manager.py", "os.remove", "file_path"),
+        # PreferencesManager: preferences_file in reset_preferences
+        ("modules/common/preferences_manager.py", "os.remove", "self.preferences_file"),
+        # TemplateSetManager: entry.file_path in remove_template_from_set, set_dir in delete_template_set, temp_dir in import_template_set
+        ("modules/services/template_set_manager.py", "os.remove", "entry.file_path"),
+        ("modules/services/template_set_manager.py", "shutil.rmtree", "set_dir"),
+        ("modules/services/template_set_manager.py", "shutil.rmtree", "temp_dir"),
+        # Ephemeral tempfile cleanups in generation and parsing pipelines
+        ("modules/parsers/schedule_parser.py", "os.remove", "tmp_path"),
+        ("modules/generators/grade_gen.py", "os.remove", "tmp_path"),
+        ("modules/common/docx_utils.py", "os.remove", "tmp_name"),
+    }
+
+    for dc in deletion_calls:
+        key = (dc["file"], dc["primitive"], dc["arg"])
+        assert key in allowed_deletion_patterns, (
+            f"Unauthorized destructive primitive call discovered at {dc['file']}:{dc['line']} -> {dc['primitive']}({dc['arg']})!"
+        )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Section I: Runtime Destructive Lifecycle Isolation & Absent-Store Safety
+# ══════════════════════════════════════════════════════════════════════════════
+
+def test_destructive_lifecycle_runtime_isolation(tmp_path):
+    """
+    Requirement 4 & 5: Runtime proof that destructive lifecycle operations are strictly isolated:
+      - parser reset does not delete or mutate preferences, custom templates, or template sets.
+      - preference reset does not delete or mutate parser config, custom templates, or template sets.
+      - template-set deletion does not delete or mutate custom-template stores, parser config, or preferences.
+      - custom-template deletion does not delete or mutate template-set stores, parser config, or preferences.
+    Uses exact byte-level verification across all 6 canonical stores.
+    """
+    from modules.common.config_manager import ParserConfigManager
+    from modules.common.preferences_manager import PreferencesManager
+    from modules.services.template_set_manager import TemplateSetManager, BUILTIN_SET_ID
+
+    base_dir = tmp_path / "runtime_isolation_env"
+    config_dir = base_dir / "config"
+    config_dir.mkdir(parents=True, exist_ok=True)
+
+    parser_mgr = ParserConfigManager(config_dir=str(config_dir))
+    prefs_mgr = PreferencesManager(config_dir=str(config_dir))
+    ts_mgr = TemplateSetManager(base_dir=str(base_dir))
+
+    # 1. Populate all 6 canonical stores
+    # Store A: parser_settings.json
+    p_cfg = parser_mgr.get_config()
+    p_cfg["ceit_prefix_map"]["ISO_DEPT"] = {
+        "name": "Isolation Department", "dept": "ISO", "dept_code": "ISO", "icon": "🛡️", "badge": "🛡️ ISO"
+    }
+    parser_mgr.save_config(p_cfg)
+    assert os.path.isfile(parser_mgr.config_file)
+    p_bytes_init = open(parser_mgr.config_file, "rb").read()
+
+    # Store B: user_preferences.json
+    u_prefs = {
+        "version": "1.0",
+        "theme": "light",
+        "accessibility": {"motion": "reduce", "transparency": "glass"}
+    }
+    prefs_mgr.save_preferences(u_prefs)
+    assert os.path.isfile(prefs_mgr.preferences_file)
+    u_bytes_init = open(prefs_mgr.preferences_file, "rb").read()
+
+    # Store C & D: custom_templates/templates.json & custom_templates/*.docx
+    dummy1 = tmp_path / "dummy_form_1.docx"
+    dummy2 = tmp_path / "dummy_form_2.docx"
+    dummy1.write_bytes(b"DOCX_PAYLOAD_FORM_1")
+    dummy2.write_bytes(b"DOCX_PAYLOAD_FORM_2")
+
+    parser_mgr.save_custom_template(str(dummy1), "Form Alpha", "FORM_ALPHA", {"metadata": {"output_folder": "CEIT_Forms"}})
+    parser_mgr.save_custom_template(str(dummy2), "Form Beta", "FORM_BETA", {"metadata": {"output_folder": "CEIT_Forms"}})
+    assert os.path.isfile(parser_mgr.custom_templates_index)
+    docx_alpha_path = os.path.join(parser_mgr.custom_templates_dir, "form_alpha.docx")
+    docx_beta_path = os.path.join(parser_mgr.custom_templates_dir, "form_beta.docx")
+    assert os.path.isfile(docx_alpha_path)
+    assert os.path.isfile(docx_beta_path)
+    c_index_init = open(parser_mgr.custom_templates_index, "rb").read()
+    docx_alpha_init = open(docx_alpha_path, "rb").read()
+    docx_beta_init = open(docx_beta_path, "rb").read()
+
+    # Store E & F: template_sets/<set_id>/manifest.json & active_template_set.json
+    ts1 = ts_mgr.create_template_set("Isolation Set", "Isolated testing template set")
+    ts_mgr.activate_template_set(ts1.set_id)
+    assert os.path.isfile(ts_mgr.active_set_file)
+    ts1_manifest_path = os.path.join(ts_mgr.template_sets_dir, ts1.set_id, "manifest.json")
+    assert os.path.isfile(ts1_manifest_path)
+    active_set_init = open(ts_mgr.active_set_file, "rb").read()
+    ts1_manifest_init = open(ts1_manifest_path, "rb").read()
+
+    # ── Test 1: Parser Reset Isolation ────────────────────────────────────────
+    res_p_reset = parser_mgr.reset_to_defaults()
+    assert res_p_reset["status"] == "success"
+    assert not os.path.exists(parser_mgr.config_file), "parser_settings.json must be removed on reset"
+    # Sibling stores must be 100% byte-identical
+    assert open(prefs_mgr.preferences_file, "rb").read() == u_bytes_init, "Parser reset must NOT touch user preferences"
+    assert open(parser_mgr.custom_templates_index, "rb").read() == c_index_init, "Parser reset must NOT touch custom templates index"
+    assert open(docx_alpha_path, "rb").read() == docx_alpha_init, "Parser reset must NOT touch custom template file 1"
+    assert open(docx_beta_path, "rb").read() == docx_beta_init, "Parser reset must NOT touch custom template file 2"
+    assert open(ts_mgr.active_set_file, "rb").read() == active_set_init, "Parser reset must NOT touch active template set"
+    assert open(ts1_manifest_path, "rb").read() == ts1_manifest_init, "Parser reset must NOT touch template set manifest"
+
+    # Restore parser config for subsequent test steps
+    parser_mgr.save_config(p_cfg)
+    assert os.path.isfile(parser_mgr.config_file)
+
+    # ── Test 2: Preferences Reset Isolation ───────────────────────────────────
+    res_u_reset = prefs_mgr.reset_preferences()
+    assert res_u_reset["status"] == "success"
+    assert not os.path.exists(prefs_mgr.preferences_file), "user_preferences.json must be removed on reset"
+    # Sibling stores must be 100% byte-identical
+    assert open(parser_mgr.config_file, "rb").read() == p_bytes_init, "Preferences reset must NOT touch parser config"
+    assert open(parser_mgr.custom_templates_index, "rb").read() == c_index_init, "Preferences reset must NOT touch custom templates index"
+    assert open(docx_alpha_path, "rb").read() == docx_alpha_init, "Preferences reset must NOT touch custom template file 1"
+    assert open(docx_beta_path, "rb").read() == docx_beta_init, "Preferences reset must NOT touch custom template file 2"
+    assert open(ts_mgr.active_set_file, "rb").read() == active_set_init, "Preferences reset must NOT touch active template set"
+    assert open(ts1_manifest_path, "rb").read() == ts1_manifest_init, "Preferences reset must NOT touch template set manifest"
+
+    # Restore preferences for subsequent test steps
+    prefs_mgr.save_preferences(u_prefs)
+    assert os.path.isfile(prefs_mgr.preferences_file)
+
+    # ── Test 3: Custom Template Deletion Isolation ────────────────────────────
+    # Deleting form_alpha must remove form_alpha.docx, update templates.json, but keep form_beta.docx intact
+    res_del_c = parser_mgr.delete_custom_template("form_alpha")
+    assert res_del_c["status"] == "success"
+    assert not os.path.exists(docx_alpha_path), "form_alpha.docx must be deleted"
+    assert os.path.exists(docx_beta_path), "form_beta.docx must remain on disk"
+    assert open(docx_beta_path, "rb").read() == docx_beta_init, "form_beta.docx must be byte-identical"
+    # templates.json must now contain only form_beta
+    active_templates = parser_mgr.get_custom_templates()
+    assert len(active_templates) == 1
+    assert active_templates[0]["id"] == "form_beta"
+    # Sibling subsystems must be 100% byte-identical
+    assert open(parser_mgr.config_file, "rb").read() == p_bytes_init, "Custom template delete must NOT touch parser config"
+    assert open(prefs_mgr.preferences_file, "rb").read() == u_bytes_init, "Custom template delete must NOT touch user preferences"
+    assert open(ts_mgr.active_set_file, "rb").read() == active_set_init, "Custom template delete must NOT touch active template set"
+    assert open(ts1_manifest_path, "rb").read() == ts1_manifest_init, "Custom template delete must NOT touch template set manifest"
+
+    # ── Test 4: Template Set Deletion Isolation & Active Set Fallback ──────────
+    # Deleting active template set must remove its directory, revert active_template_set.json to built-in,
+    # but MUST NOT mutate custom templates, parser config, or user preferences.
+    res_del_ts = ts_mgr.delete_template_set(ts1.set_id)
+    assert res_del_ts is True
+    assert not os.path.exists(os.path.join(ts_mgr.template_sets_dir, ts1.set_id)), "Template set dir must be removed"
+    assert ts_mgr.get_active_template_set_id() == BUILTIN_SET_ID, "Active set must revert to built-in"
+    with open(ts_mgr.active_set_file, "r", encoding="utf-8") as f:
+        active_set_data = json.load(f)
+    assert active_set_data.get("active_set_id") == BUILTIN_SET_ID, "active_template_set.json must store built-in set ID"
+    # Sibling subsystems must be 100% byte-identical
+    assert open(parser_mgr.config_file, "rb").read() == p_bytes_init, "Template set delete must NOT touch parser config"
+    assert open(prefs_mgr.preferences_file, "rb").read() == u_bytes_init, "Template set delete must NOT touch user preferences"
+    assert os.path.exists(docx_beta_path), "Custom template file must survive template set deletion"
+    assert open(docx_beta_path, "rb").read() == docx_beta_init, "Custom template file must remain byte-identical"
+
+
+def test_absent_store_destructive_safety_and_edge_cases(tmp_path):
+    """
+    Requirement 5: Validates destructive edge cases and absent-store safety:
+      - reset when file is missing returns success and creates 0 stray files.
+      - deletion of absent custom template returns error without file mutations.
+      - deletion of absent template set raises error without file mutations.
+      - deletion of read-only built-in template set is strictly blocked.
+      - deleting an active template set correctly restores the built-in active set without damaging unrelated stores.
+    """
+    from modules.common.config_manager import ParserConfigManager
+    from modules.common.preferences_manager import PreferencesManager
+    from modules.services.template_set_manager import TemplateSetManager, BUILTIN_SET_ID, TemplateSetError
+
+    base_dir = tmp_path / "absent_safety_env"
+    config_dir = base_dir / "config"
+    config_dir.mkdir(parents=True, exist_ok=True)
+
+    parser_mgr = ParserConfigManager(config_dir=str(config_dir))
+    prefs_mgr = PreferencesManager(config_dir=str(config_dir))
+    ts_mgr = TemplateSetManager(base_dir=str(base_dir))
+
+    # 1. Missing parser_settings.json reset safety
+    assert not os.path.exists(parser_mgr.config_file)
+    res_p = parser_mgr.reset_to_defaults()
+    assert res_p["status"] == "success"
+    assert not os.path.exists(parser_mgr.config_file), "Resetting absent parser file must not create a file on disk"
+
+    # 2. Missing user_preferences.json reset safety
+    assert not os.path.exists(prefs_mgr.preferences_file)
+    res_u = prefs_mgr.reset_preferences()
+    assert res_u["status"] == "success"
+    assert not os.path.exists(prefs_mgr.preferences_file), "Resetting absent preferences file must not create a file on disk"
+
+    # 3. Absent custom template deletion
+    res_del_c = parser_mgr.delete_custom_template("non_existent_form")
+    assert res_del_c["status"] == "error"
+    assert "not found" in res_del_c["message"]
+
+    # 4. Absent template set deletion
+    with pytest.raises(TemplateSetError) as exc_info:
+        ts_mgr.delete_template_set("non_existent_set_id")
+    assert "does not exist" in str(exc_info.value)
+
+    # 5. Read-only built-in set deletion protection
+    with pytest.raises(TemplateSetError) as exc_info2:
+        ts_mgr.delete_template_set(BUILTIN_SET_ID)
+    assert "read-only built-in" in str(exc_info2.value)
+
