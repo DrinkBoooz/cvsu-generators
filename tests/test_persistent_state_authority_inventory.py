@@ -364,6 +364,8 @@ def _resolve_ast_expr(node: ast.AST, local_env: Dict[str, str], class_env: Dict[
         if func_name == "_get_log_dir":
             return "logs"
         if func_name == "get":
+            if node.args and isinstance(node.args[0], ast.Constant) and node.args[0].value == "filename":
+                return "*.docx"
             return "*"
     return "<unresolved>"
 
@@ -458,12 +460,13 @@ def _find_target_paths_in_method(func_node: ast.FunctionDef, class_env: Dict[str
 
 def _path_pattern_matches(expected_pattern: str, resolved_path: str) -> bool:
     """
-    Checks if a canonical pattern matches a resolved filesystem operation path:
+    Checks if a canonical pattern matches a resolved filesystem operation path.
     Requires genuine target equivalence:
       - Distinguishes file targets from directory/container targets.
       - A parent directory does NOT satisfy a file target.
-      - Enforces exact segment-by-segment matching with support for parameter wildcards
-        (<set_id>, <target.get>, <filename>) and file globs (*.docx, *).
+      - Enforces strictly directional matching: expected pattern is authoritative.
+        Expected wildcards (*, *.docx, <set_id>, <target.get>, <filename>) can match
+        resolved concrete paths, but resolved wildcards cannot satisfy concrete expected targets.
       - Only matches when path component depth and segment patterns strictly align.
     """
     if not expected_pattern or not resolved_path:
@@ -480,9 +483,7 @@ def _path_pattern_matches(expected_pattern: str, resolved_path: str) -> bool:
 
     for exp_p, res_p in zip(exp_parts, res_parts):
         e = exp_p.replace("<set_id>", "*").replace("<target.get>", "*").replace("<filename>", "*")
-        r = res_p.replace("<set_id>", "*").replace("<target.get>", "*").replace("<filename>", "*")
-
-        if not (fnmatch.fnmatch(r, e) or fnmatch.fnmatch(e, r)):
+        if not fnmatch.fnmatch(res_p, e):
             return False
 
     return True
@@ -685,15 +686,57 @@ def test_registry_path_governance_detects_falsified_methods_paths_and_modules():
 
 def test_path_matcher_rejects_parent_directory_and_cross_file_false_positives():
     """
-    Requirement 3: Dedicated regression test proving that parent directory matches
-    cannot satisfy file targets and that genuine target equivalence is enforced:
-      1. A parent directory does NOT satisfy a file target.
-      2. A sibling file does NOT satisfy a different file target.
-      3. A valid directory target DOES satisfy a directory lifecycle registry entry.
-      4. Existing valid canonical writer methods continue to pass.
-      5. Existing valid custom-template wildcard targets continue to pass.
+    Requirements 2 & 3: Dedicated regression test proving strictly directional wildcard
+    matching, parent directory rejection, and genuine target equivalence:
+      1. Exact path <-> exact path (VALID)
+      2. Expected wildcard <-> concrete file (VALID)
+      3. Expected directory target <-> same directory (VALID)
+      4. Expected wildcard child <-> concrete child file (VALID)
+      5. Concrete file <-> wildcard implementation path (INVALID - catches old bidirectional bug)
+      6. Concrete file <-> unresolved '*' or symbolic wildcard (INVALID)
+      7. Concrete file <-> parent directory (INVALID)
+      8. Concrete file <-> sibling file (INVALID)
+      9. Directory target <-> child manifest or child template (INVALID)
+      10. All existing valid canonical writer mappings continue to pass.
     """
-    # 1. Parent directory does NOT satisfy a file target
+    # 1. Exact path <-> exact path (VALID)
+    assert _path_pattern_matches("config/parser_settings.json", "config/parser_settings.json")
+    assert _path_pattern_matches("config/user_preferences.json", "config/user_preferences.json")
+    assert _path_pattern_matches("active_template_set.json", "active_template_set.json")
+    assert _path_pattern_matches("custom_templates/templates.json", "custom_templates/templates.json")
+
+    # 2. Expected wildcard <-> concrete file (VALID)
+    assert _path_pattern_matches("custom_templates/*.docx", "custom_templates/my_form.docx")
+    assert _path_pattern_matches("custom_templates/*.docx", "custom_templates/sample_form.docx")
+    assert _path_pattern_matches("custom_templates/*.docx", "custom_templates/*.docx")
+
+    # 3. Expected directory target <-> same directory (VALID)
+    assert _path_pattern_matches("template_sets/<set_id>", "template_sets/<set_id>")
+    assert _path_pattern_matches("template_sets/<set_id>", "template_sets/my_custom_set")
+    assert _path_pattern_matches("template_sets/<set_id>", "template_sets/set_123")
+
+    # 4. Expected wildcard child <-> concrete child file (VALID)
+    assert _path_pattern_matches("template_sets/<set_id>/templates/*", "template_sets/<set_id>/templates/syllabus.docx")
+    assert _path_pattern_matches("template_sets/<set_id>/templates/*", "template_sets/set_1/templates/form.docx")
+    assert _path_pattern_matches("template_sets/<set_id>/templates/*", "template_sets/<set_id>/templates/*")
+
+    # 5. Concrete file <-> wildcard implementation path (INVALID - Bidirectional False Positive Regression)
+    # The registry's expected path is authoritative: observed implementation wildcards
+    # (*, *.json) MUST NEVER satisfy a concrete registry expected file.
+    assert not _path_pattern_matches("config/parser_settings.json", "config/*.json")
+    assert not _path_pattern_matches("config/user_preferences.json", "config/*.json")
+    assert not _path_pattern_matches("custom_templates/templates.json", "custom_templates/*.json")
+    assert not _path_pattern_matches("active_template_set.json", "*.json")
+
+    # 6. Concrete file <-> unresolved '*' or symbolic wildcard (INVALID)
+    assert not _path_pattern_matches("config/parser_settings.json", "config/*")
+    assert not _path_pattern_matches("config/user_preferences.json", "config/*")
+    assert not _path_pattern_matches("template_sets/<set_id>/manifest.json", "template_sets/<set_id>/*")
+    assert not _path_pattern_matches("config/parser_settings.json", "config/<filename>")
+    assert not _path_pattern_matches("config/parser_settings.json", "config/<target.get>")
+    assert not _path_pattern_matches("config/parser_settings.json", "config/<set_id>")
+
+    # 7. Concrete file <-> parent directory (INVALID)
     assert not _path_pattern_matches("config/parser_settings.json", "config")
     assert not _path_pattern_matches("template_sets/<set_id>/manifest.json", "template_sets/<set_id>")
     assert not _path_pattern_matches("custom_templates/templates.json", "custom_templates")
@@ -710,19 +753,21 @@ def test_path_matcher_rejects_parent_directory_and_cross_file_false_positives():
     assert not valid_dir_as_file
     assert "Target path 'template_sets/<set_id>/manifest.json' not matched" in err_dir
 
-    # 2. Sibling file does NOT satisfy a different file target
+    # 8. Concrete file <-> sibling file (INVALID)
     assert not _path_pattern_matches("config/parser_settings.json", "config/user_preferences.json")
     assert not _path_pattern_matches("custom_templates/*.docx", "custom_templates/templates.json")
     assert not _path_pattern_matches("custom_templates/templates.json", "custom_templates/*.docx")
     assert not _path_pattern_matches("logs/generator.log", "logs/crash.log")
     assert not _path_pattern_matches("template_sets/<set_id>/manifest.json", "template_sets/<set_id>/other.json")
 
-    # 3. A valid directory target DOES satisfy a directory lifecycle registry entry
-    assert _path_pattern_matches("template_sets/<set_id>", "template_sets/<set_id>")
-    assert _path_pattern_matches("template_sets/<set_id>", "template_sets/my_custom_set")
-    # But directory target does not match a file inside it
+    # 9. Directory target <-> child manifest or child template (INVALID)
     assert not _path_pattern_matches("template_sets/<set_id>", "template_sets/<set_id>/manifest.json")
+    assert not _path_pattern_matches("template_sets/<set_id>", "template_sets/my_set/manifest.json")
+    assert not _path_pattern_matches("template_sets/<set_id>", "template_sets/<set_id>/templates/syllabus.docx")
+    assert not _path_pattern_matches("template_sets/<set_id>", "template_sets/my_set/templates/syllabus.docx")
+    assert not _path_pattern_matches("template_sets/<set_id>", "template_sets/<set_id>/templates/*")
 
+    # Directory target matches directory target symbol correctly
     valid_del_set, _ = _validate_registry_entry_symbol(
         "modules.services.template_set_manager",
         "TemplateSetManager.delete_template_set",
@@ -730,19 +775,14 @@ def test_path_matcher_rejects_parent_directory_and_cross_file_false_positives():
     )
     assert valid_del_set
 
-    # 4. Existing valid canonical writer methods continue to pass
+    # 10. Existing valid canonical writer methods continue to pass
     for entry_id, spec in NATIVE_PERSISTENCE_REGISTRY.items():
         ok, msg = _validate_registry_entry_symbol(
             spec["writer_module"], spec["writer_method"], expected_path=spec["relative_path"]
         )
         assert ok, f"Canonical writer '{spec['writer_method']}' failed matching '{spec['relative_path']}': {msg}"
 
-    # 5. Existing valid custom-template wildcard targets continue to pass
-    assert _path_pattern_matches("custom_templates/*.docx", "custom_templates/*.docx")
-    assert _path_pattern_matches("custom_templates/*.docx", "custom_templates/sample_form.docx")
-    assert _path_pattern_matches("template_sets/<set_id>/templates/*", "template_sets/<set_id>/templates/*")
-    assert _path_pattern_matches("template_sets/<set_id>/templates/*", "template_sets/set_1/templates/form.docx")
-
+    # 11. Existing valid custom-template wildcard targets continue to pass
     valid_custom, _ = _validate_registry_entry_symbol(
         "modules.common.config_manager",
         "ParserConfigManager.save_custom_template",
