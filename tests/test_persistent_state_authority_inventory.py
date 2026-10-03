@@ -180,10 +180,7 @@ NATIVE_PERSISTENCE_REGISTRY = {
         "canonical_owner": "TemplateSetManager",
         "writer_module": "modules.services.template_set_manager",
         "writer_method": "TemplateSetManager._save_manifest",
-        "secondary_methods": [
-            "TemplateSetManager.delete_template_set",
-        ],
-        "persistence_mechanism": "tempfile.NamedTemporaryFile + os.replace + shutil.rmtree",
+        "persistence_mechanism": "tempfile.NamedTemporaryFile + os.replace",
     },
     "active_template_set": {
         "relative_path": "active_template_set.json",
@@ -462,23 +459,33 @@ def _find_target_paths_in_method(func_node: ast.FunctionDef, class_env: Dict[str
 def _path_pattern_matches(expected_pattern: str, resolved_path: str) -> bool:
     """
     Checks if a canonical pattern matches a resolved filesystem operation path:
-    Handles exact paths, glob patterns (*.docx), parameter wildcards (<set_id>),
-    and parent directory containers.
+    Requires genuine target equivalence:
+      - Distinguishes file targets from directory/container targets.
+      - A parent directory does NOT satisfy a file target.
+      - Enforces exact segment-by-segment matching with support for parameter wildcards
+        (<set_id>, <target.get>, <filename>) and file globs (*.docx, *).
+      - Only matches when path component depth and segment patterns strictly align.
     """
-    pat = expected_pattern.replace("<set_id>", "*").replace("<target.get>", "*").replace("<filename>", "*")
-    res = resolved_path.replace("<set_id>", "*").replace("<target.get>", "*").replace("<filename>", "*")
-    if fnmatch.fnmatch(res, pat):
-        return True
-    if pat.endswith("/*") and res.startswith(pat[:-2]):
-        return True
-    if pat.endswith("/*.docx") and res == pat[:-7] + "/*":
-        return True
-    if res.endswith("/*") and pat.startswith(res[:-1]):
-        return True
-    # Container match: if resolved path is container of expected file (e.g. template_sets/<set_id> for manifest.json)
-    if not any(c in res for c in ["*", "?"]) and pat.startswith(res + "/"):
-        return True
-    return False
+    if not expected_pattern or not resolved_path:
+        return False
+
+    exp_norm = expected_pattern.replace("\\", "/").strip("/")
+    res_norm = resolved_path.replace("\\", "/").strip("/")
+
+    exp_parts = [p for p in exp_norm.split("/") if p]
+    res_parts = [p for p in res_norm.split("/") if p]
+
+    if len(exp_parts) != len(res_parts):
+        return False
+
+    for exp_p, res_p in zip(exp_parts, res_parts):
+        e = exp_p.replace("<set_id>", "*").replace("<target.get>", "*").replace("<filename>", "*")
+        r = res_p.replace("<set_id>", "*").replace("<target.get>", "*").replace("<filename>", "*")
+
+        if not (fnmatch.fnmatch(r, e) or fnmatch.fnmatch(e, r)):
+            return False
+
+    return True
 
 
 def _inspect_method_has_persistence_io(func_node: ast.FunctionDef) -> bool:
@@ -674,6 +681,74 @@ def test_registry_path_governance_detects_falsified_methods_paths_and_modules():
     )
     assert not ok5
     assert "Target path 'config/user_preferences.json' not matched" in msg5
+
+
+def test_path_matcher_rejects_parent_directory_and_cross_file_false_positives():
+    """
+    Requirement 3: Dedicated regression test proving that parent directory matches
+    cannot satisfy file targets and that genuine target equivalence is enforced:
+      1. A parent directory does NOT satisfy a file target.
+      2. A sibling file does NOT satisfy a different file target.
+      3. A valid directory target DOES satisfy a directory lifecycle registry entry.
+      4. Existing valid canonical writer methods continue to pass.
+      5. Existing valid custom-template wildcard targets continue to pass.
+    """
+    # 1. Parent directory does NOT satisfy a file target
+    assert not _path_pattern_matches("config/parser_settings.json", "config")
+    assert not _path_pattern_matches("template_sets/<set_id>/manifest.json", "template_sets/<set_id>")
+    assert not _path_pattern_matches("custom_templates/templates.json", "custom_templates")
+    assert not _path_pattern_matches("config/user_preferences.json", "config")
+    assert not _path_pattern_matches("template_sets/<set_id>/manifest.json", "template_sets")
+
+    # Prove via source symbol validation that delete_template_set (targeting directory template_sets/<set_id>)
+    # is rejected when evaluated against the file target manifest.json
+    valid_dir_as_file, err_dir = _validate_registry_entry_symbol(
+        "modules.services.template_set_manager",
+        "TemplateSetManager.delete_template_set",
+        expected_path="template_sets/<set_id>/manifest.json"
+    )
+    assert not valid_dir_as_file
+    assert "Target path 'template_sets/<set_id>/manifest.json' not matched" in err_dir
+
+    # 2. Sibling file does NOT satisfy a different file target
+    assert not _path_pattern_matches("config/parser_settings.json", "config/user_preferences.json")
+    assert not _path_pattern_matches("custom_templates/*.docx", "custom_templates/templates.json")
+    assert not _path_pattern_matches("custom_templates/templates.json", "custom_templates/*.docx")
+    assert not _path_pattern_matches("logs/generator.log", "logs/crash.log")
+    assert not _path_pattern_matches("template_sets/<set_id>/manifest.json", "template_sets/<set_id>/other.json")
+
+    # 3. A valid directory target DOES satisfy a directory lifecycle registry entry
+    assert _path_pattern_matches("template_sets/<set_id>", "template_sets/<set_id>")
+    assert _path_pattern_matches("template_sets/<set_id>", "template_sets/my_custom_set")
+    # But directory target does not match a file inside it
+    assert not _path_pattern_matches("template_sets/<set_id>", "template_sets/<set_id>/manifest.json")
+
+    valid_del_set, _ = _validate_registry_entry_symbol(
+        "modules.services.template_set_manager",
+        "TemplateSetManager.delete_template_set",
+        expected_path="template_sets/<set_id>"
+    )
+    assert valid_del_set
+
+    # 4. Existing valid canonical writer methods continue to pass
+    for entry_id, spec in NATIVE_PERSISTENCE_REGISTRY.items():
+        ok, msg = _validate_registry_entry_symbol(
+            spec["writer_module"], spec["writer_method"], expected_path=spec["relative_path"]
+        )
+        assert ok, f"Canonical writer '{spec['writer_method']}' failed matching '{spec['relative_path']}': {msg}"
+
+    # 5. Existing valid custom-template wildcard targets continue to pass
+    assert _path_pattern_matches("custom_templates/*.docx", "custom_templates/*.docx")
+    assert _path_pattern_matches("custom_templates/*.docx", "custom_templates/sample_form.docx")
+    assert _path_pattern_matches("template_sets/<set_id>/templates/*", "template_sets/<set_id>/templates/*")
+    assert _path_pattern_matches("template_sets/<set_id>/templates/*", "template_sets/set_1/templates/form.docx")
+
+    valid_custom, _ = _validate_registry_entry_symbol(
+        "modules.common.config_manager",
+        "ParserConfigManager.save_custom_template",
+        expected_path="custom_templates/*.docx"
+    )
+    assert valid_custom
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1320,7 +1395,7 @@ def test_destructive_lifecycle_governance_static_ast():
                         "line": getattr(node, "lineno", 0),
                     })
 
-    # Authorized deletion calls across the entire codebase
+    # Authorized deletion calls across application Python files under modules/ and executable_test/
     allowed_deletion_patterns = {
         # ConfigManager: config_file in reset_to_defaults, file_path in delete_custom_template
         ("modules/common/config_manager.py", "os.remove", "self.config_file"),
