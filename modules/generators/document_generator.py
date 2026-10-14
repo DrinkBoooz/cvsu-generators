@@ -61,6 +61,16 @@ class DocumentGenerator(ABC):
         tables = body.findall(w("tbl"))
         paras = body.findall(w("p"))
 
+        # Dynamic topological alignment if table structure shifted (e.g. decoy table inserted)
+        from modules.parsers.template_analyzer import DeterministicTemplateAnalyzer
+        from modules.parsers.docx_grid_table import DocxGridTable
+        root_elem = body.getroottree().getroot() if hasattr(body, 'getroottree') else None
+        manifest = DeterministicTemplateAnalyzer().analyze_docx_tree(root_elem, body, docx_path=self._template_path)
+
+        meta_tbl_idx = None
+        if manifest and manifest.metadata_table_index is not None and manifest.metadata_table_index < len(tables):
+            meta_tbl_idx = manifest.metadata_table_index
+
         for field_name, b in self._recipe.header_bindings.items():
             val = resolve_field_value(field_name, info, self._recipe)
             thresh = b.shrink_threshold if self._recipe.profile_id != "custom_docx" else 0
@@ -71,21 +81,21 @@ class DocumentGenerator(ABC):
                 if not (isinstance(t, (tuple, list)) and len(t) == 3):
                     raise TemplateError(f"Invalid docx_table target: {t}")
                 tbl_idx, r_idx, c_idx = t
-                if tbl_idx < 0 or tbl_idx >= len(tables):
+                effective_tbl_idx = meta_tbl_idx if (meta_tbl_idx is not None and tbl_idx == 0) else tbl_idx
+                if effective_tbl_idx < 0 or effective_tbl_idx >= len(tables):
                     raise TemplateError(
-                        f"Header table index {tbl_idx} out of range for field '{field_name}' ({len(tables)} tables present)."
+                        f"Header table index {effective_tbl_idx} out of range for field '{field_name}' ({len(tables)} tables present)."
                     )
-                rows = tables[tbl_idx].findall(w("tr"))
-                if r_idx < 0 or r_idx >= len(rows):
+                grid = DocxGridTable(tables[effective_tbl_idx])
+                if r_idx < 0 or r_idx >= grid.num_rows:
                     raise TemplateError(
-                        f"Header row index {r_idx} out of range for field '{field_name}' in table {tbl_idx} ({len(rows)} rows present)."
+                        f"Header row index {r_idx} out of range for field '{field_name}' in table {effective_tbl_idx} ({grid.num_rows} rows present)."
                     )
-                cells = rows[r_idx].findall(w("tc"))
-                if c_idx < 0 or c_idx >= len(cells):
+                if c_idx < 0 or c_idx >= grid.num_cols:
                     raise TemplateError(
-                        f"Header cell index {c_idx} out of range for field '{field_name}' in table {tbl_idx}, row {r_idx} ({len(cells)} cells present)."
+                        f"Header cell index {c_idx} out of range for field '{field_name}' in table {effective_tbl_idx}, row {r_idx} ({grid.num_cols} cells present)."
                     )
-                set_cell_text(cells[c_idx], val, shrink_threshold=thresh, shrink_sz=sz)
+                grid.set_cell_text(r_idx, c_idx, val, shrink_threshold=thresh, shrink_sz=sz)
             elif b.cell_type == "docx_paragraph":
                 p_idx = b.target
                 if not isinstance(p_idx, int) or p_idx < 0 or p_idx >= len(paras):
@@ -153,12 +163,21 @@ class DocumentGenerator(ABC):
             return
 
         tables = body.findall(w("tbl"))
-        if rb.table_index < 0 or rb.table_index >= len(tables):
+        
+        # Dynamic topological resolution of roster table
+        roster_tbl_idx = rb.table_index
+        from modules.parsers.template_analyzer import DeterministicTemplateAnalyzer
+        root_elem = body.getroottree().getroot() if hasattr(body, 'getroottree') else None
+        manifest = DeterministicTemplateAnalyzer().analyze_docx_tree(root_elem, body, docx_path=self._template_path)
+        if manifest and manifest.roster_table is not None and manifest.roster_table.table_index < len(tables):
+            roster_tbl_idx = manifest.roster_table.table_index
+
+        if roster_tbl_idx < 0 or roster_tbl_idx >= len(tables):
             raise TemplateError(
-                f"Roster table index {rb.table_index} not found in template ({len(tables)} tables present)."
+                f"Roster table index {roster_tbl_idx} not found in template ({len(tables)} tables present)."
             )
 
-        target = tables[rb.table_index]
+        target = tables[roster_tbl_idx]
         rows = target.findall(w("tr"))
         if len(rows) <= rb.first_data_row_index:
             raise TemplateError(

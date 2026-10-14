@@ -457,11 +457,17 @@ class AttendanceGenerator:
         zin, root, body = load_docx(self.template_path)
         tables = body.findall(w("tbl"))
 
-        # 1. Target information table authoritatively via recipe
+        # 1. Target information table authoritatively via recipe with dynamic topological resolution
         info_binding = self.recipe.info_binding
-        if info_binding.table_index >= len(tables):
-            raise TemplateError(f"Info table index {info_binding.table_index} not found in template.")
-        info_tbl = tables[info_binding.table_index]
+        info_tbl_idx = info_binding.table_index
+        from modules.parsers.template_analyzer import DeterministicTemplateAnalyzer
+        manifest = DeterministicTemplateAnalyzer().analyze_docx_tree(root, body, docx_path=self.template_path)
+        if manifest and manifest.metadata_table_index is not None and manifest.metadata_table_index < len(tables):
+            info_tbl_idx = manifest.metadata_table_index
+
+        if info_tbl_idx >= len(tables):
+            raise TemplateError(f"Info table index {info_tbl_idx} not found in template.")
+        info_tbl = tables[info_tbl_idx]
         info_rows = info_tbl.findall(w("tr"))
 
         def get_info_para(r_idx: int, c_idx: int):
@@ -504,10 +510,15 @@ class AttendanceGenerator:
                 p = get_info_para(r_idx, c_idx)
                 set_para_text(p, val, shrink_threshold=shrink_thresh, shrink_sz=shrink_sz)
 
-        # 2. Target attendance matrix table authoritatively via recipe
-        if matrix_binding.table_index >= len(tables):
-            raise TemplateError(f"Matrix table index {matrix_binding.table_index} not found in template.")
-        attn_tbl = tables[matrix_binding.table_index]
+        # 2. Target attendance matrix table authoritatively via recipe with dynamic topological resolution
+        matrix_binding = self.recipe.matrix_binding
+        matrix_tbl_idx = matrix_binding.table_index
+        if manifest and manifest.roster_table is not None and manifest.roster_table.table_index < len(tables):
+            matrix_tbl_idx = manifest.roster_table.table_index
+
+        if matrix_tbl_idx >= len(tables):
+            raise TemplateError(f"Matrix table index {matrix_tbl_idx} not found in template.")
+        attn_tbl = tables[matrix_tbl_idx]
 
         remainder = date_pool - (date_w * n_date_cols) if n_date_cols > 0 else date_pool
         NO_W = 248

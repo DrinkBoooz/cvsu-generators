@@ -36,6 +36,7 @@ from modules.generators.ceit_gen import (
     collect_class_info,
     main,
 )
+from modules.generators.dynamic_renderer import DynamicDocumentRenderer
 from modules.parsers.roster_parser import (
     load_students,
     load_students_excel,
@@ -68,6 +69,7 @@ __all__ = [
     "TOSGenerator",
     "GradeDiscussionGenerator",
     "GeneratorFactory",
+    "DynamicDocumentRenderer",
     "prompt",
     "prompt_choice",
     "_build_preset_map",

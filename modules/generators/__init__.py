@@ -31,4 +31,6 @@ __all__ = [
     "ConfigurableDocumentGenerator",
     "FieldResolver",
     "resolve_field_value",
+    "DynamicDocumentRenderer",
 ]
+from .dynamic_renderer import DynamicDocumentRenderer

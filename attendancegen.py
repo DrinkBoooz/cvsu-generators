@@ -32,6 +32,7 @@ from modules.generators.attendance_gen import (
     prompt,
     main,
 )
+from modules.generators.dynamic_renderer import DynamicDocumentRenderer
 
 # Re-export roster loaders for any legacy scripts importing from attendancegen
 from modules.parsers.roster_parser import (
@@ -69,6 +70,7 @@ __all__ = [
     "build_attendance_sheet",
     "get_default_template_path",
     "generate_attendance_for_month",
+    "DynamicDocumentRenderer",
     "prompt",
     "main",
     "load_students",

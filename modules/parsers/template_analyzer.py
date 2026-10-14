@@ -239,8 +239,19 @@ class DeterministicTemplateAnalyzer:
         with zipfile.ZipFile(docx_path, "r") as z:
             doc_xml = z.read("word/document.xml")
         root = etree.fromstring(doc_xml)
-
         body = root.find(w("body"))
+        return self.analyze_docx_tree(root, body, docx_path=docx_path, content_hash=content_hash)
+
+    def analyze_docx_tree(
+        self,
+        root: etree._Element,
+        body: Optional[etree._Element],
+        docx_path: str = "",
+        content_hash: str = "",
+    ) -> TemplateManifest:
+        """
+        Introspects an in-memory or loaded OpenXML tree (<w:document> / <w:body>).
+        """
         tables = body.findall(w("tbl")) if body is not None else []
         paragraphs = body.findall(w("p")) if body is not None else []
 
@@ -452,13 +463,21 @@ class DeterministicTemplateAnalyzer:
                     row_cols["index"] = c - 1
 
             if "name" in row_cols or ("student_number" in row_cols and len(row_cols) >= 2):
-                header_r = r - 1
-                first_data_r = r
-                capacity = max(0, ws.max_row - r)
+                max_header_r = r
+                for rng in getattr(ws, "merged_cells", {}).ranges if hasattr(ws, "merged_cells") else []:
+                    if r in range(rng.min_row, rng.max_row + 1):
+                        for c_idx in row_cols.values():
+                            if (c_idx + 1) in range(rng.min_col, rng.max_col + 1):
+                                if rng.max_row > max_header_r:
+                                    max_header_r = rng.max_row
+
+                header_rows = list(range(r - 1, max_header_r))
+                first_data_r = max_header_r
+                capacity = max(0, ws.max_row - max_header_r)
                 roster_table = RepeatingTableTopology(
                     table_index=0,
                     topology_type="student_roster",
-                    header_rows=[header_r],
+                    header_rows=header_rows,
                     first_data_row_index=first_data_r,
                     template_row_index=first_data_r,
                     footer_row_indices=[],
