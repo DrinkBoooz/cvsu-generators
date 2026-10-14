@@ -266,7 +266,8 @@ def test_orchestrator_custom_template_routing(monkeypatch, tmp_path):
         enabled=True,
     )
 
-    schedule_path = os.path.join(REPO_ROOT, "ORTEGA_SCHEDULE.xls")
+    _fixture_sched = os.path.join(REPO_ROOT, "tests", "fixtures", "schedules", "ORTEGA_SCHEDULE.xls")
+    schedule_path = _fixture_sched if os.path.exists(_fixture_sched) else os.path.join(REPO_ROOT, "ORTEGA_SCHEDULE.xls")
     assert os.path.isfile(schedule_path)
 
     roster_file = tmp_path / "BSCS1-4 List of Students for 202612040-DCIT 21A - INTRODUCTION TO COMPUTING.csv"

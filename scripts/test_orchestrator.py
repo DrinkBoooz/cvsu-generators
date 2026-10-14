@@ -134,6 +134,7 @@ MANIFEST = {
                 "tests/test_docx_utils_retry.py",
                 "tests/test_replace_retry.py",
                 "tests/test_output_parity.py",
+                "tests/test_golden_parity.py",
                 "tests/test_config_manager.py",
                 "tests/test_crash_logging_hooks.py",
                 "tests/test_executable_lifecycle.py",

@@ -15,7 +15,8 @@ import process_schedule
 import attendancegen
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SCHEDULE_PATH = os.path.join(WORKSPACE_DIR, "ORTEGA_SCHEDULE.xls")
+_FIXTURE_SCHEDULE = os.path.join(WORKSPACE_DIR, "tests", "fixtures", "schedules", "ORTEGA_SCHEDULE.xls")
+SCHEDULE_PATH = _FIXTURE_SCHEDULE if os.path.exists(_FIXTURE_SCHEDULE) else os.path.join(WORKSPACE_DIR, "ORTEGA_SCHEDULE.xls")
 SCHEDULES_DIR = os.path.join(WORKSPACE_DIR, "schedules")
 
 
