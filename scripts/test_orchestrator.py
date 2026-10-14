@@ -107,6 +107,7 @@ MANIFEST = {
             "type": "pytest",
             "files": [
                 "tests/test_template_inspector.py",
+                "tests/test_deterministic_template_analyzer.py",
                 "tests/test_template_role_detector.py",
                 "tests/test_generalized_detection.py",
                 "tests/test_recipe_stage1.py",

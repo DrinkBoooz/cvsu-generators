@@ -39,6 +39,7 @@ INTERNAL_MODULE_NAMES = {
     "document_generator", "ceit_directory", "excel_utils", "logger",
     "recipe_validator", "base", "generation", "dnd", "template_set",
     "template_role_detector", "field_resolver", "template_set_manager",
+    "docx_grid_table", "template_analyzer",
 }
 
 
@@ -84,6 +85,8 @@ def extract_third_party_imports(directories: list[str]) -> set[str]:
                                 if mod_name not in stdlib and mod_name not in INTERNAL_MODULE_NAMES:
                                     found_imports.add(mod_name)
                         elif isinstance(node, ast.ImportFrom):
+                            if node.level and node.level > 0:
+                                continue
                             if node.module:
                                 mod_name = node.module.split(".")[0]
                                 if mod_name not in stdlib and mod_name not in INTERNAL_MODULE_NAMES:

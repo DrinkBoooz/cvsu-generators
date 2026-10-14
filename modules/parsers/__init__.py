@@ -14,6 +14,13 @@ from .template_inspector import (
 )
 from .recipe_validator import RecipeValidator
 from .template_role_detector import TemplateRoleDetector, DetectionResult
+from .docx_grid_table import DocxGridTable, DocxGridCell
+from .template_analyzer import (
+    DeterministicTemplateAnalyzer,
+    TemplateManifest,
+    SemanticSlot,
+    RepeatingTableTopology,
+)
 
 __all__ = [
     "CEIT_PREFIX_MAP",
@@ -41,5 +48,11 @@ __all__ = [
     "RecipeValidator",
     "TemplateRoleDetector",
     "DetectionResult",
+    "DocxGridTable",
+    "DocxGridCell",
+    "DeterministicTemplateAnalyzer",
+    "TemplateManifest",
+    "SemanticSlot",
+    "RepeatingTableTopology",
 ]
 
