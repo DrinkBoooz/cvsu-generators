@@ -668,6 +668,8 @@ def run_test_step(
     py = py_executable or sys.executable
     if is_audit_script:
         cmd = [py, files[0]]
+    elif step_id == "D3_native_pywebview_host":
+        cmd = [py, "-m", "pytest", "-m", "desktop_integration", *files, f"--junitxml={str(junit_xml)}", "-v"]
     else:
         cmd = [py, "-m", "pytest", *files, f"--junitxml={str(junit_xml)}", "-v"]
 
