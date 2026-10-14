@@ -415,3 +415,103 @@ def test_script_api_parser_config_endpoints():
     assert "TESTP" not in cfg_reset["ceit_prefix_map"]
 
 
+# ── Phase 4: Deterministic TemplateManifest Bridge & Caching Tests ───────────
+
+def test_bridge_inspect_custom_template_manifest_enrichment():
+    """Verify that ScriptAPI.inspect_custom_template returns complete TemplateManifest metadata."""
+    api = ScriptAPI()
+    template_path = os.path.join(WORKSPACE_DIR, "templates", "template_syllabus.docx")
+    assert os.path.isfile(template_path)
+
+    res = api.inspect_custom_template(template_path)
+    assert res["status"] == "success"
+    assert "file_path" in res
+    assert "recipe" in res
+    assert "manifest" in res
+    assert "manifest_summary" in res
+
+    summary = res["manifest_summary"]
+    assert summary["is_ready"] is True
+    assert isinstance(summary["content_hash"], str) and len(summary["content_hash"]) == 64
+    assert summary["slots_count"] > 0
+    assert isinstance(summary["slots"], list)
+    assert summary["roster_table"] is not None
+    assert summary["roster_table"]["capacity"] > 0
+    assert summary["roster_table"]["first_data_row"] >= 1
+    assert isinstance(summary["diagnostics"], list)
+    assert len(summary["diagnostics"]) > 0
+
+
+def test_bridge_inspect_custom_template_sha256_caching_and_invalidation(tmp_path):
+    """Verify that DeterministicTemplateAnalyzer caches manifest by SHA-256 and handles invalidation."""
+    from modules.parsers.template_analyzer import DeterministicTemplateAnalyzer
+
+    src_template = os.path.join(WORKSPACE_DIR, "templates", "template_syllabus.docx")
+    test_file = tmp_path / "cached_test_template.docx"
+    test_file.write_bytes(open(src_template, "rb").read())
+
+    analyzer = DeterministicTemplateAnalyzer.get_instance()
+    analyzer.invalidate()  # Clean baseline
+
+    # First inspection -> populates cache
+    m1 = analyzer.analyze(str(test_file))
+    assert m1.content_hash == analyzer.compute_sha256(str(test_file))
+
+    # Second inspection -> hit cache
+    m2 = analyzer.analyze(str(test_file))
+    assert m1 is m2, "Analyzer must return cached manifest instance when file is unchanged"
+
+    # Modify file content -> invalidates cache
+    test_file.write_bytes(open(src_template, "rb").read() + b"\n")
+    m3 = analyzer.analyze(str(test_file))
+    assert m3.content_hash != m1.content_hash, "Modified file content must recompute new SHA-256 hash"
+
+    # Explicit invalidation
+    analyzer.invalidate(str(test_file))
+    with analyzer._cache_lock:
+        assert str(test_file) not in analyzer._mtime_index
+
+
+def test_bridge_inspect_custom_template_path_traversal_and_invalid_formats():
+    """Verify that ScriptAPI.inspect_custom_template rejects path traversal and invalid extensions."""
+    api = ScriptAPI()
+
+    # Empty path
+    res_empty = api.inspect_custom_template("")
+    assert res_empty["status"] == "error"
+
+    # Non-existent file
+    res_missing = api.inspect_custom_template("non_existent_custom_template.docx")
+    assert res_missing["status"] == "error"
+    assert "does not exist" in res_missing["message"].lower()
+
+    # Unsupported executable format
+    res_exe = api.inspect_custom_template("evil_script.exe")
+    assert res_exe["status"] == "error"
+    assert "unsupported" in res_exe["message"].lower()
+
+    # Null byte injection
+    res_null = api.inspect_custom_template("path\x00with_null.docx")
+    assert res_null["status"] == "error"
+    assert "null byte" in res_null["message"].lower()
+
+
+def test_bridge_inspect_template_set_files_manifest_summary():
+    """Verify that ScriptAPI.inspect_template_set_files enriches inspection with manifest_summary."""
+    api = ScriptAPI()
+    docx_path = os.path.join(WORKSPACE_DIR, "templates", "template_syllabus.docx")
+    xlsx_path = os.path.join(WORKSPACE_DIR, "templates", "GRADING_LECTURE_TEMPLATE.xlsx")
+
+    res = api.inspect_template_set_files([docx_path, xlsx_path])
+    assert res["status"] == "success"
+    assert len(res["inspections"]) == 2
+
+    for item in res["inspections"]:
+        assert "manifest_summary" in item
+        ms = item["manifest_summary"]
+        assert ms["is_ready"] is True
+        assert len(ms["content_hash"]) == 64
+        assert ms["slots_count"] >= 0
+
+
+

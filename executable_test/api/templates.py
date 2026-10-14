@@ -148,13 +148,15 @@ class TemplateMixin:
     def inspect_template_set_files(self, file_paths):
         """Runs dynamic physical role detection and inspection on multiple files."""
         try:
+            from modules.parsers.template_analyzer import DeterministicTemplateAnalyzer
+            analyzer = DeterministicTemplateAnalyzer.get_instance()
             detector = TemplateRoleDetector()
             inspections = []
             for p in file_paths:
-                if os.path.exists(p):
-                    res = detector.detect_role(p)
-                    inspections.append(res.to_dict())
-                else:
+                if not isinstance(p, str) or not p.strip() or "\x00" in p:
+                    continue
+                abs_p = os.path.abspath(p.strip())
+                if not os.path.isfile(abs_p):
                     inspections.append({
                         "file_path": p,
                         "file_name": os.path.basename(p),
@@ -162,6 +164,35 @@ class TemplateMixin:
                         "status": "unsupported",
                         "error": "File does not exist",
                     })
+                    continue
+
+                ext = os.path.splitext(abs_p)[1].lower()
+                if ext not in (".docx", ".xlsx", ".xls"):
+                    inspections.append({
+                        "file_path": p,
+                        "file_name": os.path.basename(p),
+                        "file_type": ext,
+                        "status": "unsupported",
+                        "error": f"Unsupported template format '{ext}'",
+                    })
+                    continue
+
+                res = detector.detect_role(abs_p)
+                d = res.to_dict()
+                try:
+                    m = analyzer.analyze(abs_p)
+                    d["manifest_summary"] = {
+                        "content_hash": m.content_hash,
+                        "is_ready": m.is_ready,
+                        "template_type": m.template_type,
+                        "slots_count": len(m.slots),
+                        "roster_capacity": m.roster_table.data_rows_capacity if m.roster_table else 0,
+                        "diagnostics": m.get_diagnostics(),
+                    }
+                except Exception as m_err:
+                    logger.debug(f"Manifest analysis skipped for {abs_p}: {m_err}")
+                inspections.append(d)
+
             return {"status": "success", "inspections": inspections}
         except Exception as e:
             logger.error(f"Failed to inspect template set files: {e}")
@@ -295,15 +326,65 @@ class TemplateMixin:
         return {"status": "error", "message": "Target template file could not be resolved"}
 
     def inspect_custom_template(self, file_path):
-        """Runs the deterministic heuristic inspector on the provided .docx template."""
+        """Runs the deterministic heuristic inspector and analyzer on the provided .docx/.xlsx template."""
         try:
+            if not isinstance(file_path, str) or not file_path.strip():
+                return {"status": "error", "message": "Template file path must be a non-empty string"}
+
+            if "\x00" in file_path:
+                return {"status": "error", "message": "Invalid file path (null byte detected)"}
+
+            abs_path = os.path.abspath(file_path.strip())
+            ext = os.path.splitext(abs_path)[1].lower()
+            if ext not in (".docx", ".xlsx", ".xls"):
+                return {"status": "error", "message": f"Unsupported template file format '{ext}'. Only .docx and .xlsx are supported."}
+
+            if not os.path.isfile(abs_path):
+                return {"status": "error", "message": f"Template file does not exist: {file_path}"}
+
+            # 1. Authoritative Deterministic Template Analyzer (with thread-safe SHA-256 caching)
+            from modules.parsers.template_analyzer import DeterministicTemplateAnalyzer
+            analyzer = DeterministicTemplateAnalyzer.get_instance()
+            manifest = analyzer.analyze(abs_path)
+
+            # 2. Legacy recipe compatibility facade for existing UI and storage pipeline
             from modules.parsers.template_inspector import TemplateInspector
             inspector = TemplateInspector()
-            recipe = inspector.inspect_docx(file_path)
+            recipe = inspector.inspect(abs_path) if ext in (".xlsx", ".xls") else inspector.inspect_docx(abs_path)
+
+            manifest_summary = {
+                "content_hash": manifest.content_hash,
+                "is_ready": manifest.is_ready,
+                "template_type": manifest.template_type,
+                "suggested_title": manifest.suggested_title,
+                "suggested_suffix": manifest.suggested_suffix,
+                "slots_count": len(manifest.slots),
+                "slots": [
+                    {
+                        "field": s.field,
+                        "slot_type": s.slot_type,
+                        "strategy": s.strategy,
+                        "target_coordinates": (s.target_row_index, s.target_col_index) if s.slot_type == "table_cell" else s.paragraph_index,
+                    }
+                    for s in manifest.slots
+                ],
+                "roster_table": {
+                    "table_index": manifest.roster_table.table_index,
+                    "capacity": manifest.roster_table.data_rows_capacity,
+                    "columns": manifest.roster_table.columns,
+                    "first_data_row": manifest.roster_table.first_data_row_index,
+                    "total_rows": manifest.roster_table.total_rows,
+                    "total_cols": manifest.roster_table.total_cols,
+                } if manifest.roster_table else None,
+                "diagnostics": manifest.get_diagnostics(),
+            }
+
             return {
                 "status": "success",
-                "file_path": file_path,
-                "recipe": recipe
+                "file_path": abs_path,
+                "recipe": recipe,
+                "manifest": manifest.to_dict(),
+                "manifest_summary": manifest_summary,
             }
         except Exception as e:
             logger.error(f"Failed to inspect custom template {file_path}: {e}")

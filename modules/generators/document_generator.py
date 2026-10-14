@@ -269,6 +269,24 @@ class ConfigurableDocumentGenerator(DocumentGenerator):
     def suffix(self) -> str:
         return self._suffix
 
+    def generate(self, info: ClassInfo, output_path: str) -> None:
+        """
+        Renders custom templates through authoritative recipe and dynamic analysis.
+        If recipe specifies dynamic rendering engine or has no explicit bindings,
+        routes through DynamicDocumentRenderer; otherwise executes via DocumentGenerator.
+        """
+        if self._recipe.metadata.get("engine") == "dynamic" or (not self._recipe.header_bindings and not self._recipe.roster_binding):
+            from modules.generators.dynamic_renderer import DynamicDocumentRenderer
+            DynamicDocumentRenderer().render_docx(self._template_path, info, output_path=output_path)
+            logger.info(f"Dynamically generated custom document {os.path.basename(output_path)} via DynamicDocumentRenderer")
+            return
+        super().generate(info, output_path)
+
+    def render_dynamically(self, info: ClassInfo, output_path: str) -> str:
+        """Explicit route to DynamicDocumentRenderer for user-supplied templates."""
+        from modules.generators.dynamic_renderer import DynamicDocumentRenderer
+        return DynamicDocumentRenderer().render(self._template_path, info, output_path=output_path)
+
 
 __all__ = [
     "TemplateError",

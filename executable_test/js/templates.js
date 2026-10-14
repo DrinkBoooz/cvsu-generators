@@ -151,6 +151,7 @@
       function renderCustomTemplateInspection(res) {
         currentInspectedTemplate = res;
         const recipe = res.recipe || {};
+        const manifestSummary = res.manifest_summary || null;
         const card = document.getElementById("customTemplateResultCard");
         if (!card) return;
 
@@ -159,14 +160,33 @@
         const titleInput = document.getElementById("customFormTitle");
         const suffixInput = document.getElementById("customFormSuffix");
         const confBadge = document.getElementById("customConfidenceBadge");
+        const compatBadge = document.getElementById("customCompatibilityBadge");
         const fieldsList = document.getElementById("customDetectedFieldsList");
         const rosterSummary = document.getElementById(
           "customRosterStructureSummary",
         );
+        const diagDiv = document.getElementById("customTemplateDiagnostics");
 
-        if (titleInput) titleInput.value = recipe.title || "";
-        if (suffixInput) suffixInput.value = recipe.suffix || "";
-        if (confBadge) confBadge.innerText = `${recipe.confidence || 0}% Match`;
+        const suggestedTitle = (manifestSummary && manifestSummary.suggested_title) || recipe.title || "";
+        const suggestedSuffix = (manifestSummary && manifestSummary.suggested_suffix) || recipe.suffix || "";
+
+        if (titleInput) titleInput.value = suggestedTitle;
+        if (suffixInput) suffixInput.value = suggestedSuffix;
+        if (confBadge) confBadge.innerText = `${recipe.confidence || 100}% Match`;
+
+        if (compatBadge) {
+          compatBadge.style.display = "inline-flex";
+          const isReady = manifestSummary ? manifestSummary.is_ready : true;
+          if (isReady) {
+            compatBadge.innerText = "✓ Ready";
+            compatBadge.style.background = "var(--accent-emerald)";
+            compatBadge.style.color = "#fff";
+          } else {
+            compatBadge.innerText = "⚠️ Incomplete";
+            compatBadge.style.background = "var(--accent-amber)";
+            compatBadge.style.color = "#000";
+          }
+        }
 
         const folderSelect = document.getElementById("customFormTargetFolderSelect");
         const folderInput = document.getElementById("customFormCustomFolderInput");
@@ -184,40 +204,86 @@
         }
 
         if (fieldsList) {
-          const bindings = recipe.header_bindings || [];
-          if (bindings.length === 0) {
-            fieldsList.innerHTML = `<span style="color: var(--text-muted);">None detected</span>`;
-          } else {
-            fieldsList.innerHTML = bindings
-              .map((b) => {
-                const fName = (b.field || "").replace("_", " ").toUpperCase();
+          if (manifestSummary && manifestSummary.slots && manifestSummary.slots.length > 0) {
+            fieldsList.innerHTML = manifestSummary.slots
+              .map((s) => {
+                const fName = (s.field || "").replace(/_/g, " ").toUpperCase();
                 return `<span class="filter-pill" style="font-size: 10.5px; padding: 2px 6px;">${escapeHTML(fName)}</span>`;
               })
               .join("");
+          } else {
+            const bindings = recipe.header_bindings || [];
+            if (bindings.length === 0) {
+              fieldsList.innerHTML = `<span style="color: var(--text-muted);">None detected</span>`;
+            } else {
+              fieldsList.innerHTML = bindings
+                .map((b) => {
+                  const fName = (b.field || "").replace(/_/g, " ").toUpperCase();
+                  return `<span class="filter-pill" style="font-size: 10.5px; padding: 2px 6px;">${escapeHTML(fName)}</span>`;
+                })
+                .join("");
+            }
           }
         }
 
         if (rosterSummary) {
-          const r = recipe.roster_table;
-          if (!r) {
-            rosterSummary.innerHTML = `<span style="color: var(--accent-amber);">No roster table detected. Only header metadata will be populated.</span>`;
-          } else {
+          if (manifestSummary && manifestSummary.roster_table) {
+            const r = manifestSummary.roster_table;
             rosterSummary.innerHTML = `
-              <div>Table Index: ${r.table_index} | Total Cols: ${r.total_cols}</div>
+              <div>Table Index: ${r.table_index} | Capacity: ${r.capacity} rows | Cols: ${r.total_cols}</div>
               <div style="font-size: 11.5px; margin-top: 2px; color: var(--text-muted);">
-                Name Col: ${r.name_col !== null ? r.name_col : "None"} | ID Col: ${r.id_col !== null ? r.id_col : "None"} | Index Col: ${r.index_col !== null ? r.index_col : "None"}
+                First Data Row: ${r.first_data_row} | Registered Cols: ${Object.keys(r.columns || {}).join(", ") || "None"}
               </div>
             `;
+          } else {
+            const r = recipe.roster_table;
+            if (!r) {
+              rosterSummary.innerHTML = `<span style="color: var(--accent-amber);">No roster table detected. Only header metadata will be populated.</span>`;
+            } else {
+              rosterSummary.innerHTML = `
+                <div>Table Index: ${r.table_index} | Total Cols: ${r.total_cols}</div>
+                <div style="font-size: 11.5px; margin-top: 2px; color: var(--text-muted);">
+                  Name Col: ${r.name_col !== null ? r.name_col : "None"} | ID Col: ${r.id_col !== null ? r.id_col : "None"} | Index Col: ${r.index_col !== null ? r.index_col : "None"}
+                </div>
+              `;
+            }
+          }
+        }
+
+        if (diagDiv) {
+          const diags = (manifestSummary && manifestSummary.diagnostics) || [];
+          if (diags.length > 0) {
+            diagDiv.classList.remove("d-none");
+            diagDiv.innerHTML = `<strong>Diagnostics:</strong><ul style="margin: 4px 0 0 16px; padding: 0;">${diags
+              .map((d) => `<li>${escapeHTML(d)}</li>`)
+              .join("")}</ul>`;
+          } else {
+            diagDiv.classList.add("d-none");
+            diagDiv.innerHTML = "";
           }
         }
 
         card.scrollIntoView({ behavior: "smooth", block: "nearest" });
+
+        if (window.announceA11y) {
+          const isReady = manifestSummary ? manifestSummary.is_ready : true;
+          window.announceA11y(`Template analysis complete. ${isReady ? "Ready for configuration." : "Diagnostics available."}`);
+        }
+
+        if (titleInput) {
+          setTimeout(() => titleInput.focus(), 150);
+        }
       }
 
       function cancelCustomTemplatePreview() {
         currentInspectedTemplate = null;
         const card = document.getElementById("customTemplateResultCard");
         if (card) card.classList.add("d-none");
+        const dz = document.getElementById("templateDropzone");
+        if (dz) dz.focus();
+        if (window.announceA11y) {
+          window.announceA11y("Template preview discarded.");
+        }
       }
 
       async function saveCustomTemplateFromUI() {

@@ -18,6 +18,7 @@ from __future__ import annotations
 import hashlib
 import os
 import re
+import threading
 import zipfile
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
@@ -159,29 +160,65 @@ class TemplateManifest:
     confidence: float = 1.0
     extra: Dict[str, Any] = field(default_factory=dict)
 
+    @property
+    def is_ready(self) -> bool:
+        """Indicates if the template is functionally ready for dynamic population."""
+        return bool(self.slots or self.has_explicit_placeholders or self.roster_table or self.repeating_tables)
+
+    def get_diagnostics(self) -> List[str]:
+        """Returns actionable diagnostics explaining detected capabilities and missing slots."""
+        diag: List[str] = []
+        if not self.slots and not self.has_explicit_placeholders:
+            diag.append("No metadata placeholders (e.g. Instructor, Course & Sec, Schedule Code) or {{TAG}} placeholders detected.")
+        else:
+            if self.slots:
+                fields_summary = ", ".join(s.field for s in self.slots[:6])
+                if len(self.slots) > 6:
+                    fields_summary += f", and {len(self.slots) - 6} more"
+                diag.append(f"Detected {len(self.slots)} metadata slot(s): {fields_summary}.")
+            if self.has_explicit_placeholders:
+                tags_summary = ", ".join(self.explicit_placeholders[:6])
+                if len(self.explicit_placeholders) > 6:
+                    tags_summary += f", and {len(self.explicit_placeholders) - 6} more"
+                diag.append(f"Detected {len(self.explicit_placeholders)} explicit placeholder(s): {tags_summary}.")
+
+        if not self.roster_table and not self.repeating_tables:
+            diag.append("No repeating student roster or attendance table detected. Template will only render header/metadata fields.")
+        elif self.roster_table:
+            diag.append(
+                f"Detected student roster table (table index {self.roster_table.table_index}) with capacity of {self.roster_table.data_rows_capacity} data row(s)."
+            )
+        return diag
+
     def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
+        d = asdict(self)
+        d["is_ready"] = self.is_ready
+        d["diagnostics"] = self.get_diagnostics()
+        return d
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> TemplateManifest:
-        slots = [SemanticSlot.from_dict(s) for s in data.get("slots", [])]
-        repeating = [RepeatingTableTopology.from_dict(r) for r in data.get("repeating_tables", [])]
-        roster = RepeatingTableTopology.from_dict(data["roster_table"]) if data.get("roster_table") else None
+        clean = dict(data)
+        clean.pop("is_ready", None)
+        clean.pop("diagnostics", None)
+        slots = [SemanticSlot.from_dict(s) for s in clean.get("slots", [])]
+        repeating = [RepeatingTableTopology.from_dict(r) for r in clean.get("repeating_tables", [])]
+        roster = RepeatingTableTopology.from_dict(clean["roster_table"]) if clean.get("roster_table") else None
         return cls(
-            template_path=data["template_path"],
-            file_type=data.get("file_type", "docx"),
-            content_hash=data["content_hash"],
-            template_type=data.get("template_type", "generic_form"),
-            suggested_title=data.get("suggested_title", "Custom Document Form"),
-            suggested_suffix=data.get("suggested_suffix", "CUSTOM_FORM"),
+            template_path=clean["template_path"],
+            file_type=clean.get("file_type", "docx"),
+            content_hash=clean["content_hash"],
+            template_type=clean.get("template_type", "generic_form"),
+            suggested_title=clean.get("suggested_title", "Custom Document Form"),
+            suggested_suffix=clean.get("suggested_suffix", "CUSTOM_FORM"),
             slots=slots,
             repeating_tables=repeating,
             roster_table=roster,
-            metadata_table_index=data.get("metadata_table_index"),
-            has_explicit_placeholders=data.get("has_explicit_placeholders", False),
-            explicit_placeholders=data.get("explicit_placeholders", []),
-            confidence=data.get("confidence", 1.0),
-            extra=data.get("extra", {}),
+            metadata_table_index=clean.get("metadata_table_index"),
+            has_explicit_placeholders=clean.get("has_explicit_placeholders", False),
+            explicit_placeholders=clean.get("explicit_placeholders", []),
+            confidence=clean.get("confidence", 1.0),
+            extra=clean.get("extra", {}),
         )
 
     def get_slot(self, field_name: str) -> Optional[SemanticSlot]:
@@ -202,28 +239,96 @@ class DeterministicTemplateAnalyzer:
 
     Executes in under 20 milliseconds, dynamically discovering metadata coordinates
     and repeating table structures without hardcoded table/row/col indices.
+    Employs thread-safe SHA-256 fingerprint caching keyed by file content and mtime.
     """
 
-    def analyze(self, template_path: str) -> TemplateManifest:
+    _instance: Optional[DeterministicTemplateAnalyzer] = None
+    _instance_lock: threading.Lock = threading.Lock()
+
+    _cache: Dict[str, TemplateManifest] = {}
+    _mtime_index: Dict[str, Tuple[float, int, str]] = {}  # abs_path -> (mtime, size, content_hash)
+    _cache_lock: threading.Lock = threading.Lock()
+
+    @classmethod
+    def get_instance(cls) -> DeterministicTemplateAnalyzer:
+        """Thread-safe singleton accessor."""
+        if cls._instance is None:
+            with cls._instance_lock:
+                if cls._instance is None:
+                    cls._instance = cls()
+        return cls._instance
+
+    @staticmethod
+    def compute_sha256(file_path: str) -> str:
+        """Computes deterministic SHA-256 fingerprint in chunks."""
+        hasher = hashlib.sha256()
+        with open(file_path, "rb") as f:
+            while chunk := f.read(65536):
+                hasher.update(chunk)
+        return hasher.hexdigest()
+
+    def invalidate(self, file_path: Optional[str] = None) -> None:
+        """Invalidates cache for a specific file or clears entire cache."""
+        with self._cache_lock:
+            if file_path is None:
+                self._cache.clear()
+                self._mtime_index.clear()
+            else:
+                abs_p = os.path.abspath(file_path)
+                cached = self._mtime_index.pop(abs_p, None)
+                if cached:
+                    _, _, chash = cached
+                    if not any(entry[2] == chash for entry in self._mtime_index.values()):
+                        self._cache.pop(chash, None)
+
+    def analyze(self, template_path: str, force_refresh: bool = False) -> TemplateManifest:
         """
         Introspects any template file (.docx or .xlsx) and returns its TemplateManifest.
+        Utilizes fast mtime and SHA-256 content caching to avoid redundant parsing.
 
         Args:
             template_path: Physical path to .docx or .xlsx template.
+            force_refresh: When True, bypasses cache and recomputes manifest.
 
         Returns:
             TemplateManifest describing detected slots, tables, and fingerprint.
         """
-        if not os.path.isfile(template_path):
+        abs_path = os.path.abspath(template_path)
+        if not os.path.isfile(abs_path):
             raise FileNotFoundError(f"Template file does not exist: {template_path}")
 
-        ext = os.path.splitext(template_path)[1].lower()
+        mtime = os.path.getmtime(abs_path)
+        size = os.path.getsize(abs_path)
+
+        if not force_refresh:
+            with self._cache_lock:
+                if abs_path in self._mtime_index:
+                    cached_mtime, cached_size, cached_hash = self._mtime_index[abs_path]
+                    if cached_mtime == mtime and cached_size == size and cached_hash in self._cache:
+                        return self._cache[cached_hash]
+
+        # Compute SHA-256 fingerprint
+        content_hash = self.compute_sha256(abs_path)
+        if not force_refresh:
+            with self._cache_lock:
+                if content_hash in self._cache:
+                    self._mtime_index[abs_path] = (mtime, size, content_hash)
+                    return self._cache[content_hash]
+
+        ext = os.path.splitext(abs_path)[1].lower()
         if ext == ".docx":
-            return self.analyze_docx(template_path)
+            manifest = self.analyze_docx(abs_path)
         elif ext in (".xlsx", ".xls", ".xlsm"):
-            return self.analyze_xlsx(template_path)
+            manifest = self.analyze_xlsx(abs_path)
         else:
             raise ValueError(f"Unsupported template file format '{ext}' for: {template_path}")
+
+        manifest.content_hash = content_hash
+        with self._cache_lock:
+            self._cache[content_hash] = manifest
+            self._mtime_index[abs_path] = (mtime, size, content_hash)
+
+        return manifest
 
     def analyze_docx(self, docx_path: str) -> TemplateManifest:
         """
