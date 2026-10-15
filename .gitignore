@@ -20,7 +20,14 @@ dump*.txt
 *dump*.txt
 dev/merged.txt
 executable_test/dist/
+dist/
 *.exe
+
+# Security, Certificates & Private Keys (Never commit private keys)
+*.pfx
+*.p12
+*.key
+*.priv
 
 # Sample dev output directories
 dev/*/
@@ -35,10 +42,8 @@ node_modules/
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
-
 # Test Orchestrator Output
 /test_reports/
 
 # Local session checkpoint logs
 .claude/
-

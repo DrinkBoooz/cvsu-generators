@@ -124,7 +124,7 @@ def test_settings_modal_responsive_mobile():
         cols = info["gridTemplateColumns"].strip().split()
         assert len(cols) == 2, f"Expected 2 columns on mobile, got {len(cols)}"
         assert info["tabsScrollWidth"] <= info["tabsClientWidth"] + 1, "Tabs must not overflow horizontally on mobile"
-        assert len(info["buttons"]) == 8, "All 8 tabs must be present"
+        assert len(info["buttons"]) == 9, "All 9 tabs must be present"
         for btn in info["buttons"]:
             assert btn["height"] >= 20, f"Tab '{btn['text']}' height too small: {btn['height']}px"
             assert btn["width"] >= 70, f"Tab '{btn['text']}' width too small: {btn['width']}px"
@@ -231,9 +231,9 @@ def test_settings_degree_aliases_stretches_and_faculty_apple_hig():
             };
         }""")
         assert hig_info["hasGroup"], "Apple HIG Grouped list must exist in Faculty Defaults"
-        assert hig_info["rowCount"] == 3, f"Expected 3 Apple HIG rows, found {hig_info['rowCount']}"
+        assert hig_info["rowCount"] == 5, f"Expected 5 Apple HIG rows, found {hig_info['rowCount']}"
         assert hig_info["hasPreview"], "Document Header Live Preview card must exist"
-        assert hig_info["tileCount"] == 3, "Each row must have a leading icon tile"
+        assert hig_info["tileCount"] == 5, "Each row must have a leading icon tile"
 
         # 4. Verify Live Sync in Document Header Preview
         instr_input = page.locator("#cfgDefaultInstructor")
