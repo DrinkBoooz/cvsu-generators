@@ -9,6 +9,7 @@ Zero hardcoded coordinates or positional fallback logic.
 
 import os
 import re
+import time
 import shutil
 import tempfile
 from typing import Optional, Union, Any, List, Tuple
@@ -20,6 +21,30 @@ from modules.models.recipe import (
     TemplateError,
     ValidatedTemplateRecipe,
 )
+
+
+def _replace_with_retry(src: str, dst: str, retries: int = 3, delay: float = 0.5) -> None:
+    """
+    Atomically replace `dst` with `src`, retrying on Windows sharing violations
+    (PermissionError / WinError 32) caused by the destination file being open in
+    Excel, Word, or another process.
+
+    After exhausting retries, raises PermissionError with a user-actionable message
+    that process_all() captures as a recoverable per-file generation error.
+    """
+    last_exc: Exception | None = None
+    for attempt in range(max(1, retries)):
+        try:
+            os.replace(src, dst)
+            return
+        except PermissionError as exc:
+            last_exc = exc
+            if attempt < retries - 1:
+                time.sleep(delay)
+    raise PermissionError(
+        f"Cannot write '{os.path.basename(dst)}' \u2014 it may be open in Excel or Word. "
+        f"Please close the file and try again. ({last_exc})"
+    ) from last_exc
 
 
 class GradeGenerator:
@@ -133,7 +158,9 @@ class GradeGenerator:
             raise TemplateError("GradeGenerator recipe is missing mandatory roster_binding")
 
         start_row = rb.first_data_row_index
-        max_capacity = rb.capacity_limit or 40
+        if rb.capacity_limit is None or rb.capacity_limit <= 0:
+            raise TemplateError("GradeGenerator recipe is missing mandatory capacity_limit")
+        max_capacity = rb.capacity_limit
 
         sem_str, year_str = self._parse_semester_and_year(info.get("semester", ""))
         subj_code, subj_title = self._parse_subject(info.get("subject", ""))
@@ -172,9 +199,9 @@ class GradeGenerator:
             sheet_names = [s.lower() for s in wb.sheetnames]
             name_map = {s.lower(): s for s in wb.sheetnames}
 
-            if "lecture" not in sheet_names:
-                raise ValueError("Grade template is missing required 'Lecture' sheet.")
-            roster_sheet = rb.worksheet_name or name_map["lecture"]
+            if not rb.worksheet_name:
+                raise TemplateError("GradeGenerator recipe is missing mandatory worksheet_name")
+            roster_sheet = rb.worksheet_name
             if roster_sheet.lower() not in name_map:
                 raise TemplateError(
                     f"Grade template is missing roster worksheet '{roster_sheet}'."
@@ -236,7 +263,9 @@ class GradeGenerator:
             total_slots = max_capacity
             name_col = rb.name_col
             id_col = rb.id_col
-            index_col = rb.index_col or 1
+            if rb.index_col is None:
+                raise TemplateError("GradeGenerator recipe is missing mandatory index_col")
+            index_col = rb.index_col
 
             for r_idx in range(total_slots):
                 row_num = start_row + r_idx
@@ -262,7 +291,9 @@ class GradeGenerator:
 
             wb.save(tmp_path)
             wb.close()
-            os.replace(tmp_path, output_path)
+            # Part F: retry on sharing violations so a locked output file
+            # produces a user-friendly error rather than a raw WinError 32 crash.
+            _replace_with_retry(tmp_path, output_path)
             logger.info(f"Grades generated at: {output_path}")
             return True
         except Exception as e:

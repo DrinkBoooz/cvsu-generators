@@ -17,6 +17,19 @@ from .recipe import (
     RawTemplateRecipeCandidate,
     ValidatedTemplateRecipe,
 )
+from .template_set import (
+    CANONICAL_ROLES,
+    ACADEMIC_CEIT_ROLES,
+    ATTENDANCE_ROLES,
+    GRADE_SHEET_ROLES,
+    ROLE_PROFILE_MAPPING,
+    ROLE_DISPLAY_NAMES,
+    TemplateSetError,
+    InvalidTemplateSetError,
+    MissingTemplateRoleError,
+    TemplateEntry,
+    TemplateSet,
+)
 
 __all__ = [
     "Student",
@@ -39,4 +52,16 @@ __all__ = [
     "PROFILE_REGISTRY",
     "RawTemplateRecipeCandidate",
     "ValidatedTemplateRecipe",
+    "CANONICAL_ROLES",
+    "ACADEMIC_CEIT_ROLES",
+    "ATTENDANCE_ROLES",
+    "GRADE_SHEET_ROLES",
+    "ROLE_PROFILE_MAPPING",
+    "ROLE_DISPLAY_NAMES",
+    "TemplateSetError",
+    "InvalidTemplateSetError",
+    "MissingTemplateRoleError",
+    "TemplateEntry",
+    "TemplateSet",
 ]
+

@@ -66,7 +66,7 @@
               <div class="subject-title">${escapeHTML(cls.subject_name)}</div>
               <div class="sched-schedule-line">${escapeHTML(cls.schedule_desc)}</div>
             </div>
-            <div>
+            <div class="class-type-wrapper">
               <select class="type-dropdown class-type-select" data-class-id="${escapeHTML(cls.id)}">
                 <option value="lecture_lab" ${isLab ? "selected" : ""}>Lecture and Lab</option>
                 <option value="lecture_only" ${!isLab ? "selected" : ""}>Lecture only</option>

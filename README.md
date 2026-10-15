@@ -1,7 +1,7 @@
 # Cavite State University (CvSU) Document Generator
 
 [![Release](https://img.shields.io/badge/version-v2.0%20Beta-blue.svg)](file:///c:/Users/danjo/OneDrive/CVSU%20GENERATORS/executable/ui.html)
-[![Tests](<https://img.shields.io/badge/tests-153%20passed%20(100%25)-brightgreen.svg>)](file:///c:/Users/danjo/OneDrive/CVSU%20GENERATORS/tests)
+[![Tests](<https://img.shields.io/badge/tests-676%20passed%20(100%25)-brightgreen.svg>)](file:///c:/Users/danjo/OneDrive/CVSU%20GENERATORS/tests)
 [![Platform](<https://img.shields.io/badge/platform-Windows%2010%20%7C%2011%20(x64)-lightgrey.svg>)](file:///c:/Users/danjo/OneDrive/CVSU%20GENERATORS/executable)
 [![License](https://img.shields.io/badge/copyright-%C2%A9%202026%20Dan%20Joseph%20Ortega-purple.svg)](file:///c:/Users/danjo/OneDrive/CVSU%20GENERATORS/executable/file_version_info.txt)
 [![Authenticode](<https://img.shields.io/badge/Authenticode-Digitally%20Signed%20(DigiCert%20RFC%203161)-success.svg>)](file:///c:/Users/danjo/OneDrive/CVSU%20GENERATORS/executable/sign_exe.ps1)
@@ -25,7 +25,7 @@ A high-performance, institutional desktop application and automation engine engi
 5. [End-to-End Processing Logic &amp; Data Pipelines](#end-to-end-processing-logic--data-pipelines)
    - [1. Schedule Ingestion &amp; Async Filtering](#1-schedule-ingestion--async-filtering)
    - [2. Roster Parsing &amp; Fuzzy Schedule Pairing](#2-roster-parsing--fuzzy-schedule-pairing)
-   - [3. Deterministic Heuristic Template Inspection](#3-deterministic-heuristic-template-inspection)
+   - [3. Deterministic Structural Template Inspection](#3-deterministic-structural-template-inspection)
    - [4. Dynamic Document Generation &amp; OpenXML AST Injection](#4-dynamic-document-generation--openxml-ast-injection)
    - [5. Grading Sheet OpenXML Formula Preservation](#5-grading-sheet-openxml-formula-preservation)
 6. [User Configuration &amp; Custom Templates Store](#user-configuration--custom-templates-store)
@@ -84,13 +84,28 @@ CvSU Document Generator is designed as a decoupled, modular system adhering to C
 | Component              | Technology / Library                   | Purpose                                                                |
 | :--------------------- | :------------------------------------- | :--------------------------------------------------------------------- |
 | **Core Runtime**       | Python 3.10 – 3.14 (x64)               | Primary execution engine                                               |
-| **GUI Framework**      | `pywebview`                            | Native Windows webview host (Edge Chromium / WebView2)                 |
-| **Frontend UI**        | HTML5, Vanilla CSS3, Modern JavaScript | Apple HIG-inspired interface with CSS design tokens                    |
-| **Word Processing**    | `python-docx` + `lxml.etree`           | High-speed XML AST manipulation (<20ms per document)                   |
-| **Spreadsheet Engine** | `openpyxl` + `xlrd`                    | Native reading of`.xls` (BIFF8) and `.xlsx` formula workbooks          |
-| **Packaging**          | `PyInstaller`                          | Bundles runtime, Python standard library, assets into standalone`.exe` |
-| **Security & Signing** | Microsoft`signtool.exe` + DigiCert     | Authenticode digital signing with RFC 3161 SHA-256 timestamping        |
-| **Automated Testing**  | `pytest`, `pytest-mock`, `playwright`  | Comprehensive unit, integration, and UI automation                     |
+| **GUI Framework**      | `pywebview` + `pythonnet`              | Native Windows webview host (Edge Chromium / WebView2) & WinForms CLR  |
+| **Frontend UI**        | HTML5, Vanilla CSS3, Modern JavaScript | Responsive interface with modular CSS design tokens                    |
+| **Word Processing**    | OpenXML AST via `lxml.etree`           | High-speed XML AST manipulation (<20ms per document)                   |
+| **Spreadsheet Engine** | `openpyxl` + `xlrd`                    | Native reading of `.xls` (BIFF8) and `.xlsx` formula workbooks         |
+| **Packaging**          | `PyInstaller`                          | Bundles runtime, Python standard library, assets into standalone `.exe`|
+| **Security & Signing** | Microsoft `signtool.exe` + DigiCert    | Authenticode digital signing with RFC 3161 SHA-256 timestamping        |
+| **Automated Testing**  | `pytest`, `python-docx`, `playwright`  | Comprehensive unit, integration, template parity, and UI automation    |
+
+### Windows System Prerequisites
+- **Operating System**: Windows 10 or Windows 11 (64-bit)
+- **Python / Python Packages**: None required on the target machine for the packaged executable. The Python runtime and application packages are embedded in `CvSU Gen.exe`.
+- **Microsoft Edge WebView2 Evergreen Runtime**: Required host prerequisite. WebView2 is included with Windows 11; Microsoft documents Windows 10 version 1803+ with the November 2022 update as the preinstalled baseline, though certain Windows 10, LTSC, managed, or clean systems may lack the Runtime. The packaged application does not bundle an automatic WebView2 installer, and no explicit application-level runtime detector was verified in the current source.
+- **.NET Framework 4.7.2+ Project Baseline**: Supported Windows baseline for the Python.NET WinForms host and OLE drag-and-drop integration (`executable_test/native/dnd.py`). While Python.NET supports older .NET Framework versions, 4.7.2+ is the repository's verified project baseline.
+- **Office Software**: Microsoft Office (Word & Excel) or compatible office suite (only needed for opening/editing generated DOCX/XLSX files).
+
+### Dependency Manifests
+The repository uses four distinct manifests with exact direct-dependency pins:
+- `requirements-runtime.txt`: Core production runtime (`pywebview`, `pythonnet`, `lxml`, `openpyxl`, `xlrd`).
+- `requirements-test.txt`: Testing & development suite (`pytest`, `python-docx`, `playwright` + runtime).
+- `requirements-build.txt`: Executable packaging (`pyinstaller` + runtime).
+- `requirements.txt`: Aggregate developer manifest (`-r requirements-test.txt` and `-r requirements-build.txt`).
+
 
 ---
 
@@ -121,12 +136,15 @@ CVSU GENERATORS/
 │   │   └── student.py                  # Student dataclass & name normalization
 │   ├── parsers/                        # Document & schedule ingestion parsers
 │   │   ├── ceit_directory.py           # Department mapping, subject prefixes, lab detectors
+│   │   ├── docx_grid_table.py          # 2D virtual coordinate grid normalization (<w:gridSpan>, <w:vMerge>)
 │   │   ├── roster_parser.py            # Roster file parser (.xlsx, .xls, .csv)
 │   │   ├── schedule_parser.py          # Master schedule parser (.xls, .xlsx)
-│   │   └── template_inspector.py       # Deterministic Heuristic Template Analyzer (Zero-AI)
+│   │   ├── template_analyzer.py        # Deterministic offline template analyzer & TemplateManifest
+│   │   └── template_inspector.py       # Deterministic Structural Template Inspector (Zero-AI)
 │   ├── generators/                     # Document generation engines
 │   │   ├── attendance_gen.py           # Monthly attendance sheet generator (.docx)
 │   │   ├── ceit_gen.py                 # 7 CEIT departmental forms & GeneratorFactory
+│   │   ├── dynamic_renderer.py         # Self-analyzing dynamic document renderer (DOCX/XLSX)
 │   │   ├── generic_doc_gen.py          # Configurable generic document generator
 │   │   └── grade_gen.py                # Official grading workbook generator (.xlsx)
 │   └── services/                       # Orchestration and validation services
@@ -149,16 +167,20 @@ CVSU GENERATORS/
 │   ├── template_tag_placeholders.docx  # {{TAG}} placeholders + 3-col student roster
 │   ├── template_laboratory_monitoring.docx # 4-column multi-label table + 6-col roster
 │   └── template_faculty_eval.docx      # Paragraph colons + Filipino column tokens
-├── tests/                              # Comprehensive test suite (153+ automated tests)
+├── tests/                              # Comprehensive test suite (676+ automated tests)
 │   ├── test_templates/                 # Template analyzer verification test suite
 │   │   ├── create_templates.py         # Deterministic test template synthesis
 │   │   └── test_diverse_templates.py   # Multi-format inspection & generation tests
 │   ├── test_attendance_*.py            # Attendance generator & scheduling tests
 │   ├── test_config_manager.py          # Configuration persistence & fallback tests
 │   ├── test_custom_template_pipeline.py# Custom template registration & factory tests
+│   ├── test_deterministic_template_analyzer.py # Template analyzer & grid normalization tests
+│   ├── test_dynamic_renderer_resilience.py     # Dynamic renderer perturbation resilience tests
 │   ├── test_generic_doc_gen.py         # ConfigurableDocumentGenerator unit tests
+│   ├── test_golden_parity.py           # Golden-master byte and structural parity tests
 │   ├── test_grade_*.py                 # Excel grading sheet formula preservation tests
 │   ├── test_modules_*.py               # Parser and generator module integrity tests
+│   ├── test_obsidian_vault_integrity.py# Companion documentation vault integrity tests
 │   ├── test_pe_version_info.py         # Windows binary PE version resource tests
 │   ├── test_playwright_*.py            # Playwright UI automated interactions
 │   ├── test_template_inspector.py      # Heuristic inspection engine tests
@@ -278,6 +300,19 @@ CVSU GENERATORS/
 - Enforces strict `schema_version == 2`, profile constraints (`required_fields`, `prohibited_fields`, `capacity_limit`), collision resolutions, and verified safe assertions.
 - Protects `ValidatedTemplateRecipe` with private construction sentinel and AST static analysis.
 
+#### 7. `docx_grid_table.py` (`DocxGridTable`, `DocxGridCell`)
+
+- **2D Virtual Grid Normalization**: Normalizes complex Word OpenXML table elements into a 2D virtual coordinate grid `(row, col)`.
+- Handles `<w:gridSpan>` (horizontal merge) and `<w:vMerge>` (vertical merge) with root cell pointers and continuation cells.
+- Safe mutation methods (`set_text`, `replace_text`, `clear`) route updates directly to root cells and prevent duplicate writes across merged regions.
+
+#### 8. `template_analyzer.py` (`DeterministicTemplateAnalyzer`, `TemplateManifest`)
+
+- **Deterministic Offline Template Introspection**: Fast (<20ms) offline analysis of Word (`.docx`) and Excel (`.xlsx`) templates without Microsoft Word or LibreOffice runtime dependencies.
+- **Semantic Slot Anchoring**: Locates metadata slots via four resilient heuristics: `cell_right`, `cell_below`, `colon_value`, and `placeholder`.
+- **Repeating Table Topology**: Classifies tables into `STUDENT_ROSTER`, `ATTENDANCE_MONTH`, or `UNKNOWN`, detecting student name/ID columns and dynamic row insertion points.
+- **Manifest Serialization**: Emits immutable, JSON-serializable `TemplateManifest` with SHA-256 fingerprinting.
+
 ---
 
 ### `modules.generators`
@@ -321,6 +356,13 @@ CVSU GENERATORS/
 #### 4. `generic_doc_gen.py` (`ConfigurableDocumentGenerator`)
 
 - Dynamic generator that consumes `ValidatedTemplateRecipe` to populate arbitrary Word documents with `ClassInfo` and student rosters according to detected bindings and tag placeholders.
+
+#### 5. `dynamic_renderer.py` (`DynamicDocumentRenderer`)
+
+- **Universal Dynamic Rendering Engine**: Renders both Word (`.docx`) and Excel (`.xlsx`) documents directly from `TemplateManifest` without hardcoded index assumptions.
+- **Dynamic Student Row Injection**: Injects arbitrary numbers of student records, cloning row structures and formatting.
+- **Adaptive Font Scaling**: Dynamically adjusts font sizes for long student names (`<=30` chars -> 8pt, `31-35` chars -> 7pt, `>35` chars -> 6pt).
+- **Run-Level Formatting & List Preservation**: Preserves font families, bold/italic runs, cell backgrounds, and `<w:numPr>` list numbering across custom and modified templates.
 
 ---
 
@@ -399,15 +441,21 @@ Each roster file is parsed and paired with a schedule entry using a 3-tier match
 2. **Normalized Section & Subject Match**: Matches section (`BSCS 1-4` &rarr; `BSCS1-4`) and subject code (`DCIT 21`).
 3. **Program Alias Match**: Resolves informal abbreviations (e.g. `CS 1-4` &rarr; `BSCS 1-4`) via `ceit_directory.py`.
 
-### 3. Deterministic Heuristic Template Inspection
+### 3. Deterministic Structural Template Inspection
 
-When any Word `.docx` file is analyzed by `TemplateInspector`:
+CvSU Document Generator enforces a strict architectural invariant across all template generation:
+```text
+INSPECTOR DETERMINES WHERE.
+GENERATOR DETERMINES WHAT.
+VALIDATOR DETERMINES WHETHER THE WHERE IS SAFE.
+```
 
-1. **Roster Detection**: Examines all tables with $\ge 2$ rows. Scans the first 5 rows for header cells matching index, id, name, or signature tokens. Scores and selects the highest-ranking candidate.
-2. **Column Disambiguation**: Identifies ID tokens (`Student Number`, `ID`, `LRN`, `Numero`) first, ensuring they are never misassigned as Name columns.
-3. **Metadata Mapping**: Scans non-roster tables for known labels (`Instructor:`, `Course:`, `Subject:`), binding target value cells. Scans paragraphs for colon bindings.
-4. **Placeholder Extraction**: Scans all `<w:t>` text runs for `{{INSTRUCTOR}}`, `{{COURSE_SECTION}}`, `{{SCHEDULE_CODE}}`, `{{SUBJECT}}`, etc.
-5. **Confidence Rating**: Computes overall quality percentage and suggests an official file suffix (e.g. `CONSULTATION_LOG`).
+When templates (`.docx` or `.xlsx`) are inspected and processed:
+
+1. **Deterministic Structural Discovery**: Examines physical geometry (tables, rows, cells, merged ranges, and paragraphs). Uses structural evidence (merged boxes, direct adjacency, and unambiguous token mapping) rather than arbitrary positional offsets or positional defaults.
+2. **Ambiguity Rejection**: If multiple distinct physical targets satisfy a semantic field or roster without a unique structural discriminator, discovery fails closed and raises `AmbiguousTemplateError` instead of arbitrarily picking a candidate by confidence score.
+3. **Fail-Closed Physical Geometry Validation**: `RecipeValidator` enforces strict bounds checks against physical OpenXML/DOCX and openpyxl structures. Every table, row, cell, column, paragraph, and worksheet index must be verified within physical limits before a `ValidatedTemplateRecipe` is issued.
+4. **Zero Generator-Side Structural Invention**: Production generators consume only immutable validated recipes and fail closed with `TemplateError` if an invalid or out-of-bounds coordinate reaches execution. Generators never invent coordinates, assume positions, or attempt positional fallbacks.
 
 ### 4. Dynamic Document Generation & OpenXML AST Injection
 
@@ -481,11 +529,14 @@ tests/test_ui_consistency.py ....                                        [100%]
 ### Running the Tests
 
 ```bash
-# Run all automated tests (excluding Playwright UI headless browser)
+# Run multi-layer test orchestrator across all 6 test layers (676+ tests)
+py scripts/test_orchestrator.py --fast
+
+# Run fast pytest suite (excluding Playwright UI headless browser)
 pytest tests/ -k "not test_playwright"
 
-# Run only the multi-format template verification suite
-pytest tests/test_templates/ -v
+# Run deterministic template analyzer & dynamic renderer resilience suites
+pytest tests/test_deterministic_template_analyzer.py tests/test_dynamic_renderer_resilience.py tests/test_golden_parity.py
 
 # Run Playwright UI browser tests
 pytest tests/ -k "test_playwright"

@@ -266,7 +266,8 @@ def test_orchestrator_custom_template_routing(monkeypatch, tmp_path):
         enabled=True,
     )
 
-    schedule_path = os.path.join(REPO_ROOT, "ORTEGA_SCHEDULE.xls")
+    _fixture_sched = os.path.join(REPO_ROOT, "tests", "fixtures", "schedules", "ORTEGA_SCHEDULE.xls")
+    schedule_path = _fixture_sched if os.path.exists(_fixture_sched) else os.path.join(REPO_ROOT, "ORTEGA_SCHEDULE.xls")
     assert os.path.isfile(schedule_path)
 
     roster_file = tmp_path / "BSCS1-4 List of Students for 202612040-DCIT 21A - INTRODUCTION TO COMPUTING.csv"
@@ -308,3 +309,46 @@ def test_orchestrator_custom_template_routing(monkeypatch, tmp_path):
     assert os.path.isfile(native_tos), f"Expected native TOS at {native_tos}"
     assert os.path.isfile(native_exam), f"Expected native exam returns at {native_exam}"
     assert os.path.isfile(native_grade), f"Expected native grade discussion at {native_grade}"
+
+
+def test_configurable_document_generator_dynamic_renderer_routing(tmp_path):
+    """Verify ConfigurableDocumentGenerator uses DynamicDocumentRenderer and populates fields/roster."""
+    source_template = os.path.join(TEMPLATES_DIR, "template_syllabus.docx")
+    assert os.path.isfile(source_template)
+
+    inspector = TemplateInspector()
+    recipe = inspector.inspect_docx(source_template)
+    recipe["metadata"] = {"output_folder": "Special_Advising"}
+
+    gen = ConfigurableDocumentGenerator(source_template, recipe)
+    assert gen.output_folder == "Special_Advising"
+
+    info = ClassInfo(
+        instructor="Prof. Dynamic Test",
+        course_section="BSCS 3-1",
+        schedule_code="998877",
+        subject="ADVANCED SYSTEMS",
+        time_days_room="TH 1-4PM T301",
+        students=[("Student Dynamic One", "20269901"), ("Student Dynamic Two", "20269902")],
+    )
+
+    out_file = str(tmp_path / "dynamic_custom_output.docx")
+    gen.generate(info, out_file)
+
+    assert os.path.isfile(out_file)
+    from modules.common.docx_utils import load_docx, get_full_text
+    _, _, body = load_docx(out_file)
+    doc_text = get_full_text(body)
+    assert "Prof. Dynamic Test" in doc_text or "Dynamic Test" in doc_text
+    assert "Student Dynamic One" in doc_text
+    assert "Student Dynamic Two" in doc_text
+
+    # Verify explicit render_dynamically call routes to DynamicDocumentRenderer
+    out_dyn = str(tmp_path / "explicit_dynamic_output.docx")
+    gen.render_dynamically(info, out_dyn)
+    assert os.path.isfile(out_dyn)
+    _, _, dyn_body = load_docx(out_dyn)
+    dyn_text = get_full_text(dyn_body)
+    assert "Student Dynamic One" in dyn_text
+
+

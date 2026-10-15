@@ -11,6 +11,7 @@
         color: var(--accent-emerald);
         border: 1px solid rgba(16, 185, 129, 0.3);
         white-space: nowrap;
+        flex-shrink: 0;
       }
       .badge-custom-mapping {
         display: inline-flex;
@@ -24,14 +25,16 @@
         color: var(--accent-blue);
         border: 1px solid rgba(59, 130, 246, 0.3);
         white-space: nowrap;
+        flex-shrink: 0;
       }
       .btn-map-columns {
         background: var(--surface-subtle);
         border: 1px solid var(--border-subtle);
         color: var(--text-secondary);
-        padding: 3px 8px;
+        padding: 4px 10px;
+        min-height: 28px;
         border-radius: 6px;
-        font-size: 11px;
+        font-size: 11.5px;
         font-weight: 600;
         cursor: pointer;
         display: inline-flex;
@@ -43,20 +46,34 @@
           background-color 0.15s ease;
         flex-shrink: 0;
       }
+      @media (pointer: coarse), (max-width: 600px) {
+        .btn-map-columns {
+          min-height: 38px;
+          padding: 8px 12px;
+          font-size: 12px;
+        }
+      }
       .btn-map-columns:hover {
         background: var(--surface-card);
         color: var(--accent-emerald);
         border-color: var(--accent-emerald);
       }
       .roster-class-link-select {
-        font-size: 11px;
-        padding: 3px 8px;
+        font-size: 11.5px;
+        padding: 4px 8px;
+        min-height: 28px;
         border-radius: 6px;
         border: 1px solid var(--border-subtle);
         background: var(--surface-elevated);
         color: var(--text-primary);
         max-width: 170px;
         cursor: pointer;
+      }
+      @media (pointer: coarse), (max-width: 600px) {
+        .roster-class-link-select {
+          min-height: 38px;
+          font-size: 12px;
+        }
       }
       .roster-class-link-select:focus-visible {
         border-color: var(--accent-emerald);
@@ -81,6 +98,9 @@
       }
       #modalAppleConfirmBackdrop {
         z-index: 11000 !important;
+      }
+      #templateSetEditorModal {
+        z-index: 10500 !important;
       }
       .modal-dialog-custom {
         background: var(--surface-elevated);
@@ -469,6 +489,27 @@
       }
 
       /* ── Theme Transition Performance & Apple HIG View Transitions Engine ─── */
+      :root {
+        --vt-duration: 450ms;
+        --vt-easing: cubic-bezier(0.2, 0, 0, 1);
+
+        /* Apple HIG Liquid Glass edge — dark theme defaults.
+           Applied as a restrained specular/glass-like treatment on the VT
+           pseudo-element. The View Transition pseudo-element receives this
+           filter styling while WAAPI owns the circular reveal geometry.
+           No inherent color: monochrome specular only (liquid-glass.md § Color on glass). */
+        --vt-edge-specular: drop-shadow(0 0 1px rgba(255, 255, 255, 0.75))
+                            drop-shadow(0 0 5px rgba(255, 255, 255, 0.18));
+      }
+
+      /* Light theme: subtle dark-on-light hairline specular */
+      [data-theme="light"] {
+        --vt-edge-specular: drop-shadow(0 0 1px rgba(0, 0, 0, 0.15))
+                            drop-shadow(0 0 5px rgba(0, 0, 0, 0.08));
+      }
+
+      /* Kill all DOM transitions during a VT to prevent cascade storms.
+         Without this, 700+ transitionstart events fire on every toggle. */
       .theme-transitioning,
       .theme-transitioning *,
       .theme-transitioning *::before,
@@ -476,40 +517,231 @@
         transition: none !important;
       }
 
+      /* ── View Transition pseudo-element setup ───────────────────────────── */
+      /*
+       * Architecture (commit 196):
+       *
+       *   WAAPI  — sole owner of the circular iris clip-path animation.
+       *            Starts only after transition.ready resolves (pseudo-elements exist).
+       *            document.documentElement.animate({ clipPath: [...] }, {
+       *                pseudoElement: "::view-transition-new(root)" })
+       *
+       *   CSS    — owns static specular/glass-like styling on VT pseudo-elements.
+       *            Does NOT compete with WAAPI on clip-path or animation property.
+       *
+       *   DOM    — no wavefront overlay. DOM elements created before
+       *            startViewTransition() are captured in the old-page snapshot.
+       *
+       * The VT layer is a dedicated rendering pass that occurs after the normal
+       * document is composited. DOM z-index values have no defined relationship
+       * to the VT rendering layer.
+       */
+
+      /* Prevent the default cross-fade on the image pair container.
+         isolation: auto allows the new snapshot to wipe over the old. */
+      ::view-transition-image-pair(root) {
+        isolation: auto;
+      }
+
+      /* Reset default browser animations on both snapshots.
+         WAAPI drives the iris; CSS provides only the static filter treatment. */
       ::view-transition-old(root),
       ::view-transition-new(root) {
         animation: none;
         mix-blend-mode: normal !important;
+        display: block;
       }
 
+      /* Old page stays flat beneath the new iris reveal */
       ::view-transition-old(root) {
         z-index: 1;
       }
 
+      /* New page: WAAPI drives the iris clip-path reveal (see theme.js).
+         CSS applies a restrained specular filter as a glass-like edge treatment.
+         The View Transition pseudo-element receives this filter while WAAPI
+         owns the circular reveal geometry.
+         HIG: monochrome specular only, no inherent color. (liquid-glass.md § Color on glass) */
       ::view-transition-new(root) {
         z-index: 2;
-        animation: 0.65s cubic-bezier(0.25, 1, 0.5, 1) both appleThemeIrisReveal;
+        filter: var(--vt-edge-specular);
+        /* NO animation property here — WAAPI is the sole iris owner. */
       }
 
-      @keyframes appleThemeIrisReveal {
-        from {
-          clip-path: circle(0px at var(--vt-x, 90vw) var(--vt-y, 30px));
+      /* ── Reduced Motion ────────────────────────────────────────────── */
+      /*
+       * The iris animation is now WAAPI-owned (theme.js). JS evaluates
+       * prefers-reduced-motion BEFORE starting the View Transition and
+       * bypasses the WAAPI iris entirely when motion is reduced.
+       *
+       * This CSS block handles the VT pseudo-element presentation for any
+       * path where a VT is started under reduced-motion conditions:
+       * - Clears the specular filter (decorative, motion-adjacent).
+       * - Allows a simple opacity crossfade as a fallback.
+       *
+       * HIG references:
+       * - accessibility.md § Cognitive: "Avoiding animating into and out of blurs"
+       * - motion.md § Best practices: "Make motion optional."
+       * - liquid-glass.md § Review checklist #5: Reduce Motion drops refraction.
+       */
+      @media (prefers-reduced-motion: reduce) {
+        ::view-transition-old(root),
+        ::view-transition-new(root) {
+          animation: none !important;
+          filter: none !important;
         }
-        to {
-          clip-path: circle(
-            var(--vt-radius, 2000px) at var(--vt-x, 90vw) var(--vt-y, 30px)
-          );
+
+        ::view-transition-old(root) {
+          animation: vt-fade-out 200ms ease both !important;
         }
+
+        ::view-transition-new(root) {
+          animation: vt-fade-in 200ms ease both !important;
+        }
+      }
+
+      /* ── Reduced Transparency ─────────────────────────────────────── */
+      /*
+       * When the user prefers reduced transparency, the specular edge should
+       * be made more opaque and the translucent decoration removed.
+       * The iris geometry is unaffected — only the aesthetic treatment changes.
+       * Note: prefers-reduced-transparency is a proposed CSS media feature;
+       * support varies by platform and runtime.
+       */
+      @media (prefers-reduced-transparency: reduce) {
+        :root {
+          /* Replace translucent specular with a solid, opaque edge indicator.
+             No transparency — clear edge separation maintained. */
+          --vt-edge-specular: drop-shadow(0 0 2px rgba(255, 255, 255, 0.95));
+        }
+        [data-theme="light"] {
+          --vt-edge-specular: drop-shadow(0 0 2px rgba(0, 0, 0, 0.90));
+        }
+      }
+
+      /* ── Increased Contrast ────────────────────────────────────────── */
+      /*
+       * When the user requests more contrast, increase edge visibility:
+       * stronger specular, reduced soft glow, clearer boundary.
+       */
+      @media (prefers-contrast: more) {
+        :root {
+          --vt-edge-specular: drop-shadow(0 0 2px rgba(255, 255, 255, 1.0))
+                              drop-shadow(0 0 1px rgba(255, 255, 255, 0.90));
+        }
+        [data-theme="light"] {
+          --vt-edge-specular: drop-shadow(0 0 2px rgba(0, 0, 0, 1.0))
+                              drop-shadow(0 0 1px rgba(0, 0, 0, 0.85));
+        }
+      }
+
+      @keyframes vt-fade-out {
+        to { opacity: 0; }
+      }
+
+      @keyframes vt-fade-in {
+        from { opacity: 0; }
+      }
+
+      /* ── Theme button icon animation ─────────────────────────────────────── */
+      /*
+       * Option A (commit 197): spin-morph uses a CSS @keyframes animation,
+       * NOT a CSS transition. The theme-transitioning guard sets
+       * 'transition: none !important' on all descendants — this suppresses
+       * CSS transitions but does NOT suppress keyframe animations.
+       *
+       * Intentional duration: 280ms with spring-like easing. Independent of
+       * THEME_TRANSITION_DURATION_MS (450ms). The icon animation is a brief
+       * accent, not a phase of the iris reveal.
+       *
+       * Reduced motion: JS does NOT add 'spin-morph' when prefers-reduced-motion
+       * is active. The @media block below is a defense-in-depth fallback.
+       */
+      @keyframes spin-morph-kf {
+        0%   { transform: rotate(0deg)   scale(1.0); }
+        40%  { transform: rotate(40deg)  scale(0.82); }
+        70%  { transform: rotate(20deg)  scale(0.90); }
+        100% { transform: rotate(0deg)   scale(1.0); }
       }
 
       .theme-icon-container {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+        /* No CSS transition on transform — animation uses @keyframes. */
       }
+
       .theme-icon-container.spin-morph {
-        transform: rotate(45deg) scale(0.85);
+        animation: spin-morph-kf 280ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .theme-icon-container.spin-morph {
+          animation: none;
+        }
+      }
+
+      /* Explicit app-level reduced-motion override */
+      [data-acc-motion="reduce"] .theme-icon-container.spin-morph {
+        animation: none !important;
+      }
+
+      /* ── Solid Opaque Surface Override (Reduced Transparency) ────── */
+      [data-acc-transparency="reduce"] .top-header,
+      [data-acc-transparency="reduce"] .bottom-action-content,
+      [data-acc-transparency="reduce"] .dock-bar,
+      [data-acc-transparency="reduce"] .drawer-panel,
+      [data-acc-transparency="reduce"] .modal-dialog-custom,
+      [data-acc-transparency="reduce"] .glass-card {
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+      }
+
+      [data-acc-transparency="reduce"] .glass-card {
+        background: #1e293b !important;
+        border: 1px solid #334155 !important;
+      }
+      [data-theme="light"][data-acc-transparency="reduce"] .glass-card {
+        background: #ffffff !important;
+        border: 1px solid #cbd5e1 !important;
+      }
+
+      [data-acc-transparency="reduce"] .top-header {
+        background: #0f172a !important;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45) !important;
+      }
+      [data-theme="light"][data-acc-transparency="reduce"] .top-header {
+        background: #ffffff !important;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08) !important;
+      }
+
+      [data-acc-transparency="reduce"] .bottom-action-content,
+      [data-acc-transparency="reduce"] .dock-bar {
+        background: #1e293b !important;
+        border: 1px solid #334155 !important;
+      }
+      [data-theme="light"][data-acc-transparency="reduce"] .bottom-action-content,
+      [data-theme="light"][data-acc-transparency="reduce"] .dock-bar {
+        background: #f8fafc !important;
+        border: 1px solid #cbd5e1 !important;
+      }
+
+      [data-acc-transparency="reduce"] .modal-dialog-custom {
+        background: #0f172a !important;
+        border: 1px solid #334155 !important;
+      }
+      [data-theme="light"][data-acc-transparency="reduce"] .modal-dialog-custom {
+        background: #ffffff !important;
+        border: 1px solid #cbd5e1 !important;
+      }
+
+      [data-acc-transparency="reduce"] .drawer-panel {
+        background: #0f172a !important;
+        border-left: 1px solid #334155 !important;
+      }
+      [data-theme="light"][data-acc-transparency="reduce"] .drawer-panel {
+        background: #ffffff !important;
+        border-left: 1px solid #cbd5e1 !important;
       }
 
       /* ── Parser & Curriculum Settings Modal Styling (Apple HIG) ────────── */
@@ -741,10 +973,39 @@
         transition: border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1),
                     box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1);
       }
-      .apple-hig-input:focus {
+      .apple-hig-input:focus,
+      .apple-hig-input:focus-visible {
         border-color: var(--accent-emerald);
-        box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2), inset 0 1px 2px rgba(0, 0, 0, 0.08);
+        box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.25), inset 0 1px 2px rgba(0, 0, 0, 0.08);
         outline: none;
+      }
+      .apple-hig-select {
+        width: 100%;
+        background: var(--surface-subtle);
+        border: 1px solid var(--border-subtle);
+        border-radius: 8px;
+        padding: 8px 12px;
+        font-size: 12.5px;
+        font-weight: 500;
+        color: var(--text-primary);
+        box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.08);
+        cursor: pointer;
+        transition: border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+                    box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      .apple-hig-select:focus,
+      .apple-hig-select:focus-visible {
+        border-color: var(--accent-emerald);
+        box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.25), inset 0 1px 2px rgba(0, 0, 0, 0.08);
+        outline: none;
+      }
+      @media (forced-colors: active) {
+        .apple-hig-select:focus,
+        .apple-hig-select:focus-visible,
+        .apple-hig-input:focus,
+        .apple-hig-input:focus-visible {
+          outline: 2px solid Highlight !important;
+        }
       }
 
       .apple-hig-footnote {
@@ -1217,4 +1478,17 @@
           padding: 8px 16px;
         }
       }
-    
+
+      /* ── Template Set Editor Responsive Form Grid ────────────────────────── */
+      .template-set-form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+        margin-bottom: 14px;
+      }
+      @media (max-width: 600px) {
+        .template-set-form-grid {
+          grid-template-columns: 1fr;
+          gap: 10px;
+        }
+      }

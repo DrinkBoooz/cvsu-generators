@@ -6,7 +6,7 @@ WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 UI_HTML_PATH = os.path.join(WORKSPACE_DIR, "executable_test", "ui.html")
 FILE_URL = f"file:///{UI_HTML_PATH.replace(os.sep, '/')}"
 
-TABS = ["Prefixes", "Lab", "Degrees", "Keywords", "Schedule", "CustomTemplates"]
+TABS = ["Prefixes", "Lab", "Degrees", "Keywords", "Schedule", "CustomTemplates", "Accessibility"]
 
 
 def test_settings_modal_height_uniformity_desktop():
@@ -18,6 +18,7 @@ def test_settings_modal_height_uniformity_desktop():
 
         page.click("#btnOpenSettings")
         page.wait_for_selector("#modalParserSettingsBackdrop:not(.d-none)")
+        page.wait_for_timeout(300)
 
         measurements = []
         for t in TABS:
@@ -123,7 +124,7 @@ def test_settings_modal_responsive_mobile():
         cols = info["gridTemplateColumns"].strip().split()
         assert len(cols) == 2, f"Expected 2 columns on mobile, got {len(cols)}"
         assert info["tabsScrollWidth"] <= info["tabsClientWidth"] + 1, "Tabs must not overflow horizontally on mobile"
-        assert len(info["buttons"]) == 6, "All 6 tabs must be present"
+        assert len(info["buttons"]) == 8, "All 8 tabs must be present"
         for btn in info["buttons"]:
             assert btn["height"] >= 20, f"Tab '{btn['text']}' height too small: {btn['height']}px"
             assert btn["width"] >= 70, f"Tab '{btn['text']}' width too small: {btn['width']}px"

@@ -12,7 +12,8 @@ from executable_test.main import ScriptAPI
 
 def test_dnd_schedule_detection():
     api = ScriptAPI()
-    schedule_path = os.path.join(WORKSPACE_DIR, "ORTEGA_SCHEDULE.xls")
+    fixture_sched = os.path.join(WORKSPACE_DIR, "tests", "fixtures", "schedules", "ORTEGA_SCHEDULE.xls")
+    schedule_path = fixture_sched if os.path.exists(fixture_sched) else os.path.join(WORKSPACE_DIR, "ORTEGA_SCHEDULE.xls")
     assert os.path.exists(schedule_path)
 
     # Simulate dropped schedule path

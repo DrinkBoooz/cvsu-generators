@@ -69,6 +69,14 @@
         border-radius: 8px;
         transition: all 0.15s ease;
       }
+      @media (pointer: coarse), (max-width: 600px) {
+        .drawer-close {
+          width: 38px;
+          height: 38px;
+          min-width: 38px;
+          min-height: 38px;
+        }
+      }
       .drawer-close:hover {
         background: var(--surface-subtle);
         color: var(--text-primary);
@@ -87,7 +95,7 @@
         font-size: 15px;
         font-weight: 700;
         margin-bottom: 8px;
-        color: var(--accent-emerald);
+        color: var(--text-emerald);
       }
 
       /* Alerts & Callouts */
@@ -149,7 +157,7 @@
         gap: 7px;
         font-size: 12.5px;
         font-weight: 600;
-        color: var(--accent-amber);
+        color: var(--text-amber);
         letter-spacing: -0.01em;
       }
       .apple-callout-pill {
@@ -160,7 +168,7 @@
         padding: 2px 7px;
         border-radius: var(--radius-pill);
         background: rgba(245, 158, 11, 0.12);
-        color: var(--accent-amber);
+        color: var(--text-amber);
         border: 1px solid rgba(245, 158, 11, 0.22);
       }
       .apple-callout-code {
@@ -228,7 +236,7 @@
         line-height: 1.45;
       }
       .text-link {
-        color: var(--accent-emerald);
+        color: var(--text-emerald);
         text-decoration: underline;
         text-underline-offset: 2px;
       }

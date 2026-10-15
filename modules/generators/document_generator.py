@@ -61,6 +61,16 @@ class DocumentGenerator(ABC):
         tables = body.findall(w("tbl"))
         paras = body.findall(w("p"))
 
+        # Dynamic topological alignment if table structure shifted (e.g. decoy table inserted)
+        from modules.parsers.template_analyzer import DeterministicTemplateAnalyzer
+        from modules.parsers.docx_grid_table import DocxGridTable
+        root_elem = body.getroottree().getroot() if hasattr(body, 'getroottree') else None
+        manifest = DeterministicTemplateAnalyzer().analyze_docx_tree(root_elem, body, docx_path=self._template_path)
+
+        meta_tbl_idx = None
+        if manifest and manifest.metadata_table_index is not None and manifest.metadata_table_index < len(tables):
+            meta_tbl_idx = manifest.metadata_table_index
+
         for field_name, b in self._recipe.header_bindings.items():
             val = resolve_field_value(field_name, info, self._recipe)
             thresh = b.shrink_threshold if self._recipe.profile_id != "custom_docx" else 0
@@ -68,18 +78,31 @@ class DocumentGenerator(ABC):
 
             if b.cell_type == "docx_table":
                 t = b.target
-                if isinstance(t, (tuple, list)) and len(t) == 3:
-                    tbl_idx, r_idx, c_idx = t
-                    if tbl_idx < len(tables):
-                        rows = tables[tbl_idx].findall(w("tr"))
-                        if r_idx < len(rows):
-                            cells = rows[r_idx].findall(w("tc"))
-                            if c_idx < len(cells):
-                                set_cell_text(cells[c_idx], val, shrink_threshold=thresh, shrink_sz=sz)
+                if not (isinstance(t, (tuple, list)) and len(t) == 3):
+                    raise TemplateError(f"Invalid docx_table target: {t}")
+                tbl_idx, r_idx, c_idx = t
+                effective_tbl_idx = meta_tbl_idx if (meta_tbl_idx is not None and tbl_idx == 0) else tbl_idx
+                if effective_tbl_idx < 0 or effective_tbl_idx >= len(tables):
+                    raise TemplateError(
+                        f"Header table index {effective_tbl_idx} out of range for field '{field_name}' ({len(tables)} tables present)."
+                    )
+                grid = DocxGridTable(tables[effective_tbl_idx])
+                if r_idx < 0 or r_idx >= grid.num_rows:
+                    raise TemplateError(
+                        f"Header row index {r_idx} out of range for field '{field_name}' in table {effective_tbl_idx} ({grid.num_rows} rows present)."
+                    )
+                if c_idx < 0 or c_idx >= grid.num_cols:
+                    raise TemplateError(
+                        f"Header cell index {c_idx} out of range for field '{field_name}' in table {effective_tbl_idx}, row {r_idx} ({grid.num_cols} cells present)."
+                    )
+                grid.set_cell_text(r_idx, c_idx, val, shrink_threshold=thresh, shrink_sz=sz)
             elif b.cell_type == "docx_paragraph":
                 p_idx = b.target
-                if isinstance(p_idx, int) and p_idx < len(paras):
-                    replace_after_colon(paras[p_idx], val, shrink_threshold=thresh, shrink_sz=sz)
+                if not isinstance(p_idx, int) or p_idx < 0 or p_idx >= len(paras):
+                    raise TemplateError(
+                        f"Header paragraph index {p_idx} out of range for field '{field_name}' ({len(paras)} paragraphs present)."
+                    )
+                replace_after_colon(paras[p_idx], val, shrink_threshold=thresh, shrink_sz=sz)
 
         # Placeholders if present in metadata
         placeholders = self._recipe.metadata.get("placeholders", [])
@@ -133,21 +156,6 @@ class DocumentGenerator(ABC):
                                         t_mid.text = ""
                         p_txt = "".join(r.findtext(w("t")) or "" for r in runs)
 
-    def _is_student_table(self, tbl) -> bool:
-        """Deprecated legacy student table locator; prefer recipe.roster_binding."""
-        rows = tbl.findall(w("tr"))
-        if not rows:
-            return False
-        cells = rows[0].findall(w("tc"))
-        if not cells:
-            return False
-        hdr = " ".join("".join((t.text or '') for t in c.iter(w('t'))) for c in cells).lower()
-        if any(k in hdr for k in ("instructor", "course /", "schedule code", "subject code", "semester /", "time / days / room")):
-            return False
-        return ("student" in hdr or "name of student" in hdr or "name of students" in hdr or "no." in hdr) and (
-            "signature" in hdr or "student number" in hdr or "studentnumber" in hdr or "name of student" in hdr
-        )
-
     def fill_table(self, body, info: ClassInfo) -> None:
         """Fills student roster table driven strictly by recipe roster_binding."""
         rb = self._recipe.roster_binding
@@ -155,12 +163,21 @@ class DocumentGenerator(ABC):
             return
 
         tables = body.findall(w("tbl"))
-        if rb.table_index >= len(tables):
+        
+        # Dynamic topological resolution of roster table
+        roster_tbl_idx = rb.table_index
+        from modules.parsers.template_analyzer import DeterministicTemplateAnalyzer
+        root_elem = body.getroottree().getroot() if hasattr(body, 'getroottree') else None
+        manifest = DeterministicTemplateAnalyzer().analyze_docx_tree(root_elem, body, docx_path=self._template_path)
+        if manifest and manifest.roster_table is not None and manifest.roster_table.table_index < len(tables):
+            roster_tbl_idx = manifest.roster_table.table_index
+
+        if roster_tbl_idx < 0 or roster_tbl_idx >= len(tables):
             raise TemplateError(
-                f"Roster table index {rb.table_index} not found in template ({len(tables)} tables present)."
+                f"Roster table index {roster_tbl_idx} not found in template ({len(tables)} tables present)."
             )
 
-        target = tables[rb.table_index]
+        target = tables[roster_tbl_idx]
         rows = target.findall(w("tr"))
         if len(rows) <= rb.first_data_row_index:
             raise TemplateError(
@@ -180,10 +197,6 @@ class DocumentGenerator(ABC):
                         for t in r.findall(w("t")):
                             t.text = ""
             cells = tr.findall(w("tc"))
-            while len(cells) < 3:
-                new_tc = etree.Element(w("tc"))
-                tr.append(new_tc)
-                cells = tr.findall(w("tc"))
             self._fill_student_row(cells, idx, name, stnum)
             target.append(tr)
 
@@ -192,11 +205,26 @@ class DocumentGenerator(ABC):
         rb = self._recipe.roster_binding
         if rb is None:
             return
-        if self._recipe.profile_id == "custom_docx" and rb.index_col is not None and rb.index_col < len(cells):
+        if self._recipe.profile_id == "custom_docx" and rb.index_col is not None:
+            if rb.index_col < 0 or rb.index_col >= len(cells):
+                raise TemplateError(
+                    f"Roster index_col {rb.index_col} out of range ({len(cells)} cells present)."
+                )
             set_cell_text(cells[rb.index_col], str(idx + 1))
-        if rb.name_col is not None and rb.name_col < len(cells):
-            set_cell_text(cells[rb.name_col], name, shrink_threshold=32, shrink_sz="18")
-        if rb.id_col is not None and rb.id_col < len(cells):
+        if rb.name_col is not None:
+            if rb.name_col < 0 or rb.name_col >= len(cells):
+                raise TemplateError(
+                    f"Roster name_col {rb.name_col} out of range ({len(cells)} cells present)."
+                )
+            if self._recipe.profile_id == "custom_docx":
+                set_cell_text(cells[rb.name_col], name, shrink_threshold=32, shrink_sz="18")
+            else:
+                set_cell_text(cells[rb.name_col], name, is_student_name=True)
+        if rb.id_col is not None:
+            if rb.id_col < 0 or rb.id_col >= len(cells):
+                raise TemplateError(
+                    f"Roster id_col {rb.id_col} out of range ({len(cells)} cells present)."
+                )
             set_cell_text(cells[rb.id_col], stnum)
 
     def generate(self, info: ClassInfo, output_path: str) -> None:
@@ -240,6 +268,24 @@ class ConfigurableDocumentGenerator(DocumentGenerator):
     @property
     def suffix(self) -> str:
         return self._suffix
+
+    def generate(self, info: ClassInfo, output_path: str) -> None:
+        """
+        Renders custom templates through authoritative recipe and dynamic analysis.
+        If recipe specifies dynamic rendering engine or has no explicit bindings,
+        routes through DynamicDocumentRenderer; otherwise executes via DocumentGenerator.
+        """
+        if self._recipe.metadata.get("engine") == "dynamic" or (not self._recipe.header_bindings and not self._recipe.roster_binding):
+            from modules.generators.dynamic_renderer import DynamicDocumentRenderer
+            DynamicDocumentRenderer().render_docx(self._template_path, info, output_path=output_path)
+            logger.info(f"Dynamically generated custom document {os.path.basename(output_path)} via DynamicDocumentRenderer")
+            return
+        super().generate(info, output_path)
+
+    def render_dynamically(self, info: ClassInfo, output_path: str) -> str:
+        """Explicit route to DynamicDocumentRenderer for user-supplied templates."""
+        from modules.generators.dynamic_renderer import DynamicDocumentRenderer
+        return DynamicDocumentRenderer().render(self._template_path, info, output_path=output_path)
 
 
 __all__ = [

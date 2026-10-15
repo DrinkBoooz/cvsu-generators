@@ -5,6 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CvSU Gen — Document Automation Suite</title>
 
+    <!-- ── Fast 0ms Startup Cache Synchronizer (Tier 2) ── -->
+    <script>
+      (function() {
+        try {
+          var t = localStorage.getItem('cvsu_gen_theme');
+          if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+          var m = localStorage.getItem('cvsu_acc_motion');
+          if (m === 'reduce') document.documentElement.setAttribute('data-acc-motion', 'reduce');
+          else if (m === 'full') document.documentElement.setAttribute('data-acc-motion', 'no-preference');
+          var tr = localStorage.getItem('cvsu_acc_transparency');
+          if (tr === 'reduce') document.documentElement.setAttribute('data-acc-transparency', 'reduce');
+          else if (tr === 'glass') document.documentElement.setAttribute('data-acc-transparency', 'glass');
+        } catch (e) {}
+      })();
+    </script>
+
     <!-- ── Critical Visibility Failsafe ── -->
     <style>
       .d-none {
@@ -112,7 +128,7 @@
                 d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"
               ></path>
             </svg>
-            Settings
+            <span class="nav-btn-label">Settings</span>
           </button>
           <button
             class="nav-btn"
@@ -138,7 +154,7 @@
               <line x1="16" y1="13" x2="8" y2="13"></line>
               <line x1="16" y1="17" x2="8" y2="17"></line>
             </svg>
-            Logs
+            <span class="nav-btn-label">Logs</span>
           </button>
           <button
             id="btnOpenHelp"
@@ -161,7 +177,7 @@
               <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
               <line x1="12" y1="17" x2="12.01" y2="17"></line>
             </svg>
-            Guides
+            <span class="nav-btn-label">Guides</span>
           </button>
         </nav>
       </header>
@@ -636,14 +652,15 @@
                     >0 Students</span
                   >
                 </div>
-                <div style="display: flex; gap: 6px">
+                <div style="display: flex; gap: 6px; align-items: center;">
                   <input
                     type="text"
                     id="rosterSearchInput"
                     placeholder="Filter rosters..."
                     style="
-                      font-size: 11px;
-                      padding: 2px 8px;
+                      font-size: 12px;
+                      padding: 4px 10px;
+                      min-height: 28px;
                       border-radius: 8px;
                       border: 1px solid var(--border-subtle);
                       background: var(--surface-card);
@@ -654,7 +671,7 @@
                   <button
                     class="nav-btn"
                     id="btnClearAllRosters"
-                    style="padding: 2px 8px; font-size: 11px"
+                    style="padding: 4px 10px; font-size: 12px; min-height: 28px; display: inline-flex; align-items: center;"
                     aria-label="Remove all imported rosters"
                     onclick="clearAllRosters()"
                   >
@@ -1324,14 +1341,26 @@
                 (64-bit)
               </li>
               <li>
-                <strong>Dependencies:</strong> <strong>None!</strong> The
-                application is completely standalone. You do
-                <strong>not</strong> need Python installed.
+                <strong>Python / Python Packages:</strong> None required on the target machine
+                for the packaged executable. The Python runtime and application packages
+                are embedded in <code>CvSU Gen.exe</code>.
+              </li>
+              <li>
+                <strong>WebView2 Runtime:</strong> Microsoft Edge WebView2 Evergreen Runtime is
+                a required host prerequisite. Included with Windows 11; Microsoft documents Windows 10
+                v1803+ with the November 2022 update as the pre-installed baseline, though certain
+                managed, LTSC, or clean setups may lack it. The packaged application does not bundle
+                an automatic WebView2 installer, and no explicit application-level runtime detector
+                was verified in the current source.
+              </li>
+              <li>
+                <strong>.NET Framework:</strong> .NET Framework 4.7.2+ is the supported
+                project baseline for the native WinForms desktop host and drag-and-drop integration.
               </li>
               <li>
                 <strong>Office Software:</strong> Microsoft Office (Word &amp;
-                Excel) or any compatible office suite to view/edit the generated
-                documents.
+                Excel) or any compatible office suite (only needed for viewing/editing the generated
+                documents; the application generates files natively).
               </li>
             </ul>
           </div>
@@ -2333,11 +2362,27 @@
             </button>
             <button
               class="settings-nav-tab"
+              id="cfgTabTemplateSets"
+              type="button"
+              onclick="switchConfigTab('TemplateSets')"
+            >
+              📦 Template Sets
+            </button>
+            <button
+              class="settings-nav-tab"
               id="cfgTabCustomTemplates"
               type="button"
               onclick="switchConfigTab('CustomTemplates')"
             >
               📄 Custom Forms
+            </button>
+            <button
+              class="settings-nav-tab"
+              id="cfgTabAccessibility"
+              type="button"
+              onclick="switchConfigTab('Accessibility')"
+            >
+              ♿ Accessibility
             </button>
           </div>
 
@@ -2765,6 +2810,95 @@
             </div>
           </div>
 
+          <!-- Tab 5: Template Sets -->
+          <div id="cfgPaneTemplateSets" class="settings-tab-pane d-none">
+            <div
+              style="
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                margin-bottom: 14px;
+                gap: 12px;
+                flex-wrap: wrap;
+              "
+            >
+              <div>
+                <h4
+                  style="
+                    font-size: 14px;
+                    font-weight: 700;
+                    color: var(--text-primary);
+                    margin-bottom: 4px;
+                  "
+                >
+                  📦 Institutional &amp; Departmental Template Sets
+                </h4>
+                <p
+                  style="
+                    font-size: 12px;
+                    color: var(--text-secondary);
+                    line-height: 1.4;
+                    max-width: 650px;
+                  "
+                >
+                  Create, activate, and manage complete template packages that replace built-in CvSU CEIT forms, attendance sheets, and grading spreadsheets. Physical template structures are dynamically inspected and verified.
+                </p>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <button
+                  class="nav-btn"
+                  type="button"
+                  onclick="importTemplateSetUI()"
+                  style="font-size: 12px; padding: 4px 10px;"
+                  title="Import a .cvstemplateset.zip package"
+                >
+                  📥 Import Set
+                </button>
+                <button
+                  class="btn-primary-compact"
+                  type="button"
+                  onclick="openCreateTemplateSetModal()"
+                  style="font-size: 12px; padding: 4px 12px;"
+                >
+                  ➕ Create Template Set
+                </button>
+              </div>
+            </div>
+
+            <!-- Active Template Set Banner -->
+            <div
+              id="activeTemplateSetBanner"
+              style="
+                background: var(--surface-subtle);
+                border: 1px solid var(--accent-emerald);
+                border-radius: var(--radius-md);
+                padding: 14px 16px;
+                margin-bottom: 14px;
+              "
+            >
+              <!-- Dynamically populated by template_sets.js -->
+            </div>
+
+            <!-- Template Sets List -->
+            <div>
+              <div
+                style="
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: center;
+                  margin-bottom: 8px;
+                "
+              >
+                <span style="font-size: 13px; font-weight: 600; color: var(--text-primary);">
+                  Available Template Sets
+                </span>
+              </div>
+              <div id="templateSetsListContainer">
+                <!-- Dynamically populated cards -->
+              </div>
+            </div>
+          </div>
+
           <!-- Tab 6: Custom Templates & Heuristic Analyzer -->
           <div id="cfgPaneCustomTemplates" class="settings-tab-pane d-none">
             <div
@@ -2852,6 +2986,9 @@
             <div
               id="customTemplateResultCard"
               class="d-none"
+              role="region"
+              aria-live="polite"
+              aria-labelledby="customTemplateResultCardHeading"
               style="
                 background: var(--surface-elevated);
                 border: 1px solid var(--accent-emerald);
@@ -2871,8 +3008,10 @@
                 "
               >
                 <div style="display: flex; align-items: center; gap: 8px">
-                  <span style="font-size: 16px">✨</span>
-                  <strong style="font-size: 13.5px; color: var(--text-primary)"
+                  <span style="font-size: 16px" aria-hidden="true">✨</span>
+                  <strong
+                    id="customTemplateResultCardHeading"
+                    style="font-size: 13.5px; color: var(--text-primary)"
                     >Template Analysis Results</strong
                   >
                   <span
@@ -2885,12 +3024,21 @@
                     "
                     >100% Match</span
                   >
+                  <span
+                    id="customCompatibilityBadge"
+                    class="filter-pill"
+                    role="status"
+                    aria-label="Template Compatibility Status"
+                    style="font-size: 11px; padding: 2px 8px; display: none;"
+                    >✓ Ready</span
+                  >
                 </div>
                 <div style="display: flex; gap: 8px">
                   <button
                     class="nav-btn"
                     type="button"
                     onclick="cancelCustomTemplatePreview()"
+                    aria-label="Discard template inspection results"
                     style="font-size: 12px; padding: 4px 10px"
                   >
                     Discard
@@ -2899,6 +3047,7 @@
                     class="nav-btn"
                     type="button"
                     onclick="saveCustomTemplateFromUI()"
+                    aria-label="Add template to generator suite"
                     style="
                       background: var(--accent-emerald);
                       color: #fff;
@@ -2916,6 +3065,7 @@
               <div class="settings-custom-form-grid" style="margin-bottom: 14px">
                 <div>
                   <label
+                    for="customFormTitle"
                     style="
                       font-size: 11.5px;
                       font-weight: 600;
@@ -2930,10 +3080,13 @@
                     id="customFormTitle"
                     class="form-control-custom"
                     placeholder="e.g. Student Consultation Log"
+                    aria-label="Form Display Title"
+                    aria-required="false"
                   />
                 </div>
                 <div>
                   <label
+                    for="customFormSuffix"
                     style="
                       font-size: 11.5px;
                       font-weight: 600;
@@ -2948,10 +3101,13 @@
                     id="customFormSuffix"
                     class="form-control-custom"
                     placeholder="e.g. CONSULTATION_LOG"
+                    aria-label="File Suffix (Upper snake-case)"
+                    aria-required="true"
                   />
                 </div>
                 <div>
                   <label
+                    for="customFormTargetFolderSelect"
                     style="
                       font-size: 11.5px;
                       font-weight: 600;
@@ -2964,6 +3120,7 @@
                   <select
                     id="customFormTargetFolderSelect"
                     class="form-control-custom"
+                    aria-label="Target Folder"
                     onchange="onCustomTargetFolderChange(this.value)"
                   >
                     <option value="CEIT_Forms">📁 CEIT_Forms (Default)</option>
@@ -2980,6 +3137,7 @@
                 style="margin-top: -6px; margin-bottom: 14px;"
               >
                 <label
+                  for="customFormCustomFolderInput"
                   style="
                     font-size: 11.5px;
                     font-weight: 600;
@@ -2993,6 +3151,7 @@
                   type="text"
                   id="customFormCustomFolderInput"
                   class="form-control-custom"
+                  aria-label="Custom Relative Subfolder"
                   placeholder="e.g. Advising/Logs"
                 />
               </div>
@@ -3051,6 +3210,24 @@
                   ></div>
                 </div>
               </div>
+
+              <!-- Actionable Diagnostics & Analysis Alerts -->
+              <div
+                id="customTemplateDiagnostics"
+                class="d-none"
+                role="status"
+                aria-live="polite"
+                style="
+                  margin-top: 12px;
+                  font-size: 11.5px;
+                  padding: 8px 12px;
+                  border-radius: var(--radius-sm);
+                  background: rgba(245, 158, 11, 0.1);
+                  border: 1px solid var(--accent-amber);
+                  color: var(--text-primary);
+                  line-height: 1.5;
+                "
+              ></div>
             </div>
 
             <!-- Active Custom Templates List -->
@@ -3078,6 +3255,104 @@
                 style="display: flex; flex-direction: column; gap: 8px"
               >
                 <!-- Dynamically rendered custom template cards -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab 8: Accessibility & Motion Preferences (Apple HIG Grouped List) -->
+          <div id="cfgPaneAccessibility" class="settings-tab-pane d-none">
+            <div class="apple-hig-section-header">
+              Accessibility &amp; Visual Preferences
+            </div>
+
+            <div class="apple-hig-group">
+              <!-- Row 1: Motion & Transitions -->
+              <div class="apple-hig-row">
+                <div class="apple-hig-row-meta">
+                  <div class="apple-hig-icon-tile icon-tile-blue" aria-hidden="true">
+                    🎬
+                  </div>
+                  <div class="apple-hig-text-stack">
+                    <label for="accMotionSelect" class="apple-hig-label">
+                      Interface Motion &amp; Transitions
+                    </label>
+                    <span class="apple-hig-caption" id="accMotionCaption">
+                      Controls viewport View Transition reveals and morph animations. Full Motion enables animations even when the operating system requests reduced motion.
+                    </span>
+                  </div>
+                </div>
+                <div class="apple-hig-input-wrap">
+                  <select
+                    id="accMotionSelect"
+                    class="form-control-custom apple-hig-select"
+                    onchange="onAccessibilityMotionChange(this.value)"
+                    aria-label="Interface Motion and Transitions"
+                    aria-describedby="accMotionCaption"
+                  >
+                    <option value="system">Follow System (Default)</option>
+                    <option value="reduce">Reduced Motion (Suppress transitions)</option>
+                    <option value="full">Full Motion (Override system preference)</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Row 2: Surface Transparency / Glass -->
+              <div class="apple-hig-row">
+                <div class="apple-hig-row-meta">
+                  <div class="apple-hig-icon-tile icon-tile-emerald" aria-hidden="true">
+                    🪟
+                  </div>
+                  <div class="apple-hig-text-stack">
+                    <label for="accTransparencySelect" class="apple-hig-label">
+                      Surface Transparency &amp; Materials
+                    </label>
+                    <span class="apple-hig-caption" id="accTransparencyCaption">
+                      Controls surface translucency on cards, headers, docks, and dialogs. Reduced Transparency applies solid opaque backgrounds for higher legibility.
+                    </span>
+                  </div>
+                </div>
+                <div class="apple-hig-input-wrap">
+                  <select
+                    id="accTransparencySelect"
+                    class="form-control-custom apple-hig-select"
+                    onchange="onAccessibilityTransparencyChange(this.value)"
+                    aria-label="Surface Transparency and Materials"
+                    aria-describedby="accTransparencyCaption"
+                  >
+                    <option value="system">Follow System (Default)</option>
+                    <option value="reduce">Reduced Transparency (Solid opaque)</option>
+                    <option value="glass">Standard Transparency (Frosted glass)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <p class="apple-hig-footnote">
+              By default, CvSU Gen aligns with Windows accessibility preferences (Settings → Accessibility → Visual effects). Choosing 'Full Motion' or 'Standard Transparency' explicitly overrides system preferences for this application. Your accessibility and theme preferences are saved with your application settings.
+            </p>
+
+            <!-- Live Environment Diagnostics Card -->
+            <div class="apple-hig-section-header" style="margin-top: 14px;">
+              System Accessibility Status
+            </div>
+            <div class="apple-hig-group" id="accDiagnosticsCard" style="padding: 12px 16px; font-size: 12px;">
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+                <div>
+                  <div style="color: var(--text-secondary); font-size: 11px; margin-bottom: 2px;">Windows Animation Effects</div>
+                  <div id="accStatusSysMotion" style="font-weight: 600; color: var(--text-primary);">Detecting...</div>
+                </div>
+                <div>
+                  <div style="color: var(--text-secondary); font-size: 11px; margin-bottom: 2px;">Effective Motion State</div>
+                  <div id="accStatusEffectiveMotion" style="font-weight: 600; color: var(--text-primary);">Detecting...</div>
+                </div>
+                <div>
+                  <div style="color: var(--text-secondary); font-size: 11px; margin-bottom: 2px;">View Transition Engine</div>
+                  <div id="accStatusVTEngine" style="font-weight: 600; color: var(--text-primary);">Detecting...</div>
+                </div>
+                <div>
+                  <div style="color: var(--text-secondary); font-size: 11px; margin-bottom: 2px;">Effective Material Surface</div>
+                  <div id="accStatusEffectiveSurface" style="font-weight: 600; color: var(--text-primary);">Detecting...</div>
+                </div>
               </div>
             </div>
           </div>
@@ -3134,6 +3409,72 @@
               Save &amp; Apply Changes
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Template Set Editor Modal -->
+    <div id="templateSetEditorModal" class="modal-backdrop-custom d-none" role="dialog" aria-modal="true" style="position: fixed; inset: 0; z-index: 10500; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; padding: 16px;">
+      <div style="background: var(--surface-card); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); width: 100%; max-width: 820px; max-height: 90vh; display: flex; flex-direction: column; box-shadow: 0 20px 40px rgba(0,0,0,0.4); overflow: hidden;">
+        <div style="padding: 16px 20px; border-bottom: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center; background: var(--surface-subtle);">
+          <h3 id="templateSetEditorTitle" style="font-size: 15px; font-weight: 700; color: var(--text-primary); margin: 0;">
+            ➕ Create New Template Set
+          </h3>
+          <button type="button" class="btn-remove-roster" onclick="closeTemplateSetEditorModal()" style="font-size: 16px; padding: 2px 8px;">✕</button>
+        </div>
+
+        <div style="padding: 20px; overflow-y: auto; flex: 1;">
+          <div class="template-set-form-grid">
+            <div>
+              <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 4px;">Template Set Name *</label>
+              <input type="text" id="templateSetNameInput" class="form-control-custom" placeholder="e.g. College of Science Template Set" />
+            </div>
+            <div>
+              <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 4px;">Description</label>
+              <input type="text" id="templateSetDescInput" class="form-control-custom" placeholder="e.g. Approved forms for College of Science 2026" />
+            </div>
+          </div>
+
+          <div style="margin-bottom: 16px;">
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); cursor: pointer; user-select: none;">
+              <input type="checkbox" id="templateSetFallbackCheck" style="accent-color: var(--accent-emerald); cursor: pointer;" />
+              <span>Enable fallback to CvSU default templates for missing roles (Recommended: OFF for strict institutional compliance)</span>
+            </label>
+          </div>
+
+          <!-- Upload Dropzone -->
+          <div
+            id="templateSetDropzone"
+            class="dropzone"
+            style="min-height: 95px; margin-bottom: 16px; padding: 14px;"
+            onclick="browseTemplateSetFilesFromUI()"
+            tabindex="0"
+            role="button"
+            aria-label="Upload document templates (.docx, .xlsx)"
+          >
+            <div class="dropzone-title" style="font-size: 13px">
+              📂 Drag &amp; drop Word (.docx) and Excel (.xlsx) templates here, or click to browse
+            </div>
+            <div class="dropzone-subtitle" style="font-size: 11.5px">
+              Multiple files analyzed simultaneously using authoritative Python inspectors
+            </div>
+          </div>
+
+          <!-- Completeness Summary Bar -->
+          <div id="templateSetCompletenessSummary" style="margin-bottom: 14px;"></div>
+
+          <!-- Inspected Files List -->
+          <div>
+            <div style="font-size: 12.5px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px;">
+              Configured Templates &amp; Detected Roles
+            </div>
+            <div id="templateSetInspectedFilesList"></div>
+          </div>
+        </div>
+
+        <div style="padding: 14px 20px; border-top: 1px solid var(--border-subtle); display: flex; justify-content: flex-end; gap: 10px; background: var(--surface-subtle);">
+          <button type="button" class="nav-btn" onclick="closeTemplateSetEditorModal()">Cancel</button>
+          <button type="button" class="btn-primary-compact" onclick="saveTemplateSetFromModal()">✓ Save Template Set</button>
         </div>
       </div>
     </div>
@@ -3277,6 +3618,7 @@
     <script src="js/step3.js"></script>
     <script src="js/settings.js"></script>
     <script src="js/templates.js"></script>
+    <script src="js/template_sets.js"></script>
     <script src="js/app.js"></script>
   </body>
 </html>

@@ -1,5 +1,6 @@
 import os
 import re
+import time
 import tempfile
 import shutil
 import uuid
@@ -20,17 +21,34 @@ def safe_get_column_letter(col_idx: int, zero_based: bool = False) -> str:
     except Exception:
         return openpyxl.utils.get_column_letter(1)
 
-def safe_temp_copy(file_path: str) -> str:
+def safe_temp_copy(file_path: str, retries: int = 3, delay: float = 0.3) -> str:
     """
     Creates a temporary copy of a spreadsheet in the OS temp directory
     to prevent file locks, permission errors on read-only drives, and folder clutter.
+
+    Retries up to `retries` times with `delay`-second backoff on PermissionError
+    (e.g., the source is held open by OneDrive sync, an antivirus scanner, or Excel).
+    Raises PermissionError with a user-actionable message if the file cannot be
+    copied after all retries.
     """
     ext = os.path.splitext(file_path)[1]
     temp_dir = tempfile.gettempdir()
     unique_name = f"cvsu_sched_{uuid.uuid4().hex[:8]}{ext}"
     temp_path = os.path.join(temp_dir, unique_name)
-    shutil.copy2(file_path, temp_path)
-    return temp_path
+    last_exc: Exception | None = None
+    for attempt in range(max(1, retries)):
+        try:
+            shutil.copy2(file_path, temp_path)
+            return temp_path
+        except PermissionError as exc:
+            last_exc = exc
+            if attempt < retries - 1:
+                time.sleep(delay)
+    raise PermissionError(
+        f"Cannot read '{os.path.basename(file_path)}' — it may be open in Excel, "
+        f"OneDrive, or another application. Please close it and try again. "
+        f"({last_exc})"
+    ) from last_exc
 
 def parse_excel_time(t_str, is_pm_hint=None) -> str:
     """
@@ -82,6 +100,30 @@ def get_long_path(p: str) -> str:
     p = os.path.abspath(p)
     if os.name == 'nt' and not p.startswith('\\\\?\\'):
         return '\\\\?\\' + p
+    return p
+
+
+def strip_long_path_prefix(p: str) -> str:
+    """
+    Strips the Windows extended-length path prefix (\\?\\) before passing
+    a path to shell operations such as os.startfile() / ShellExecuteW.
+
+    This must ONLY be used at the shell boundary — never on paths passed to
+    Python's own filesystem APIs, which accept the \\?\\ prefix.
+
+    Handles:
+      * Normal paths (returned unchanged)
+      * \\?\\C:\\... local extended-length paths
+      * \\?\\UNC\\server\\share... UNC long paths → \\\\server\\share
+      * Already-normal paths (idempotent)
+    """
+    if not p:
+        return p
+    if p.startswith('\\\\?\\UNC\\'):
+        # \\?\UNC\server\share → \\server\share
+        return '\\\\' + p[8:]
+    if p.startswith('\\\\?\\'):
+        return p[4:]
     return p
 
 def sanitize_filename(name: str) -> str:

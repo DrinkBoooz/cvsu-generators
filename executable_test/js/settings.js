@@ -107,7 +107,9 @@
           "Degrees",
           "Keywords",
           "Schedule",
+          "TemplateSets",
           "CustomTemplates",
+          "Accessibility",
         ];
         tabs.forEach((t) => {
           const tabBtn = document.getElementById(`cfgTab${t}`);
@@ -115,11 +117,17 @@
           if (tabBtn) tabBtn.classList.toggle("active", t === tabName);
           if (pane) pane.classList.toggle("d-none", t !== tabName);
         });
+        if (tabName === "TemplateSets" && typeof loadTemplateSetsUI === "function") {
+          loadTemplateSetsUI();
+        }
         if (tabName === "CustomTemplates") {
           loadCustomTemplatesUI();
         }
         if (tabName === "Schedule") {
           updateFacultyDefaultsPreview();
+        }
+        if (tabName === "Accessibility") {
+          updateAccessibilitySettingsUI();
         }
       }
 
@@ -131,6 +139,7 @@
         renderConfigKeywords();
         renderConfigScheduleDefaults();
         loadCustomTemplatesUI();
+        updateAccessibilitySettingsUI();
       }
 
       function renderConfigPrefixes() {
@@ -634,3 +643,108 @@
           }
         }
       }
+
+      // ── Accessibility Settings Handlers ────────────────────────────────────
+      function updateAccessibilitySettingsUI() {
+        const motionSelect = document.getElementById("accMotionSelect");
+        const transSelect = document.getElementById("accTransparencySelect");
+
+        const currentMotion = (typeof getStoredAccessibilityMotion === "function")
+          ? getStoredAccessibilityMotion()
+          : (localStorage.getItem("cvsu_acc_motion") || "system");
+        const currentTrans = (typeof getStoredAccessibilityTransparency === "function")
+          ? getStoredAccessibilityTransparency()
+          : (localStorage.getItem("cvsu_acc_transparency") || "system");
+
+        if (motionSelect) motionSelect.value = currentMotion;
+        if (transSelect) transSelect.value = currentTrans;
+
+        // Update live diagnostic status indicators
+        const sysMotionMatches = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        const effectiveMotion = (typeof getEffectiveMotionPreference === "function")
+          ? getEffectiveMotionPreference()
+          : (currentMotion === "reduce" ? "reduce" : (currentMotion === "full" ? "no-preference" : (sysMotionMatches ? "reduce" : "no-preference")));
+        const effectiveTrans = (typeof getEffectiveTransparencyPreference === "function")
+          ? getEffectiveTransparencyPreference()
+          : (currentTrans === "reduce" ? "reduce" : "glass");
+
+        const elSysMotion = document.getElementById("accStatusSysMotion");
+        const elEffectiveMotion = document.getElementById("accStatusEffectiveMotion");
+        const elVTEngine = document.getElementById("accStatusVTEngine");
+        const elEffectiveSurface = document.getElementById("accStatusEffectiveSurface");
+
+        if (elSysMotion) {
+          elSysMotion.textContent = sysMotionMatches ? "Disabled (prefers-reduced-motion)" : "Active (Full Motion)";
+          elSysMotion.style.color = sysMotionMatches ? "var(--accent-amber)" : "var(--accent-emerald)";
+        }
+        if (elEffectiveMotion) {
+          elEffectiveMotion.textContent = effectiveMotion === "reduce" ? "Reduced Motion" : "Full Motion";
+          elEffectiveMotion.style.color = effectiveMotion === "reduce" ? "var(--accent-amber)" : "var(--accent-emerald)";
+        }
+        if (elVTEngine) {
+          const hasVT = typeof document.startViewTransition === "function";
+          elVTEngine.textContent = hasVT ? "Available (startViewTransition)" : "Not Available (Fallback)";
+          elVTEngine.style.color = hasVT ? "var(--accent-emerald)" : "var(--accent-amber)";
+        }
+        if (elEffectiveSurface) {
+          elEffectiveSurface.textContent = effectiveTrans === "reduce" ? "Solid Opaque (Reduced Transparency)" : "Standard (Frosted Glass)";
+          elEffectiveSurface.style.color = effectiveTrans === "reduce" ? "var(--accent-blue)" : "var(--accent-emerald)";
+        }
+      }
+
+      function onAccessibilityMotionChange(val) {
+        const cleanVal = typeof sanitizeMotionPreference === "function" ? sanitizeMotionPreference(val) : (val || "system");
+        try {
+          localStorage.setItem("cvsu_acc_motion", cleanVal);
+        } catch (e) {}
+        if (typeof applyAccessibilityPreferences === "function") {
+          applyAccessibilityPreferences();
+        }
+        updateAccessibilitySettingsUI();
+        if (typeof syncCurrentPreferencesToNative === "function") {
+          syncCurrentPreferencesToNative();
+        }
+        if (typeof showToast === "function") {
+          const label = cleanVal === "system" ? "Follow System" : (cleanVal === "reduce" ? "Reduced Motion" : "Full Motion (Override)");
+          showToast("Accessibility Updated", `Motion preference set to: ${label}`, "info");
+        }
+      }
+
+      function onAccessibilityTransparencyChange(val) {
+        const cleanVal = typeof sanitizeTransparencyPreference === "function" ? sanitizeTransparencyPreference(val) : (val || "system");
+        try {
+          localStorage.setItem("cvsu_acc_transparency", cleanVal);
+        } catch (e) {}
+        if (typeof applyAccessibilityPreferences === "function") {
+          applyAccessibilityPreferences();
+        }
+        updateAccessibilitySettingsUI();
+        if (typeof syncCurrentPreferencesToNative === "function") {
+          syncCurrentPreferencesToNative();
+        }
+        if (typeof showToast === "function") {
+          const label = cleanVal === "system" ? "Follow System" : (cleanVal === "reduce" ? "Reduced Transparency (Solid)" : "Standard Transparency (Frosted Glass)");
+          showToast("Accessibility Updated", `Transparency preference set to: ${label}`, "info");
+        }
+      }
+
+      function resetAccessibilityPreferences() {
+        try {
+          localStorage.setItem("cvsu_acc_motion", "system");
+          localStorage.setItem("cvsu_acc_transparency", "system");
+          localStorage.setItem("cvsu_prefs_migrated", "true");
+        } catch (e) {}
+        if (typeof applyAccessibilityPreferences === "function") {
+          applyAccessibilityPreferences();
+        }
+        updateAccessibilitySettingsUI();
+        if (typeof syncCurrentPreferencesToNative === "function") {
+          syncCurrentPreferencesToNative();
+        }
+      }
+
+      // Expose globally for testing
+      window.updateAccessibilitySettingsUI = updateAccessibilitySettingsUI;
+      window.onAccessibilityMotionChange = onAccessibilityMotionChange;
+      window.onAccessibilityTransparencyChange = onAccessibilityTransparencyChange;
+      window.resetAccessibilityPreferences = resetAccessibilityPreferences;

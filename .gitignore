@@ -11,6 +11,19 @@ output/
 *.csv
 scratch/
 
+# Scratch & temporary artifacts
+*.tmp
+c*.xml
+bandit_report.json
+*ORTEGA_SCHEDULE*.txt
+dump_*.txt
+
+# Sample dev output directories
+dev/*/
+
+# Whitelist test fixtures
+!tests/fixtures/**
+
 # Playwright
 node_modules/
 /test-results/
@@ -18,3 +31,10 @@ node_modules/
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+
+# Test Orchestrator Output
+/test_reports/
+
+# Local session checkpoint logs
+.claude/
+

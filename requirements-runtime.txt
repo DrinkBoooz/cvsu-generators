@@ -1,0 +1,7 @@
+# CvSU Document Generator - Production Runtime Dependencies
+# Direct-dependency specification pinned for reproducibility
+pywebview==6.2.1
+pythonnet==3.1.0
+lxml==6.1.1
+openpyxl==3.1.5
+xlrd==2.0.2

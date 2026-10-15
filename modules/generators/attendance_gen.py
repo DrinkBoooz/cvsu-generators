@@ -41,8 +41,10 @@ from modules.parsers.roster_parser import (
     _detect_roster_columns,
 )
 
-class TemplateError(Exception):
-    pass
+from modules.models.recipe import (
+    TemplateError,
+    ValidatedAttendanceTemplateRecipe,
+)
 
 class EmptyDateError(Exception):
     pass
@@ -52,6 +54,13 @@ MONTHS = {
     5: "MAY", 6: "JUNE", 7: "JULY", 8: "AUGUST",
     9: "SEPTEMBER", 10: "OCTOBER", 11: "NOVEMBER", 12: "DECEMBER"
 }
+
+# Fixed non-date column width budget in WordprocessingML pct units (5000 = 100%)
+# Columns: NO (248) + NAME (1277) + STNUM (499) + LB (212) + LC (208) + R (133) = 2577
+FIXED_PCT = 248 + 1277 + 499 + 212 + 208 + 133  # 2577
+DATE_POOL = 5000 - FIXED_PCT  # 2423
+MIN_PRINTABLE_DATE_W = 25
+GENERATOR_MIN_STUDENT_ROWS = 40
 
 # ── Date helpers ──────────────────────────────────────────────────────────────
 
@@ -373,6 +382,427 @@ def clone_student_row(template_row) -> etree._Element:
 
 # ── Core builder ─────────────────────────────────────────────────────────────
 
+# ── Attendance Generator (Authoritative Recipe-Driven) ──────────────────────
+
+class AttendanceGenerator:
+    """
+    Authoritative, recipe-driven attendance generator engine.
+    Constructed ONLY with a ValidatedAttendanceTemplateRecipe.
+    The inspector determines WHERE. The generator determines WHAT.
+    No production generator may establish, repair, or guess a template binding
+    independently of a validated recipe.
+    """
+
+    def __init__(self, template_path: str, recipe: ValidatedAttendanceTemplateRecipe):
+        if not isinstance(recipe, ValidatedAttendanceTemplateRecipe):
+            raise TypeError(
+                f"AttendanceGenerator requires a ValidatedAttendanceTemplateRecipe, "
+                f"got {type(recipe).__name__}."
+            )
+        if not os.path.exists(template_path):
+            raise FileNotFoundError(f"Template file not found: {template_path}")
+
+        self.template_path = os.path.abspath(template_path)
+        self.recipe = recipe
+
+    def generate(
+        self,
+        output_path: str,
+        course_code_title: str,
+        class_schedule: str,
+        semester_ay: str,
+        room_assignment: str,
+        instructor: str,
+        months: list,
+        year: int,
+        weekdays: list,
+        students: list,
+        start_bound=None,
+        end_bound=None,
+    ) -> None:
+        class_dates = get_class_dates_for_weekdays(
+            months, year, weekdays, start_bound=start_bound, end_bound=end_bound
+        )
+        if not class_dates:
+            raise EmptyDateError("No class dates found for the given months/year/weekdays.")
+
+        week_groups = dates_to_weeks(class_dates)
+        n_weeks = len(week_groups)
+        schedule_meetings = build_schedule_meetings(class_schedule)
+        if not schedule_meetings:
+            schedule_meetings = [(day_idx, "") for day_idx in (weekdays or [0])]
+        session_count = len(schedule_meetings)
+        n_date_cols = n_weeks * session_count
+        month_year_label = month_label(months, year)
+        schedule_label = build_schedule_label(class_schedule)
+
+        # Capacity policy check:
+        # Fixed non-date percentage widths sum to 2577 pct units (NO: 248, NAME: 1277, STNUM: 499, LB: 212, LC: 208, R: 133)
+        # DATE_POOL = 5000 - 2577 = 2423 pct units
+        matrix_binding = self.recipe.matrix_binding
+        extra_lead_cols = max(0, matrix_binding.date_columns_start - 3)
+        extra_lead_w = extra_lead_cols * 200
+        fixed_pct = 2577 + extra_lead_w
+        date_pool = max(500, 5000 - fixed_pct)
+        MIN_PRINTABLE_DATE_W = 25
+        GENERATOR_MIN_STUDENT_ROWS = 40
+
+        date_w = date_pool // n_date_cols if n_date_cols > 0 else date_pool
+        if n_date_cols > 0 and date_w < MIN_PRINTABLE_DATE_W:
+            raise TemplateError(
+                f"Insufficient generation capacity: requested {n_date_cols} sessions "
+                f"exceeds printable page width capacity (column width {date_w} < {MIN_PRINTABLE_DATE_W} pct)."
+            )
+
+        zin, root, body = load_docx(self.template_path)
+        tables = body.findall(w("tbl"))
+
+        # 1. Target information table authoritatively via recipe with dynamic topological resolution
+        info_binding = self.recipe.info_binding
+        info_tbl_idx = info_binding.table_index
+        from modules.parsers.template_analyzer import DeterministicTemplateAnalyzer
+        manifest = DeterministicTemplateAnalyzer().analyze_docx_tree(root, body, docx_path=self.template_path)
+        if manifest and manifest.metadata_table_index is not None and manifest.metadata_table_index < len(tables):
+            info_tbl_idx = manifest.metadata_table_index
+
+        if info_tbl_idx >= len(tables):
+            raise TemplateError(f"Info table index {info_tbl_idx} not found in template.")
+        info_tbl = tables[info_tbl_idx]
+        info_rows = info_tbl.findall(w("tr"))
+
+        def get_info_para(r_idx: int, c_idx: int):
+            if r_idx >= len(info_rows):
+                raise TemplateError(f"Info table missing row {r_idx}")
+            cells = info_rows[r_idx].findall(w("tc"))
+            if c_idx >= len(cells):
+                raise TemplateError(f"Info table missing cell at row {r_idx}, col {c_idx}")
+            p = cells[c_idx].find(w("p"))
+            if p is None:
+                p = etree.SubElement(cells[c_idx], w("p"))
+            return p
+
+        # Clean room assignment
+        if instructor and room_assignment:
+            cleaned_rooms = []
+            for part in room_assignment.split(","):
+                part_str = part.strip()
+                if ":" in part_str:
+                    typ_prefix, r_val = part_str.split(":", 1)
+                    norm_r = normalize_room(r_val.strip(), instructor)
+                    cleaned_rooms.append(f"{typ_prefix.strip()}: {norm_r}")
+                else:
+                    cleaned_rooms.append(normalize_room(part_str, instructor))
+            room_assignment = ", ".join(cleaned_rooms)
+
+        # Populate discovered header fields driven purely by recipe bindings
+        field_values = {
+            "course_code_title": (course_code_title, 40, "16"),
+            "month_year": (month_year_label, 0, "18"),
+            "class_schedule": (schedule_label, 45, "16"),
+            "semester_ay": (semester_ay, 0, "18"),
+            "room_assignment": (room_assignment, 0, "18"),
+            "instructor": (instructor, 35, "16"),
+        }
+
+        for field_name, (val, shrink_thresh, shrink_sz) in field_values.items():
+            if field_name in info_binding.bindings:
+                r_idx, c_idx = info_binding.bindings[field_name]
+                p = get_info_para(r_idx, c_idx)
+                set_para_text(p, val, shrink_threshold=shrink_thresh, shrink_sz=shrink_sz)
+
+        # 2. Target attendance matrix table authoritatively via recipe with dynamic topological resolution
+        matrix_binding = self.recipe.matrix_binding
+        matrix_tbl_idx = matrix_binding.table_index
+        if manifest and manifest.roster_table is not None and manifest.roster_table.table_index < len(tables):
+            matrix_tbl_idx = manifest.roster_table.table_index
+
+        if matrix_tbl_idx >= len(tables):
+            raise TemplateError(f"Matrix table index {matrix_tbl_idx} not found in template.")
+        attn_tbl = tables[matrix_tbl_idx]
+
+        remainder = date_pool - (date_w * n_date_cols) if n_date_cols > 0 else date_pool
+        NO_W = 248
+        NAME_W = 1277 + remainder
+        STNUM_W = 499
+        LB_W = 212
+        LC_W = 208
+        R_W = 133
+        WEEK_W = date_w * session_count
+
+        summary_widths = list(matrix_binding.summary_column_widths)
+        SUM_W = sum(summary_widths)
+
+        lead_widths = [NO_W, NAME_W, STNUM_W]
+        if extra_lead_cols > 0:
+            lead_widths += [200] * extra_lead_cols
+
+        orig_rows = attn_tbl.findall(w("tr"))
+        if (
+            matrix_binding.header_row0_index >= len(orig_rows)
+            or matrix_binding.header_row1_index >= len(orig_rows)
+            or matrix_binding.student_template_row_index >= len(orig_rows)
+        ):
+            raise TemplateError("Matrix table row indices exceed table rows count.")
+
+        orig_header0 = orig_rows[matrix_binding.header_row0_index]
+        orig_header1 = orig_rows[matrix_binding.header_row1_index]
+        orig_student = orig_rows[matrix_binding.student_template_row_index]
+
+        for tr in orig_rows:
+            attn_tbl.remove(tr)
+
+        tblgrid = attn_tbl.find(w("tblGrid"))
+        if tblgrid is not None:
+            attn_tbl.remove(tblgrid)
+        tblgrid = etree.SubElement(attn_tbl, w("tblGrid"))
+        for cw in lead_widths + [date_w] * n_date_cols + summary_widths:
+            gc = etree.SubElement(tblgrid, w("gridCol"))
+            gc.set(w("w"), str(cw))
+
+        # Reconstruct header row 0 (weeks) explicitly by region
+        orig_header0_cells = orig_header0.findall(w("tc"))
+        if (
+            matrix_binding.week_template_cell_col < 0
+            or matrix_binding.week_template_cell_col >= len(orig_header0_cells)
+        ):
+            raise TemplateError(
+                f"Invalid week_template_cell_col {matrix_binding.week_template_cell_col} "
+                f"out of range [0, {len(orig_header0_cells)})."
+            )
+        if (
+            matrix_binding.summary_header0_cell_col < 0
+            or matrix_binding.summary_header0_cell_col >= len(orig_header0_cells)
+        ):
+            raise TemplateError(
+                f"Invalid summary_header0_cell_col {matrix_binding.summary_header0_cell_col} "
+                f"out of range [0, {len(orig_header0_cells)})."
+            )
+        if matrix_binding.date_columns_start > len(orig_header0_cells):
+            raise TemplateError(
+                f"date_columns_start {matrix_binding.date_columns_start} exceeds header row 0 cell count {len(orig_header0_cells)}."
+            )
+
+        week_cell_template = orig_header0_cells[matrix_binding.week_template_cell_col]
+        summary_header0_template = orig_header0_cells[matrix_binding.summary_header0_cell_col]
+
+        row0 = copy.deepcopy(orig_header0)
+        for tc in row0.findall(w("tc")):
+            row0.remove(tc)
+
+        # Region 1: Lead / extra columns
+        for c in range(matrix_binding.date_columns_start):
+            lead_tc = copy.deepcopy(orig_header0_cells[c])
+            if c == matrix_binding.no_col:
+                set_cell_width(lead_tc, NO_W)
+            elif c == matrix_binding.name_col:
+                set_cell_width(lead_tc, NAME_W)
+            elif c == matrix_binding.id_col:
+                set_cell_width(lead_tc, STNUM_W)
+            else:
+                set_cell_width(lead_tc, 200)
+            row0.append(lead_tc)
+
+        # Region 2: Date / session region (weeks)
+        for wi, wg in enumerate(week_groups, 1):
+            tc = copy.deepcopy(week_cell_template)
+            set_cell_width(tc, WEEK_W)
+            set_gridspan(tc, session_count)
+            p = tc.find(w("p"))
+            if p is not None:
+                set_para_text(p, f"WEEK {wi}")
+            row0.append(tc)
+
+        # Region 3: Summary region
+        sum_tc = copy.deepcopy(summary_header0_template)
+        set_cell_width(sum_tc, SUM_W)
+        set_gridspan(sum_tc, matrix_binding.summary_columns_count)
+        p = sum_tc.find(w("p"))
+        if p is not None:
+            set_para_text(p, "")
+        row0.append(sum_tc)
+        attn_tbl.append(row0)
+
+        # Reconstruct header row 1 (dates / session numbers / summary names) explicitly by region
+        orig_header1_cells = orig_header1.findall(w("tc"))
+        if (
+            matrix_binding.date_template_cell_col < 0
+            or matrix_binding.date_template_cell_col >= len(orig_header1_cells)
+        ):
+            raise TemplateError(
+                f"Invalid date_template_cell_col {matrix_binding.date_template_cell_col} "
+                f"out of range [0, {len(orig_header1_cells)})."
+            )
+        if matrix_binding.date_columns_start > len(orig_header1_cells):
+            raise TemplateError(
+                f"date_columns_start {matrix_binding.date_columns_start} exceeds header row 1 cell count {len(orig_header1_cells)}."
+            )
+        date_cell_template = orig_header1_cells[matrix_binding.date_template_cell_col]
+
+        row1 = copy.deepcopy(orig_header1)
+        for tc in row1.findall(w("tc")):
+            row1.remove(tc)
+
+        # Region 1: Lead / extra columns
+        for c in range(matrix_binding.date_columns_start):
+            lead_tc = copy.deepcopy(orig_header1_cells[c])
+            if c == matrix_binding.no_col:
+                set_cell_width(lead_tc, NO_W)
+            elif c == matrix_binding.name_col:
+                set_cell_width(lead_tc, NAME_W)
+            elif c == matrix_binding.id_col:
+                set_cell_width(lead_tc, STNUM_W)
+            else:
+                set_cell_width(lead_tc, 200)
+            row1.append(lead_tc)
+
+        # Region 2: Date / session region
+        for wg in week_groups:
+            week_dates = {dt.weekday(): dt for dt in wg}
+            for session_idx, (day_idx, slot_label) in enumerate(schedule_meetings, 1):
+                dt = week_dates.get(day_idx)
+                day_num = str(dt.day) if dt is not None else ""
+                tc = copy.deepcopy(date_cell_template)
+                set_cell_width(tc, date_w)
+                paras = tc.findall(w("p"))
+                if len(paras) >= 2:
+                    set_para_text(paras[0], day_num)
+                    set_para_text(paras[1], "")
+                elif len(paras) == 1:
+                    set_para_text(paras[0], day_num)
+                row1.append(tc)
+
+        # Region 3: Summary region
+        for sum_name, sum_col, wval in zip(
+            matrix_binding.summary_column_names,
+            matrix_binding.summary_header1_cell_cols,
+            summary_widths,
+        ):
+            if sum_col < 0 or sum_col >= len(orig_header1_cells):
+                raise TemplateError(
+                    f"Invalid summary_header1_cell_cols index {sum_col} out of range [0, {len(orig_header1_cells)})."
+                )
+            source_tc = orig_header1_cells[sum_col]
+            tc = copy.deepcopy(source_tc)
+            set_cell_width(tc, wval)
+            p = tc.find(w("p"))
+            if p is not None:
+                set_para_text(p, sum_name)
+            row1.append(tc)
+
+        attn_tbl.append(row1)
+
+        # 3. Student rows explicitly constructed by region
+        orig_student_cells = orig_student.findall(w("tc"))
+        if (
+            matrix_binding.student_date_template_cell_col < 0
+            or matrix_binding.student_date_template_cell_col >= len(orig_student_cells)
+        ):
+            raise TemplateError(
+                f"Invalid student_date_template_cell_col {matrix_binding.student_date_template_cell_col} "
+                f"out of range [0, {len(orig_student_cells)})."
+            )
+        if matrix_binding.date_columns_start > len(orig_student_cells):
+            raise TemplateError(
+                f"date_columns_start {matrix_binding.date_columns_start} exceeds student row cell count {len(orig_student_cells)}."
+            )
+        if (
+            matrix_binding.no_col >= len(orig_student_cells)
+            or matrix_binding.name_col >= len(orig_student_cells)
+            or matrix_binding.id_col >= len(orig_student_cells)
+        ):
+            raise TemplateError("Lead student column indices exceed student row cell count.")
+
+        att_cell_template = orig_student_cells[matrix_binding.student_date_template_cell_col]
+
+        target_rows = max(matrix_binding.template_student_row_capacity, GENERATOR_MIN_STUDENT_ROWS, len(students))
+        for row_idx in range(target_rows):
+            name, stnum = students[row_idx] if row_idx < len(students) else ("", "")
+
+            tr = copy.deepcopy(orig_student)
+            for tc in tr.findall(w("tc")):
+                tr.remove(tc)
+
+            trpr = tr.find(w("trPr"))
+            if trpr is None:
+                trpr = etree.SubElement(tr, w("trPr"))
+            if trpr.find(w("cantSplit")) is None:
+                etree.SubElement(trpr, w("cantSplit"))
+
+            # Region 1: Lead / extra columns
+            for c in range(matrix_binding.date_columns_start):
+                lead_tc = copy.deepcopy(orig_student_cells[c])
+                if c == matrix_binding.no_col:
+                    set_cell_width(lead_tc, NO_W)
+                    p = lead_tc.find(w("p"))
+                    if p is not None:
+                        set_para_text(p, str(row_idx + 1))
+                elif c == matrix_binding.name_col:
+                    set_cell_width(lead_tc, NAME_W)
+                    tcpr1 = lead_tc.find(w("tcPr"))
+                    if tcpr1 is not None:
+                        tcmar = tcpr1.find(w("tcMar"))
+                        if tcmar is None:
+                            tcmar = etree.SubElement(tcpr1, w("tcMar"))
+                        left = tcmar.find(w("left"))
+                        if left is None:
+                            left = etree.SubElement(tcmar, w("left"))
+                        left.set(w("w"), "50")
+                        left.set(w("type"), "dxa")
+                        right = tcmar.find(w("right"))
+                        if right is None:
+                            right = etree.SubElement(tcmar, w("right"))
+                        right.set(w("w"), "50")
+                        right.set(w("type"), "dxa")
+                    p = lead_tc.find(w("p"))
+                    if p is not None:
+                        set_para_text(p, name, is_attendance_student=True)
+                elif c == matrix_binding.id_col:
+                    set_cell_width(lead_tc, STNUM_W)
+                    p = lead_tc.find(w("p"))
+                    if p is not None:
+                        set_para_text(p, stnum)
+                else:
+                    set_cell_width(lead_tc, 200)
+                    p = lead_tc.find(w("p"))
+                    if p is not None:
+                        set_para_text(p, "")
+                tr.append(lead_tc)
+
+            # Region 2: Date / session region
+            for _ in range(n_date_cols):
+                tc = copy.deepcopy(att_cell_template)
+                set_cell_width(tc, date_w)
+                p = tc.find(w("p"))
+                if p is not None:
+                    set_para_text(p, "")
+                tr.append(tc)
+
+            # Region 3: Summary region
+            for sum_name, sum_col, wval in zip(
+                matrix_binding.summary_column_names,
+                matrix_binding.student_summary_cell_cols,
+                summary_widths,
+            ):
+                if sum_col < 0 or sum_col >= len(orig_student_cells):
+                    raise TemplateError(
+                        f"Invalid student_summary_cell_cols index {sum_col} out of range [0, {len(orig_student_cells)})."
+                    )
+                source_tc = orig_student_cells[sum_col]
+                tc = copy.deepcopy(source_tc)
+                set_cell_width(tc, wval)
+                p = tc.find(w("p"))
+                if p is not None:
+                    set_para_text(p, "")
+                tr.append(tc)
+
+            attn_tbl.append(tr)
+
+        save_docx(zin, root, output_path)
+        logger.info(f"Generated attendance sheet: {output_path}")
+
+
+# ── Public Compatibility Wrappers ──────────────────────────────────────────
+
 def build_attendance_sheet(
     template_path: str,
     output_path: str,
@@ -386,226 +816,33 @@ def build_attendance_sheet(
     weekdays: list,
     students: list,
     start_bound=None,
-    end_bound=None
+    end_bound=None,
+    recipe: Optional[ValidatedAttendanceTemplateRecipe] = None,
 ):
-    class_dates = get_class_dates_for_weekdays(months, year, weekdays, start_bound=start_bound, end_bound=end_bound)
-    if not class_dates:
-        raise EmptyDateError("No class dates found for the given months/year/weekdays.")
+    """
+    Public compatibility entrypoint.
+    Resolves ValidatedAttendanceTemplateRecipe via TemplateRecipeResolver
+    and delegates to AttendanceGenerator.
+    """
+    if recipe is None:
+        from modules.services.template_recipe_service import TemplateRecipeResolver
+        recipe = TemplateRecipeResolver.get_instance().resolve(template_path, profile_id="attendance_docx")
 
-    week_groups = dates_to_weeks(class_dates)
-    n_weeks = len(week_groups)
-    schedule_meetings = build_schedule_meetings(class_schedule)
-    if not schedule_meetings:
-        schedule_meetings = [(day_idx, "") for day_idx in (weekdays or [0])]
-    session_count = len(schedule_meetings)
-    n_date_cols = n_weeks * session_count
-    month_year_label = month_label(months, year)
-    schedule_label = build_schedule_label(class_schedule)
-
-    zin, root, body = load_docx(template_path)
-    tables = body.findall(w("tbl"))
-    if len(tables) < 2:
-        raise TemplateError("Attendance template must contain at least two tables.")
-    
-    info_tbl  = tables[0]
-    attn_tbl  = tables[1]
-
-    info_rows = info_tbl.findall(w("tr"))
-    if len(info_rows) < 5:
-        raise TemplateError("Attendance template info table must have at least 5 rows.")
-
-    def info_cell_para(row_idx, cell_idx):
-        try:
-            cells = info_rows[row_idx].findall(w("tc"))
-            return cells[cell_idx].find(w("p"))
-        except IndexError:
-            raise TemplateError(f"Info table structure invalid: missing cell at row {row_idx}, col {cell_idx}.")
-
-    # Ensure room_assignment is clean of instructor suffix
-    if instructor and room_assignment:
-        cleaned_rooms = []
-        for part in room_assignment.split(","):
-            part_str = part.strip()
-            if ":" in part_str:
-                typ_prefix, r_val = part_str.split(":", 1)
-                norm_r = normalize_room(r_val.strip(), instructor)
-                cleaned_rooms.append(f"{typ_prefix.strip()}: {norm_r}")
-            else:
-                cleaned_rooms.append(normalize_room(part_str, instructor))
-        room_assignment = ", ".join(cleaned_rooms)
-
-    set_para_text(info_cell_para(0, 1), course_code_title, shrink_threshold=40, shrink_sz="18")
-    set_para_text(info_cell_para(0, 4), month_year_label)
-    set_para_text(info_cell_para(1, 1), schedule_label, shrink_threshold=45, shrink_sz="18")
-    set_para_text(info_cell_para(2, 1), semester_ay)
-    set_para_text(info_cell_para(3, 1), room_assignment)
-    set_para_text(info_cell_para(4, 1), instructor, shrink_threshold=35, shrink_sz="18")
-
-    FIXED_PCT   = 248 + 1277 + 499 + 212 + 208 + 133
-    DATE_POOL   = 5000 - FIXED_PCT
-    DATE_W      = DATE_POOL // n_date_cols
-    remainder   = DATE_POOL - (DATE_W * n_date_cols)
-    NO_W    = 248
-    NAME_W  = 1277 + remainder
-    STNUM_W = 499
-    LB_W    = 212
-    LC_W    = 208
-    R_W     = 133
-    WEEK_W  = DATE_W * session_count
-    SUM_W   = LB_W + LC_W + R_W
-
-    orig_rows = attn_tbl.findall(w("tr"))
-    if len(orig_rows) < 3:
-        raise TemplateError("Attendance template attendance table must have at least 3 rows (2 headers, 1 student row).")
-        
-    orig_header0   = orig_rows[0]
-    orig_header1   = orig_rows[1]
-    orig_student   = orig_rows[2]
-
-    for tr in orig_rows:
-        attn_tbl.remove(tr)
-
-    tblgrid = attn_tbl.find(w("tblGrid"))
-    if tblgrid is not None:
-        attn_tbl.remove(tblgrid)
-    tblgrid = etree.SubElement(attn_tbl, w("tblGrid"))
-    for cw in [NO_W, NAME_W, STNUM_W] + [DATE_W]*n_date_cols + [LB_W, LC_W, R_W]:
-        gc = etree.SubElement(tblgrid, w("gridCol"))
-        gc.set(w("w"), str(cw))
-
-    row0 = copy.deepcopy(orig_header0)
-    row0_cells = row0.findall(w("tc"))
-
-    set_cell_width(row0_cells[0], NO_W)
-    set_cell_width(row0_cells[1], NAME_W)
-    set_cell_width(row0_cells[2], STNUM_W)
-
-    for tc in row0_cells[3:]:
-        row0.remove(tc)
-
-    week_cell_template = row0_cells[3]
-    for wi, wg in enumerate(week_groups, 1):
-        tc = copy.deepcopy(week_cell_template)
-        set_cell_width(tc, WEEK_W)
-        set_gridspan(tc, session_count)
-        p = tc.find(w("p"))
-        if p is not None:
-            set_para_text(p, f"WEEK {wi}")
-        row0.append(tc)
-
-    sum_tc = copy.deepcopy(row0_cells[-1])
-    set_cell_width(sum_tc, SUM_W)
-    set_gridspan(sum_tc, 3)
-    p = sum_tc.find(w("p"))
-    if p is not None:
-        set_para_text(p, "")
-    row0.append(sum_tc)
-    attn_tbl.append(row0)
-
-    row1 = copy.deepcopy(orig_header1)
-    row1_cells = row1.findall(w("tc"))
-
-    set_cell_width(row1_cells[0], NO_W)
-    set_cell_width(row1_cells[1], NAME_W)
-    set_cell_width(row1_cells[2], STNUM_W)
-
-    for tc in row1_cells[3:]:
-        row1.remove(tc)
-
-    date_cell_template = row1_cells[3]
-
-    for wg in week_groups:
-        week_dates = {dt.weekday(): dt for dt in wg}
-        for session_idx, (day_idx, slot_label) in enumerate(schedule_meetings, 1):
-            dt = week_dates.get(day_idx)
-            day_num = str(dt.day) if dt is not None else ""
-            tc = copy.deepcopy(date_cell_template)
-            set_cell_width(tc, DATE_W)
-            paras = tc.findall(w("p"))
-            if len(paras) >= 2:
-                set_para_text(paras[0], day_num)
-                set_para_text(paras[1], "")
-            elif len(paras) == 1:
-                set_para_text(paras[0], day_num)
-            row1.append(tc)
-
-    lb_template = row1_cells[-3]
-    lc_template = row1_cells[-2]
-    r_template  = row1_cells[-1]
-    for tc_tmpl, wval in [(lb_template, LB_W), (lc_template, LC_W), (r_template, R_W)]:
-        tc = copy.deepcopy(tc_tmpl)
-        set_cell_width(tc, wval)
-        row1.append(tc)
-
-    attn_tbl.append(row1)
-
-    orig_student_cells = orig_student.findall(w("tc"))
-    att_cell_template  = orig_student_cells[3]
-    lb_s = orig_student_cells[-3]
-    lc_s = orig_student_cells[-2]
-    r_s  = orig_student_cells[-1]
-
-    MAX_ROWS = 40
-    target_rows = max(MAX_ROWS, len(students))
-    for row_idx in range(target_rows):
-        name, stnum = students[row_idx] if row_idx < len(students) else ("", "")
-
-        tr = copy.deepcopy(orig_student)
-        cells = tr.findall(w("tc"))
-
-        set_cell_width(cells[0], NO_W)
-        set_cell_width(cells[1], NAME_W)
-        set_cell_width(cells[2], STNUM_W)
-
-        tcpr1 = cells[1].find(w("tcPr"))
-        if tcpr1 is not None:
-            tcmar = tcpr1.find(w("tcMar"))
-            if tcmar is None:
-                tcmar = etree.SubElement(tcpr1, w("tcMar"))
-            left = tcmar.find(w("left"))
-            if left is None:
-                left = etree.SubElement(tcmar, w("left"))
-            left.set(w("w"), "50")
-            left.set(w("type"), "dxa")
-            right = tcmar.find(w("right"))
-            if right is None:
-                right = etree.SubElement(tcmar, w("right"))
-            right.set(w("w"), "50")
-            right.set(w("type"), "dxa")
-
-        trpr = tr.find(w("trPr"))
-        if trpr is None:
-            trpr = etree.SubElement(tr, w("trPr"))
-        if trpr.find(w("cantSplit")) is None:
-            etree.SubElement(trpr, w("cantSplit"))
-
-        set_para_text(cells[0].find(w("p")), str(row_idx + 1))
-        set_para_text(cells[1].find(w("p")), name, shrink_threshold=32, shrink_sz="18")
-        set_para_text(cells[2].find(w("p")), stnum)
-
-        for tc in cells[3:]:
-            tr.remove(tc)
-
-        for _ in range(n_date_cols):
-            tc = copy.deepcopy(att_cell_template)
-            set_cell_width(tc, DATE_W)
-            p = tc.find(w("p"))
-            if p is not None:
-                set_para_text(p, "")
-            tr.append(tc)
-
-        for tc_tmpl, wval in [(lb_s, LB_W), (lc_s, LC_W), (r_s, R_W)]:
-            tc = copy.deepcopy(tc_tmpl)
-            set_cell_width(tc, wval)
-            p = tc.find(w("p"))
-            if p is not None:
-                set_para_text(p, "")
-            tr.append(tc)
-
-        attn_tbl.append(tr)
-
-    save_docx(zin, root, output_path)
-    logger.info(f"Generated attendance sheet: {output_path}")
+    gen = AttendanceGenerator(template_path, recipe)
+    gen.generate(
+        output_path=output_path,
+        course_code_title=course_code_title,
+        class_schedule=class_schedule,
+        semester_ay=semester_ay,
+        room_assignment=room_assignment,
+        instructor=instructor,
+        months=months,
+        year=year,
+        weekdays=weekdays,
+        students=students,
+        start_bound=start_bound,
+        end_bound=end_bound,
+    )
 
 
 def get_default_template_path(has_lab: bool = False) -> str:

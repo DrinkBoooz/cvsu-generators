@@ -7,6 +7,26 @@ import os
 import sys
 from pathlib import Path
 
+# ── Crash hooks must be installed BEFORE any other import so that import-time
+#    errors are captured in the log files.
+# ── In windowed/frozen mode sys.stderr is None; without this, unhandled
+#    exceptions in startup code are completely silent.
+if not ("pytest" in sys.modules or "PYTEST_CURRENT_TEST" in os.environ):
+    try:
+        # Ensure repository root / _MEIPASS on path first so the import works
+        if getattr(sys, "frozen", False):
+            _boot_dir = sys._MEIPASS
+        else:
+            _boot_dir = os.path.dirname(os.path.abspath(__file__))
+            _repo_root = os.path.dirname(_boot_dir)
+            for _p in (_boot_dir, _repo_root):
+                if _p not in sys.path:
+                    sys.path.insert(0, _p)
+        from modules.common.logger import install_global_hooks
+        install_global_hooks()
+    except Exception:
+        pass  # Hooks couldn't be installed — proceed; at least pywebview will log to console
+
 # Ensure repository root and package directory are on sys.path
 if getattr(sys, 'frozen', False):
     CURR_DIR = sys._MEIPASS
@@ -55,26 +75,45 @@ def create_app():
     )
     api._window = window
 
+    # ── Window Lifecycle State (Part B)
+    # Transitions: OPEN → CLOSING → CLOSED
+    # No new evaluate_js/WebView operation may start once CLOSING begins.
     def on_window_closing():
-        api._is_window_closed = True
+        """
+        Fired synchronously on the UI thread before the window is destroyed.
+        Transitions state to CLOSING so that in-flight workers stop dispatching
+        to the WebView before the COM object is torn down.
+        """
+        api._window_state = "CLOSING"
+        api._is_window_closed = True   # legacy bool kept for backwards compat
         api.cancel_generation()
 
     def on_window_closed():
-        api._is_window_closed = True
+        """
+        Fired after the window has been destroyed.
+        Transitions state to CLOSED — any attempt to call evaluate_js is now a bug.
+        """
+        api._window_state = "CLOSED"
+        api._is_window_closed = True   # legacy bool kept for backwards compat
+
+    # Set initial lifecycle state
+    api._window_state = "OPEN"
 
     window.events.closing += on_window_closing
     window.events.closed += on_window_closed
 
     if os.environ.get('CVSU_DIAGNOSTIC_MODE') == '1':
-        _setup_diagnostics(window, document_url)
+        _setup_diagnostics(window, document_url, api)
 
     return window, api
 
-def _setup_diagnostics(window, doc_url):
+def _setup_diagnostics(window, doc_url, api=None):
     """
     Activates non-perturbing telemetry listeners when CVSU_DIAGNOSTIC_MODE=1 is set.
     Uses an in-memory deque buffer and background flusher thread.
     Callbacks perform ZERO synchronous file I/O and ZERO JSON serialization.
+
+    Part H — records all required lifecycle milestones.
     """
     try:
         import datetime
@@ -92,12 +131,22 @@ def _setup_diagnostics(window, doc_url):
         buffer_lock = threading.Lock()
         stop_event = threading.Event()
 
-        # Initial startup record
-        event_buffer.append({
-            "event": "diagnostic_init",
-            "timestamp": time.time(),
-            "document_url": doc_url
-        })
+        def _emit(event_name: str, **kwargs):
+            """Zero-I/O, zero-serialization emit into the ring buffer."""
+            entry = {"event": event_name, "timestamp": time.time()}
+            entry.update(kwargs)
+            with buffer_lock:
+                event_buffer.append(entry)
+
+        # Part H milestone: startup
+        _emit("startup",
+              document_url=doc_url,
+              pid=os.getpid(),
+              frozen=getattr(sys, "frozen", False),
+              python_version=sys.version)
+
+        def on_loaded():
+            _emit("webview_initialized")
 
         def on_request(request):
             """Strictly read-only, non-mutating callback with zero synchronous I/O."""
@@ -157,13 +206,29 @@ def _setup_diagnostics(window, doc_url):
         flusher = threading.Thread(target=flush_worker, daemon=True, name="CvSUDiagnosticFlusher")
         flusher.start()
 
+        def on_closing_diag():
+            _emit("window_closing",
+                  window_state=getattr(api, "_window_state", "unknown") if api else "unknown")
+
         def on_closed():
+            _emit("window_closed")
             stop_event.set()
             flusher.join(timeout=1.0)
 
-        window.events.request_sent += on_request
-        window.events.response_received += on_response
-        window.events.closed += on_closed
+        _ev = window.events
+        if hasattr(_ev, "loaded"):
+            _ev.loaded += on_loaded
+        if hasattr(_ev, "request_sent"):
+            _ev.request_sent += on_request
+        if hasattr(_ev, "response_received"):
+            _ev.response_received += on_response
+        if hasattr(_ev, "closing"):
+            _ev.closing += on_closing_diag
+        if hasattr(_ev, "closed"):
+            _ev.closed += on_closed
+
+        # Expose emit function so generation.py can log milestones
+        window._diag_emit = _emit
 
         # Store state object for inspection and unit testing
         window._diag_state = {
@@ -173,12 +238,256 @@ def _setup_diagnostics(window, doc_url):
             "log_path": log_path,
             "on_request": on_request,
             "on_response": on_response,
-            "flusher": flusher
+            "flusher": flusher,
+            "emit": _emit,
         }
         return window._diag_state
     except Exception:
         return None
 
+def _run_theme_diagnostics_probe(window, api):
+    """
+    Executes controlled runtime diagnostics inside the native PyWebView/WebView2 host.
+    Collects renderer identification, browser version, API availability,
+    promise resolutions, WAAPI pseudoElement metrics, and reduced-motion states.
+    Writes output to CVSU_DIAGNOSTIC_OUTPUT or %TEMP%/cvsu_theme_diagnostic_report.json.
+    """
+    import json
+    import tempfile
+    import time
+
+    time.sleep(1.0)
+
+    report = {
+        "timestamp": time.time(),
+        "pid": os.getpid(),
+        "is_frozen": getattr(sys, "frozen", False),
+        "pywebview_version": "6.2.1",
+        "renderer": getattr(webview, "renderer", "unknown"),
+    }
+
+    try:
+        import clr
+        from Microsoft.Web.WebView2.Core import CoreWebView2Environment
+        report["webview2_runtime_version"] = CoreWebView2Environment.GetAvailableBrowserVersionString()
+    except Exception as e:
+        report["webview2_runtime_version_error"] = str(e)
+
+    try:
+        report["url"] = window.evaluate_js("window.location.href")
+        report["userAgent"] = window.evaluate_js("navigator.userAgent")
+        report["platform"] = window.evaluate_js("navigator.platform")
+        report["userAgentData_brands"] = window.evaluate_js("navigator.userAgentData ? navigator.userAgentData.brands : null")
+        report["userAgentData_platform"] = window.evaluate_js("navigator.userAgentData ? navigator.userAgentData.platform : null")
+        report["hasStartViewTransition"] = window.evaluate_js("typeof document.startViewTransition === 'function'")
+        report["hasElementAnimate"] = window.evaluate_js("typeof Element.prototype.animate === 'function'")
+        report["hasCSSSupports"] = window.evaluate_js("typeof CSS !== 'undefined' && typeof CSS.supports === 'function'")
+        report["supportsVTName"] = window.evaluate_js("typeof CSS !== 'undefined' && CSS.supports('view-transition-name: root')")
+        report["supportsClipPath"] = window.evaluate_js("typeof CSS !== 'undefined' && CSS.supports('clip-path: circle(10px at 10px 10px)')")
+        report["prefersReducedMotion"] = window.evaluate_js("window.matchMedia('(prefers-reduced-motion: reduce)').matches")
+        report["systemReducedMotion"] = window.evaluate_js("window.matchMedia('(prefers-reduced-motion: reduce)').matches")
+        report["systemReducedTransparency"] = window.evaluate_js("window.matchMedia('(prefers-reduced-transparency: reduce)').matches")
+        report["storedMotionPreference"] = window.evaluate_js("window.getStoredAccessibilityMotion ? window.getStoredAccessibilityMotion() : null")
+        report["effectiveMotionPreference"] = window.evaluate_js("window.getEffectiveMotionPreference ? window.getEffectiveMotionPreference() : null")
+        report["storedTransparencyPreference"] = window.evaluate_js("window.getStoredAccessibilityTransparency ? window.getStoredAccessibilityTransparency() : null")
+        report["effectiveTransparencyPreference"] = window.evaluate_js("window.getEffectiveTransparencyPreference ? window.getEffectiveTransparencyPreference() : null")
+
+        window.evaluate_js("""
+            window.__diag_controlled_promise = null;
+            if (typeof window.__runControlledThemeTransition === 'function') {
+                window.__runControlledThemeTransition().then(res => {
+                    window.__diag_controlled_promise = res;
+                }).catch(err => {
+                    window.__diag_controlled_promise = { error: String(err) };
+                });
+            }
+        """)
+
+        for _ in range(40):
+            time.sleep(0.1)
+            done = window.evaluate_js("Boolean(window.__diag_controlled_promise)")
+            if done:
+                break
+        time.sleep(0.5)
+        report["controlled_transition"] = window.evaluate_js("window.__diag_controlled_promise")
+
+        report["accessibility_ui"] = window.evaluate_js("""({
+            hasTab: Boolean(document.getElementById('cfgTabAccessibility')),
+            hasPane: Boolean(document.getElementById('cfgPaneAccessibility')),
+            hasMotionSelect: Boolean(document.getElementById('accMotionSelect')),
+            hasTransparencySelect: Boolean(document.getElementById('accTransparencySelect')),
+            dataAccMotion: document.documentElement.getAttribute('data-acc-motion'),
+            dataAccTransparency: document.documentElement.getAttribute('data-acc-transparency')
+        })""")
+
+        window.evaluate_js("""
+            window.__captured_errors = [];
+            const origErr = console.error;
+            console.error = function(...args) {
+                window.__captured_errors.push(args.map(a => String(a)).join(' '));
+                origErr.apply(console, args);
+            };
+            const btn = document.getElementById('btnToggleTheme');
+            if (btn) btn.click();
+        """)
+        time.sleep(0.6)
+        report["natural_toggle"] = {
+            "theme": window.evaluate_js("document.documentElement.getAttribute('data-theme')"),
+            "captured_errors": window.evaluate_js("window.__captured_errors")
+        }
+
+        # Test app-level override: setting motion to "full" overrides OS reduceMotion
+        window.evaluate_js("""
+            window.__captured_errors = [];
+            if (typeof onAccessibilityMotionChange === 'function') {
+                onAccessibilityMotionChange('full');
+            }
+            const btn = document.getElementById('btnToggleTheme');
+            if (btn) btn.click();
+        """)
+        time.sleep(0.6)
+        report["app_override_full_motion_toggle"] = {
+            "theme": window.evaluate_js("document.documentElement.getAttribute('data-theme')"),
+            "effective_motion": window.evaluate_js("document.documentElement.getAttribute('data-acc-motion')"),
+            "captured_errors": window.evaluate_js("window.__captured_errors")
+        }
+
+        # Reset back to system default
+        window.evaluate_js("""
+            if (typeof onAccessibilityMotionChange === 'function') {
+                onAccessibilityMotionChange('system');
+            }
+        """)
+
+        window.evaluate_js("""
+            window.__captured_errors = [];
+            const origMM = window.matchMedia;
+            window.matchMedia = function(q) {
+                if (q === '(prefers-reduced-motion: reduce)') {
+                    return { matches: false, addEventListener: () => {}, removeEventListener: () => {} };
+                }
+                return origMM.call(window, q);
+            };
+            const btn = document.getElementById('btnToggleTheme');
+            if (btn) btn.click();
+        """)
+        time.sleep(0.6)
+        report["bypassed_reduced_motion_toggle"] = {
+            "theme": window.evaluate_js("document.documentElement.getAttribute('data-theme')"),
+            "captured_errors": window.evaluate_js("window.__captured_errors")
+        }
+
+    except Exception as e:
+        report["probe_error"] = str(e)
+
+    out_path = os.environ.get(
+        "CVSU_DIAGNOSTIC_OUTPUT",
+        os.path.join(tempfile.gettempdir(), "cvsu_theme_diagnostic_report.json")
+    )
+    try:
+        with open(out_path, "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2)
+        print(f"[DIAGNOSTIC] Report written to: {out_path}")
+    except Exception as err:
+        print(f"[DIAGNOSTIC] Error writing report: {err}")
+
+    if os.environ.get("CVSU_DIAGNOSTIC_EXIT") == "1":
+        window.destroy()
+
+def _run_persistence_diagnostics_probe(window, api):
+    """
+    Automated diagnostic probe for verifying persistence across runs in packaged CvSU Gen.exe.
+    Collects preferences, tests write-through, verifies restart recovery, and outputs JSON.
+    """
+    import json
+    import time
+    import tempfile
+
+    report = {
+        "timestamp": time.time(),
+        "is_frozen": getattr(sys, "frozen", False),
+    }
+
+    try:
+        time.sleep(0.5)
+        initial_theme = window.evaluate_js("document.documentElement.getAttribute('data-theme')")
+        initial_motion = window.evaluate_js("window.getStoredAccessibilityMotion ? window.getStoredAccessibilityMotion() : localStorage.getItem('cvsu_acc_motion')")
+        initial_trans = window.evaluate_js("window.getStoredAccessibilityTransparency ? window.getStoredAccessibilityTransparency() : localStorage.getItem('cvsu_acc_transparency')")
+
+        py_prefs = api.get_user_preferences()
+        py_parser = api.get_parser_config()
+
+        report["initial"] = {
+            "dom_theme": initial_theme,
+            "dom_motion": initial_motion,
+            "dom_trans": initial_trans,
+            "py_prefs": py_prefs,
+            "py_parser_prefixes_count": len(py_parser.get("base_subject_prefixes", [])),
+        }
+
+        probe_action = os.environ.get("CVSU_PERSISTENCE_ACTION")
+        if probe_action == "mutate_and_exit":
+            window.evaluate_js("""
+                if (typeof onAccessibilityMotionChange === 'function') onAccessibilityMotionChange('reduce');
+                if (typeof onAccessibilityTransparencyChange === 'function') onAccessibilityTransparencyChange('glass');
+                const btn = document.getElementById('btnToggleTheme');
+                if (btn) btn.click();
+            """)
+            time.sleep(0.6)
+            custom_cfg = api.get_parser_config()
+            custom_cfg["base_subject_prefixes"].append("PACKAGEDTEST")
+            api.save_parser_config(custom_cfg)
+
+            report["post_mutation"] = {
+                "dom_theme": window.evaluate_js("document.documentElement.getAttribute('data-theme')"),
+                "dom_motion": window.evaluate_js("window.getStoredAccessibilityMotion()"),
+                "dom_trans": window.evaluate_js("window.getStoredAccessibilityTransparency()"),
+                "py_prefs": api.get_user_preferences(),
+                "has_test_prefix": "PACKAGEDTEST" in api.get_parser_config().get("base_subject_prefixes", []),
+            }
+
+        elif probe_action == "verify_and_reset":
+            api.reset_parser_config()
+            report["after_parser_reset"] = {
+                "py_prefs": api.get_user_preferences(),
+                "has_test_prefix": "PACKAGEDTEST" in api.get_parser_config().get("base_subject_prefixes", []),
+            }
+            api.reset_user_preferences()
+            report["after_prefs_reset"] = {
+                "py_prefs": api.get_user_preferences(),
+            }
+
+    except Exception as e:
+        report["error"] = str(e)
+
+    out_path = os.environ.get(
+        "CVSU_DIAGNOSTIC_OUTPUT",
+        os.path.join(tempfile.gettempdir(), "cvsu_persistence_diagnostic_report.json")
+    )
+    try:
+        with open(out_path, "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2)
+        print(f"[DIAGNOSTIC] Persistence report written to: {out_path}")
+    except Exception as err:
+        print(f"[DIAGNOSTIC] Error writing report: {err}")
+
+    if os.environ.get("CVSU_DIAGNOSTIC_EXIT") == "1":
+        window.destroy()
+
 if __name__ == '__main__':
+    if os.environ.get('CVSU_REMOTE_DEBUG_PORT'):
+        try:
+            webview.settings['REMOTE_DEBUGGING_PORT'] = int(os.environ['CVSU_REMOTE_DEBUG_PORT'])
+        except Exception:
+            pass
+
     app_window, app_api = create_app()
-    webview.start(setup_window_drag_and_drop, (app_window, app_api))
+
+    def _startup_handler(window, api):
+        setup_window_drag_and_drop(window, api)
+        if os.environ.get('CVSU_THEME_DIAGNOSTIC') == '1':
+            _run_theme_diagnostics_probe(window, api)
+        if os.environ.get('CVSU_PERSISTENCE_DIAGNOSTIC') == '1':
+            _run_persistence_diagnostics_probe(window, api)
+
+    webview.start(_startup_handler, (app_window, app_api))

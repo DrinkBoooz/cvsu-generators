@@ -1,4 +1,8 @@
-lxml>=6.0.0
-xlrd>=2.0.0
-openpyxl>=3.0.0
-pytest>=8.0.0
+# CvSU Document Generator - Aggregate Developer Environment
+# Direct-dependency specification pinned for reproducibility
+# For targeted installations, see:
+#   - requirements-runtime.txt (core production runtime)
+#   - requirements-test.txt    (testing and development)
+#   - requirements-build.txt   (PyInstaller executable packaging)
+-r requirements-test.txt
+-r requirements-build.txt

@@ -5,6 +5,10 @@ import roster_parser
 import process_schedule
 from executable_test.main import ScriptAPI
 
+_FIXTURE_SCHEDULE = os.path.join(os.path.dirname(__file__), "fixtures", "schedules", "ORTEGA_SCHEDULE.xls")
+_ROOT_SCHEDULE = os.path.join(os.path.dirname(__file__), "..", "ORTEGA_SCHEDULE.xls")
+SCHEDULE_PATH = _FIXTURE_SCHEDULE if os.path.exists(_FIXTURE_SCHEDULE) else _ROOT_SCHEDULE
+
 def test_ceit_prefix_directory_completeness():
     """Verify all 15 official CEIT prefixes and department mappings are present."""
     expected_prefixes = [
@@ -96,7 +100,7 @@ def test_load_students_with_overrides(tmp_path):
 
 def test_validate_rosters_with_manual_linking(tmp_path):
     """Test validate_rosters with non-standard roster filenames linked via roster_configs."""
-    schedule_path = os.path.join(os.path.dirname(__file__), "..", "ORTEGA_SCHEDULE.xls")
+    schedule_path = SCHEDULE_PATH
     
     # Non-standard filename that fails default regex
     odd_file = tmp_path / "CS1-4_Official_Roster.csv"
@@ -266,7 +270,7 @@ def test_process_schedule_with_multi_column_multi_header_roster(tmp_path):
     """Verify end-to-end processing with a 10-column multi-header XLSX roster."""
     import openpyxl
 
-    schedule_path = os.path.join(os.path.dirname(__file__), "..", "ORTEGA_SCHEDULE.xls")
+    schedule_path = SCHEDULE_PATH
 
     wb = openpyxl.Workbook()
     ws = wb.active
