@@ -35,6 +35,7 @@ def process_all(
     progress_callback=None,
     cancel_event=None,
     roster_configs=None,
+    calendar_resolver=None,
 ):
     """
     Core end-to-end orchestration service. Processes timetable schedules and student rosters,
@@ -466,6 +467,17 @@ def process_all(
                         "subject": subject_name
                     }
                     
+                    cal_resolver = calendar_resolver
+                    if cal_resolver is None:
+                        try:
+                            from modules.parsers.calendar_resolver import CalendarResolver
+                            from modules.common.config_manager import config_manager
+                            cal_cfg = config_manager.get_config().get("calendar_config")
+                            if cal_cfg and cal_cfg.get("enabled", False):
+                                cal_resolver = CalendarResolver.from_dict(cal_cfg)
+                        except Exception as ce:
+                            logger.warning(f"Could not initialize CalendarResolver in orchestrator: {ce}")
+
                     for m in months:
                         if cancel_event and cancel_event.is_set():
                             results["cancelled"] = True
@@ -490,7 +502,8 @@ def process_all(
                                 year=str(year_for_month),
                                 class_day=combined_days,
                                 start_bound=start_bound,
-                                end_bound=end_bound
+                                end_bound=end_bound,
+                                calendar_resolver=cal_resolver,
                             )
                             if res == "skipped_empty":
                                 results["skipped"]["attendance"].append(f"{month_out_name} (0 days)")

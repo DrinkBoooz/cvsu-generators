@@ -109,6 +109,7 @@
           "Schedule",
           "TemplateSets",
           "CustomTemplates",
+          "Calendar",
           "Accessibility",
         ];
         tabs.forEach((t) => {
@@ -122,6 +123,9 @@
         }
         if (tabName === "CustomTemplates") {
           loadCustomTemplatesUI();
+        }
+        if (tabName === "Calendar") {
+          loadCalendarSettingsUI();
         }
         if (tabName === "Schedule") {
           updateFacultyDefaultsPreview();
@@ -139,6 +143,7 @@
         renderConfigKeywords();
         renderConfigScheduleDefaults();
         loadCustomTemplatesUI();
+        loadCalendarSettingsUI();
         updateAccessibilitySettingsUI();
       }
 
@@ -692,6 +697,17 @@
         activeParserConfig.organization_preset.department = dept ? dept.value.trim() : "";
         activeParserConfig.organization_preset.signatories = getActiveSignatories();
 
+        if (activeCalendarConfig) {
+          activeParserConfig.calendar_config = activeCalendarConfig;
+          if (window.pywebview && window.pywebview.api && window.pywebview.api.save_calendar_config) {
+            try {
+              window.pywebview.api.save_calendar_config(activeCalendarConfig);
+            } catch (calErr) {
+              console.warn("Could not save calendar config via dedicated API:", calErr);
+            }
+          }
+        }
+
         if (
           window.pywebview &&
           window.pywebview.api &&
@@ -931,8 +947,468 @@
         }
       }
 
+      // ── Academic Calendar, Holiday & Walang Pasok Suspension Engine ───────────
+      let activeCalendarConfig = null;
+      let cachedCalendarDates = [];
+
+      async function loadCalendarSettingsUI() {
+        if (
+          !activeCalendarConfig &&
+          window.pywebview &&
+          window.pywebview.api &&
+          window.pywebview.api.get_calendar_config
+        ) {
+          try {
+            activeCalendarConfig = await window.pywebview.api.get_calendar_config();
+          } catch (err) {
+            console.warn("Failed to load calendar config from pywebview:", err);
+          }
+        }
+
+        if (!activeCalendarConfig) {
+          if (activeParserConfig && activeParserConfig.calendar_config) {
+            activeCalendarConfig = JSON.parse(JSON.stringify(activeParserConfig.calendar_config));
+          } else {
+            activeCalendarConfig = {
+              default_mode: "OMIT_COLUMN",
+              rules: [
+                { name: "New Year's Day", rule_type: "fixed_date", month: 1, day: 1, category: "HOLIDAY" },
+                { name: "Araw ng Kagitingan", rule_type: "fixed_date", month: 4, day: 9, category: "HOLIDAY" },
+                { name: "Labor Day", rule_type: "fixed_date", month: 5, day: 1, category: "HOLIDAY" },
+                { name: "Independence Day", rule_type: "fixed_date", month: 6, day: 12, category: "HOLIDAY" },
+                { name: "Ninoy Aquino Day", rule_type: "fixed_date", month: 8, day: 21, category: "HOLIDAY" },
+                { name: "National Heroes Day", rule_type: "nth_weekday", month: 8, weekday: 0, nth: -1, category: "HOLIDAY" },
+                { name: "Cavite Day", rule_type: "fixed_date", month: 9, day: 2, category: "HOLIDAY" },
+                { name: "All Saints' Day", rule_type: "fixed_date", month: 11, day: 1, category: "HOLIDAY" },
+                { name: "All Souls' Day", rule_type: "fixed_date", month: 11, day: 2, category: "HOLIDAY" },
+                { name: "Bonifacio Day", rule_type: "fixed_date", month: 11, day: 30, category: "HOLIDAY" },
+                { name: "Feast of the Immaculate Conception", rule_type: "fixed_date", month: 12, day: 8, category: "HOLIDAY" },
+                { name: "Christmas Day", rule_type: "fixed_date", month: 12, day: 25, category: "HOLIDAY" },
+                { name: "Rizal Day", rule_type: "fixed_date", month: 12, day: 30, category: "HOLIDAY" },
+                { name: "Last Day of the Year", rule_type: "fixed_date", month: 12, day: 31, category: "HOLIDAY" },
+              ],
+              exceptions: [],
+              overrides: {},
+            };
+          }
+        }
+
+        // Update UI Controls
+        const modeSelect = document.getElementById("calExceptionModeSelect");
+        if (modeSelect) {
+          modeSelect.value = activeCalendarConfig.default_mode || "OMIT_COLUMN";
+        }
+
+        // Render recurrence rules badges
+        renderRecurrenceRulesUI();
+
+        // Render date strip
+        await renderCalendarDateStrip();
+      }
+
+      function renderRecurrenceRulesUI() {
+        const container = document.getElementById("calRecurrenceRulesList");
+        if (!container || !activeCalendarConfig) return;
+        const rules = activeCalendarConfig.rules || [];
+        if (rules.length === 0) {
+          container.innerHTML = `<span style="color: var(--text-muted);">No recurrence rules configured.</span>`;
+          return;
+        }
+        container.innerHTML = rules
+          .map((r) => {
+            let desc = "";
+            if (r.rule_type === "fixed_date") {
+              const m = String(r.month || 0).padStart(2, "0");
+              const d = String(r.day || 0).padStart(2, "0");
+              desc = `${m}-${d}`;
+            } else if (r.rule_type === "nth_weekday") {
+              desc = `Nth-Wkday M${r.month}`;
+            } else {
+              desc = r.rule_type || "";
+            }
+            return `
+            <span class="badge-ceit-pill" style="font-size: 11px; padding: 2px 8px; background: var(--surface-subtle); border: 1px solid var(--border-subtle);">
+              🇵🇭 <strong>${escapeHTML(r.name || "Holiday")}</strong> (${escapeHTML(desc)})
+            </span>
+          `;
+          })
+          .join("");
+      }
+
+      function onCalendarModeChange(val) {
+        if (!activeCalendarConfig) activeCalendarConfig = {};
+        activeCalendarConfig.default_mode = val || "OMIT_COLUMN";
+        if (activeParserConfig) {
+          if (!activeParserConfig.calendar_config) activeParserConfig.calendar_config = {};
+          activeParserConfig.calendar_config.default_mode = activeCalendarConfig.default_mode;
+        }
+        if (
+          window.pywebview &&
+          window.pywebview.api &&
+          window.pywebview.api.save_calendar_config
+        ) {
+          window.pywebview.api.save_calendar_config(activeCalendarConfig).catch((e) => {
+            console.warn("Could not save calendar mode immediately:", e);
+          });
+        }
+        if (typeof showToast === "function") {
+          const label =
+            val === "OMIT_COLUMN"
+              ? "Non-working dates will be excluded from attendance column sequence."
+              : "Non-working dates will remain in header with compact status stamps.";
+          showToast("Attendance Policy Updated", label, "info");
+        }
+      }
+
+      function onCalendarSemesterSelectChange(val) {
+        renderCalendarDateStrip();
+      }
+
+      async function parseAnnouncementFromUI() {
+        const textarea = document.getElementById("calAnnouncementInput");
+        const feedback = document.getElementById("calParseFeedback");
+        if (!textarea) return;
+        const text = textarea.value.trim();
+        if (!text) {
+          if (typeof showToast === "function") {
+            showToast("Input Required", "Please paste memo or announcement text first.", "warning");
+          }
+          return;
+        }
+
+        if (
+          window.pywebview &&
+          window.pywebview.api &&
+          window.pywebview.api.parse_calendar_announcement
+        ) {
+          try {
+            const res = await window.pywebview.api.parse_calendar_announcement(text);
+            if (res && res.status === "success") {
+              if (!activeCalendarConfig) activeCalendarConfig = {};
+              if (!Array.isArray(activeCalendarConfig.exceptions)) {
+                activeCalendarConfig.exceptions = [];
+              }
+              const newExceptions = res.exceptions || [];
+              activeCalendarConfig.exceptions.push(...newExceptions);
+
+              if (feedback) {
+                feedback.innerHTML = `<span style="color: var(--accent-emerald);">✓ Parsed and registered <strong>${newExceptions.length}</strong> calendar exception(s).</span>`;
+              }
+              if (typeof showToast === "function") {
+                showToast("Announcement Parsed", `Added ${newExceptions.length} calendar exception(s).`, "success");
+              }
+              textarea.value = "";
+              await renderCalendarDateStrip();
+              return;
+            }
+          } catch (err) {
+            console.error("Failed to parse announcement via backend:", err);
+          }
+        }
+
+        if (feedback) {
+          feedback.innerHTML = `<span style="color: var(--accent-emerald);">✓ Processed announcement lines.</span>`;
+        }
+        await renderCalendarDateStrip();
+      }
+
+      async function importIcsFromUI() {
+        if (
+          window.pywebview &&
+          window.pywebview.api &&
+          window.pywebview.api.import_calendar_ics
+        ) {
+          try {
+            const res = await window.pywebview.api.import_calendar_ics();
+            if (res && res.status === "success") {
+              if (!activeCalendarConfig) activeCalendarConfig = {};
+              if (!Array.isArray(activeCalendarConfig.exceptions)) {
+                activeCalendarConfig.exceptions = [];
+              }
+              const newExceptions = res.exceptions || [];
+              activeCalendarConfig.exceptions.push(...newExceptions);
+              if (typeof showToast === "function") {
+                showToast("iCalendar Imported", `Loaded ${newExceptions.length} calendar event(s) from .ics file.`, "success");
+              }
+              const feedback = document.getElementById("calParseFeedback");
+              if (feedback) {
+                feedback.innerHTML = `<span style="color: var(--accent-emerald);">✓ Imported <strong>${newExceptions.length}</strong> events from iCalendar (.ics).</span>`;
+              }
+              await renderCalendarDateStrip();
+            } else if (res && res.status === "error") {
+              if (typeof showToast === "function") {
+                showToast("Import Failed", res.message || "Failed to parse .ics file.", "error");
+              }
+            }
+          } catch (err) {
+            console.error("Failed to import .ics file:", err);
+          }
+        } else {
+          if (typeof showToast === "function") {
+            showToast("Offline Mock", "iCalendar import dialog requires PyWebView desktop bridge.", "info");
+          }
+        }
+      }
+
+      async function clearCalendarExceptionsFromUI() {
+        if (!activeCalendarConfig) return;
+        activeCalendarConfig.exceptions = [];
+        const feedback = document.getElementById("calParseFeedback");
+        if (feedback) {
+          feedback.innerHTML = `<span style="color: var(--text-muted);">Exceptions cleared.</span>`;
+        }
+        if (
+          window.pywebview &&
+          window.pywebview.api &&
+          window.pywebview.api.save_calendar_config
+        ) {
+          await window.pywebview.api.save_calendar_config(activeCalendarConfig);
+        }
+        if (typeof showToast === "function") {
+          showToast("Exceptions Cleared", "Cleared Layer 2 memo/calendar exceptions.", "info");
+        }
+        await renderCalendarDateStrip();
+      }
+
+      async function resetCalendarOverridesFromUI() {
+        if (!activeCalendarConfig) return;
+        activeCalendarConfig.overrides = {};
+        if (
+          window.pywebview &&
+          window.pywebview.api &&
+          window.pywebview.api.save_calendar_config
+        ) {
+          await window.pywebview.api.save_calendar_config(activeCalendarConfig);
+        }
+        if (typeof showToast === "function") {
+          showToast("Overrides Reset", "All single-date manual toggles have been reset to active / rules.", "info");
+        }
+        await renderCalendarDateStrip();
+      }
+
+      async function renderCalendarDateStrip() {
+        const container = document.getElementById("calDateStripContainer");
+        const statsSpan = document.getElementById("calDateStripStats");
+        if (!container) return;
+
+        const yearInput = document.getElementById("calYearSelect");
+        const semesterSelect = document.getElementById("calSemesterSelect");
+        const daysSelect = document.getElementById("calMeetingDaysSelect");
+
+        const year = parseInt((yearInput && yearInput.value) || "2026", 10);
+        const term = (semesterSelect && semesterSelect.value) || "first";
+        let months = [8, 9, 10, 11, 12];
+        if (term === "second") months = [1, 2, 3, 4, 5];
+        else if (term === "midyear") months = [6, 7];
+
+        const daysStr = (daysSelect && daysSelect.value) || "0,3";
+        const weekdays = daysStr
+          .split(",")
+          .map((s) => parseInt(s.trim(), 10))
+          .filter((n) => !isNaN(n));
+
+        let dates = [];
+        if (
+          window.pywebview &&
+          window.pywebview.api &&
+          window.pywebview.api.preview_calendar_dates
+        ) {
+          try {
+            const res = await window.pywebview.api.preview_calendar_dates({
+              year: year,
+              months: months,
+              weekdays: weekdays,
+              calendar_config: activeCalendarConfig,
+            });
+            if (res && res.status === "success" && Array.isArray(res.dates)) {
+              dates = res.dates;
+            }
+          } catch (err) {
+            console.warn("Could not preview calendar dates via backend:", err);
+          }
+        }
+
+        if (dates.length === 0) {
+          dates = generateMockCalendarDates(year, months, weekdays, activeCalendarConfig);
+        }
+
+        cachedCalendarDates = dates;
+        renderDatePills(dates, container, statsSpan);
+      }
+
+      function renderDatePills(dates, container, statsSpan) {
+        if (!container) return;
+        if (!dates || dates.length === 0) {
+          container.innerHTML = `<div style="padding: 12px; color: var(--text-muted); font-size: 12px; text-align: center; width: 100%;">No candidate meeting dates found for the selected term and day pattern.</div>`;
+          if (statsSpan) statsSpan.innerText = "0 dates calculated";
+          return;
+        }
+
+        let activeCount = 0;
+        let exceptionCount = 0;
+
+        const html = dates
+          .map((d) => {
+            const cat = (d.category || "ACTIVE").toUpperCase();
+            const isWorking = d.is_working !== undefined ? d.is_working : cat === "ACTIVE";
+            if (isWorking) activeCount++;
+            else exceptionCount++;
+
+            let pillClass = "cal-date-pill-active";
+            let tagBg = "var(--accent-emerald)";
+            let tagText = "ACTIVE";
+            let icon = "🟢";
+
+            if (cat === "HOLIDAY") {
+              pillClass = "cal-date-pill-holiday";
+              tagBg = "var(--accent-rose)";
+              tagText = "HOLIDAY";
+              icon = "🔴";
+            } else if (cat === "SUSPENDED") {
+              pillClass = "cal-date-pill-suspended";
+              tagBg = "var(--accent-amber)";
+              tagText = "SUSP.";
+              icon = "🟠";
+            } else if (cat === "EXAM") {
+              pillClass = "cal-date-pill-exam";
+              tagBg = "var(--accent-purple, #8b5cf6)";
+              tagText = "EXAM";
+              icon = "🟣";
+            } else if (cat === "EVENT") {
+              pillClass = "cal-date-pill-event";
+              tagBg = "var(--accent-blue)";
+              tagText = "EVENT";
+              icon = "🔵";
+            }
+
+            const shortDate = d.date_str ? d.date_str.substring(5) : "";
+            const labelText = d.label || tagText;
+
+            return `
+            <button
+              type="button"
+              class="cal-date-pill ${pillClass}"
+              role="switch"
+              aria-checked="${isWorking ? 'true' : 'false'}"
+              aria-label="${escapeHTML(d.date_str)} (${escapeHTML(d.weekday_name || '')}): ${escapeHTML(cat)} - ${escapeHTML(labelText)}. Press Enter or Space to cycle status"
+              tabindex="0"
+              onclick="cycleCalendarDateStatus('${escapeHTML(d.date_str)}')"
+              onkeydown="onCalendarDateKeyDown(event, '${escapeHTML(d.date_str)}')"
+              title="${escapeHTML(d.date_str)} (${escapeHTML(d.weekday_name || '')}) - ${escapeHTML(labelText)} - Click to cycle status"
+            >
+              <span style="font-size: 11px; font-weight: 700; color: var(--text-primary); margin-bottom: 2px;">
+                ${escapeHTML(shortDate)}
+              </span>
+              <span style="font-size: 10px; color: var(--text-muted); margin-bottom: 4px;">
+                ${escapeHTML(d.weekday_name || "")}
+              </span>
+              <span style="font-size: 9.5px; font-weight: 700; padding: 1px 5px; border-radius: 4px; background: ${tagBg}; color: #ffffff; white-space: nowrap;">
+                ${icon} ${escapeHTML(tagText)}
+              </span>
+            </button>
+          `;
+          })
+          .join("");
+
+        container.innerHTML = html;
+        if (statsSpan) {
+          statsSpan.innerText = `${dates.length} Total Dates: ${activeCount} Active Classes, ${exceptionCount} Exceptions`;
+        }
+      }
+
+      async function cycleCalendarDateStatus(dateStr) {
+        if (!dateStr || !activeCalendarConfig) return;
+        if (!activeCalendarConfig.overrides) activeCalendarConfig.overrides = {};
+
+        const currentStatus = (activeCalendarConfig.overrides[dateStr] || "").toUpperCase();
+        let effectiveStatus = currentStatus;
+        if (!effectiveStatus) {
+          const item = cachedCalendarDates.find((d) => d.date_str === dateStr);
+          effectiveStatus = item ? (item.category || "ACTIVE").toUpperCase() : "ACTIVE";
+        }
+
+        // Cycle: ACTIVE -> HOLIDAY -> SUSPENDED -> EXAM -> EVENT -> ACTIVE
+        let nextStatus = "HOLIDAY";
+        if (effectiveStatus === "ACTIVE") nextStatus = "HOLIDAY";
+        else if (effectiveStatus === "HOLIDAY") nextStatus = "SUSPENDED";
+        else if (effectiveStatus === "SUSPENDED") nextStatus = "EXAM";
+        else if (effectiveStatus === "EXAM") nextStatus = "EVENT";
+        else if (effectiveStatus === "EVENT") nextStatus = "ACTIVE";
+
+        activeCalendarConfig.overrides[dateStr] = nextStatus;
+
+        if (activeParserConfig) {
+          if (!activeParserConfig.calendar_config) activeParserConfig.calendar_config = {};
+          activeParserConfig.calendar_config.overrides = activeCalendarConfig.overrides;
+        }
+
+        if (
+          window.pywebview &&
+          window.pywebview.api &&
+          window.pywebview.api.save_calendar_config
+        ) {
+          window.pywebview.api.save_calendar_config(activeCalendarConfig).catch((e) => {
+            console.warn("Could not save calendar overrides immediately:", e);
+          });
+        }
+
+        await renderCalendarDateStrip();
+      }
+
+      function onCalendarDateKeyDown(event, dateStr) {
+        if (event.key === "Enter" || event.key === " " || event.keyCode === 13 || event.keyCode === 32) {
+          event.preventDefault();
+          cycleCalendarDateStatus(dateStr);
+        }
+      }
+
+      function generateMockCalendarDates(year, months, weekdays, calConfig) {
+        const dates = [];
+        const weekdayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+        const overrides = (calConfig && calConfig.overrides) || {};
+
+        months.forEach((m) => {
+          const numDays = new Date(year, m, 0).getDate();
+          for (let day = 1; day <= numDays; day++) {
+            const dt = new Date(year, m - 1, day);
+            const jsDay = dt.getDay();
+            const pythonWeekday = jsDay === 0 ? 6 : jsDay - 1;
+            if (weekdays.includes(pythonWeekday)) {
+              const mStr = String(m).padStart(2, "0");
+              const dStr = String(day).padStart(2, "0");
+              const dateStr = `${year}-${mStr}-${dStr}`;
+              const ovr = overrides[dateStr];
+              let cat = ovr || "ACTIVE";
+              dates.push({
+                date_str: dateStr,
+                year: year,
+                month: m,
+                day: day,
+                weekday: pythonWeekday,
+                weekday_name: weekdayNames[pythonWeekday],
+                category: cat,
+                label: cat === "ACTIVE" ? "" : cat,
+                is_working: cat === "ACTIVE",
+                mode: calConfig?.default_mode || "OMIT_COLUMN",
+              });
+            }
+          }
+        });
+        return dates;
+      }
+
       // Expose globally for testing
       window.updateAccessibilitySettingsUI = updateAccessibilitySettingsUI;
       window.onAccessibilityMotionChange = onAccessibilityMotionChange;
       window.onAccessibilityTransparencyChange = onAccessibilityTransparencyChange;
       window.resetAccessibilityPreferences = resetAccessibilityPreferences;
+      window.loadCalendarSettingsUI = loadCalendarSettingsUI;
+      window.onCalendarModeChange = onCalendarModeChange;
+      window.onCalendarSemesterSelectChange = onCalendarSemesterSelectChange;
+      window.parseAnnouncementFromUI = parseAnnouncementFromUI;
+      window.importIcsFromUI = importIcsFromUI;
+      window.clearCalendarExceptionsFromUI = clearCalendarExceptionsFromUI;
+      window.resetCalendarOverridesFromUI = resetCalendarOverridesFromUI;
+      window.renderCalendarDateStrip = renderCalendarDateStrip;
+      window.cycleCalendarDateStatus = cycleCalendarDateStatus;
+      window.onCalendarDateKeyDown = onCalendarDateKeyDown;

@@ -117,6 +117,7 @@ MANIFEST = {
                 "tests/test_template_set_orchestrator.py",
                 "tests/test_template_set_e2e.py",
                 "tests/test_dynamic_org_and_signatories.py",
+                "tests/test_dynamic_calendar_resolver.py",
             ],
         },
         "B3_generators_and_lifecycle": {

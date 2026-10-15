@@ -2,7 +2,7 @@
 
 A desktop application for Cavite State University (CvSU) faculty members to automatically generate complete, submission-ready academic documents in a single click:
 
-- 📅 **Attendance Sheets (.docx)**: Monthly attendance logs with exact calendar days matching your schedule.
+- 📅 **Attendance Sheets (.docx)**: Monthly attendance logs with exact calendar days matching your schedule, featuring an offline 3-layer dynamic calendar engine with multi-year recurrence rules, memo announcement parsing, and `#WalangPasok` weather suspension handling.
 - 📋 **CEIT Department Forms (.docx)**: 7 complete forms including Syllabus Acceptance, Exam Returns (Midterm/Finals), Table of Specifications (TOS - Midterm/Finals), and Grade Discussion Forms (Midterm/Finals).
 - 📊 **Official CvSU Grade Sheets (.xlsx)**: Pre-formatted grade sheets for **Lecture** and **Lecture & Lab** courses, preserving all formulas, student data, dynamic college title, and signature metadata.
 

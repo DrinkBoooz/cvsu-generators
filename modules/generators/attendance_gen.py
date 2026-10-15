@@ -380,6 +380,42 @@ def clone_student_row(template_row) -> etree._Element:
                     t.text = ""
     return row
 
+def _format_stamp_cell(tc, tag: str, date_w: int):
+    """Formats attendance matrix cells for non-working stamped dates with font auto-scaling and centered alignment."""
+    tag_len = len(tag)
+    if tag_len >= 7:
+        target_sz = "10"  # 5pt
+    elif tag_len >= 5:
+        target_sz = "12"  # 6pt
+    elif tag_len >= 4:
+        target_sz = "14"  # 7pt
+    else:
+        target_sz = "16"  # 8pt
+
+    p = tc.find(w("p"))
+    if p is not None:
+        ppr = p.find(w("pPr"))
+        if ppr is None:
+            ppr = etree.Element(w("pPr"))
+            p.insert(0, ppr)
+        jc = ppr.find(w("jc"))
+        if jc is None:
+            jc = etree.SubElement(ppr, w("jc"))
+        jc.set(w("val"), "center")
+
+        for r in p.findall(w("r")):
+            rpr = r.find(w("rPr"))
+            if rpr is None:
+                rpr = etree.SubElement(r, w("rPr"))
+            sz = rpr.find(w("sz"))
+            if sz is None:
+                sz = etree.SubElement(rpr, w("sz"))
+            sz.set(w("val"), target_sz)
+            sz_cs = rpr.find(w("szCs"))
+            if sz_cs is None:
+                sz_cs = etree.SubElement(rpr, w("szCs"))
+            sz_cs.set(w("val"), target_sz)
+
 # ── Core builder ─────────────────────────────────────────────────────────────
 
 # ── Attendance Generator (Authoritative Recipe-Driven) ──────────────────────
@@ -419,12 +455,18 @@ class AttendanceGenerator:
         students: list,
         start_bound=None,
         end_bound=None,
+        calendar_resolver=None,
     ) -> None:
         class_dates = get_class_dates_for_weekdays(
             months, year, weekdays, start_bound=start_bound, end_bound=end_bound
         )
         if not class_dates:
             raise EmptyDateError("No class dates found for the given months/year/weekdays.")
+
+        if calendar_resolver is not None:
+            class_dates, _ = calendar_resolver.filter_or_stamp_dates(class_dates)
+            if not class_dates:
+                raise EmptyDateError("No active class dates found after calendar resolution.")
 
         week_groups = dates_to_weeks(class_dates)
         n_weeks = len(week_groups)
@@ -656,10 +698,12 @@ class AttendanceGenerator:
             row1.append(lead_tc)
 
         # Region 2: Date / session region
+        column_dates = []
         for wg in week_groups:
             week_dates = {dt.weekday(): dt for dt in wg}
             for session_idx, (day_idx, slot_label) in enumerate(schedule_meetings, 1):
                 dt = week_dates.get(day_idx)
+                column_dates.append(dt)
                 day_num = str(dt.day) if dt is not None else ""
                 tc = copy.deepcopy(date_cell_template)
                 set_cell_width(tc, date_w)
@@ -769,12 +813,21 @@ class AttendanceGenerator:
                 tr.append(lead_tc)
 
             # Region 2: Date / session region
-            for _ in range(n_date_cols):
+            for col_idx in range(n_date_cols):
                 tc = copy.deepcopy(att_cell_template)
                 set_cell_width(tc, date_w)
+                tag = ""
+                if col_idx < len(column_dates):
+                    dt = column_dates[col_idx]
+                    if dt is not None and calendar_resolver is not None:
+                        res = calendar_resolver.resolve_date(dt)
+                        if not res.is_working_session:
+                            tag = res.display_tag or "HOLIDAY"
                 p = tc.find(w("p"))
                 if p is not None:
-                    set_para_text(p, "")
+                    set_para_text(p, tag)
+                    if tag:
+                        _format_stamp_cell(tc, tag, date_w)
                 tr.append(tc)
 
             # Region 3: Summary region
@@ -818,6 +871,7 @@ def build_attendance_sheet(
     start_bound=None,
     end_bound=None,
     recipe: Optional[ValidatedAttendanceTemplateRecipe] = None,
+    calendar_resolver=None,
 ):
     """
     Public compatibility entrypoint.
@@ -842,6 +896,7 @@ def build_attendance_sheet(
         students=students,
         start_bound=start_bound,
         end_bound=end_bound,
+        calendar_resolver=calendar_resolver,
     )
 
 
@@ -857,7 +912,7 @@ def get_default_template_path(has_lab: bool = False) -> str:
     return bundled_template
 
 
-def generate_attendance_for_month(template_path, output_path, info, students, month, year, class_day, start_bound=None, end_bound=None):
+def generate_attendance_for_month(template_path, output_path, info, students, month, year, class_day, start_bound=None, end_bound=None, calendar_resolver=None):
     """
     Wrapper for process_schedule.py / orchestrator to generate a single month attendance sheet.
     info: dict containing course, schedule, semester, room, instructor, subject
@@ -895,7 +950,8 @@ def generate_attendance_for_month(template_path, output_path, info, students, mo
             weekdays=schedule_days,
             students=students,
             start_bound=start_bound,
-            end_bound=end_bound
+            end_bound=end_bound,
+            calendar_resolver=calendar_resolver,
         )
         return "generated"
     except EmptyDateError:

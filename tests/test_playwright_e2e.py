@@ -165,6 +165,7 @@ const rawMockApi = {
     export_template_set: async (id, path) => ({ status: "success", export_path: path }),
     export_user_preferences: async () => ({ status: "success" }),
     get_active_template_set: async () => window.__mockResponses.get_active_template_set || { set_id: "builtin_cvsu" },
+    get_calendar_config: async () => ({ default_mode: "OMIT_COLUMN", rules: [], exceptions: [], overrides: {} }),
     get_ceit_prefix_directory: async () => ({ prefixes: {}, departments: {} }),
     get_custom_templates: async () => window.__mockResponses.get_custom_templates || [],
     get_org_preset: async () => ({ version: "1.0", campus: "Main Campus", signatories: [] }),
@@ -175,6 +176,7 @@ const rawMockApi = {
     handle_dropped_custom_template: async (f) => ({ status: "success" }),
     handle_dropped_rosters: async (f, cfg) => window.__mockResponses.handle_dropped_rosters || window.__mockResponses.browse_rosters,
     handle_dropped_schedule: async (f) => window.__mockResponses.browse_schedule,
+    import_calendar_ics: async (path) => ({ status: "success", exceptions: [] }),
     import_org_preset: async (path) => ({ status: "success", preset: { version: "1.0", campus: "Main Campus", signatories: [] } }),
     import_parser_config: async () => ({ status: "success" }),
     import_template_set: async (path) => ({ status: "success", set_id: "imported_set" }),
@@ -186,6 +188,8 @@ const rawMockApi = {
     open_file: async (f) => ({ status: "success" }),
     open_log_folder: async () => ({ status: "success" }),
     open_output_folder: async (f) => ({ status: "success" }),
+    parse_calendar_announcement: async (text, year) => ({ status: "success", exceptions: [] }),
+    preview_calendar_dates: async (params) => ({ status: "success", dates: [] }),
     remove_roster: async (p, cfg) => window.__mockResponses.remove_roster || { count: 0, rosters: [], validation: [] },
     reset_parser_config: async () => ({ status: "success" }),
     reset_user_preferences: async () => ({ status: "success" }),
@@ -217,6 +221,7 @@ const rawMockApi = {
         }
         return window.__mockResponses.run_generation;
     },
+    save_calendar_config: async (cfg) => ({ status: "success" }),
     save_custom_template: async (p, t, s, r) => window.__mockResponses.save_custom_template || { status: "success" },
     save_org_preset: async (data) => ({ status: "success" }),
     save_parser_config: async (cfg) => ({ status: "success" }),

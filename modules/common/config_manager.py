@@ -185,7 +185,30 @@ def get_default_config_dict() -> dict:
         "known_lab_subjects": list(DEFAULT_KNOWN_LAB_SUBJECT_CODES),
         "program_aliases": dict(DEFAULT_PROGRAM_ALIASES),
         "roster_keywords": deepcopy(DEFAULT_ROSTER_KEYWORDS),
-        "schedule_config": dict(DEFAULT_SCHEDULE_CONFIG)
+        "schedule_config": dict(DEFAULT_SCHEDULE_CONFIG),
+        "calendar_config": {
+            "enabled": False,
+            "default_mode": "OMIT_COLUMN",
+            "rules": [
+                {"rule_type": "fixed_date", "name": "New Year's Day", "category": "HOLIDAY", "month": 1, "day": 1, "weekday": None, "nth": None, "mode": None},
+                {"rule_type": "fixed_date", "name": "Araw ng Kagitingan", "category": "HOLIDAY", "month": 4, "day": 9, "weekday": None, "nth": None, "mode": None},
+                {"rule_type": "fixed_date", "name": "Labor Day", "category": "HOLIDAY", "month": 5, "day": 1, "weekday": None, "nth": None, "mode": None},
+                {"rule_type": "fixed_date", "name": "Independence Day", "category": "HOLIDAY", "month": 6, "day": 12, "weekday": None, "nth": None, "mode": None},
+                {"rule_type": "fixed_date", "name": "Ninoy Aquino Day", "category": "HOLIDAY", "month": 8, "day": 21, "weekday": None, "nth": None, "mode": None},
+                {"rule_type": "fixed_date", "name": "Cavite Day", "category": "HOLIDAY", "month": 9, "day": 2, "weekday": None, "nth": None, "mode": None},
+                {"rule_type": "fixed_date", "name": "All Saints' Day", "category": "HOLIDAY", "month": 11, "day": 1, "weekday": None, "nth": None, "mode": None},
+                {"rule_type": "fixed_date", "name": "All Souls' Day", "category": "HOLIDAY", "month": 11, "day": 2, "weekday": None, "nth": None, "mode": None},
+                {"rule_type": "fixed_date", "name": "Bonifacio Day", "category": "HOLIDAY", "month": 11, "day": 30, "weekday": None, "nth": None, "mode": None},
+                {"rule_type": "fixed_date", "name": "Feast of the Immaculate Conception", "category": "HOLIDAY", "month": 12, "day": 8, "weekday": None, "nth": None, "mode": None},
+                {"rule_type": "fixed_date", "name": "Christmas Eve", "category": "HOLIDAY", "month": 12, "day": 24, "weekday": None, "nth": None, "mode": None},
+                {"rule_type": "fixed_date", "name": "Christmas Day", "category": "HOLIDAY", "month": 12, "day": 25, "weekday": None, "nth": None, "mode": None},
+                {"rule_type": "fixed_date", "name": "Rizal Day", "category": "HOLIDAY", "month": 12, "day": 30, "weekday": None, "nth": None, "mode": None},
+                {"rule_type": "fixed_date", "name": "New Year's Eve", "category": "HOLIDAY", "month": 12, "day": 31, "weekday": None, "nth": None, "mode": None},
+                {"rule_type": "nth_weekday", "name": "National Heroes Day", "category": "HOLIDAY", "month": 8, "day": None, "weekday": 0, "nth": "last", "mode": None},
+            ],
+            "exceptions": [],
+            "overrides": {},
+        },
     }
 
 

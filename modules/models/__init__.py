@@ -35,8 +35,22 @@ from .organization import (
     SignatorySlot,
     OrganizationPreset,
 )
+from .calendar import (
+    CalendarExceptionCategory,
+    CalendarExceptionMode,
+    CalendarException,
+    RecurrenceRule,
+    ResolvedDateInfo,
+    CATEGORY_TAG_MAP,
+)
 
 __all__ = [
+    "CalendarExceptionCategory",
+    "CalendarExceptionMode",
+    "CalendarException",
+    "RecurrenceRule",
+    "ResolvedDateInfo",
+    "CATEGORY_TAG_MAP",
     "OrganizationalContext",
     "SignatorySlot",
     "OrganizationPreset",

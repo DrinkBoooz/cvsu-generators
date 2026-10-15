@@ -300,3 +300,98 @@ class ConfigMixin:
                 cfg["college_dean"] = name
         return config_manager.save_config(cfg)
 
+    def get_calendar_config(self):
+        """Retrieves active academic calendar and holiday suspension configuration."""
+        from modules.common.config_manager import config_manager
+        from modules.parsers.calendar_resolver import get_default_cavite_recurrence_rules
+        cfg = config_manager.get_config()
+        cal_cfg = cfg.get("calendar_config")
+        if not cal_cfg:
+            cal_cfg = {
+                "default_mode": "OMIT_COLUMN",
+                "rules": [r.to_dict() for r in get_default_cavite_recurrence_rules()],
+                "exceptions": [],
+                "overrides": {},
+            }
+        return cal_cfg
+
+    def save_calendar_config(self, calendar_dict):
+        """Persists updated calendar configuration."""
+        from modules.common.config_manager import config_manager
+        if not isinstance(calendar_dict, dict):
+            return {"status": "error", "message": "Calendar configuration must be a dictionary"}
+        cfg = config_manager.get_config()
+        cfg["calendar_config"] = calendar_dict
+        return config_manager.save_config(cfg)
+
+    def preview_calendar_dates(self, params):
+        """Calculates candidate meeting dates for a schedule and month range."""
+        from modules.parsers.calendar_resolver import CalendarResolver
+        from modules.common.config_manager import config_manager
+        if not isinstance(params, dict):
+            return {"status": "error", "message": "Parameters must be a dictionary"}
+        year = int(params.get("year", 2026))
+        months = params.get("months", [8, 9, 10, 11, 12])
+        weekdays = params.get("weekdays", [0])
+        start_bound = params.get("start_bound")
+        end_bound = params.get("end_bound")
+
+        cal_cfg = params.get("calendar_config") or config_manager.get_config().get("calendar_config")
+        resolver = CalendarResolver.from_dict(cal_cfg) if cal_cfg else CalendarResolver()
+        dates_preview = resolver.preview_semester_dates(
+            year=year,
+            months=months,
+            weekdays=weekdays,
+            start_bound=tuple(start_bound) if start_bound else None,
+            end_bound=tuple(end_bound) if end_bound else None,
+        )
+        return {"status": "success", "dates": dates_preview}
+
+    def import_calendar_ics(self, file_path=None):
+        """Parses an iCalendar (.ics) file offline into CalendarException objects."""
+        import os
+        import webview
+        from modules.parsers.calendar_resolver import parse_ics_content
+        if not file_path:
+            if not self._window:
+                return {"status": "error", "message": "Window context unavailable"}
+            result = self._window.create_file_dialog(
+                webview.OPEN_DIALOG,
+                file_types=('iCalendar files (*.ics)', 'All files (*.*)')
+            )
+            if not result or len(result) == 0:
+                return {"status": "cancelled"}
+            file_path = result[0]
+
+        if not os.path.isfile(file_path):
+            return {"status": "error", "message": f"File not found: {file_path}"}
+
+        try:
+            with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+                content = f.read()
+            exceptions = parse_ics_content(content)
+            return {
+                "status": "success",
+                "count": len(exceptions),
+                "file_path": file_path,
+                "exceptions": [e.to_dict() for e in exceptions],
+            }
+        except Exception as e:
+            logger.error(f"Failed parsing .ics file {file_path}: {e}")
+            return {"status": "error", "message": str(e)}
+
+    def parse_calendar_announcement(self, text, default_year=None):
+        """Parses natural text or CSV memo lines into CalendarException objects."""
+        from modules.parsers.calendar_resolver import parse_announcement_lines
+        try:
+            exceptions = parse_announcement_lines(text or "", default_year=default_year)
+            return {
+                "status": "success",
+                "count": len(exceptions),
+                "exceptions": [e.to_dict() for e in exceptions],
+            }
+        except Exception as e:
+            logger.error(f"Failed parsing announcement text: {e}")
+            return {"status": "error", "message": str(e)}
+
+
