@@ -149,3 +149,154 @@ class ConfigMixin:
             return preferences_manager.import_preferences(import_path)
         return {"status": "cancelled"}
 
+    # ── Organizational Topology & Signatory Presets (.cvsu-org.json) ─────────
+    def export_org_preset(self, path: str = None, preset_data: dict = None):
+        """
+        Exports an organizational topology and signatory preset (.cvsu-org.json).
+        Enforces strict path validation and schema integrity.
+        """
+        import os
+        import json
+        from modules.models.organization import OrganizationPreset
+
+        if path is None:
+            if not getattr(self, "_window", None):
+                return {"status": "error", "message": "Window context unavailable"}
+            result = self._window.create_file_dialog(
+                webview.SAVE_DIALOG,
+                save_filename="cvsu_organization_preset.cvsu-org.json",
+                file_types=('CvSU Organization Preset (*.cvsu-org.json;*.json)', 'All files (*.*)')
+            )
+            if not result:
+                return {"status": "cancelled"}
+            path = result if isinstance(result, str) else result[0]
+
+        # Security check: null bytes
+        if "\x00" in str(path):
+            return {"status": "error", "message": "Invalid characters in path"}
+
+        # Security check: file extension
+        lower_path = str(path).lower()
+        if not lower_path.endswith(".json") and not lower_path.endswith(".cvsu-org.json"):
+            return {"status": "error", "message": "Invalid file extension. Expected .json or .cvsu-org.json"}
+
+        preset_dict = preset_data or {}
+        preset_obj = OrganizationPreset.from_dict(preset_dict)
+        errors = preset_obj.validate()
+        if errors:
+            return {"status": "error", "message": "; ".join(errors)}
+
+        try:
+            abs_path = os.path.abspath(path)
+            os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+            with open(abs_path, "w", encoding="utf-8") as f:
+                json.dump(preset_obj.to_dict(), f, indent=2)
+            logger.info(f"Exported organization preset to {abs_path}")
+            return {"status": "success", "file_path": abs_path}
+        except Exception as e:
+            logger.error(f"Failed to export organization preset: {e}")
+            return {"status": "error", "message": str(e)}
+
+    def import_org_preset(self, path: str = None):
+        """
+        Imports an organizational topology and signatory preset (.cvsu-org.json).
+        Enforces strict path validation and schema integrity.
+        """
+        import os
+        import json
+        from modules.models.organization import OrganizationPreset
+
+        if path is None:
+            if not getattr(self, "_window", None):
+                return {"status": "error", "message": "Window context unavailable"}
+            result = self._window.create_file_dialog(
+                webview.OPEN_DIALOG,
+                allow_multiple=False,
+                file_types=('CvSU Organization Preset (*.cvsu-org.json;*.json)', 'All files (*.*)')
+            )
+            if not result or len(result) == 0:
+                return {"status": "cancelled"}
+            path = result[0]
+
+        # Security check: null bytes
+        if "\x00" in str(path):
+            return {"status": "error", "message": "Invalid characters in path"}
+
+        # Security check: file extension
+        lower_path = str(path).lower()
+        if not lower_path.endswith(".json") and not lower_path.endswith(".cvsu-org.json"):
+            return {"status": "error", "message": "Invalid file extension. Expected .json or .cvsu-org.json"}
+
+        abs_path = os.path.abspath(path)
+        if not os.path.isfile(abs_path):
+            return {"status": "error", "message": f"File does not exist: {abs_path}"}
+
+        try:
+            with open(abs_path, "r", encoding="utf-8") as f:
+                raw_data = json.load(f)
+        except Exception as e:
+            logger.error(f"Failed to parse JSON preset from {abs_path}: {e}")
+            return {"status": "error", "message": f"Malformed JSON: {e}"}
+
+        if not isinstance(raw_data, dict):
+            return {"status": "error", "message": "Preset data must be a JSON object"}
+
+        preset_obj = OrganizationPreset.from_dict(raw_data)
+        errors = preset_obj.validate()
+        if errors:
+            return {"status": "error", "message": "; ".join(errors)}
+
+        return {"status": "success", "preset": preset_obj.to_dict(), "file_path": abs_path}
+
+    def get_org_preset(self):
+        """Retrieves active organizational topology and signatory settings."""
+        from modules.common.config_manager import config_manager
+        cfg = config_manager.get_config()
+        return cfg.get("organization_preset", {
+            "version": "1.0",
+            "campus": cfg.get("schedule_config", {}).get("default_campus", "Main Campus"),
+            "college": cfg.get("schedule_config", {}).get("default_college", "COLLEGE OF ENGINEERING AND INFORMATION TECHNOLOGY"),
+            "department": "Department of Information Technology",
+            "signatories": [
+                {
+                    "slot_id": "prepared_by",
+                    "label": "Prepared by:",
+                    "name": cfg.get("schedule_config", {}).get("default_instructor", ""),
+                    "title": "Instructor"
+                },
+                {
+                    "slot_id": "reviewed_by",
+                    "label": "Reviewed by:",
+                    "name": cfg.get("department_chair", ""),
+                    "title": "Department Chairperson"
+                },
+                {
+                    "slot_id": "approved_by",
+                    "label": "Approved by:",
+                    "name": cfg.get("college_dean", ""),
+                    "title": "College Dean"
+                }
+            ]
+        })
+
+    def save_org_preset(self, preset_data):
+        """Saves active organizational topology and signatory settings."""
+        from modules.common.config_manager import config_manager
+        from modules.models.organization import OrganizationPreset
+        preset_obj = OrganizationPreset.from_dict(preset_data)
+        errors = preset_obj.validate()
+        if errors:
+            return {"status": "error", "message": "; ".join(errors)}
+
+        cfg = config_manager.get_config()
+        cfg["organization_preset"] = preset_obj.to_dict()
+        for sig in preset_obj.signatories:
+            sid = sig.get("slot_id") or ""
+            title = (sig.get("title") or "").lower()
+            name = sig.get("name") or ""
+            if "chair" in sid or "chair" in title or sid in ("reviewed_by", "recommending_approval"):
+                cfg["department_chair"] = name
+            elif "dean" in sid or "dean" in title or "admin" in title or sid == "approved_by":
+                cfg["college_dean"] = name
+        return config_manager.save_config(cfg)
+

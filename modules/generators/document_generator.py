@@ -227,11 +227,27 @@ class DocumentGenerator(ABC):
                 )
             set_cell_text(cells[rb.id_col], stnum)
 
+    def fill_signatories(self, body, info: ClassInfo) -> None:
+        """Fills dynamic N-tier signatory slots discovered via DeterministicTemplateAnalyzer."""
+        try:
+            from modules.parsers.template_analyzer import DeterministicTemplateAnalyzer
+            from modules.generators.dynamic_renderer import DynamicDocumentRenderer
+            root_elem = body.getroottree().getroot() if hasattr(body, 'getroottree') else None
+            manifest = DeterministicTemplateAnalyzer().analyze_docx_tree(root_elem, body, docx_path=self._template_path)
+            if manifest and manifest.signatory_slots:
+                renderer = DynamicDocumentRenderer()
+                tables = body.findall(w("tbl"))
+                paras = body.findall(w("p"))
+                renderer._populate_signatories_docx(tables, paras, manifest.signatory_slots, info)
+        except Exception as e:
+            logger.warning(f"Could not populate dynamic signatories for {self._template_path}: {e}")
+
     def generate(self, info: ClassInfo, output_path: str) -> None:
         """Template method — orchestrates the full generation pipeline."""
         zin, root, body = load_docx(self._template_path)
         self.fill_header(body, info)
         self.fill_table(body, info)
+        self.fill_signatories(body, info)
         save_docx(zin, root, output_path)
         logger.info(f"Generated {os.path.basename(output_path)}")
 

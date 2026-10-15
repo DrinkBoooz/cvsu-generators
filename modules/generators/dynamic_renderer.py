@@ -37,6 +37,7 @@ from modules.common.docx_utils import (
 )
 from modules.models.schedule import ClassInfo
 from modules.parsers.docx_grid_table import DocxGridTable, DocxGridCell
+from modules.models.organization import SignatorySlot
 from modules.parsers.template_analyzer import (
     DeterministicTemplateAnalyzer,
     TemplateManifest,
@@ -265,6 +266,10 @@ class DynamicDocumentRenderer:
                 for f_row in footer_rows:
                     tbl.append(f_row)
 
+        # 4. Populate dynamic N-tier signatory slots
+        if manifest.signatory_slots:
+            self._populate_signatories_docx(tables, paras, manifest.signatory_slots, data_context)
+
         if output_path:
             save_docx(zin, root, output_path)
             logger.info(f"DynamicDocumentRenderer generated: {os.path.basename(output_path)}")
@@ -323,6 +328,10 @@ class DynamicDocumentRenderer:
                 if "student_number" in cols:
                     ws.cell(row=row_idx, column=cols["student_number"] + 1, value=stnum)
 
+        # 3. Populate dynamic N-tier signatory slots across worksheets
+        if manifest.signatory_slots:
+            self._populate_signatories_xlsx(wb, manifest.signatory_slots, data_context)
+
         target_out = output_path or xlsx_path
         wb.save(target_out)
         logger.info(f"DynamicDocumentRenderer generated XLSX: {os.path.basename(target_out)}")
@@ -374,6 +383,163 @@ class DynamicDocumentRenderer:
                             for t_mid in runs[mid_i].findall(w("t")):
                                 t_mid.text = ""
                 p_txt = "".join(r.findtext(w("t")) or "" for r in runs)
+
+    def _resolve_signatory_value(
+        self,
+        slot: SignatorySlot,
+        data_context: Union[ClassInfo, Dict[str, Any]],
+    ) -> Optional[str]:
+        """
+        Resolves the appropriate signatory name/value from data context for a given SignatorySlot.
+        Supports:
+        - Explicit N-tier signatories list or mapping in data_context['signatories']
+        - Bound key matches (e.g., 'department_chair', 'college_dean', 'campus_administrator', 'instructor')
+        - Role label / slot_id heuristic fallback for backward compatibility
+        """
+        # 1. Check nested signatories list/dict
+        signatories = getattr(data_context, "signatories", None)
+        if signatories is None and isinstance(data_context, dict):
+            signatories = data_context.get("signatories")
+
+        if signatories:
+            if isinstance(signatories, list):
+                for sig in signatories:
+                    if isinstance(sig, dict):
+                        sid = sig.get("slot_id") or ""
+                        lbl = sig.get("label") or ""
+                        bkey = sig.get("bound_key") or ""
+                        title = sig.get("title") or ""
+                        if (
+                            (sid and sid == slot.slot_id)
+                            or (bkey and bkey == slot.bound_key)
+                            or (lbl and lbl.strip().lower() == slot.role_label.strip().lower())
+                            or (title and slot.default_title and title.strip().lower() == slot.default_title.strip().lower())
+                        ):
+                            val = sig.get("name") or sig.get("value")
+                            if val:
+                                return str(val).strip()
+            elif isinstance(signatories, dict):
+                for k in (slot.bound_key, slot.slot_id, slot.role_label):
+                    if k and k in signatories:
+                        val = signatories[k]
+                        if val:
+                            return str(val).strip()
+
+        # 2. Direct key lookups in data_context
+        candidate_keys = []
+        if slot.bound_key:
+            candidate_keys.append(slot.bound_key)
+        if slot.slot_id and slot.slot_id not in candidate_keys:
+            candidate_keys.append(slot.slot_id)
+
+        slot_id = slot.slot_id
+        bound_key = slot.bound_key
+        def_title_lower = slot.default_title.lower() if slot.default_title else ""
+
+        if bound_key == "prepared_by" or slot_id == "prepared_by" or "instructor" in def_title_lower:
+            candidate_keys.extend(["instructor", "prepared_by", "faculty", "adviser"])
+
+        if bound_key == "department_chair" or slot_id in ("reviewed_by", "recommending_approval") or "chair" in def_title_lower:
+            candidate_keys.extend(["department_chair", "dept_chair", "chair", "chairperson"])
+
+        if bound_key == "college_dean" or "dean" in def_title_lower:
+            candidate_keys.extend(["college_dean", "dean", "gs_dean"])
+
+        if bound_key == "campus_administrator" or "administrator" in def_title_lower or "admin" in def_title_lower:
+            candidate_keys.extend(["campus_administrator", "campus_admin", "administrator", "admin", "college_dean"])
+
+        if slot_id == "approved_by":
+            if "admin" in def_title_lower or "administrator" in def_title_lower:
+                candidate_keys.extend(["campus_administrator", "campus_admin", "administrator", "college_dean", "dean", "approved_by"])
+            elif "dean" in def_title_lower:
+                candidate_keys.extend(["college_dean", "dean", "campus_administrator", "approved_by"])
+            else:
+                candidate_keys.extend(["approved_by", "college_dean", "campus_administrator", "dean"])
+
+        if slot_id in ("reviewed_by", "recommending_approval"):
+            candidate_keys.extend(["department_chair", "dept_chair", "chair", "chairperson"])
+
+        for k in candidate_keys:
+            val = None
+            if isinstance(data_context, dict):
+                val = data_context.get(k)
+            else:
+                val = getattr(data_context, k, None)
+            if val is not None and str(val).strip():
+                return str(val).strip()
+
+        return None
+
+    def _populate_signatories_docx(
+        self,
+        tables: List[etree._Element],
+        paragraphs: List[etree._Element],
+        signatory_slots: List[SignatorySlot],
+        data_context: Union[ClassInfo, Dict[str, Any]],
+    ) -> None:
+        """
+        Populates N-tier signatory slots in docx tables or paragraphs with run formatting preserved.
+        """
+        for slot in signatory_slots:
+            val = self._resolve_signatory_value(slot, data_context)
+            if not val:
+                continue
+
+            str_val = str(val).strip()
+
+            if slot.slot_type == "table_cell":
+                if slot.table_index is None or slot.table_index >= len(tables):
+                    continue
+                grid = DocxGridTable(tables[slot.table_index])
+                t_r = slot.target_row_index
+                t_c = slot.target_col_index
+                if t_r is not None and t_c is not None and t_r < grid.num_rows and t_c < grid.num_cols:
+                    grid.set_cell_text(t_r, t_c, str_val)
+
+            elif slot.slot_type == "paragraph":
+                target_p_idx = slot.target_paragraph_index if slot.target_paragraph_index is not None else slot.paragraph_index
+                if target_p_idx is not None and target_p_idx < len(paragraphs):
+                    p = paragraphs[target_p_idx]
+                    runs = p.findall(w("r"))
+                    if runs:
+                        first_r = runs[0]
+                        t_node = first_r.find(w("t"))
+                        if t_node is None:
+                            t_node = etree.SubElement(first_r, w("t"))
+                        t_node.text = str_val
+                        for r_extra in runs[1:]:
+                            for t_extra in r_extra.findall(w("t")):
+                                t_extra.text = ""
+                    else:
+                        r = etree.SubElement(p, w("r"))
+                        t = etree.SubElement(r, w("t"))
+                        t.text = str_val
+
+    def _populate_signatories_xlsx(
+        self,
+        wb: openpyxl.Workbook,
+        signatory_slots: List[SignatorySlot],
+        data_context: Union[ClassInfo, Dict[str, Any]],
+    ) -> None:
+        """
+        Populates N-tier signatory slots in openpyxl Excel worksheets.
+        """
+        for slot in signatory_slots:
+            val = self._resolve_signatory_value(slot, data_context)
+            if not val:
+                continue
+
+            sheet_name = slot.sheet_name
+            if not sheet_name or sheet_name not in wb.sheetnames:
+                ws = wb.active
+            else:
+                ws = wb[sheet_name]
+
+            target_coord = slot.target_cell_coord
+            if target_coord:
+                ws[target_coord] = str(val).strip()
+            elif slot.target_row_index and slot.target_col_index:
+                ws.cell(row=slot.target_row_index, column=slot.target_col_index, value=str(val).strip())
 
 
 __all__ = ["DynamicDocumentRenderer"]

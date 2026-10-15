@@ -30,8 +30,16 @@ from .template_set import (
     TemplateEntry,
     TemplateSet,
 )
+from .organization import (
+    OrganizationalContext,
+    SignatorySlot,
+    OrganizationPreset,
+)
 
 __all__ = [
+    "OrganizationalContext",
+    "SignatorySlot",
+    "OrganizationPreset",
     "Student",
     "ScheduleMeeting",
     "ScheduleBlock",

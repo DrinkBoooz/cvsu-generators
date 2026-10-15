@@ -376,6 +376,8 @@ class TemplateMixin:
                     "total_rows": manifest.roster_table.total_rows,
                     "total_cols": manifest.roster_table.total_cols,
                 } if manifest.roster_table else None,
+                "organizational_context": manifest.organizational_context.to_dict() if manifest.organizational_context else None,
+                "signatory_slots": [s.to_dict() for s in manifest.signatory_slots] if manifest.signatory_slots else [],
                 "diagnostics": manifest.get_diagnostics(),
             }
 

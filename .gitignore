@@ -16,7 +16,11 @@ scratch/
 c*.xml
 bandit_report.json
 *ORTEGA_SCHEDULE*.txt
-dump_*.txt
+dump*.txt
+*dump*.txt
+dev/merged.txt
+executable_test/dist/
+*.exe
 
 # Sample dev output directories
 dev/*/

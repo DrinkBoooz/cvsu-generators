@@ -250,6 +250,36 @@
           }
         }
 
+        const orgSummaryEl = document.getElementById("customDiscoveredOrgSummary");
+        const sigsSummaryEl = document.getElementById("customDiscoveredSignatoriesSummary");
+
+        if (orgSummaryEl) {
+          const org = manifestSummary ? manifestSummary.organizational_context : null;
+          if (org) {
+            orgSummaryEl.innerHTML = `
+              <div><strong>Institution:</strong> ${escapeHTML(org.institution || 'CvSU')}</div>
+              <div><strong>Campus:</strong> ${escapeHTML(org.campus || 'Main Campus')}</div>
+              <div><strong>College:</strong> ${escapeHTML(org.college || 'None (Campus Level)')}</div>
+              <div><strong>Department:</strong> ${escapeHTML(org.department || 'None detected')}</div>
+            `;
+          } else {
+            orgSummaryEl.innerHTML = `<span style="color: var(--text-muted);">Standard university headers detected</span>`;
+          }
+        }
+
+        if (sigsSummaryEl) {
+          const sigs = manifestSummary ? manifestSummary.signatory_slots : [];
+          if (sigs && sigs.length > 0) {
+            sigsSummaryEl.innerHTML = sigs.map((s, i) => `
+              <div style="margin-bottom: 2px;">
+                <strong>${i + 1}. ${escapeHTML(s.role_label)}</strong> &rarr; <span class="filter-pill" style="font-size: 10px; padding: 1px 5px;">${escapeHTML(s.default_title || s.bound_key)}</span>
+              </div>
+            `).join("");
+          } else {
+            sigsSummaryEl.innerHTML = `<span style="color: var(--text-muted);">No footer signatory anchors detected</span>`;
+          }
+        }
+
         if (diagDiv) {
           const diags = (manifestSummary && manifestSummary.diagnostics) || [];
           if (diags.length > 0) {

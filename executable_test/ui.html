@@ -2711,7 +2711,34 @@
                 </div>
               </div>
 
-              <!-- Row 2: College Name -->
+              <!-- Row 2: Campus Name -->
+              <div class="apple-hig-row">
+                <div class="apple-hig-row-meta">
+                  <div class="apple-hig-icon-tile icon-tile-blue" aria-hidden="true">
+                    🏫
+                  </div>
+                  <div class="apple-hig-text-stack">
+                    <label for="cfgDefaultCampus" class="apple-hig-label">
+                      Campus / Branch Name
+                    </label>
+                    <span class="apple-hig-caption">
+                      Official campus name (e.g. Main Campus, CvSU - Tanza Campus, Rosario Campus)
+                    </span>
+                  </div>
+                </div>
+                <div class="apple-hig-input-wrap">
+                  <input
+                    type="text"
+                    id="cfgDefaultCampus"
+                    class="form-control-custom apple-hig-input"
+                    placeholder="e.g. Don Severino de las Alas Campus (Main Campus)"
+                    oninput="updateFacultyDefaultsPreview()"
+                    aria-label="Default Campus Name"
+                  />
+                </div>
+              </div>
+
+              <!-- Row 3: College Name -->
               <div class="apple-hig-row">
                 <div class="apple-hig-row-meta">
                   <div class="apple-hig-icon-tile icon-tile-emerald" aria-hidden="true">
@@ -2738,7 +2765,34 @@
                 </div>
               </div>
 
-              <!-- Row 3: Semester & Academic Year -->
+              <!-- Row 4: Department Name -->
+              <div class="apple-hig-row">
+                <div class="apple-hig-row-meta">
+                  <div class="apple-hig-icon-tile icon-tile-emerald" aria-hidden="true">
+                    🏢
+                  </div>
+                  <div class="apple-hig-text-stack">
+                    <label for="cfgDefaultDepartment" class="apple-hig-label">
+                      Department / Unit Name
+                    </label>
+                    <span class="apple-hig-caption">
+                      Academic department banner (e.g. Department of Information Technology)
+                    </span>
+                  </div>
+                </div>
+                <div class="apple-hig-input-wrap">
+                  <input
+                    type="text"
+                    id="cfgDefaultDepartment"
+                    class="form-control-custom apple-hig-input"
+                    placeholder="e.g. Department of Information Technology"
+                    oninput="updateFacultyDefaultsPreview()"
+                    aria-label="Default Department Name"
+                  />
+                </div>
+              </div>
+
+              <!-- Row 5: Semester & Academic Year -->
               <div class="apple-hig-row">
                 <div class="apple-hig-row-meta">
                   <div class="apple-hig-icon-tile icon-tile-amber" aria-hidden="true">
@@ -2766,9 +2820,23 @@
               </div>
             </div>
 
+            <!-- N-Tier Signatory Chain Configuration -->
+            <div class="apple-hig-section-header" style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px;">
+              <span>Dynamic N-Tier Signatory Chain</span>
+              <div style="display: flex; gap: 6px;">
+                <button type="button" class="btn-config-add" style="padding: 3px 8px; font-size: 11px;" onclick="addSignatoryRow()">+ Add Tier</button>
+                <button type="button" class="btn-config-add" style="padding: 3px 8px; font-size: 11px;" onclick="importOrgPresetFromUI()">📥 Import Preset</button>
+                <button type="button" class="btn-config-add" style="padding: 3px 8px; font-size: 11px;" onclick="exportOrgPresetFromUI()">📤 Export Preset</button>
+              </div>
+            </div>
+
+            <div id="cfgSignatoriesListContainer" style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px;">
+              <!-- Dynamically rendered signatory rows -->
+            </div>
+
             <!-- Apple HIG Footnote Note -->
             <p class="apple-hig-footnote">
-              Fallback defaults are automatically used when the timetable schedule spreadsheet header has unmerged title blocks or missing cells.
+              Fallback defaults and N-tier signatories are dynamically mapped into document banners, approval blocks, and rating sheets across Main and Satellite Campuses.
             </p>
 
             <!-- Live Document Header Preview Card (macOS Quick Look style) -->
@@ -2776,7 +2844,7 @@
               <div class="apple-hig-preview-topbar">
                 <div class="apple-hig-preview-title-wrap">
                   <span class="preview-doc-glyph" aria-hidden="true">📄</span>
-                  <span class="preview-doc-heading">Document Header Live Preview</span>
+                  <span class="preview-doc-heading">Document Header &amp; Signatory Live Preview</span>
                 </div>
                 <span class="apple-hig-live-badge">Live Sync</span>
               </div>
@@ -2785,10 +2853,13 @@
                 <div class="preview-sheet-crest">
                   <span class="preview-cvsu-republic">Republic of the Philippines</span>
                   <span class="preview-cvsu-main">CAVITE STATE UNIVERSITY</span>
-                  <span class="preview-cvsu-campus">Don Severino de las Alas Campus</span>
+                  <span class="preview-cvsu-campus" id="previewHeaderCampus">Don Severino de las Alas Campus</span>
                 </div>
                 <div class="preview-sheet-college" id="previewHeaderCollege">
                   COLLEGE OF ENGINEERING AND INFORMATION TECHNOLOGY
+                </div>
+                <div class="preview-sheet-dept" id="previewHeaderDepartment" style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-top: 2px;">
+                  Department of Information Technology
                 </div>
                 <div class="preview-sheet-divider"></div>
                 <div class="preview-sheet-meta-grid">
@@ -2800,6 +2871,9 @@
                     <span class="preview-meta-k">Faculty Instructor:</span>
                     <span class="preview-meta-v" id="previewHeaderInstructor">DAN JOSEPH A. ORTEGA</span>
                   </div>
+                </div>
+                <div id="previewHeaderSignatories" style="display: flex; justify-content: space-around; gap: 8px; margin-top: 12px; border-top: 1px dashed var(--border-subtle); padding-top: 8px; font-size: 10.5px; text-align: center;">
+                  <!-- Signatories live preview -->
                 </div>
               </div>
 
@@ -3206,6 +3280,50 @@
                   </div>
                   <div
                     id="customRosterStructureSummary"
+                    style="color: var(--text-secondary); line-height: 1.5"
+                  ></div>
+                </div>
+                <div
+                  style="
+                    background: var(--surface-subtle);
+                    padding: 10px;
+                    border-radius: var(--radius-sm);
+                    border: 1px solid var(--border-subtle);
+                  "
+                >
+                  <div
+                    style="
+                      font-weight: 600;
+                      color: var(--text-primary);
+                      margin-bottom: 6px;
+                    "
+                  >
+                    🏛️ Discovered Organization Topology:
+                  </div>
+                  <div
+                    id="customDiscoveredOrgSummary"
+                    style="color: var(--text-secondary); line-height: 1.5"
+                  ></div>
+                </div>
+                <div
+                  style="
+                    background: var(--surface-subtle);
+                    padding: 10px;
+                    border-radius: var(--radius-sm);
+                    border: 1px solid var(--border-subtle);
+                  "
+                >
+                  <div
+                    style="
+                      font-weight: 600;
+                      color: var(--text-primary);
+                      margin-bottom: 6px;
+                    "
+                  >
+                    ✍️ Discovered Signatory Chain:
+                  </div>
+                  <div
+                    id="customDiscoveredSignatoriesSummary"
                     style="color: var(--text-secondary); line-height: 1.5"
                   ></div>
                 </div>
