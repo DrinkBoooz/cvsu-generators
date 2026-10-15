@@ -75,6 +75,40 @@
         </div>
 
         <nav aria-label="Quick Actions" class="header-actions">
+          <!-- Semester Workspace Quick Switcher -->
+          <div class="workspace-nav-group" style="display: flex; align-items: center; gap: 6px; margin-right: 6px;">
+            <select
+              id="selectWorkspace"
+              class="input-select"
+              onchange="onWorkspaceSelectChange(this.value)"
+              title="Active Semester Workspace"
+              aria-label="Active Semester Workspace"
+              style="padding: 4px 8px; font-size: 0.8rem; border-radius: var(--radius-sm); max-width: 160px; height: 30px;"
+            >
+              <option value="">Default Workspace</option>
+            </select>
+            <button
+              class="nav-btn"
+              id="btnSaveWorkspace"
+              onclick="promptSaveCurrentWorkspace()"
+              title="Save active semester state as snapshot"
+              aria-label="Save active semester state as snapshot"
+            >
+              <span aria-hidden="true">💾</span>
+              <span class="nav-btn-label">Save</span>
+            </button>
+            <button
+              class="nav-btn"
+              id="btnWorkspaceManager"
+              onclick="openWorkspaceModal()"
+              title="Manage Semester Workspaces"
+              aria-label="Manage Semester Workspaces"
+            >
+              <span aria-hidden="true">📂</span>
+              <span class="nav-btn-label">Workspaces</span>
+            </button>
+          </div>
+
           <button
             class="nav-btn"
             id="btnToggleTheme"
@@ -4098,6 +4132,181 @@
       </div>
     </div>
 
+    <!-- ── Semester Workspace Manager Modal ─────────────────────────────── -->
+    <div
+      id="modalWorkspaceBackdrop"
+      class="modal-backdrop-custom d-none"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modalWorkspaceTitle"
+      onclick="closeWorkspaceModal()"
+    >
+      <div
+        class="modal-dialog-custom"
+        onclick="event.stopPropagation()"
+        style="max-width: 600px;"
+      >
+        <div class="modal-header-custom">
+          <div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 18px;" aria-hidden="true">📂</span>
+              <h3 id="modalWorkspaceTitle" style="font-size: 15px; font-weight: 700; margin: 0; color: var(--text-primary);">
+                Semester Workspaces
+              </h3>
+            </div>
+            <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">
+              Save and instantly switch between academic semesters, terms, and faculty profiles
+            </div>
+          </div>
+          <button
+            type="button"
+            id="btnCloseWorkspaceModal"
+            class="modal-close-btn"
+            onclick="closeWorkspaceModal()"
+            aria-label="Close Workspaces Modal"
+          >
+            &times;
+          </button>
+        </div>
+
+        <div class="modal-body-custom" style="padding: 18px 20px;">
+          <!-- Save New Snapshot Section -->
+          <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+            <input
+              type="text"
+              id="inputWorkspaceName"
+              class="input-text"
+              placeholder="Workspace Name (e.g., 1st Sem AY 2026-2027)"
+              style="flex: 1;"
+            />
+            <button
+              type="button"
+              id="btnSaveCurrentWorkspace"
+              class="btn-primary-compact"
+              onclick="saveCurrentWorkspaceFromUI()"
+              style="font-size: 12px; white-space: nowrap;"
+            >
+              💾 Save Active State
+            </button>
+          </div>
+
+          <!-- Existing Saved Workspaces List -->
+          <div style="font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-bottom: 8px;">
+            Saved Workspaces
+          </div>
+          <div id="workspaceListContainer" class="workspace-items-list" style="max-height: 260px; overflow-y: auto; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 8px;">
+            <!-- Populated dynamically -->
+            <div style="text-align: center; color: var(--text-muted); padding: 12px; font-size: 11.5px;">No saved semester workspaces yet.</div>
+          </div>
+        </div>
+
+        <div class="modal-footer-custom" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 18px;">
+          <div style="display: flex; gap: 8px;">
+            <button type="button" id="btnImportWorkspace" class="nav-btn" onclick="importWorkspaceFromUI()" style="font-size: 12px;">
+              📥 Import (.cvsu-workspace.json)
+            </button>
+            <button type="button" id="btnExportWorkspace" class="nav-btn" onclick="exportActiveWorkspaceFromUI()" style="font-size: 12px;">
+              📤 Export Active
+            </button>
+          </div>
+          <button type="button" class="nav-btn" onclick="closeWorkspaceModal()" style="font-size: 12px;">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Smart Mid-Semester Roster Diff Modal ────────────────────────────── -->
+    <div
+      id="modalRosterDiffBackdrop"
+      class="modal-backdrop-custom d-none"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modalRosterDiffTitle"
+      onclick="closeRosterDiffModal()"
+    >
+      <div
+        class="modal-dialog-custom"
+        onclick="event.stopPropagation()"
+        style="max-width: 660px;"
+      >
+        <div class="modal-header-custom">
+          <div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 18px;" aria-hidden="true">🔄</span>
+              <h3 id="modalRosterDiffTitle" style="font-size: 15px; font-weight: 700; margin: 0; color: var(--text-primary);">
+                Mid-Semester Roster Update Review
+              </h3>
+              <span id="rosterDiffClassKey" class="filter-pill active" style="font-size: 11px; padding: 2px 8px;">-</span>
+            </div>
+            <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">
+              Review student adds, drops, and modifications before updating the class list
+            </div>
+          </div>
+          <button
+            type="button"
+            id="btnCloseRosterDiff"
+            class="modal-close-btn"
+            onclick="closeRosterDiffModal()"
+            aria-label="Close Roster Diff Modal"
+          >
+            &times;
+          </button>
+        </div>
+
+        <div class="modal-body-custom" style="padding: 16px 20px; max-height: 400px; overflow-y: auto;">
+          <!-- Summary Header Badges -->
+          <div id="rosterDiffSummary" style="display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap;">
+            <!-- Populated dynamically: green badge (+ Added), red badge (- Dropped), amber (~ Modified) -->
+          </div>
+
+          <!-- Added Students -->
+          <div style="margin-bottom: 12px;">
+            <div style="font-size: 12px; font-weight: 700; color: var(--accent-emerald); margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+              <span>+ Newly Enrolled / Added Students</span>
+            </div>
+            <div id="rosterDiffAddedList" style="border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 6px; font-size: 11.5px; background: rgba(16, 185, 129, 0.05);">
+              <em>None</em>
+            </div>
+          </div>
+
+          <!-- Dropped Students -->
+          <div style="margin-bottom: 12px;">
+            <div style="font-size: 12px; font-weight: 700; color: var(--accent-rose); margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+              <span>- Dropped / Withdrawn Students</span>
+            </div>
+            <div id="rosterDiffRemovedList" style="border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 6px; font-size: 11.5px; background: rgba(239, 68, 68, 0.05);">
+              <em>None</em>
+            </div>
+          </div>
+
+          <!-- Modified Students -->
+          <div style="margin-bottom: 12px;">
+            <div style="font-size: 12px; font-weight: 700; color: var(--accent-amber, #f59e0b); margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+              <span>~ Modified Records (Name / ID updates)</span>
+            </div>
+            <div id="rosterDiffModifiedList" style="border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 6px; font-size: 11.5px; background: rgba(245, 158, 11, 0.05);">
+              <em>None</em>
+            </div>
+          </div>
+
+          <!-- Unchanged Count Note -->
+          <div style="font-size: 11.5px; color: var(--text-muted); text-align: right;">
+            <span id="rosterDiffUnchangedCount">0</span> unchanged students
+          </div>
+        </div>
+
+        <div class="modal-footer-custom" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 18px;">
+          <button type="button" id="btnCancelRosterDiff" class="nav-btn" onclick="closeRosterDiffModal()" style="font-size: 12px;">
+            Cancel
+          </button>
+          <button type="button" id="btnApplyRosterDiff" class="btn-primary-compact" onclick="confirmApplyRosterDiff()" style="font-size: 12px; padding: 6px 14px;">
+            ✓ Apply Roster Update
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- ── Apple HIG Confirmation Sheet Modal ────────────────────────────── -->
     <div
       id="modalAppleConfirmBackdrop"
@@ -4238,6 +4447,7 @@
     <script src="js/settings.js"></script>
     <script src="js/templates.js"></script>
     <script src="js/template_sets.js"></script>
+    <script src="js/workspaces.js"></script>
     <script src="js/app.js"></script>
   </body>
 </html>

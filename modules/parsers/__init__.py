@@ -1,5 +1,5 @@
 from .ceit_directory import CEIT_PREFIX_MAP, SUBJECT_PREFIXES, get_prefix_metadata, parse_filename_hints
-from .roster_parser import inspect_roster, load_students, load_students_excel, load_students_csv
+from .roster_parser import inspect_roster, load_students, load_students_excel, load_students_csv, compute_roster_diff
 from .schedule_parser import (
     find_schedule_file, parse_schedule, find_blocks_for_section,
     inspect_schedule_file, _find_class_details_by_schedule_code,
@@ -21,8 +21,11 @@ from .template_analyzer import (
     SemanticSlot,
     RepeatingTableTopology,
 )
+from .smart_ingest import SmartIngestClassifier
 
 __all__ = [
+    "SmartIngestClassifier",
+    "compute_roster_diff",
     "CEIT_PREFIX_MAP",
     "SUBJECT_PREFIXES",
     "get_prefix_metadata",

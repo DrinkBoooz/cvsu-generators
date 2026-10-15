@@ -71,6 +71,15 @@
                 <option value="lecture_lab" ${isLab ? "selected" : ""}>Lecture and Lab</option>
                 <option value="lecture_only" ${!isLab ? "selected" : ""}>Lecture only</option>
               </select>
+              <button
+                type="button"
+                class="btn-map-columns"
+                onclick="triggerRosterDiff('${escapeHTML(cls.id)}')"
+                title="Review mid-semester roster additions/drops for this class"
+                style="margin-top: 4px; font-size: 11px;"
+              >
+                🔄 Diff Update
+              </button>
             </div>
           `;
           container.appendChild(card);

@@ -237,3 +237,45 @@ def test_ui_visual_slot_mapper_and_preflight_preview():
     assert "openPreflightPreviewModal" in ui_content
     assert "closePreflightPreviewModal" in ui_content
 
+
+def test_ui_semester_workspaces_and_roster_diff():
+    ui_content = get_ui_bundle()
+
+    # Workspace Selector & Header Buttons
+    assert 'id="selectWorkspace"' in ui_content
+    assert 'id="btnSaveWorkspace"' in ui_content
+    assert 'id="btnWorkspaceManager"' in ui_content
+
+    # Workspace Modal Elements
+    assert 'id="modalWorkspaceBackdrop"' in ui_content
+    assert 'id="modalWorkspaceTitle"' in ui_content
+    assert 'id="btnCloseWorkspaceModal"' in ui_content
+    assert 'id="inputWorkspaceName"' in ui_content
+    assert 'id="btnSaveCurrentWorkspace"' in ui_content
+    assert 'id="btnImportWorkspace"' in ui_content
+    assert 'id="btnExportWorkspace"' in ui_content
+    assert 'id="workspaceListContainer"' in ui_content
+
+    # Roster Diff Modal Elements
+    assert 'id="modalRosterDiffBackdrop"' in ui_content
+    assert 'id="modalRosterDiffTitle"' in ui_content
+    assert 'id="btnCloseRosterDiff"' in ui_content
+    assert 'id="rosterDiffClassKey"' in ui_content
+    assert 'id="rosterDiffSummary"' in ui_content
+    assert 'id="rosterDiffAddedList"' in ui_content
+    assert 'id="rosterDiffRemovedList"' in ui_content
+    assert 'id="rosterDiffModifiedList"' in ui_content
+    assert 'id="rosterDiffUnchangedCount"' in ui_content
+    assert 'id="btnCancelRosterDiff"' in ui_content
+    assert 'id="btnApplyRosterDiff"' in ui_content
+
+    # Workspace & Diff JS Handlers
+    assert "loadWorkspaceListUI" in ui_content
+    assert "onWorkspaceSelectChange" in ui_content
+    assert "openWorkspaceModal" in ui_content
+    assert "closeWorkspaceModal" in ui_content
+    assert "openRosterDiffModal" in ui_content
+    assert "closeRosterDiffModal" in ui_content
+    assert "confirmApplyRosterDiff" in ui_content
+
+

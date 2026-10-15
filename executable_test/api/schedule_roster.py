@@ -200,3 +200,105 @@ class ScheduleRosterMixin:
         except Exception as e:
             logger.error(f"Error in detect_classes: {e}")
             return []
+
+    # ── Smart Ingest & Mid-Semester Roster Diffing ───────────────────────────
+
+    def smart_ingest_files(self, file_paths: list):
+        """
+        Classifies and deterministically ingests a mixed batch of dropped or selected files.
+        Routes schedules, rosters, templates, calendars, presets, and workspaces automatically.
+        """
+        from modules.parsers.smart_ingest import SmartIngestClassifier
+        classifier = SmartIngestClassifier()
+        return classifier.ingest_files(file_paths or [], app_api=self)
+
+    def preview_roster_diff(self, class_key: str, new_file_path: str):
+        """
+        Computes a diff comparing the active class roster against an updated mid-semester roster file.
+        Returns categorizations: added, removed, modified, unchanged.
+        """
+        if not new_file_path or not os.path.isfile(new_file_path):
+            return {"status": "error", "message": f"Updated roster file not found: {new_file_path}"}
+
+        if "\x00" in str(new_file_path):
+            return {"status": "error", "message": "Invalid characters in file path"}
+
+        try:
+            from modules.parsers.roster_parser import load_students, compute_roster_diff
+            new_students = load_students(new_file_path)
+
+            # Locate existing roster for class_key
+            old_students = []
+            detected = self.detect_classes()
+            matched_cls = None
+            for cls in detected:
+                if (str(cls.get("id")) == str(class_key) or
+                    str(cls.get("schedule_code")) == str(class_key) or
+                    str(cls.get("course_sec")).strip().lower() == str(class_key).strip().lower()):
+                    matched_cls = cls
+                    break
+
+            if matched_cls and matched_cls.get("roster_path") and os.path.isfile(matched_cls["roster_path"]):
+                old_students = load_students(matched_cls["roster_path"])
+            elif class_key in self.rosters and os.path.isfile(class_key):
+                old_students = load_students(class_key)
+
+            diff = compute_roster_diff(old_students, new_students)
+            return {
+                "status": "success",
+                "class_key": class_key,
+                "new_file_path": new_file_path,
+                "old_file_path": matched_cls.get("roster_path") if matched_cls else "",
+                "diff": diff,
+            }
+        except Exception as e:
+            logger.error(f"Failed to preview roster diff: {e}")
+            return {"status": "error", "message": str(e)}
+
+    def apply_roster_diff(self, class_key: str, new_file_path: str):
+        """
+        Applies an updated roster to replace an existing class roster, re-evaluating validations.
+        """
+        if not new_file_path or not os.path.isfile(new_file_path):
+            return {"status": "error", "message": f"Updated roster file not found: {new_file_path}"}
+
+        try:
+            detected = self.detect_classes()
+            matched_cls = None
+            for cls in detected:
+                if (str(cls.get("id")) == str(class_key) or
+                    str(cls.get("schedule_code")) == str(class_key) or
+                    str(cls.get("course_sec")).strip().lower() == str(class_key).strip().lower()):
+                    matched_cls = cls
+                    break
+
+            old_path = matched_cls.get("roster_path") if matched_cls else None
+
+            with self._lock:
+                if old_path and old_path in self.rosters:
+                    idx = self.rosters.index(old_path)
+                    self.rosters[idx] = new_file_path
+                elif new_file_path not in self.rosters:
+                    self.rosters.append(new_file_path)
+
+                # If schedule_code was matched, record in roster_configs
+                if matched_cls and matched_cls.get("schedule_code"):
+                    base_new = os.path.basename(new_file_path)
+                    self.roster_configs.setdefault(base_new, {})["linked_schedule_code"] = matched_cls["schedule_code"]
+
+                current_rosters = list(self.rosters)
+
+            validation = validate_rosters(self.schedule_path, current_rosters, roster_configs=self.roster_configs)
+            logger.info(f"Applied updated roster diff for {class_key}: {new_file_path}")
+            return {
+                "status": "success",
+                "class_key": class_key,
+                "new_file_path": new_file_path,
+                "count": len(current_rosters),
+                "rosters": current_rosters,
+                "validation": validation,
+            }
+        except Exception as e:
+            logger.error(f"Failed to apply roster diff: {e}")
+            return {"status": "error", "message": str(e)}
+

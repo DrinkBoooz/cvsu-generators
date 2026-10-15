@@ -1437,9 +1437,10 @@ def test_destructive_lifecycle_governance_static_ast():
 
     # Authorized deletion calls across application Python files under modules/ and executable_test/
     allowed_deletion_patterns = {
-        # ConfigManager: config_file in reset_to_defaults, file_path in delete_custom_template
+        # ConfigManager: config_file in reset_to_defaults, file_path in delete_custom_template, target_path in delete_workspace
         ("modules/common/config_manager.py", "os.remove", "self.config_file"),
         ("modules/common/config_manager.py", "os.remove", "file_path"),
+        ("modules/common/config_manager.py", "os.remove", "target_path"),
         # PreferencesManager: preferences_file in reset_preferences
         ("modules/common/preferences_manager.py", "os.remove", "self.preferences_file"),
         # TemplateSetManager: entry.file_path in remove_template_from_set, set_dir in delete_template_set, temp_dir in import_template_set

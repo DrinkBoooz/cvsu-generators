@@ -43,8 +43,11 @@ from .calendar import (
     ResolvedDateInfo,
     CATEGORY_TAG_MAP,
 )
+from .workspace import SemesterWorkspace, sanitize_workspace_id
 
 __all__ = [
+    "SemesterWorkspace",
+    "sanitize_workspace_id",
     "CalendarExceptionCategory",
     "CalendarExceptionMode",
     "CalendarException",

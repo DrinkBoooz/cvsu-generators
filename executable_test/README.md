@@ -63,6 +63,12 @@ Before generating, make sure you have the following files ready:
 
   _(The program uses this exact format to pair each student list with the corresponding block in your schedule)._
 
+### 3. Unified Smart Ingest & Named Workspaces
+
+- **Smart Ingest Router**: You can drag and drop any supported file (`.xlsx`, `.xls`, `.csv`, `.docx`, `.ics`, `.cvsu-org.json`, `.cvsu-workspace.json`) directly into the window or dropzones; the system auto-classifies and routes each file to the appropriate module.
+- **Mid-Semester Roster Diffing**: Click the **🔄 Diff Update** button on any matched class card to preview additions, drops, and modifications before applying them in one click.
+- **Semester Workspaces**: Save full semester snapshots via the top navigation bar (`#selectWorkspace`) to switch between academic semesters or faculty profiles instantly.
+
 ---
 
 ## 📝 Step-by-Step Instructions

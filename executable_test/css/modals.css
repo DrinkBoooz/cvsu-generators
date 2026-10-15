@@ -1762,3 +1762,53 @@
           max-height: 280px;
         }
       }
+
+      /* ── Semester Workspace & Roster Diff Modern Styles ──────────────── */
+      .workspace-card-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 12px;
+        border-radius: var(--radius-sm);
+        background: var(--surface-card);
+        border: 1px solid var(--border-subtle);
+        margin-bottom: 6px;
+        transition: all 0.15s ease;
+      }
+      .workspace-card-item:hover {
+        border-color: var(--accent-emerald);
+        background: var(--surface-elevated);
+      }
+      .diff-badge-added {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px 8px;
+        border-radius: 999px;
+        background: rgba(16, 185, 129, 0.15);
+        color: var(--accent-emerald);
+        font-weight: 700;
+        font-size: 11px;
+      }
+      .diff-badge-removed {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px 8px;
+        border-radius: 999px;
+        background: rgba(239, 68, 68, 0.15);
+        color: var(--accent-rose);
+        font-weight: 700;
+        font-size: 11px;
+      }
+      .diff-badge-modified {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px 8px;
+        border-radius: 999px;
+        background: rgba(245, 158, 11, 0.15);
+        color: var(--accent-amber, #f59e0b);
+        font-weight: 700;
+        font-size: 11px;
+      }

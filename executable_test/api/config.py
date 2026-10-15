@@ -394,4 +394,167 @@ class ConfigMixin:
             logger.error(f"Failed parsing announcement text: {e}")
             return {"status": "error", "message": str(e)}
 
+    # ── Named Semester Workspaces (.cvsu-workspace.json) ──────────────────────
+
+    def list_workspaces(self):
+        """Returns list of saved semester workspace snapshots."""
+        from modules.common.config_manager import config_manager
+        return config_manager.list_workspaces()
+
+    def save_workspace(self, name: str, workspace_dict: dict = None):
+        """Saves current state or provided dictionary as a named semester workspace snapshot."""
+        from modules.common.config_manager import config_manager
+        if workspace_dict is None:
+            lock = getattr(self, "_lock", None)
+            if lock:
+                with lock:
+                    current_sched = getattr(self, "schedule_path", "")
+                    current_rosters = list(getattr(self, "rosters", []))
+                    current_roster_configs = dict(getattr(self, "roster_configs", {}))
+                    current_output = getattr(self, "output_dir", "")
+            else:
+                current_sched = getattr(self, "schedule_path", "")
+                current_rosters = list(getattr(self, "rosters", []))
+                current_roster_configs = dict(getattr(self, "roster_configs", {}))
+                current_output = getattr(self, "output_dir", "")
+
+            cfg = config_manager.get_config()
+            workspace_dict = {
+                "name": name,
+                "schedule_path": current_sched,
+                "rosters": current_rosters,
+                "roster_configs": current_roster_configs,
+                "output_dir": current_output,
+                "organization_preset": cfg.get("organization_preset", {}),
+                "calendar_config": cfg.get("calendar_config", {}),
+                "active_template_set": getattr(self, "active_template_set", ""),
+            }
+        return config_manager.save_workspace(name, workspace_dict)
+
+    def load_workspace(self, workspace_id_or_name: str):
+        """Loads a semester workspace snapshot and applies state to active session."""
+        from modules.common.config_manager import config_manager
+        from modules.services.validator import validate_rosters
+        ws = config_manager.get_workspace(workspace_id_or_name)
+        if not ws:
+            return {"status": "error", "message": f"Workspace '{workspace_id_or_name}' not found"}
+
+        lock = getattr(self, "_lock", None)
+        if lock:
+            with lock:
+                self.schedule_path = ws.get("schedule_path", "")
+                self.rosters = list(ws.get("rosters", []))
+                self.roster_configs = dict(ws.get("roster_configs", {}))
+                self.output_dir = ws.get("output_dir", "")
+        else:
+            self.schedule_path = ws.get("schedule_path", "")
+            self.rosters = list(ws.get("rosters", []))
+            self.roster_configs = dict(ws.get("roster_configs", {}))
+            self.output_dir = ws.get("output_dir", "")
+
+        cfg_modified = False
+        cfg = config_manager.get_config()
+        if ws.get("organization_preset"):
+            cfg["organization_preset"] = ws["organization_preset"]
+            cfg_modified = True
+        if ws.get("calendar_config"):
+            cfg["calendar_config"] = ws["calendar_config"]
+            cfg_modified = True
+        if cfg_modified:
+            config_manager.save_config(cfg)
+
+        validation = []
+        if getattr(self, "rosters", None):
+            try:
+                validation = validate_rosters(
+                    self.schedule_path,
+                    self.rosters,
+                    roster_configs=getattr(self, "roster_configs", {})
+                )
+            except Exception as e:
+                logger.warning(f"Validation error upon workspace load: {e}")
+
+        logger.info(f"Loaded workspace: {ws.get('name')}")
+        return {
+            "status": "success",
+            "workspace": ws,
+            "validation": validation,
+        }
+
+    def delete_workspace(self, workspace_id_or_name: str):
+        """Deletes a saved semester workspace."""
+        from modules.common.config_manager import config_manager
+        return config_manager.delete_workspace(workspace_id_or_name)
+
+    def export_workspace_file(self, file_path: str = None, workspace_id_or_name: str = None):
+        """Exports a workspace snapshot to an external .cvsu-workspace.json file."""
+        import webview
+        from modules.common.config_manager import config_manager
+
+        if file_path is None:
+            if not getattr(self, "_window", None):
+                return {"status": "error", "message": "Window context unavailable"}
+            result = self._window.create_file_dialog(
+                webview.SAVE_DIALOG,
+                save_filename="semester_workspace.cvsu-workspace.json",
+                file_types=('CvSU Workspace (*.cvsu-workspace.json;*.json)', 'All files (*.*)')
+            )
+            if not result:
+                return {"status": "cancelled"}
+            file_path = result if isinstance(result, str) else result[0]
+
+        ws_dict = None
+        if not workspace_id_or_name:
+            # Snapshot active state
+            lock = getattr(self, "_lock", None)
+            if lock:
+                with lock:
+                    current_sched = getattr(self, "schedule_path", "")
+                    current_rosters = list(getattr(self, "rosters", []))
+                    current_roster_configs = dict(getattr(self, "roster_configs", {}))
+                    current_output = getattr(self, "output_dir", "")
+            else:
+                current_sched = getattr(self, "schedule_path", "")
+                current_rosters = list(getattr(self, "rosters", []))
+                current_roster_configs = dict(getattr(self, "roster_configs", {}))
+                current_output = getattr(self, "output_dir", "")
+
+            cfg = config_manager.get_config()
+            ws_dict = {
+                "name": "Exported Workspace Snapshot",
+                "schedule_path": current_sched,
+                "rosters": current_rosters,
+                "roster_configs": current_roster_configs,
+                "output_dir": current_output,
+                "organization_preset": cfg.get("organization_preset", {}),
+                "calendar_config": cfg.get("calendar_config", {}),
+                "active_template_set": getattr(self, "active_template_set", ""),
+            }
+
+        return config_manager.export_workspace_file(
+            file_path,
+            workspace_id_or_name=workspace_id_or_name,
+            workspace_dict=ws_dict
+        )
+
+    def import_workspace_file(self, file_path: str = None):
+        """Imports an external .cvsu-workspace.json file."""
+        import webview
+        from modules.common.config_manager import config_manager
+
+        if file_path is None:
+            if not getattr(self, "_window", None):
+                return {"status": "error", "message": "Window context unavailable"}
+            result = self._window.create_file_dialog(
+                webview.OPEN_DIALOG,
+                allow_multiple=False,
+                file_types=('CvSU Workspace (*.cvsu-workspace.json;*.json)', 'All files (*.*)')
+            )
+            if not result or len(result) == 0:
+                return {"status": "cancelled"}
+            file_path = result[0]
+
+        return config_manager.import_workspace_file(file_path)
+
+
 

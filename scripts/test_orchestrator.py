@@ -101,6 +101,7 @@ MANIFEST = {
                 "tests/test_multi_row_roster_headers.py",
                 "tests/test_field_resolver.py",
                 "tests/test_compound_semantic_labels.py",
+                "tests/test_workspaces_smart_ingest_and_diff.py",
             ],
         },
         "B2_inspectors_detectors_validators": {

@@ -229,6 +229,7 @@ class ParserConfigManager:
 
         self.custom_templates_dir = os.path.join(self.base_dir, "custom_templates")
         self.custom_templates_index = os.path.join(self.custom_templates_dir, "templates.json")
+        self.workspaces_dir = os.path.join(self.base_dir, "workspaces")
         self.config_file = os.path.join(self.config_dir, "parser_settings.json")
         self._cached_config = None
         self._listeners = []
@@ -666,6 +667,201 @@ class ParserConfigManager:
             return {"status": "success", "deleted_id": template_id}
         except Exception as e:
             logger.error(f"Failed to delete custom template {template_id}: {e}")
+            return {"status": "error", "message": str(e)}
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Named Semester Workspaces (.cvsu-workspace.json)
+    # ═══════════════════════════════════════════════════════════════════════════
+
+    def get_workspaces_dir(self) -> str:
+        os.makedirs(self.workspaces_dir, exist_ok=True)
+        return self.workspaces_dir
+
+    def list_workspaces(self) -> list:
+        """Returns list of saved workspace summaries sorted by updated_at descending."""
+        workspaces_dir = self.get_workspaces_dir()
+        results = []
+        try:
+            for fname in os.listdir(workspaces_dir):
+                if not fname.endswith(".json"):
+                    continue
+                fpath = os.path.join(workspaces_dir, fname)
+                try:
+                    with open(fpath, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    if isinstance(data, dict):
+                        ws_id = data.get("workspace_id") or os.path.splitext(fname)[0]
+                        name = data.get("name") or ws_id
+                        results.append({
+                            "workspace_id": ws_id,
+                            "name": name,
+                            "updated_at": data.get("updated_at", ""),
+                            "created_at": data.get("created_at", ""),
+                            "schedule_path": data.get("schedule_path", ""),
+                            "rosters_count": len(data.get("rosters", [])),
+                            "output_dir": data.get("output_dir", ""),
+                            "active_template_set": data.get("active_template_set", ""),
+                            "file_path": fpath,
+                        })
+                except Exception as read_err:
+                    logger.warning(f"Failed to read workspace file {fpath}: {read_err}")
+            results.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
+        except Exception as e:
+            logger.error(f"Error listing workspaces: {e}")
+        return results
+
+    def get_workspace(self, workspace_id_or_name: str) -> dict | None:
+        """Finds a workspace by its ID or human-readable name."""
+        if not workspace_id_or_name:
+            return None
+        from modules.models.workspace import sanitize_workspace_id
+        target_id = sanitize_workspace_id(workspace_id_or_name)
+        workspaces_dir = self.get_workspaces_dir()
+        direct_path = os.path.join(workspaces_dir, f"{target_id}.json")
+        if os.path.isfile(direct_path):
+            try:
+                with open(direct_path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception as e:
+                logger.error(f"Error reading workspace {direct_path}: {e}")
+                return None
+
+        # Fallback: scan by name (case-insensitive) or workspace_id
+        try:
+            for fname in os.listdir(workspaces_dir):
+                if not fname.endswith(".json"):
+                    continue
+                fpath = os.path.join(workspaces_dir, fname)
+                try:
+                    with open(fpath, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    if isinstance(data, dict):
+                        if (data.get("workspace_id") == workspace_id_or_name or
+                            str(data.get("name", "")).strip().lower() == str(workspace_id_or_name).strip().lower()):
+                            return data
+                except Exception:
+                    continue
+        except Exception as e:
+            logger.error(f"Error scanning workspaces directory: {e}")
+        return None
+
+    def save_workspace(self, name: str, workspace_dict: dict = None) -> dict:
+        """Saves or updates a semester workspace snapshot atomically."""
+        from modules.models.workspace import SemesterWorkspace, sanitize_workspace_id
+        try:
+            ws_dir = self.get_workspaces_dir()
+            payload = dict(workspace_dict or {})
+            if name:
+                payload["name"] = name.strip()
+            ws_id = payload.get("workspace_id") or sanitize_workspace_id(payload.get("name", "workspace"))
+            payload["workspace_id"] = ws_id
+            payload["updated_at"] = datetime.now().isoformat()
+            if not payload.get("created_at"):
+                existing = self.get_workspace(ws_id)
+                if existing and existing.get("created_at"):
+                    payload["created_at"] = existing["created_at"]
+                else:
+                    payload["created_at"] = payload["updated_at"]
+
+            ws = SemesterWorkspace.from_dict(payload)
+            errors = ws.validate()
+            if errors:
+                return {"status": "error", "message": "; ".join(errors)}
+
+            target_path = os.path.join(ws_dir, f"{ws.workspace_id}.json")
+            with tempfile.NamedTemporaryFile("w", dir=ws_dir, delete=False, encoding="utf-8") as tf:
+                json.dump(ws.to_dict(), tf, indent=2)
+                temp_name = tf.name
+            os.replace(temp_name, target_path)
+
+            logger.info(f"Saved semester workspace: {ws.name} ({ws.workspace_id})")
+            return {"status": "success", "workspace": ws.to_dict(), "file_path": target_path}
+        except Exception as e:
+            logger.error(f"Failed to save workspace: {e}")
+            return {"status": "error", "message": str(e)}
+
+    def delete_workspace(self, workspace_id_or_name: str) -> dict:
+        """Deletes a saved workspace file."""
+        from modules.models.workspace import sanitize_workspace_id
+        try:
+            ws = self.get_workspace(workspace_id_or_name)
+            if not ws:
+                return {"status": "error", "message": f"Workspace '{workspace_id_or_name}' not found"}
+            ws_id = ws.get("workspace_id") or sanitize_workspace_id(workspace_id_or_name)
+            target_path = os.path.join(self.get_workspaces_dir(), f"{ws_id}.json")
+            if os.path.exists(target_path):
+                os.remove(target_path)
+                logger.info(f"Deleted semester workspace: {ws_id}")
+                return {"status": "success", "deleted_id": ws_id}
+            return {"status": "error", "message": f"Workspace file not found: {target_path}"}
+        except Exception as e:
+            logger.error(f"Failed to delete workspace: {e}")
+            return {"status": "error", "message": str(e)}
+
+    def export_workspace_file(self, file_path: str, workspace_id_or_name: str = None, workspace_dict: dict = None) -> dict:
+        """Exports a workspace snapshot to an external file (.cvsu-workspace.json or .json)."""
+        from modules.models.workspace import SemesterWorkspace
+        if "\x00" in str(file_path):
+            return {"status": "error", "message": "Invalid characters in file path"}
+        lower_path = str(file_path).lower()
+        if not lower_path.endswith(".json") and not lower_path.endswith(".cvsu-workspace.json"):
+            return {"status": "error", "message": "Invalid file extension. Expected .json or .cvsu-workspace.json"}
+
+        ws_data = None
+        if workspace_dict:
+            ws_data = workspace_dict
+        elif workspace_id_or_name:
+            ws_data = self.get_workspace(workspace_id_or_name)
+            if not ws_data:
+                return {"status": "error", "message": f"Workspace '{workspace_id_or_name}' not found"}
+        else:
+            return {"status": "error", "message": "No workspace data or ID provided for export"}
+
+        try:
+            ws = SemesterWorkspace.from_dict(ws_data)
+            errors = ws.validate()
+            if errors:
+                return {"status": "error", "message": "; ".join(errors)}
+            abs_path = os.path.abspath(file_path)
+            os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+            with open(abs_path, "w", encoding="utf-8") as f:
+                json.dump(ws.to_dict(), f, indent=2)
+            logger.info(f"Exported semester workspace to {abs_path}")
+            return {"status": "success", "file_path": abs_path, "workspace": ws.to_dict()}
+        except Exception as e:
+            logger.error(f"Failed to export workspace to {file_path}: {e}")
+            return {"status": "error", "message": str(e)}
+
+    def import_workspace_file(self, file_path: str) -> dict:
+        """Imports an external .cvsu-workspace.json file and persists it to local workspaces."""
+        from modules.models.workspace import SemesterWorkspace
+        if "\x00" in str(file_path):
+            return {"status": "error", "message": "Invalid characters in file path"}
+        lower_path = str(file_path).lower()
+        if not lower_path.endswith(".json") and not lower_path.endswith(".cvsu-workspace.json"):
+            return {"status": "error", "message": "Invalid file extension. Expected .json or .cvsu-workspace.json"}
+
+        abs_path = os.path.abspath(file_path)
+        if not os.path.isfile(abs_path):
+            return {"status": "error", "message": f"File does not exist: {abs_path}"}
+
+        try:
+            with open(abs_path, "r", encoding="utf-8") as f:
+                raw_data = json.load(f)
+            if not isinstance(raw_data, dict):
+                return {"status": "error", "message": "Workspace data must be a JSON object"}
+
+            ws = SemesterWorkspace.from_dict(raw_data)
+            errors = ws.validate()
+            if errors:
+                return {"status": "error", "message": "; ".join(errors)}
+
+            save_res = self.save_workspace(ws.name, ws.to_dict())
+            if save_res.get("status") == "success":
+                return {"status": "success", "workspace": save_res["workspace"], "file_path": abs_path}
+            return save_res
+        except Exception as e:
+            logger.error(f"Failed to import workspace from {file_path}: {e}")
             return {"status": "error", "message": str(e)}
 
 

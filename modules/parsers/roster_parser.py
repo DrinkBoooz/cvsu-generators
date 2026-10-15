@@ -500,3 +500,143 @@ def sanitize_stnum(stnum: str) -> str:
     if st.endswith(".0"):
         st = st[:-2]
     return st
+
+
+def _normalize_student_record(item) -> dict:
+    if hasattr(item, "name") and hasattr(item, "student_number"):
+        raw_name = getattr(item, "name", "")
+        raw_id = getattr(item, "student_number", "")
+    elif isinstance(item, (tuple, list)):
+        raw_name = item[0] if len(item) > 0 else ""
+        raw_id = item[1] if len(item) > 1 else ""
+    elif isinstance(item, dict):
+        raw_name = item.get("name") or item.get("student_name") or ""
+        raw_id = item.get("student_number") or item.get("id") or item.get("student_no") or ""
+    else:
+        raw_name = str(item)
+        raw_id = ""
+
+    norm_n = normalize_name(raw_name)
+    norm_i = sanitize_stnum(raw_id)
+    clean_id = re.sub(r'[^a-zA-Z0-9]', '', str(norm_i).lower())
+    clean_name = re.sub(r'[^a-zA-Z0-9]', '', str(norm_n).lower())
+
+    return {
+        "name": norm_n,
+        "student_number": norm_i,
+        "clean_id": clean_id,
+        "clean_name": clean_name,
+    }
+
+
+def compute_roster_diff(
+    old_students: list,
+    new_students: list
+) -> dict:
+    """
+    Computes a deterministic diff between an existing class roster and an updated roster.
+    Categorizes student records into:
+      - added: Newly enrolled students
+      - removed: Dropped / withdrawn students
+      - modified: Students whose name or ID was updated
+      - unchanged: Identical records
+    """
+    old_norm = [_normalize_student_record(s) for s in (old_students or [])]
+    new_norm = [_normalize_student_record(s) for s in (new_students or [])]
+
+    # Filter out blank records
+    old_norm = [s for s in old_norm if s["clean_name"] or s["clean_id"]]
+    new_norm = [s for s in new_norm if s["clean_name"] or s["clean_id"]]
+
+    matched_old_indices = set()
+    matched_new_indices = set()
+
+    unchanged = []
+    modified = []
+
+    # Priority 1: Match by student number if valid
+    for n_idx, new_s in enumerate(new_norm):
+        if not new_s["clean_id"]:
+            continue
+        for o_idx, old_s in enumerate(old_norm):
+            if o_idx in matched_old_indices:
+                continue
+            if old_s["clean_id"] and old_s["clean_id"] == new_s["clean_id"]:
+                matched_old_indices.add(o_idx)
+                matched_new_indices.add(n_idx)
+                if old_s["clean_name"] == new_s["clean_name"]:
+                    unchanged.append({
+                        "name": new_s["name"],
+                        "student_number": new_s["student_number"]
+                    })
+                else:
+                    modified.append({
+                        "old": {"name": old_s["name"], "student_number": old_s["student_number"]},
+                        "new": {"name": new_s["name"], "student_number": new_s["student_number"]},
+                        "change_type": "name_modified",
+                        "reason": f"Name updated from '{old_s['name']}' to '{new_s['name']}'"
+                    })
+                break
+
+    # Priority 2: Match remaining by clean name
+    for n_idx, new_s in enumerate(new_norm):
+        if n_idx in matched_new_indices:
+            continue
+        if not new_s["clean_name"]:
+            continue
+        for o_idx, old_s in enumerate(old_norm):
+            if o_idx in matched_old_indices:
+                continue
+            if old_s["clean_name"] and old_s["clean_name"] == new_s["clean_name"]:
+                matched_old_indices.add(o_idx)
+                matched_new_indices.add(n_idx)
+                if old_s["clean_id"] == new_s["clean_id"]:
+                    unchanged.append({
+                        "name": new_s["name"],
+                        "student_number": new_s["student_number"]
+                    })
+                else:
+                    modified.append({
+                        "old": {"name": old_s["name"], "student_number": old_s["student_number"]},
+                        "new": {"name": new_s["name"], "student_number": new_s["student_number"]},
+                        "change_type": "id_modified",
+                        "reason": f"Student ID updated from '{old_s['student_number']}' to '{new_s['student_number']}'"
+                    })
+                break
+
+    # Remaining old records were removed / dropped
+    removed = []
+    for o_idx, old_s in enumerate(old_norm):
+        if o_idx not in matched_old_indices:
+            removed.append({
+                "name": old_s["name"],
+                "student_number": old_s["student_number"]
+            })
+
+    # Remaining new records were added / newly enrolled
+    added = []
+    for n_idx, new_s in enumerate(new_norm):
+        if n_idx not in matched_new_indices:
+            added.append({
+                "name": new_s["name"],
+                "student_number": new_s["student_number"]
+            })
+
+    has_changes = bool(added or removed or modified)
+
+    return {
+        "has_changes": has_changes,
+        "total_old": len(old_norm),
+        "total_new": len(new_norm),
+        "counts": {
+            "added": len(added),
+            "removed": len(removed),
+            "modified": len(modified),
+            "unchanged": len(unchanged),
+        },
+        "added": added,
+        "removed": removed,
+        "modified": modified,
+        "unchanged": unchanged,
+    }
+
