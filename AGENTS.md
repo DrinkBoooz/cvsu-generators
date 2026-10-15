@@ -287,24 +287,20 @@ Whenever a new document template is introduced to the application, the agent mus
 When instructed to add or create a new form generator from a `.docx` template:
 
 1. **Place Template**: Place the template file in `templates/` (e.g. `templates/template_consultation.docx`).
-2. **Inspect Template Structure**: Run a quick diagnostic script using `python-docx` to inspect table indices, row structures, and column layouts:
+2. **Deterministic Template Analysis**: Run `DeterministicTemplateAnalyzer` (`modules/parsers/template_analyzer.py`) to generate a `TemplateManifest`:
    ```python
-   import docx
-   doc = docx.Document("templates/<your_template>.docx")
-   for idx, tbl in enumerate(doc.tables):
-       print(f"Table {idx} ({len(tbl.rows)} rows, {len(tbl.columns)} cols):")
-       for r_idx, r in enumerate(tbl.rows[:3]):
-           print(f"  Row {r_idx}: {[c.text.strip() for c in r.cells]}")
+   from modules.parsers.template_analyzer import DeterministicTemplateAnalyzer
+   analyzer = DeterministicTemplateAnalyzer()
+   manifest = analyzer.analyze_docx("templates/<your_template>.docx")
+   print("Discovered Slots:", [s.field_name for s in manifest.semantic_slots])
+   print("Repeating Tables:", len(manifest.repeating_tables))
    ```
-3. **Implement Generator Logic**:
-   - Inspect the current generator architecture and follow the established implementation pattern in the active generator engine.
-   - For example, if extending the CEIT forms pattern:
-     - Subclass `DocumentGenerator(ABC)`.
-     - Implement `fill_header(self, body, info: ClassInfo) -> None` (replace metadata placeholders, use helpers like `set_cell_text`, `replace_value_run`).
-     - Implement `_fill_student_row(self, cells: list, idx: int, name: str, stnum: str) -> None` (assign row cells, apply scaling logic).
+   Inspect the emitted slot bindings (`cell_right`, `cell_below`, `colon_value`, `placeholder`) and repeating table topology (`STUDENT_ROSTER`).
+3. **Rendering & Generator Architecture**:
+   - **Universal Dynamic Renderer**: If standard slot replacement and student row injection suffice, utilize `DynamicDocumentRenderer` (`modules/generators/dynamic_renderer.py`), which automatically leverages `DocxGridTable` (`modules/parsers/docx_grid_table.py`) for 2D virtual coordinate grid normalization across `<w:gridSpan>` and `<w:vMerge>` cells, adaptive font scaling, and run formatting preservation.
+   - **Custom Class Subclassing**: If custom business logic is required, subclass `DocumentGenerator(ABC)` in `modules/generators/ceit_gen.py`. Use `DocxGridTable` rather than raw cell indices for table operations to ensure grid invariance under layout changes.
 4. **Register in Factory or Configuration**:
-   - Inspect how generators are instantiated and register the new template accordingly.
-   - For example, in `GeneratorFactory` (`ceit_gen.py`):
+   - In `GeneratorFactory` (`ceit_gen.py`):
      - Add template key to `GeneratorFactory.TEMPLATE_FILES`:
        ```python
        "new_key": "template_new_file.docx",
@@ -331,7 +327,7 @@ When instructed to add or create a new form generator from a `.docx` template:
    - Update `tests/test_modules_generation.py`:
      - Update `assert len(all_gens) == <new_total>`
      - Add the new suffix to `expected_suffixes`.
-   - Add a unit test (e.g. in `tests/test_<new_form>_generator.py`) asserting:
-     - Template exists and loads via factory.
-     - Generated `.docx` contains populated instructor, course, and student rows.
-   - Run `pytest tests/ -k "not test_playwright"` to ensure 100% test pass rate.
+   - Add unit and resilience tests (e.g. in `tests/test_deterministic_template_analyzer.py` and `tests/test_<new_form>_generator.py`) asserting:
+     - Template exists and loads via factory / analyzer.
+     - Generated `.docx` contains populated instructor, course, and student rows with 100% structural integrity.
+   - Run `pytest tests/ -k "not test_playwright"` and `py scripts/test_orchestrator.py --fast` to ensure 100% test pass rate.

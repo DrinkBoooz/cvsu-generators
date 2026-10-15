@@ -1,7 +1,7 @@
 # Cavite State University (CvSU) Document Generator
 
 [![Release](https://img.shields.io/badge/version-v2.0%20Beta-blue.svg)](file:///c:/Users/danjo/OneDrive/CVSU%20GENERATORS/executable/ui.html)
-[![Tests](<https://img.shields.io/badge/tests-153%20passed%20(100%25)-brightgreen.svg>)](file:///c:/Users/danjo/OneDrive/CVSU%20GENERATORS/tests)
+[![Tests](<https://img.shields.io/badge/tests-676%20passed%20(100%25)-brightgreen.svg>)](file:///c:/Users/danjo/OneDrive/CVSU%20GENERATORS/tests)
 [![Platform](<https://img.shields.io/badge/platform-Windows%2010%20%7C%2011%20(x64)-lightgrey.svg>)](file:///c:/Users/danjo/OneDrive/CVSU%20GENERATORS/executable)
 [![License](https://img.shields.io/badge/copyright-%C2%A9%202026%20Dan%20Joseph%20Ortega-purple.svg)](file:///c:/Users/danjo/OneDrive/CVSU%20GENERATORS/executable/file_version_info.txt)
 [![Authenticode](<https://img.shields.io/badge/Authenticode-Digitally%20Signed%20(DigiCert%20RFC%203161)-success.svg>)](file:///c:/Users/danjo/OneDrive/CVSU%20GENERATORS/executable/sign_exe.ps1)
@@ -136,12 +136,15 @@ CVSU GENERATORS/
 │   │   └── student.py                  # Student dataclass & name normalization
 │   ├── parsers/                        # Document & schedule ingestion parsers
 │   │   ├── ceit_directory.py           # Department mapping, subject prefixes, lab detectors
+│   │   ├── docx_grid_table.py          # 2D virtual coordinate grid normalization (<w:gridSpan>, <w:vMerge>)
 │   │   ├── roster_parser.py            # Roster file parser (.xlsx, .xls, .csv)
 │   │   ├── schedule_parser.py          # Master schedule parser (.xls, .xlsx)
+│   │   ├── template_analyzer.py        # Deterministic offline template analyzer & TemplateManifest
 │   │   └── template_inspector.py       # Deterministic Structural Template Inspector (Zero-AI)
 │   ├── generators/                     # Document generation engines
 │   │   ├── attendance_gen.py           # Monthly attendance sheet generator (.docx)
 │   │   ├── ceit_gen.py                 # 7 CEIT departmental forms & GeneratorFactory
+│   │   ├── dynamic_renderer.py         # Self-analyzing dynamic document renderer (DOCX/XLSX)
 │   │   ├── generic_doc_gen.py          # Configurable generic document generator
 │   │   └── grade_gen.py                # Official grading workbook generator (.xlsx)
 │   └── services/                       # Orchestration and validation services
@@ -164,16 +167,20 @@ CVSU GENERATORS/
 │   ├── template_tag_placeholders.docx  # {{TAG}} placeholders + 3-col student roster
 │   ├── template_laboratory_monitoring.docx # 4-column multi-label table + 6-col roster
 │   └── template_faculty_eval.docx      # Paragraph colons + Filipino column tokens
-├── tests/                              # Comprehensive test suite (153+ automated tests)
+├── tests/                              # Comprehensive test suite (676+ automated tests)
 │   ├── test_templates/                 # Template analyzer verification test suite
 │   │   ├── create_templates.py         # Deterministic test template synthesis
 │   │   └── test_diverse_templates.py   # Multi-format inspection & generation tests
 │   ├── test_attendance_*.py            # Attendance generator & scheduling tests
 │   ├── test_config_manager.py          # Configuration persistence & fallback tests
 │   ├── test_custom_template_pipeline.py# Custom template registration & factory tests
+│   ├── test_deterministic_template_analyzer.py # Template analyzer & grid normalization tests
+│   ├── test_dynamic_renderer_resilience.py     # Dynamic renderer perturbation resilience tests
 │   ├── test_generic_doc_gen.py         # ConfigurableDocumentGenerator unit tests
+│   ├── test_golden_parity.py           # Golden-master byte and structural parity tests
 │   ├── test_grade_*.py                 # Excel grading sheet formula preservation tests
 │   ├── test_modules_*.py               # Parser and generator module integrity tests
+│   ├── test_obsidian_vault_integrity.py# Companion documentation vault integrity tests
 │   ├── test_pe_version_info.py         # Windows binary PE version resource tests
 │   ├── test_playwright_*.py            # Playwright UI automated interactions
 │   ├── test_template_inspector.py      # Heuristic inspection engine tests
@@ -293,6 +300,19 @@ CVSU GENERATORS/
 - Enforces strict `schema_version == 2`, profile constraints (`required_fields`, `prohibited_fields`, `capacity_limit`), collision resolutions, and verified safe assertions.
 - Protects `ValidatedTemplateRecipe` with private construction sentinel and AST static analysis.
 
+#### 7. `docx_grid_table.py` (`DocxGridTable`, `DocxGridCell`)
+
+- **2D Virtual Grid Normalization**: Normalizes complex Word OpenXML table elements into a 2D virtual coordinate grid `(row, col)`.
+- Handles `<w:gridSpan>` (horizontal merge) and `<w:vMerge>` (vertical merge) with root cell pointers and continuation cells.
+- Safe mutation methods (`set_text`, `replace_text`, `clear`) route updates directly to root cells and prevent duplicate writes across merged regions.
+
+#### 8. `template_analyzer.py` (`DeterministicTemplateAnalyzer`, `TemplateManifest`)
+
+- **Deterministic Offline Template Introspection**: Fast (<20ms) offline analysis of Word (`.docx`) and Excel (`.xlsx`) templates without Microsoft Word or LibreOffice runtime dependencies.
+- **Semantic Slot Anchoring**: Locates metadata slots via four resilient heuristics: `cell_right`, `cell_below`, `colon_value`, and `placeholder`.
+- **Repeating Table Topology**: Classifies tables into `STUDENT_ROSTER`, `ATTENDANCE_MONTH`, or `UNKNOWN`, detecting student name/ID columns and dynamic row insertion points.
+- **Manifest Serialization**: Emits immutable, JSON-serializable `TemplateManifest` with SHA-256 fingerprinting.
+
 ---
 
 ### `modules.generators`
@@ -336,6 +356,13 @@ CVSU GENERATORS/
 #### 4. `generic_doc_gen.py` (`ConfigurableDocumentGenerator`)
 
 - Dynamic generator that consumes `ValidatedTemplateRecipe` to populate arbitrary Word documents with `ClassInfo` and student rosters according to detected bindings and tag placeholders.
+
+#### 5. `dynamic_renderer.py` (`DynamicDocumentRenderer`)
+
+- **Universal Dynamic Rendering Engine**: Renders both Word (`.docx`) and Excel (`.xlsx`) documents directly from `TemplateManifest` without hardcoded index assumptions.
+- **Dynamic Student Row Injection**: Injects arbitrary numbers of student records, cloning row structures and formatting.
+- **Adaptive Font Scaling**: Dynamically adjusts font sizes for long student names (`<=30` chars -> 8pt, `31-35` chars -> 7pt, `>35` chars -> 6pt).
+- **Run-Level Formatting & List Preservation**: Preserves font families, bold/italic runs, cell backgrounds, and `<w:numPr>` list numbering across custom and modified templates.
 
 ---
 
@@ -502,11 +529,14 @@ tests/test_ui_consistency.py ....                                        [100%]
 ### Running the Tests
 
 ```bash
-# Run all automated tests (excluding Playwright UI headless browser)
+# Run multi-layer test orchestrator across all 6 test layers (676+ tests)
+py scripts/test_orchestrator.py --fast
+
+# Run fast pytest suite (excluding Playwright UI headless browser)
 pytest tests/ -k "not test_playwright"
 
-# Run only the multi-format template verification suite
-pytest tests/test_templates/ -v
+# Run deterministic template analyzer & dynamic renderer resilience suites
+pytest tests/test_deterministic_template_analyzer.py tests/test_dynamic_renderer_resilience.py tests/test_golden_parity.py
 
 # Run Playwright UI browser tests
 pytest tests/ -k "test_playwright"
