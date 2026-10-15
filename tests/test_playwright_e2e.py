@@ -168,9 +168,11 @@ const rawMockApi = {
     get_calendar_config: async () => ({ default_mode: "OMIT_COLUMN", rules: [], exceptions: [], overrides: {} }),
     get_ceit_prefix_directory: async () => ({ prefixes: {}, departments: {} }),
     get_custom_templates: async () => window.__mockResponses.get_custom_templates || [],
+    get_generation_progress: async () => ({ status: "idle", current_index: 0, total_count: 0, percent: 0, current_file_label: "", current_class: "", error: null }),
     get_org_preset: async () => ({ version: "1.0", campus: "Main Campus", signatories: [] }),
     get_parser_config: async () => ({ prefixes: {}, lab_courses: [] }),
     get_recent_logs: async (l) => "No log entries found.",
+    get_template_grid_preview: async (path, max_rows) => ({ status: "success", preview: { tables: [] } }),
     get_template_sets: async () => window.__mockResponses.get_template_sets || [],
     get_user_preferences: async (meta) => window.__mockResponses.get_user_preferences || (meta ? { version: "1.0", theme: "dark", accessibility: { motion: "system", transparency: "system" }, _persisted: true } : { version: "1.0", theme: "dark", accessibility: { motion: "system", transparency: "system" } }),
     handle_dropped_custom_template: async (f) => ({ status: "success" }),
@@ -190,6 +192,7 @@ const rawMockApi = {
     open_output_folder: async (f) => ({ status: "success" }),
     parse_calendar_announcement: async (text, year) => ({ status: "success", exceptions: [] }),
     preview_calendar_dates: async (params) => ({ status: "success", dates: [] }),
+    preview_sample_document: async (payload) => ({ status: "success", student_count: 25, active_font_pt: "8pt", resolved_slots: {}, sample_roster_rows: [] }),
     remove_roster: async (p, cfg) => window.__mockResponses.remove_roster || { count: 0, rosters: [], validation: [] },
     reset_parser_config: async () => ({ status: "success" }),
     reset_user_preferences: async () => ({ status: "success" }),
@@ -200,8 +203,8 @@ const rawMockApi = {
         if (window.__mockResponses.run_generation_reject) {
             throw new Error(window.__mockResponses.run_generation_reject);
         }
-        if (args.length !== 5) {
-            throw new TypeError(`run_generation expected 5 args, got ${args.length}`);
+        if (args.length !== 5 && args.length !== 6) {
+            throw new TypeError(`run_generation expected 5 or 6 args, got ${args.length}`);
         }
         const [to, do_, sc, ee, rc] = args;
         if (typeof to !== "object" || to === null || Array.isArray(to)) {
@@ -226,6 +229,7 @@ const rawMockApi = {
     save_org_preset: async (data) => ({ status: "success" }),
     save_parser_config: async (cfg) => ({ status: "success" }),
     save_template_set: async (id, data) => ({ status: "success" }),
+    save_template_slot_overrides: async (path, overrides) => ({ status: "success", overrides_count: Object.keys(overrides || {}).length }),
     save_user_preferences: async (prefs) => ({ status: "success" }),
     set_template_set_fallback: async (id, fallback) => ({ status: "success" }),
     toggle_custom_template: async (id, e) => ({ status: "success" }),

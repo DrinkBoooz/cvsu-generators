@@ -34,3 +34,13 @@ class BaseAPI:
         self._is_window_closed = False
         self._cancel_event = threading.Event()
         self._lock = threading.Lock()
+        self._generation_progress = {
+            "status": "idle",
+            "current_index": 0,
+            "total_count": 0,
+            "percent": 0,
+            "current_file_label": "",
+            "current_class": "",
+            "error": None,
+        }
+

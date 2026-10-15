@@ -11,6 +11,10 @@
             Cancelling...
           `;
         }
+        if (window._progressPollingInterval) {
+          clearInterval(window._progressPollingInterval);
+          window._progressPollingInterval = null;
+        }
         showToast(
           "Cancelling Generation",
           "Stopping after current file completes...",
@@ -205,6 +209,34 @@
           btnCancel.classList.remove("d-none");
         }
 
+        const exportPdf = document.getElementById("checkExportPdf")?.checked || false;
+
+        // Start deterministic batch progress polling fallback
+        if (window._progressPollingInterval) clearInterval(window._progressPollingInterval);
+        window._progressPollingInterval = setInterval(async () => {
+          if (window._generationState !== "running") {
+            clearInterval(window._progressPollingInterval);
+            window._progressPollingInterval = null;
+            return;
+          }
+          try {
+            if (window.pywebview?.api?.get_generation_progress) {
+              const prog = await window.pywebview.api.get_generation_progress();
+              if (prog && prog.status === "running") {
+                const pct = prog.percent || 0;
+                const label = `[${prog.current_index}/${prog.total_count}] Generating ${prog.current_file_label || 'documents'}...`;
+                if (progressFill) progressFill.style.width = `${pct}%`;
+                if (progressPercent) progressPercent.innerText = `${pct}%`;
+                if (progressTaskLabel) progressTaskLabel.innerText = label;
+                if (progressContainer) {
+                  progressContainer.setAttribute("aria-valuenow", String(pct));
+                  progressContainer.setAttribute("aria-valuetext", `${pct}% - ${label}`);
+                }
+              }
+            }
+          } catch (e) {}
+        }, 350);
+
         try {
           const payload = await window.pywebview.api.run_generation(
             typeOverrides,
@@ -212,6 +244,7 @@
             selectedClasses,
             enabledEngines,
             state.rosterConfigs,
+            exportPdf,
           );
 
           if (
@@ -291,6 +324,10 @@
         // Authoritative state transition to IDLE
         window._activeGenerationId = null;
         window._generationState = "idle";
+        if (window._progressPollingInterval) {
+          clearInterval(window._progressPollingInterval);
+          window._progressPollingInterval = null;
+        }
 
         const btn = document.getElementById("processBtn");
         const btnLabel = document.getElementById("processBtnLabel");
@@ -380,11 +417,11 @@
 
           // Render Metrics Pills
           const details = payload.details;
-          if (metricsContainer && details && details.generated) {
             const ceitCount = (details.generated.ceit || []).length;
             const attCount = (details.generated.attendance || []).length;
             const gradeCount = (details.generated.grades || []).length;
-            const totalFiles = ceitCount + attCount + gradeCount;
+            const pdfCount = (details.generated.pdf || []).length;
+            const totalFiles = ceitCount + attCount + gradeCount + pdfCount;
 
             let elapsedStr = "0s";
             if (generationStartTime) {
@@ -397,6 +434,7 @@
               <span class="meta-pill">📋 ${ceitCount} CEIT Forms</span>
               <span class="meta-pill">📅 ${attCount} Attendance</span>
               <span class="meta-pill">📊 ${gradeCount} Grade Sheets</span>
+              ${pdfCount > 0 ? `<span class="meta-pill" style="border-color: var(--accent-cyan); color: var(--accent-cyan);">📄 ${pdfCount} PDFs</span>` : ""}
               <span class="meta-pill">⏱️ ${elapsedStr}</span>
             `;
           }
@@ -452,6 +490,7 @@
               addCategoryRows("CEIT Forms", pkgs.ceit, "📄");
               addCategoryRows("Attendance Sheets", pkgs.attendance, "📅");
               addCategoryRows("Grade Sheets", pkgs.grades, "📊");
+              addCategoryRows("PDF Submissions", pkgs.pdf, "📄");
 
               classCard.innerHTML = `
                 <div class="artifact-class-header" onclick="this.nextElementSibling.classList.toggle('d-none')">
@@ -512,3 +551,180 @@
           "error",
         );
       };
+
+      // ── In-Memory Pre-Flight Sample Document Preview Controller ───────────
+      async function openPreflightPreviewModal() {
+        const readiness = getGenerationReadiness();
+        if (!readiness.schedule) {
+          showToast(
+            "Schedule Required",
+            "Please select or drop your Instructor Schedule (.xls / .xlsx) before previewing.",
+            "warning",
+          );
+          scrollToStep("cardStep1");
+          return;
+        }
+        if (!readiness.rosters) {
+          showToast(
+            "Rosters Required",
+            "Please select or drop at least one Student Roster file before previewing.",
+            "warning",
+          );
+          scrollToStep("cardStep2");
+          return;
+        }
+
+        const modal = document.getElementById("modalPreflightPreviewBackdrop");
+        if (modal) modal.classList.remove("d-none");
+
+        const badge = document.getElementById("previewFontScalingBadge");
+        const slotsBody = document.getElementById("previewResolvedSlotsBody");
+        const rosterBody = document.getElementById("previewRosterTableBody");
+        const sigsList = document.getElementById("previewSignatoriesList");
+
+        const infoCourseSec = document.getElementById("previewInfoCourseSec");
+        const infoSchedCode = document.getElementById("previewInfoSchedCode");
+        const infoSubject = document.getElementById("previewInfoSubject");
+        const infoInstructor = document.getElementById("previewInfoInstructor");
+        const infoStudentCount = document.getElementById("previewInfoStudentCount");
+        const infoFontTier = document.getElementById("previewInfoFontTier");
+
+        if (badge) {
+          badge.innerText = "Analyzing Section...";
+          badge.style.background = "var(--surface-subtle)";
+          badge.style.color = "var(--text-secondary)";
+        }
+        if (slotsBody) {
+          slotsBody.innerHTML = '<tr><td colspan="2" style="text-align: center; color: var(--text-muted); padding: 14px;">Synthesizing sample document in memory...</td></tr>';
+        }
+        if (rosterBody) {
+          rosterBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 14px;">Loading sample student records...</td></tr>';
+        }
+        if (sigsList) {
+          sigsList.innerHTML = '<span style="color: var(--text-muted);">Resolving signatory chain hierarchy...</span>';
+        }
+
+        // Collect class filter & overrides
+        const selectedClasses = [];
+        document.querySelectorAll(".item-class-check:checked").forEach((cb) => {
+          selectedClasses.push(cb.getAttribute("data-class-id"));
+        });
+        const enabledEngines = [];
+        if (state.engines.attendance) enabledEngines.push("attendance");
+        if (state.engines.ceit) enabledEngines.push("ceit");
+        if (state.engines.grades) enabledEngines.push("grades");
+
+        const typeOverrides = {};
+        document.querySelectorAll(".class-type-select").forEach((sel) => {
+          const cid = sel.getAttribute("data-class-id");
+          if (cid) typeOverrides[cid] = sel.value;
+        });
+
+        try {
+          if (!window.pywebview?.api?.preview_sample_document) {
+            showToast("Bridge Unavailable", "preview_sample_document API is not ready.", "warning");
+            return;
+          }
+
+          const payload = {
+            schedule_path: state.schedulePath,
+            roster_paths: state.rosterPaths,
+            selected_classes: selectedClasses,
+            enabled_engines: enabledEngines,
+            class_type_overrides: typeOverrides,
+            roster_configs: state.rosterConfigs || {},
+          };
+
+          const res = await window.pywebview.api.preview_sample_document(payload);
+          if (!res || res.status === "error") {
+            showToast("Preview Error", res?.message || "Failed to generate sample preview.", "error");
+            if (slotsBody) slotsBody.innerHTML = `<tr><td colspan="2" style="color: var(--accent-rose); padding: 10px;">${escapeHTML(res?.message || "Preview error")}</td></tr>`;
+            return;
+          }
+
+          const fontPt = res.active_font_pt || "8pt";
+          const count = res.student_count || 0;
+          const slots = res.resolved_slots || {};
+          const rows = res.sample_roster_rows || [];
+          const sigs = res.signatory_chain || [];
+
+          if (badge) {
+            badge.innerText = `${fontPt} Tier (${count} Students)`;
+            if (fontPt === "8pt") {
+              badge.style.background = "var(--accent-emerald)";
+              badge.style.color = "#fff";
+            } else if (fontPt === "7pt") {
+              badge.style.background = "var(--accent-amber)";
+              badge.style.color = "#000";
+            } else {
+              badge.style.background = "var(--accent-rose)";
+              badge.style.color = "#fff";
+            }
+          }
+
+          if (infoCourseSec) infoCourseSec.innerText = res.course_sec || slots.section || "-";
+          if (infoSchedCode) infoSchedCode.innerText = res.schedule_code || slots.schedule_code || "-";
+          if (infoSubject) infoSubject.innerText = res.subject || slots.course_code || "-";
+          if (infoInstructor) infoInstructor.innerText = res.instructor || slots.instructor || "-";
+          if (infoStudentCount) infoStudentCount.innerText = String(count);
+          if (infoFontTier) infoFontTier.innerText = fontPt;
+
+          // Render Slots Table
+          if (slotsBody) {
+            const entries = Object.entries(slots);
+            if (entries.length === 0) {
+              slotsBody.innerHTML = '<tr><td colspan="2" style="color: var(--text-muted); padding: 10px;">No slots resolved.</td></tr>';
+            } else {
+              slotsBody.innerHTML = entries.map(([field, val]) => `
+                <tr>
+                  <td style="font-weight: 600; color: var(--text-secondary);"><code style="color: var(--accent-emerald);">{{${escapeHTML(field)}}}</code></td>
+                  <td style="color: var(--text-primary);">${escapeHTML(String(val))}</td>
+                </tr>
+              `).join("");
+            }
+          }
+
+          // Render Roster Table (first 10)
+          if (rosterBody) {
+            if (rows.length === 0) {
+              rosterBody.innerHTML = '<tr><td colspan="4" style="color: var(--text-muted); padding: 10px;">No students found in sample roster.</td></tr>';
+            } else {
+              rosterBody.innerHTML = rows.map((st, idx) => `
+                <tr>
+                  <td style="color: var(--text-muted); text-align: center;">${idx + 1}</td>
+                  <td style="font-family: monospace;">${escapeHTML(st.student_id || "-")}</td>
+                  <td><strong>${escapeHTML(st.name || "-")}</strong></td>
+                  <td>${escapeHTML(st.gender || "-")}</td>
+                </tr>
+              `).join("");
+            }
+          }
+
+          // Render Signatories Hierarchy
+          if (sigsList) {
+            if (sigs.length === 0) {
+              sigsList.innerHTML = '<span style="color: var(--text-muted);">Standard university signatories apply.</span>';
+            } else {
+              sigsList.innerHTML = sigs.map((s, idx) => `
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-bottom: 1px solid var(--border-subtle);">
+                  <div>
+                    <strong>${idx + 1}. ${escapeHTML(s.role_label || s.title || 'Signatory')}</strong>: 
+                    <span>${escapeHTML(s.signatory_name || s.name || 'Pending Faculty')}</span>
+                  </div>
+                  <span class="filter-pill" style="font-size: 10px; padding: 1px 6px;">${escapeHTML(s.bound_key || '')}</span>
+                </div>
+              `).join("");
+            }
+          }
+        } catch (e) {
+          console.error("openPreflightPreviewModal error:", e);
+          showToast("Error", String(e), "error");
+        }
+      }
+      window.openPreflightPreviewModal = openPreflightPreviewModal;
+
+      function closePreflightPreviewModal() {
+        const modal = document.getElementById("modalPreflightPreviewBackdrop");
+        if (modal) modal.classList.add("d-none");
+      }
+      window.closePreflightPreviewModal = closePreflightPreviewModal;

@@ -1067,6 +1067,31 @@
           Processing typically takes only a few seconds!
         </p>
 
+        <!-- Pre-Flight Preview & Export Options Bar -->
+        <div style="display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-bottom: 12px;">
+          <button
+            type="button"
+            id="btnPreviewSample"
+            class="nav-btn"
+            onclick="openPreflightPreviewModal()"
+            style="font-size: 12.5px; padding: 6px 14px; border-color: var(--accent-cyan); color: var(--accent-cyan);"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            Preview Sample Page
+          </button>
+          <label style="display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-secondary); cursor: pointer; user-select: none;">
+            <input
+              type="checkbox"
+              id="checkExportPdf"
+              style="accent-color: var(--accent-emerald); cursor: pointer;"
+            />
+            <span>Also Export as PDF (<code>.docx &rarr; .pdf</code>)</span>
+          </label>
+        </div>
+
         <button
           id="processBtn"
           class="btn-primary-action"
@@ -3115,7 +3140,16 @@
                     >✓ Ready</span
                   >
                 </div>
-                <div style="display: flex; gap: 8px">
+                  <button
+                    class="nav-btn"
+                    id="btnOpenSlotMapperFromInspector"
+                    type="button"
+                    onclick="openSlotMapperForCurrent()"
+                    aria-label="Open Visual Slot Mapper for this template"
+                    style="font-size: 12px; padding: 4px 10px; border-color: var(--accent-cyan); color: var(--accent-cyan);"
+                  >
+                    🗺️ Visual Slot Mapper
+                  </button>
                   <button
                     class="nav-btn"
                     type="button"
@@ -3800,6 +3834,266 @@
         <div style="padding: 14px 20px; border-top: 1px solid var(--border-subtle); display: flex; justify-content: flex-end; gap: 10px; background: var(--surface-subtle);">
           <button type="button" class="nav-btn" onclick="closeTemplateSetEditorModal()">Cancel</button>
           <button type="button" class="btn-primary-compact" onclick="saveTemplateSetFromModal()">✓ Save Template Set</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Visual Slot Mapper Modal Drawer ───────────────────────────────── -->
+    <div
+      id="modalSlotMapperBackdrop"
+      class="modal-backdrop-custom d-none"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="slotMapperTitle"
+      aria-describedby="slotMapperDesc"
+      onclick="closeSlotMapperModal()"
+    >
+      <div
+        class="modal-dialog-custom slot-mapper-dialog"
+        onclick="event.stopPropagation()"
+      >
+        <div class="modal-header-custom">
+          <div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 18px;" aria-hidden="true">🗺️</span>
+              <h3 id="slotMapperTitle" style="font-size: 15px; font-weight: 700; margin: 0; color: var(--text-primary);">
+                Visual Template Slot Mapper
+              </h3>
+            </div>
+            <div id="slotMapperFileLabel" style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">
+              Loading template structure...
+            </div>
+          </div>
+          <button
+            type="button"
+            id="btnCloseSlotMapper"
+            class="modal-close-btn"
+            onclick="closeSlotMapperModal()"
+            aria-label="Close Slot Mapper"
+          >
+            &times;
+          </button>
+        </div>
+
+        <div class="modal-body-custom slot-mapper-body">
+          <div class="slot-mapper-grid-area">
+            <div class="slot-mapper-bar">
+              <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <label for="slotMapperTableSelect" style="font-size: 11.5px; font-weight: 600; color: var(--text-secondary);">Table:</label>
+                <select id="slotMapperTableSelect" class="form-control-custom" onchange="onSlotMapperTableChange(this.value)" style="max-width: 180px; font-size: 11.5px; padding: 3px 6px;">
+                  <option value="0">Table 1</option>
+                </select>
+                <span id="slotMapperTableMeta" class="filter-pill" style="font-size: 10.5px;">0 rows x 0 cols</span>
+              </div>
+              <div id="slotMapperDesc" style="font-size: 11px; color: var(--text-muted);">
+                Click any cell or press Tab/Enter/Space to inspect &amp; assign semantic slots.
+              </div>
+            </div>
+
+            <div
+              id="slotMapperGridContainer"
+              class="slot-mapper-grid-scroll"
+              tabindex="0"
+              role="region"
+              aria-label="Template 2D Virtual Grid Table"
+            >
+              <!-- 2D Virtual Grid Table rendered dynamically -->
+            </div>
+          </div>
+
+          <div class="slot-mapper-inspector-area">
+            <div id="slotMapperInspector" class="slot-mapper-inspector-card">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <span style="font-size: 12px; font-weight: 700; color: var(--text-primary);">Cell Inspector</span>
+                <span id="slotMapperCoordBadge" class="filter-pill active" style="font-size: 10.5px;">No cell selected</span>
+              </div>
+
+              <div id="slotMapperCurrentRole" style="font-size: 11px; color: var(--text-secondary); margin-bottom: 8px;">
+                Current Role: <em>None detected</em>
+              </div>
+
+              <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 2px;">Cell Text:</label>
+              <div id="slotMapperTextPreview" class="slot-mapper-text-preview">-</div>
+
+              <div style="margin-top: 10px;">
+                <label for="slotMapperFieldSelect" style="font-size: 11px; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 4px;">Assign Semantic Slot:</label>
+                <select id="slotMapperFieldSelect" class="form-control-custom" onchange="onSlotFieldSelectChange(this.value)" style="width: 100%; font-size: 11.5px; margin-bottom: 6px;">
+                  <option value="instructor">instructor (Instructor Name)</option>
+                  <option value="course_code">course_code (Course Code)</option>
+                  <option value="course_title">course_title (Course Title)</option>
+                  <option value="section">section (Class Section)</option>
+                  <option value="schedule_code">schedule_code (Schedule Code)</option>
+                  <option value="semester">semester (Semester)</option>
+                  <option value="academic_year">academic_year (Academic Year)</option>
+                  <option value="campus">campus (Campus Name)</option>
+                  <option value="college">college (College Name)</option>
+                  <option value="department">department (Department Name)</option>
+                  <option value="room">room (Room / Location)</option>
+                  <option value="custom">custom (Custom Field...)</option>
+                </select>
+
+                <div id="slotMapperCustomFieldContainer" class="d-none" style="margin-bottom: 6px;">
+                  <input type="text" id="slotMapperCustomFieldInput" class="form-control-custom" placeholder="e.g. dean_title or lab_code" style="font-size: 11.5px;" />
+                </div>
+
+                <label for="slotMapperStrategySelect" style="font-size: 11px; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 4px;">Binding Strategy:</label>
+                <select id="slotMapperStrategySelect" class="form-control-custom" style="width: 100%; font-size: 11.5px; margin-bottom: 10px;">
+                  <option value="exact_cell">exact_cell (Inject directly into this cell)</option>
+                  <option value="cell_right">cell_right (Target cell to the right)</option>
+                  <option value="cell_below">cell_below (Target cell directly below)</option>
+                  <option value="colon_value">colon_value (Replace value after ':')</option>
+                  <option value="placeholder">placeholder (Replace token e.g. {{field}})</option>
+                </select>
+
+                <div style="display: flex; gap: 6px; margin-bottom: 12px;">
+                  <button type="button" id="btnApplyCellSlot" class="btn-primary-compact" onclick="applyCellSlotOverride()" style="flex: 1; font-size: 11px; padding: 6px 8px;">
+                    🎯 Assign Slot
+                  </button>
+                  <button type="button" id="btnRemoveCellSlot" class="nav-btn" onclick="removeCellSlotOverride()" style="font-size: 11px; padding: 6px 8px;">
+                    ✕ Clear
+                  </button>
+                </div>
+              </div>
+
+              <div style="border-top: 1px solid var(--border-subtle); padding-top: 8px;">
+                <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">
+                  <span>Slot Overrides</span>
+                  <span id="slotMapperOverridesCount" class="filter-pill" style="font-size: 10px; padding: 1px 5px;">0</span>
+                </div>
+                <div id="slotMapperOverridesList" class="slot-mapper-overrides-list">
+                  <div style="color: var(--text-muted); font-size: 10.5px; text-align: center; padding: 8px;">No custom overrides staged.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer-custom" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 18px;">
+          <button type="button" id="btnResetSlotOverrides" class="nav-btn" onclick="resetSlotOverridesUI()" style="font-size: 12px;">
+            Reset All
+          </button>
+          <div style="display: flex; gap: 8px;">
+            <button type="button" class="nav-btn" onclick="closeSlotMapperModal()" style="font-size: 12px;">
+              Cancel
+            </button>
+            <button type="button" id="btnSaveSlotOverrides" class="btn-primary-compact" onclick="saveSlotOverridesFromUI()" style="font-size: 12px; padding: 6px 14px;">
+              ✓ Save Overrides &amp; Apply
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Pre-Flight Document Preview Modal ─────────────────────────────── -->
+    <div
+      id="modalPreflightPreviewBackdrop"
+      class="modal-backdrop-custom d-none"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="preflightPreviewTitle"
+      onclick="closePreflightPreviewModal()"
+    >
+      <div
+        class="modal-dialog-custom preflight-preview-dialog"
+        onclick="event.stopPropagation()"
+      >
+        <div class="modal-header-custom">
+          <div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 18px;" aria-hidden="true">🔍</span>
+              <h3 id="preflightPreviewTitle" style="font-size: 15px; font-weight: 700; margin: 0; color: var(--text-primary);">
+                Pre-Flight Document Sample Preview
+              </h3>
+              <span id="previewFontScalingBadge" class="filter-pill active" style="background: var(--accent-emerald); font-size: 10.5px; padding: 2px 8px;">
+                8pt Tier (&le; 30 Students)
+              </span>
+            </div>
+            <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">
+              In-memory sample document synthesis before running the complete batch
+            </div>
+          </div>
+          <button
+            type="button"
+            id="btnClosePreflightPreview"
+            class="modal-close-btn"
+            onclick="closePreflightPreviewModal()"
+            aria-label="Close Preview"
+          >
+            &times;
+          </button>
+        </div>
+
+        <div class="modal-body-custom preflight-preview-body">
+          <!-- Section Information Card -->
+          <div id="previewSectionInfoCard" class="preflight-info-grid">
+            <div><strong>Course &amp; Section:</strong> <span id="previewInfoCourseSec">-</span></div>
+            <div><strong>Schedule Code:</strong> <span id="previewInfoSchedCode">-</span></div>
+            <div><strong>Subject:</strong> <span id="previewInfoSubject">-</span></div>
+            <div><strong>Instructor:</strong> <span id="previewInfoInstructor">-</span></div>
+            <div><strong>Student Count:</strong> <span id="previewInfoStudentCount">0</span></div>
+            <div><strong>Active Font Tier:</strong> <span id="previewInfoFontTier">8pt</span></div>
+          </div>
+
+          <!-- Injected Semantic Fields Table -->
+          <div style="margin-bottom: 14px;">
+            <div style="font-size: 12.5px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px;">
+              📋 Injected Semantic Fields
+            </div>
+            <div id="previewResolvedSlotsContainer" class="preflight-table-scroll">
+              <table id="previewResolvedSlotsTable" class="preflight-table">
+                <thead>
+                  <tr>
+                    <th style="width: 35%;">Field</th>
+                    <th>Injected Value</th>
+                  </tr>
+                </thead>
+                <tbody id="previewResolvedSlotsBody">
+                  <!-- Populated dynamically -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Sample Roster Table -->
+          <div style="margin-bottom: 14px;">
+            <div style="font-size: 12.5px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px;">
+              👥 Sample Roster (First 10 Students)
+            </div>
+            <div id="previewRosterTableContainer" class="preflight-table-scroll">
+              <table id="previewRosterTable" class="preflight-table">
+                <thead>
+                  <tr>
+                    <th style="width: 38px;">#</th>
+                    <th style="width: 140px;">Student Number</th>
+                    <th>Name</th>
+                    <th style="width: 80px;">Gender</th>
+                  </tr>
+                </thead>
+                <tbody id="previewRosterTableBody">
+                  <!-- Populated dynamically -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Signatory Hierarchy -->
+          <div>
+            <div style="font-size: 12.5px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px;">
+              ✍️ Signatory Chain Hierarchy
+            </div>
+            <div id="previewSignatoriesList" class="preflight-sigs-list">
+              <!-- Populated dynamically -->
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer-custom" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 18px;">
+          <button type="button" class="nav-btn" onclick="closePreflightPreviewModal()" style="font-size: 12px;">
+            Close Preview
+          </button>
+          <button type="button" class="btn-primary-compact" onclick="closePreflightPreviewModal(); startGeneration();" style="font-size: 12px; padding: 6px 14px;">
+            ✓ Looks Good — Run Generation
+          </button>
         </div>
       </div>
     </div>

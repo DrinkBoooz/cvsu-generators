@@ -97,7 +97,16 @@
                   </div>
                 </div>
               </div>
-              <div style="display: flex; align-items: center; gap: 12px;">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <button
+                  type="button"
+                  class="nav-btn"
+                  onclick="openSlotMapperForTemplate('${escapeHTML(t.path || t.file_path || filename)}')"
+                  title="Open Visual Slot Mapper"
+                  style="font-size: 11px; padding: 3px 8px; border-color: var(--accent-cyan); color: var(--accent-cyan);"
+                >
+                  🗺️ Map Slots
+                </button>
                 <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer; color: var(--text-secondary); user-select: none;">
                   <input type="checkbox" ${isEnabled ? "checked" : ""} onchange="toggleCustomTemplateUI('${escapedId}', this.checked)" style="accent-color: var(--accent-emerald); cursor: pointer;" />
                   <span>Enabled</span>
@@ -436,3 +445,371 @@
         }
       }
       window.onCustomTargetFolderChange = onCustomTargetFolderChange;
+
+      // ── Interactive Visual Slot Mapper Drawer & 2D Grid Engine ────────────
+      let slotMapperActivePath = null;
+      let slotMapperGridData = null;
+      let slotMapperCurrentTableIndex = 0;
+      let slotMapperSelectedCell = null;
+      let slotMapperStagedOverrides = {};
+
+      function openSlotMapperForCurrent() {
+        if (!currentInspectedTemplate || !currentInspectedTemplate.file_path) {
+          showToast("No Template", "Please inspect or select a template first.", "warning");
+          return;
+        }
+        openSlotMapperModal(currentInspectedTemplate.file_path);
+      }
+      window.openSlotMapperForCurrent = openSlotMapperForCurrent;
+
+      function openSlotMapperForTemplate(filePath) {
+        if (!filePath) {
+          showToast("No Template", "Target template path was not specified.", "warning");
+          return;
+        }
+        openSlotMapperModal(filePath);
+      }
+      window.openSlotMapperForTemplate = openSlotMapperForTemplate;
+
+      async function openSlotMapperModal(filePath) {
+        slotMapperActivePath = filePath;
+        slotMapperSelectedCell = null;
+        slotMapperStagedOverrides = {};
+        slotMapperCurrentTableIndex = 0;
+
+        const modal = document.getElementById("modalSlotMapperBackdrop");
+        const fileLabel = document.getElementById("slotMapperFileLabel");
+        const gridContainer = document.getElementById("slotMapperGridContainer");
+        const coordBadge = document.getElementById("slotMapperCoordBadge");
+        const roleDiv = document.getElementById("slotMapperCurrentRole");
+        const textPrev = document.getElementById("slotMapperTextPreview");
+        const tableSelect = document.getElementById("slotMapperTableSelect");
+        const metaPill = document.getElementById("slotMapperTableMeta");
+
+        if (modal) modal.classList.remove("d-none");
+        if (fileLabel) fileLabel.innerText = String(filePath).split(/[/\\]/).pop() || filePath;
+        if (coordBadge) coordBadge.innerText = "No cell selected";
+        if (roleDiv) roleDiv.innerHTML = "Current Role: <em>None detected</em>";
+        if (textPrev) textPrev.innerText = "-";
+        if (gridContainer) {
+          gridContainer.innerHTML = '<div style="padding: 24px; text-align: center; color: var(--text-muted); font-size: 12px;">Loading 2D Virtual Grid representation...</div>';
+        }
+
+        renderSlotOverridesList();
+
+        try {
+          if (!window.pywebview?.api?.get_template_grid_preview) {
+            if (gridContainer) gridContainer.innerHTML = '<div style="padding: 24px; text-align: center; color: var(--text-muted); font-size: 12px;">PyWebView bridge is unavailable.</div>';
+            return;
+          }
+
+          const res = await window.pywebview.api.get_template_grid_preview(filePath, 25);
+          if (res && res.status === "success" && res.preview) {
+            slotMapperGridData = res.preview;
+            const tables = slotMapperGridData.tables || [];
+
+            if (tableSelect) {
+              tableSelect.innerHTML = tables.map((t, idx) => `
+                <option value="${idx}">Table ${idx + 1} (${t.row_count}x${t.col_count})</option>
+              `).join("");
+              tableSelect.value = "0";
+            }
+
+            renderSlotMapperGrid();
+          } else {
+            showToast("Grid Preview Error", (res && res.message) || "Failed to load grid preview.", "error");
+            if (gridContainer) {
+              gridContainer.innerHTML = `<div style="padding: 24px; text-align: center; color: var(--accent-rose); font-size: 12px;">${escapeHTML(res?.message || "Failed to parse grid")}</div>`;
+            }
+          }
+        } catch (e) {
+          console.error("openSlotMapperModal error:", e);
+          showToast("Error", String(e), "error");
+          if (gridContainer) {
+            gridContainer.innerHTML = `<div style="padding: 24px; text-align: center; color: var(--accent-rose); font-size: 12px;">${escapeHTML(String(e))}</div>`;
+          }
+        }
+      }
+      window.openSlotMapperModal = openSlotMapperModal;
+
+      function closeSlotMapperModal() {
+        const modal = document.getElementById("modalSlotMapperBackdrop");
+        if (modal) modal.classList.add("d-none");
+        slotMapperActivePath = null;
+        slotMapperSelectedCell = null;
+      }
+      window.closeSlotMapperModal = closeSlotMapperModal;
+
+      function onSlotMapperTableChange(idx) {
+        slotMapperCurrentTableIndex = parseInt(idx, 10) || 0;
+        slotMapperSelectedCell = null;
+        renderSlotMapperGrid();
+      }
+      window.onSlotMapperTableChange = onSlotMapperTableChange;
+
+      function renderSlotMapperGrid() {
+        const gridContainer = document.getElementById("slotMapperGridContainer");
+        const metaPill = document.getElementById("slotMapperTableMeta");
+        if (!gridContainer || !slotMapperGridData) return;
+
+        const tables = slotMapperGridData.tables || [];
+        const table = tables[slotMapperCurrentTableIndex];
+        if (!table) {
+          gridContainer.innerHTML = '<div style="padding: 24px; text-align: center; color: var(--text-muted); font-size: 12px;">No table found at this index.</div>';
+          return;
+        }
+
+        if (metaPill) {
+          metaPill.innerText = `Table ${slotMapperCurrentTableIndex + 1} (${table.row_count} rows x ${table.col_count} cols)`;
+        }
+
+        const maxCols = table.col_count || 1;
+        let html = '<table class="slot-mapper-table"><thead><tr>';
+        html += '<th style="width: 42px;">Row</th>';
+        for (let c = 0; c < maxCols; c++) {
+          html += `<th>Col ${c}</th>`;
+        }
+        html += '</tr></thead><tbody>';
+
+        const matrix = table.grid || [];
+        for (let r = 0; r < matrix.length; r++) {
+          html += `<tr><td style="font-weight: 600; color: var(--text-muted); background: var(--surface-subtle); text-align: center;">${r}</td>`;
+          const row = matrix[r] || [];
+          for (let c = 0; c < maxCols; c++) {
+            const cell = row[c];
+            if (!cell) {
+              html += '<td></td>';
+              continue;
+            }
+
+            const isSelected = slotMapperSelectedCell && slotMapperSelectedCell.tableIdx === slotMapperCurrentTableIndex && slotMapperSelectedCell.r === r && slotMapperSelectedCell.c === c;
+            const overrideKey = `${slotMapperCurrentTableIndex}_${r}_${c}`;
+            const staged = slotMapperStagedOverrides[overrideKey];
+
+            let cellClasses = ['slot-mapper-cell'];
+            if (isSelected) cellClasses.push('cell-selected');
+            if (cell.is_merged_continuation) cellClasses.push('cell-continuation');
+            if (staged) cellClasses.push('cell-has-slot');
+            else if (cell.bound_role) {
+              if (cell.bound_role.includes('roster')) cellClasses.push('cell-is-roster');
+              else if (cell.bound_role.includes('signatory')) cellClasses.push('cell-is-signatory');
+              else cellClasses.push('cell-has-slot');
+            }
+
+            let badgeHtml = '';
+            if (staged) {
+              badgeHtml = `<div class="slot-cell-badge">⚡ ${escapeHTML(staged.field)} (${escapeHTML(staged.strategy)})</div>`;
+            } else if (cell.bound_role) {
+              const isRoster = cell.bound_role.includes('roster');
+              const isSig = cell.bound_role.includes('signatory');
+              const bCls = isRoster ? 'badge-roster' : (isSig ? 'badge-sig' : '');
+              badgeHtml = `<div class="slot-cell-badge ${bCls}">${escapeHTML(cell.bound_role)}</div>`;
+            }
+
+            const rawText = escapeHTML(cell.text || '');
+            const spanAttr = `rowspan="${cell.rowspan || 1}" colspan="${cell.colspan || 1}"`;
+            html += `
+              <td
+                class="${cellClasses.join(' ')}"
+                tabindex="0"
+                role="gridcell"
+                aria-label="Row ${r}, Column ${c}: ${cell.text ? escapeHTML(cell.text.substring(0, 30)) : 'Empty'}"
+                onclick="selectSlotMapperCell(${slotMapperCurrentTableIndex}, ${r}, ${c})"
+                onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();selectSlotMapperCell(${slotMapperCurrentTableIndex}, ${r}, ${c});}"
+              >
+                <div style="font-size: 11px; max-height: 48px; overflow: hidden; text-overflow: ellipsis; word-break: break-word;">${rawText || '<span style="color:var(--text-muted);">&mdash;</span>'}</div>
+                ${badgeHtml}
+              </td>
+            `;
+          }
+          html += '</tr>';
+        }
+        html += '</tbody></table>';
+
+        gridContainer.innerHTML = html;
+      }
+
+      function selectSlotMapperCell(tableIdx, r, c) {
+        slotMapperSelectedCell = { tableIdx, r, c };
+
+        const coordBadge = document.getElementById("slotMapperCoordBadge");
+        const roleDiv = document.getElementById("slotMapperCurrentRole");
+        const textPrev = document.getElementById("slotMapperTextPreview");
+        const fieldSelect = document.getElementById("slotMapperFieldSelect");
+        const stratSelect = document.getElementById("slotMapperStrategySelect");
+        const customInput = document.getElementById("slotMapperCustomFieldInput");
+        const customContainer = document.getElementById("slotMapperCustomFieldContainer");
+
+        const tables = (slotMapperGridData && slotMapperGridData.tables) || [];
+        const table = tables[tableIdx];
+        const cell = table?.grid?.[r]?.[c] || { row: r, col: c, text: "", rowspan: 1, colspan: 1, bound_role: null };
+
+        if (coordBadge) coordBadge.innerText = `Row ${r}, Col ${c} (${cell.rowspan}x${cell.colspan})`;
+        if (roleDiv) roleDiv.innerHTML = `Current Role: <strong>${escapeHTML(cell.bound_role || 'None detected')}</strong>`;
+        if (textPrev) textPrev.innerText = cell.text || '(empty cell)';
+
+        const overrideKey = `${tableIdx}_${r}_${c}`;
+        const staged = slotMapperStagedOverrides[overrideKey];
+        if (staged) {
+          const isStandard = ['instructor', 'course_code', 'course_title', 'section', 'schedule_code', 'semester', 'academic_year', 'campus', 'college', 'department', 'room'].includes(staged.field);
+          if (fieldSelect) {
+            fieldSelect.value = isStandard ? staged.field : 'custom';
+          }
+          if (customContainer) {
+            if (!isStandard) {
+              customContainer.classList.remove('d-none');
+              if (customInput) customInput.value = staged.field;
+            } else {
+              customContainer.classList.add('d-none');
+            }
+          }
+          if (stratSelect && staged.strategy) stratSelect.value = staged.strategy;
+        }
+
+        renderSlotMapperGrid();
+      }
+      window.selectSlotMapperCell = selectSlotMapperCell;
+
+      function onSlotFieldSelectChange(val) {
+        const customContainer = document.getElementById("slotMapperCustomFieldContainer");
+        if (customContainer) {
+          if (val === "custom") customContainer.classList.remove("d-none");
+          else customContainer.classList.add("d-none");
+        }
+      }
+      window.onSlotFieldSelectChange = onSlotFieldSelectChange;
+
+      function applyCellSlotOverride() {
+        if (!slotMapperSelectedCell) {
+          showToast("No Cell Selected", "Click on any grid cell first.", "warning");
+          return;
+        }
+
+        const fieldSelect = document.getElementById("slotMapperFieldSelect");
+        const customInput = document.getElementById("slotMapperCustomFieldInput");
+        const stratSelect = document.getElementById("slotMapperStrategySelect");
+
+        let field = fieldSelect ? fieldSelect.value : "instructor";
+        if (field === "custom") {
+          field = customInput ? customInput.value.trim() : "";
+          if (!field) {
+            showToast("Missing Field Name", "Please specify a custom slot field name.", "warning");
+            return;
+          }
+        }
+
+        const strategy = stratSelect ? stratSelect.value : "exact_cell";
+        const { tableIdx, r, c } = slotMapperSelectedCell;
+        const key = `${tableIdx}_${r}_${c}`;
+
+        slotMapperStagedOverrides[key] = {
+          table_index: tableIdx,
+          row: r,
+          col: c,
+          field: field,
+          strategy: strategy,
+        };
+
+        renderSlotMapperGrid();
+        renderSlotOverridesList();
+        showToast("Slot Assigned", `Bound {{${field}}} (${strategy}) to Table ${tableIdx + 1} [${r}, ${c}]`, "success");
+      }
+      window.applyCellSlotOverride = applyCellSlotOverride;
+
+      function removeCellSlotOverride() {
+        if (!slotMapperSelectedCell) return;
+        const { tableIdx, r, c } = slotMapperSelectedCell;
+        const key = `${tableIdx}_${r}_${c}`;
+        if (slotMapperStagedOverrides[key]) {
+          delete slotMapperStagedOverrides[key];
+          renderSlotMapperGrid();
+          renderSlotOverridesList();
+          showToast("Slot Cleared", `Cleared slot override for [${r}, ${c}]`, "info");
+        }
+      }
+      window.removeCellSlotOverride = removeCellSlotOverride;
+
+      function renderSlotOverridesList() {
+        const listEl = document.getElementById("slotMapperOverridesList");
+        const countEl = document.getElementById("slotMapperOverridesCount");
+        const keys = Object.keys(slotMapperStagedOverrides);
+
+        if (countEl) countEl.innerText = keys.length;
+        if (!listEl) return;
+
+        if (keys.length === 0) {
+          listEl.innerHTML = '<div style="color: var(--text-muted); font-size: 10.5px; text-align: center; padding: 8px;">No custom overrides staged.</div>';
+          return;
+        }
+
+        listEl.innerHTML = keys.map((k) => {
+          const item = slotMapperStagedOverrides[k];
+          return `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 6px; border-bottom: 1px solid var(--border-subtle); gap: 6px;">
+              <div>
+                <strong style="color: var(--accent-emerald);">{{${escapeHTML(item.field)}}}</strong>
+                <span style="color: var(--text-muted); font-size: 10px;"> &rarr; T${item.table_index + 1}[${item.row},${item.col}] (${escapeHTML(item.strategy)})</span>
+              </div>
+              <button
+                type="button"
+                class="nav-btn"
+                onclick="deleteSpecificSlotOverride('${k}')"
+                title="Remove Override"
+                style="font-size: 10px; padding: 1px 5px; color: var(--accent-rose);"
+              >✕</button>
+            </div>
+          `;
+        }).join("");
+      }
+
+      function deleteSpecificSlotOverride(key) {
+        if (slotMapperStagedOverrides[key]) {
+          delete slotMapperStagedOverrides[key];
+          renderSlotMapperGrid();
+          renderSlotOverridesList();
+        }
+      }
+      window.deleteSpecificSlotOverride = deleteSpecificSlotOverride;
+
+      function resetSlotOverridesUI() {
+        slotMapperStagedOverrides = {};
+        renderSlotMapperGrid();
+        renderSlotOverridesList();
+        showToast("Overrides Reset", "Cleared all pending slot overrides.", "info");
+      }
+      window.resetSlotOverridesUI = resetSlotOverridesUI;
+
+      async function saveSlotOverridesFromUI() {
+        if (!slotMapperActivePath) {
+          showToast("No Active Template", "No template is currently open for editing.", "warning");
+          return;
+        }
+
+        try {
+          if (!window.pywebview?.api?.save_template_slot_overrides) {
+            showToast("Bridge Unavailable", "save_template_slot_overrides API is not ready.", "warning");
+            return;
+          }
+
+          const res = await window.pywebview.api.save_template_slot_overrides(
+            slotMapperActivePath,
+            slotMapperStagedOverrides
+          );
+
+          if (res && res.status === "success") {
+            showToast(
+              "Overrides Saved",
+              `Successfully applied ${Object.keys(slotMapperStagedOverrides).length} slot override(s)!`,
+              "success"
+            );
+            closeSlotMapperModal();
+            await loadCustomTemplatesUI();
+          } else {
+            showToast("Save Error", res?.message || "Failed to save slot overrides.", "error");
+          }
+        } catch (e) {
+          console.error("saveSlotOverridesFromUI error:", e);
+          showToast("Error", String(e), "error");
+        }
+      }
+      window.saveSlotOverridesFromUI = saveSlotOverridesFromUI;

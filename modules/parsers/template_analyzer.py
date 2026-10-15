@@ -287,6 +287,54 @@ class TemplateManifest:
                 return slot
         return None
 
+    def apply_slot_overrides(self, overrides: Dict[str, Dict[str, Any]]) -> None:
+        """
+        Applies user-defined slot overrides, updating or adding SemanticSlot entries.
+        """
+        if not isinstance(overrides, dict):
+            return
+        self.extra.setdefault("slot_overrides", {})
+        self.extra["slot_overrides"].update(overrides)
+
+        for field_name, ov in overrides.items():
+            if not isinstance(ov, dict):
+                continue
+            if ov.get("disabled"):
+                self.slots = [s for s in self.slots if s.field != field_name]
+                continue
+
+            t_idx = ov.get("table_index", 0)
+            r_idx = ov.get("row_index", 0)
+            c_idx = ov.get("col_index", 0)
+            strategy = ov.get("strategy", "set_cell_text")
+            label = ov.get("label", field_name)
+
+            existing = next((s for s in self.slots if s.field == field_name), None)
+            if existing:
+                existing.slot_type = "table_cell"
+                existing.table_index = t_idx
+                existing.row_index = r_idx
+                existing.col_index = c_idx
+                existing.target_row_index = r_idx
+                existing.target_col_index = c_idx
+                existing.strategy = strategy
+                existing.confidence = 1.0
+            else:
+                new_slot = SemanticSlot(
+                    field=field_name,
+                    slot_type="table_cell",
+                    label_text=label,
+                    table_index=t_idx,
+                    row_index=r_idx,
+                    col_index=c_idx,
+                    target_row_index=r_idx,
+                    target_col_index=c_idx,
+                    strategy=strategy,
+                    confidence=1.0,
+                )
+                self.slots.append(new_slot)
+
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Deterministic Template Analyzer Engine
@@ -1085,4 +1133,194 @@ class DeterministicTemplateAnalyzer:
                 ))
 
         return slots
+
+    def serialize_grid_preview(self, path: str, max_rows: int = 15) -> Dict[str, Any]:
+        """
+        Serializes a lightweight 2D visual grid representation of each table in the template,
+        including normalized cell coordinates, spans (colspan/rowspan), merged state,
+        and current semantic/signatory/roster role bindings.
+        """
+        abs_path = os.path.abspath(path)
+        if not os.path.isfile(abs_path):
+            raise FileNotFoundError(f"Template file does not exist: {path}")
+
+        ext = os.path.splitext(abs_path)[1].lower()
+        manifest = self.analyze(abs_path)
+
+        # Check if saved slot overrides exist in config_manager
+        try:
+            from modules.common.config_manager import config_manager
+            saved_overrides = config_manager.get_config().get("template_slot_overrides", {})
+            file_key = os.path.basename(abs_path)
+            if file_key in saved_overrides:
+                manifest.apply_slot_overrides(saved_overrides[file_key])
+            elif abs_path in saved_overrides:
+                manifest.apply_slot_overrides(saved_overrides[abs_path])
+        except Exception as e:
+            pass
+
+        tables_data: List[Dict[str, Any]] = []
+
+        if ext == ".docx":
+            from modules.common.docx_utils import load_docx, w
+            from modules.parsers.docx_grid_table import DocxGridTable
+
+            zin, root, body = load_docx(abs_path)
+            doc_tables = body.findall(w("tbl"))
+
+            for t_idx, tbl in enumerate(doc_tables):
+                grid = DocxGridTable(tbl)
+                limit_r = min(grid.num_rows, max(1, max_rows))
+                rows_list = []
+
+                for r in range(limit_r):
+                    cells_list = []
+                    for c in range(grid.num_cols):
+                        cell = grid.get_cell(r, c)
+                        if cell is None:
+                            continue
+
+                        # Resolve bound role
+                        bound_role = None
+                        for s in manifest.slots:
+                            if s.slot_type == "table_cell" and s.table_index == t_idx:
+                                if (s.target_row_index == r and s.target_col_index == c) or (
+                                    s.target_row_index == cell.origin_row and s.target_col_index == cell.origin_col
+                                ):
+                                    bound_role = {
+                                        "type": "semantic_slot",
+                                        "field": s.field,
+                                        "label": s.label_text,
+                                        "strategy": s.strategy,
+                                    }
+                                    break
+
+                        if not bound_role and manifest.signatory_slots:
+                            for sig in manifest.signatory_slots:
+                                if sig.table_index == t_idx and (
+                                    (sig.target_row_index == r and sig.target_col_index == c)
+                                    or (sig.target_row_index == cell.origin_row and sig.target_col_index == cell.origin_col)
+                                    or (sig.row_index == r and sig.col_index == c)
+                                ):
+                                    bound_role = {
+                                        "type": "signatory",
+                                        "field": sig.bound_key or sig.slot_id,
+                                        "label": sig.role_label,
+                                        "strategy": "signatory",
+                                    }
+                                    break
+
+                        if not bound_role and manifest.roster_table and manifest.roster_table.table_index == t_idx:
+                            rt = manifest.roster_table
+                            if r in rt.header_rows:
+                                bound_role = {"type": "roster_header", "field": "header", "label": "Roster Header"}
+                            elif r == rt.template_row_index or r == rt.first_data_row_index:
+                                col_name = next((k for k, col_idx in rt.columns.items() if col_idx == c), f"col_{c}")
+                                bound_role = {"type": "roster_data", "field": col_name, "label": f"Student {col_name.title()}"}
+                            elif r in rt.footer_row_indices:
+                                bound_role = {"type": "roster_footer", "field": "footer", "label": "Table Footer"}
+
+                        cells_list.append({
+                            "row": r,
+                            "col": c,
+                            "text": cell.text,
+                            "raw_text": cell.raw_text,
+                            "rowspan": cell.row_span,
+                            "colspan": cell.col_span,
+                            "is_origin": cell.is_origin,
+                            "is_merged_continuation": not cell.is_origin,
+                            "origin_row": cell.origin_row,
+                            "origin_col": cell.origin_col,
+                            "bound_role": bound_role,
+                        })
+                    rows_list.append(cells_list)
+
+                tables_data.append({
+                    "table_index": t_idx,
+                    "num_rows": grid.num_rows,
+                    "num_cols": grid.num_cols,
+                    "preview_rows": limit_r,
+                    "rows": rows_list,
+                })
+
+        elif ext in (".xlsx", ".xls"):
+            wb = openpyxl.load_workbook(abs_path, data_only=True)
+            ws = wb.active
+            limit_r = min(ws.max_row, max(1, max_rows))
+            limit_c = min(ws.max_column, 26)
+
+            # Map merged cells
+            merged_map = {}
+            for m_range in ws.merged_cells.ranges:
+                min_col, min_row, max_col, max_row = m_range.min_col, m_range.min_row, m_range.max_col, m_range.max_row
+                rowspan = max_row - min_row + 1
+                colspan = max_col - min_col + 1
+                for mr in range(min_row, max_row + 1):
+                    for mc in range(min_col, max_col + 1):
+                        is_orig = (mr == min_row and mc == min_col)
+                        merged_map[(mr, mc)] = (min_row, min_col, rowspan, colspan, is_orig)
+
+            rows_list = []
+            for r in range(1, limit_r + 1):
+                cells_list = []
+                for c in range(1, limit_c + 1):
+                    val = ws.cell(row=r, column=c).value
+                    cell_text = str(val) if val is not None else ""
+                    coord = f"{openpyxl.utils.get_column_letter(c)}{r}"
+
+                    if (r, c) in merged_map:
+                        orig_r, orig_c, rspan, cspan, is_orig = merged_map[(r, c)]
+                    else:
+                        orig_r, orig_c, rspan, cspan, is_orig = r, c, 1, 1, True
+
+                    bound_role = None
+                    for s in manifest.slots:
+                        if s.cell_coord == coord or (s.target_row_index == r and s.target_col_index == c):
+                            bound_role = {
+                                "type": "semantic_slot",
+                                "field": s.field,
+                                "label": s.label_text,
+                                "strategy": s.strategy,
+                            }
+                            break
+
+                    cells_list.append({
+                        "row": r - 1,
+                        "col": c - 1,
+                        "coord": coord,
+                        "text": cell_text,
+                        "rowspan": rspan,
+                        "colspan": cspan,
+                        "is_origin": is_orig,
+                        "is_merged_continuation": not is_orig,
+                        "origin_row": orig_r - 1,
+                        "origin_col": orig_c - 1,
+                        "bound_role": bound_role,
+                    })
+                rows_list.append(cells_list)
+
+            tables_data.append({
+                "table_index": 0,
+                "sheet_name": ws.title,
+                "num_rows": ws.max_row,
+                "num_cols": ws.max_column,
+                "preview_rows": limit_r,
+                "rows": rows_list,
+            })
+
+        return {
+            "file_path": abs_path,
+            "file_name": os.path.basename(abs_path),
+            "file_type": "docx" if ext == ".docx" else "xlsx",
+            "template_type": manifest.template_type,
+            "suggested_title": manifest.suggested_title,
+            "suggested_suffix": manifest.suggested_suffix,
+            "tables": tables_data,
+            "slots": [s.to_dict() for s in manifest.slots],
+            "signatory_slots": [s.to_dict() for s in manifest.signatory_slots],
+            "roster_table": manifest.roster_table.to_dict() if manifest.roster_table else None,
+            "slot_overrides": manifest.extra.get("slot_overrides", {}),
+            "diagnostics": manifest.get_diagnostics(),
+        }
+
 

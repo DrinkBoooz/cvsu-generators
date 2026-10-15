@@ -428,3 +428,57 @@ class TemplateMixin:
         except Exception as e:
             logger.error(f"Failed to delete custom template: {e}")
             return {"status": "error", "message": str(e)}
+
+    # ══ 2D Grid Serialization & Visual Slot Overrides ═════════════════════════
+    def get_template_grid_preview(self, file_path, max_rows=15):
+        """Returns 2D grid table serialization for visual slot inspection and overrides."""
+        try:
+            if not isinstance(file_path, str) or not file_path.strip():
+                return {"status": "error", "message": "Template file path must be a non-empty string"}
+
+            abs_path = os.path.abspath(file_path.strip())
+            if not os.path.isfile(abs_path):
+                return {"status": "error", "message": f"Template file does not exist: {file_path}"}
+
+            from modules.parsers.template_analyzer import DeterministicTemplateAnalyzer
+            analyzer = DeterministicTemplateAnalyzer.get_instance()
+            preview = analyzer.serialize_grid_preview(abs_path, max_rows=int(max_rows))
+            return {"status": "success", "preview": preview}
+        except Exception as e:
+            logger.error(f"Failed to generate template grid preview for {file_path}: {e}")
+            return {"status": "error", "message": str(e)}
+
+    def save_template_slot_overrides(self, file_path, overrides_dict):
+        """Saves user-defined slot overrides for the given template."""
+        try:
+            if not isinstance(file_path, str) or not file_path.strip():
+                return {"status": "error", "message": "Template file path must be a non-empty string"}
+
+            if not isinstance(overrides_dict, dict):
+                return {"status": "error", "message": "Overrides must be a JSON object mapping slot fields to cell coordinates"}
+
+            abs_path = os.path.abspath(file_path.strip())
+            file_key = os.path.basename(abs_path)
+
+            from modules.common.config_manager import config_manager
+            cfg = config_manager.get_config()
+            all_overrides = cfg.setdefault("template_slot_overrides", {})
+            all_overrides[file_key] = overrides_dict
+            all_overrides[abs_path] = overrides_dict
+            config_manager.save_config(cfg)
+
+            # Invalidate analyzer cache for this template
+            from modules.parsers.template_analyzer import DeterministicTemplateAnalyzer
+            analyzer = DeterministicTemplateAnalyzer.get_instance()
+            analyzer.invalidate(abs_path)
+
+            return {
+                "status": "success",
+                "file_path": abs_path,
+                "overrides_count": len(overrides_dict),
+                "overrides": overrides_dict,
+            }
+        except Exception as e:
+            logger.error(f"Failed to save slot overrides for {file_path}: {e}")
+            return {"status": "error", "message": str(e)}
+

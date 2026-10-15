@@ -118,6 +118,7 @@ MANIFEST = {
                 "tests/test_template_set_e2e.py",
                 "tests/test_dynamic_org_and_signatories.py",
                 "tests/test_dynamic_calendar_resolver.py",
+                "tests/test_visual_slot_mapper_and_preview.py",
             ],
         },
         "B3_generators_and_lifecycle": {

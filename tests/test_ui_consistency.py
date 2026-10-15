@@ -175,3 +175,65 @@ def test_ui_smart_roster_mapping_and_ceit_directory():
     for prefix in ceit_prefixes:
         assert prefix in ui_content, f"CEIT prefix {prefix} must be documented in ui.html help directory"
 
+def test_ui_visual_slot_mapper_and_preflight_preview():
+    ui_content = get_ui_bundle()
+
+    # Visual Slot Mapper elements
+    assert 'id="modalSlotMapperBackdrop"' in ui_content
+    assert 'id="slotMapperTitle"' in ui_content
+    assert 'id="slotMapperFileLabel"' in ui_content
+    assert 'id="btnCloseSlotMapper"' in ui_content
+    assert 'id="slotMapperTableSelect"' in ui_content
+    assert 'id="slotMapperTableMeta"' in ui_content
+    assert 'id="slotMapperGridContainer"' in ui_content
+    assert 'id="slotMapperInspector"' in ui_content
+    assert 'id="slotMapperCoordBadge"' in ui_content
+    assert 'id="slotMapperCurrentRole"' in ui_content
+    assert 'id="slotMapperTextPreview"' in ui_content
+    assert 'id="slotMapperFieldSelect"' in ui_content
+    assert 'id="slotMapperCustomFieldContainer"' in ui_content
+    assert 'id="slotMapperCustomFieldInput"' in ui_content
+    assert 'id="slotMapperStrategySelect"' in ui_content
+    assert 'id="btnApplyCellSlot"' in ui_content
+    assert 'id="btnRemoveCellSlot"' in ui_content
+    assert 'id="slotMapperOverridesCount"' in ui_content
+    assert 'id="slotMapperOverridesList"' in ui_content
+    assert 'id="btnResetSlotOverrides"' in ui_content
+    assert 'id="btnSaveSlotOverrides"' in ui_content
+    assert 'id="btnOpenSlotMapperFromInspector"' in ui_content
+
+    # Visual Slot Mapper JavaScript functions
+    assert "openSlotMapperModal" in ui_content
+    assert "closeSlotMapperModal" in ui_content
+    assert "onSlotMapperTableChange" in ui_content
+    assert "renderSlotMapperGrid" in ui_content
+    assert "selectSlotMapperCell" in ui_content
+    assert "applyCellSlotOverride" in ui_content
+    assert "saveSlotOverridesFromUI" in ui_content
+
+    # Pre-Flight Sample Preview elements
+    assert 'id="btnPreviewSample"' in ui_content
+    assert 'id="checkExportPdf"' in ui_content
+    assert 'id="modalPreflightPreviewBackdrop"' in ui_content
+    assert 'id="preflightPreviewTitle"' in ui_content
+    assert 'id="previewFontScalingBadge"' in ui_content
+    assert 'id="btnClosePreflightPreview"' in ui_content
+    assert 'id="previewSectionInfoCard"' in ui_content
+    assert 'id="previewInfoCourseSec"' in ui_content
+    assert 'id="previewInfoSchedCode"' in ui_content
+    assert 'id="previewInfoSubject"' in ui_content
+    assert 'id="previewInfoInstructor"' in ui_content
+    assert 'id="previewInfoStudentCount"' in ui_content
+    assert 'id="previewInfoFontTier"' in ui_content
+    assert 'id="previewResolvedSlotsContainer"' in ui_content
+    assert 'id="previewResolvedSlotsTable"' in ui_content
+    assert 'id="previewResolvedSlotsBody"' in ui_content
+    assert 'id="previewRosterTableContainer"' in ui_content
+    assert 'id="previewRosterTable"' in ui_content
+    assert 'id="previewRosterTableBody"' in ui_content
+    assert 'id="previewSignatoriesList"' in ui_content
+
+    # Pre-Flight Sample Preview JavaScript functions
+    assert "openPreflightPreviewModal" in ui_content
+    assert "closePreflightPreviewModal" in ui_content
+

@@ -322,6 +322,13 @@ class DocxGridTable:
             raise IndexError(f"Col {col} out of range [0, {self.num_cols})")
         return self._grid[row][col]
 
+    def get_cell(self, row: int, col: int) -> Optional[DocxGridCell]:
+        """Safely retrieves the visual cell at (row, col), or None if out of bounds."""
+        if 0 <= row < self.num_rows and 0 <= col < self.num_cols:
+            return self._grid[row][col]
+        return None
+
+
     def __getitem__(self, index: Tuple[int, int]) -> DocxGridCell:
         """Enables 2D subscript access: table[row, col]."""
         r, c = index

@@ -36,6 +36,7 @@ def process_all(
     cancel_event=None,
     roster_configs=None,
     calendar_resolver=None,
+    export_pdf=False,
 ):
     """
     Core end-to-end orchestration service. Processes timetable schedules and student rosters,
@@ -46,9 +47,9 @@ def process_all(
     xlsx_files = [get_long_path(f) for f in xlsx_files]
     
     results = {
-        "generated": {"attendance": [], "grades": [], "ceit": []},
-        "skipped": {"attendance": [], "grades": [], "ceit": [], "rosters": []},
-        "errors": {"attendance": [], "grades": [], "ceit": [], "rosters": []},
+        "generated": {"attendance": [], "grades": [], "ceit": [], "pdf": []},
+        "skipped": {"attendance": [], "grades": [], "ceit": [], "rosters": [], "pdf": []},
+        "errors": {"attendance": [], "grades": [], "ceit": [], "rosters": [], "pdf": []},
         "by_class": {},
         "cancelled": False
     }
@@ -556,4 +557,35 @@ def process_all(
                 results["errors"]["grades"].append(err_msg)
                 _notify(course_sec, "Error Grades")
 
+    if export_pdf and not results.get("cancelled"):
+        logger.info("Commencing optional Headless PDF Export...")
+        try:
+            from modules.common.pdf_exporter import PdfExporter
+            exporter = PdfExporter()
+            if not exporter.is_available():
+                results["skipped"]["pdf"].append("No local PDF converter installed (MS Word or LibreOffice).")
+            else:
+                all_docx = []
+                for cls_name, cls_items in results["by_class"].items():
+                    for doc_entry in cls_items.get("ceit", []):
+                        if isinstance(doc_entry, dict) and doc_entry.get("path") and doc_entry["path"].endswith(".docx"):
+                            all_docx.append(doc_entry["path"])
+                    for doc_entry in cls_items.get("attendance", []):
+                        if isinstance(doc_entry, dict) and doc_entry.get("path") and doc_entry["path"].endswith(".docx"):
+                            all_docx.append(doc_entry["path"])
+
+                if all_docx:
+                    pdf_res = exporter.batch_export(
+                        all_docx,
+                        output_dir_base,
+                        cancel_event=cancel_event,
+                        progress_cb=lambda p: _notify("PDF", f"Exported {os.path.basename(p)}")
+                    )
+                    results["generated"]["pdf"].extend([os.path.basename(p) for p in pdf_res.get("converted", [])])
+                    results["errors"]["pdf"].extend([f"Failed: {os.path.basename(p)}" for p in pdf_res.get("failed", [])])
+        except Exception as pe:
+            logger.warning(f"Optional PDF export encountered non-fatal fault: {pe}")
+            results["errors"]["pdf"].append(str(pe))
+
     return results
+

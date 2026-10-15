@@ -87,11 +87,24 @@ class DynamicDocumentRenderer:
             mapping = {
                 "instructor": context.instructor,
                 "course_section": context.course_section,
+                "section": context.course_section,
+                "course_sec": context.course_section,
                 "schedule_code": context.schedule_code,
+                "sched_code": context.schedule_code,
+                "class_code": context.schedule_code,
                 "subject": context.subject,
+                "course_code": context.subject,
+                "subject_code": context.subject,
+                "subject_title": context.subject,
+                "course_title": context.subject,
                 "time_days_room": context.time_days_room,
+                "schedule": context.time_days_room,
+                "time_room": context.time_days_room,
+                "room": getattr(context, "room", ""),
                 "semester_ay": context.semester_ay,
+                "semester": context.semester_ay,
                 "college": getattr(context, "college", ""),
+                "department": getattr(context, "department", ""),
             }
             if field_name in mapping:
                 return mapping[field_name]
@@ -101,11 +114,15 @@ class DynamicDocumentRenderer:
             if field_name in context:
                 return context[field_name]
             aliases = {
-                "course_section": ["course_sec", "section"],
-                "schedule_code": ["sched_code", "class_code"],
-                "subject": ["subject_name", "course_title"],
-                "time_days_room": ["schedule", "time_room", "time_days"],
-                "semester_ay": ["semester", "ay"],
+                "instructor": ["faculty", "adviser", "teacher"],
+                "course_section": ["course_sec", "section", "course"],
+                "section": ["course_section", "course_sec"],
+                "schedule_code": ["sched_code", "class_code", "sched"],
+                "subject": ["subject_name", "course_title", "course_code", "subject_code", "subject_title"],
+                "course_code": ["subject", "subject_name", "subject_code"],
+                "time_days_room": ["schedule", "time_room", "time_days", "time"],
+                "room": ["room_assignment", "room_no", "bldg"],
+                "semester_ay": ["semester", "ay", "term"],
                 "month_year": ["month", "month_label"],
             }
             for alias in aliases.get(field_name, []):
