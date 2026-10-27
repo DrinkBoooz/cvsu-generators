@@ -454,7 +454,8 @@
               const totalClassFiles =
                 (pkgs.ceit?.length || 0) +
                 (pkgs.attendance?.length || 0) +
-                (pkgs.grades?.length || 0);
+                (pkgs.grades?.length || 0) +
+                (pkgs.pdf?.length || 0);
 
               let fileRowsHtml = "";
               const addCategoryRows = (catName, files, icon) => {

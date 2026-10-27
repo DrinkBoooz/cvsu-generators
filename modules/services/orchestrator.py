@@ -395,7 +395,7 @@ def process_all(
                 results["errors"]["attendance"].append(err_msg)
         
         if course_sec not in results["by_class"]:
-            results["by_class"][course_sec] = {"ceit": [], "attendance": [], "grades": []}
+            results["by_class"][course_sec] = {"ceit": [], "attendance": [], "grades": [], "pdf": []}
 
         if "ceit" in enabled_engines:
             for gen_factory, suffix in factory.get_all():
@@ -583,6 +583,21 @@ def process_all(
                     )
                     results["generated"]["pdf"].extend([os.path.basename(p) for p in pdf_res.get("converted", [])])
                     results["errors"]["pdf"].extend([f"Failed: {os.path.basename(p)}" for p in pdf_res.get("failed", [])])
+
+                    converted_paths = pdf_res.get("converted", [])
+                    pdf_map = {os.path.splitext(os.path.basename(p))[0]: p for p in converted_paths}
+                    for cls_name, cls_items in results["by_class"].items():
+                        if "pdf" not in cls_items:
+                            cls_items["pdf"] = []
+                        all_class_docs = cls_items.get("ceit", []) + cls_items.get("attendance", [])
+                        for doc_entry in all_class_docs:
+                            if isinstance(doc_entry, dict) and "path" in doc_entry:
+                                stem = os.path.splitext(os.path.basename(doc_entry["path"]))[0]
+                                if stem in pdf_map:
+                                    pdf_path = pdf_map[stem]
+                                    pdf_name = os.path.basename(pdf_path)
+                                    if not any(x.get("path") == pdf_path for x in cls_items["pdf"]):
+                                        cls_items["pdf"].append({"name": pdf_name, "path": pdf_path})
         except Exception as pe:
             logger.warning(f"Optional PDF export encountered non-fatal fault: {pe}")
             results["errors"]["pdf"].append(str(pe))
