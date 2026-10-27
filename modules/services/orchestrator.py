@@ -474,7 +474,7 @@ def process_all(
                             from modules.parsers.calendar_resolver import CalendarResolver
                             from modules.common.config_manager import config_manager
                             cal_cfg = config_manager.get_config().get("calendar_config")
-                            if cal_cfg and cal_cfg.get("enabled", False):
+                            if cal_cfg and (cal_cfg.get("enabled", False) or len(cal_cfg.get("exceptions", [])) > 0 or len(cal_cfg.get("overrides", {})) > 0):
                                 cal_resolver = CalendarResolver.from_dict(cal_cfg)
                         except Exception as ce:
                             logger.warning(f"Could not initialize CalendarResolver in orchestrator: {ce}")

@@ -1047,6 +1047,7 @@
 
       function onCalendarModeChange(val) {
         if (!activeCalendarConfig) activeCalendarConfig = {};
+        activeCalendarConfig.enabled = true;
         activeCalendarConfig.default_mode = val || "OMIT_COLUMN";
         if (activeParserConfig) {
           if (!activeParserConfig.calendar_config) activeParserConfig.calendar_config = {};
@@ -1095,6 +1096,7 @@
             const res = await window.pywebview.api.parse_calendar_announcement(text);
             if (res && res.status === "success") {
               if (!activeCalendarConfig) activeCalendarConfig = {};
+              activeCalendarConfig.enabled = true;
               if (!Array.isArray(activeCalendarConfig.exceptions)) {
                 activeCalendarConfig.exceptions = [];
               }
@@ -1135,6 +1137,7 @@
             const res = await window.pywebview.api.import_calendar_ics();
             if (res && res.status === "success") {
               if (!activeCalendarConfig) activeCalendarConfig = {};
+              activeCalendarConfig.enabled = true;
               if (!Array.isArray(activeCalendarConfig.exceptions)) {
                 activeCalendarConfig.exceptions = [];
               }
@@ -1635,6 +1638,7 @@
             const res = await window.pywebview.api.load_calendar_preset(presetId);
             if (res && res.status === "success" && res.preset) {
               if (!activeCalendarConfig) activeCalendarConfig = {};
+              activeCalendarConfig.enabled = true;
               if (!Array.isArray(activeCalendarConfig.exceptions)) {
                 activeCalendarConfig.exceptions = [];
               }
@@ -1656,10 +1660,18 @@
               await renderCalendarDateStrip();
 
               if (feedback) {
-                feedback.innerHTML = `<span style="color: var(--accent-emerald);">✓ Successfully loaded <strong>${addedCount}</strong> event(s) from preset: <em>${escapeHTML(res.preset.name)}</em>.</span>`;
+                if (addedCount > 0) {
+                  feedback.innerHTML = `<span style="color: var(--accent-emerald);">✓ Successfully loaded <strong>${addedCount}</strong> event(s) from preset: <em>${escapeHTML(res.preset.name)}</em>.</span>`;
+                } else {
+                  feedback.innerHTML = `<span style="color: var(--accent-emerald);">✓ All <strong>${newExceptions.length}</strong> event(s) from preset <em>${escapeHTML(res.preset.name)}</em> are already loaded and active.</span>`;
+                }
               }
               if (typeof showToast === "function") {
-                showToast("Preset Loaded", `Loaded ${addedCount} events from ${res.preset.name}.`, "success");
+                if (addedCount > 0) {
+                  showToast("Preset Loaded", `Loaded ${addedCount} events from ${res.preset.name}.`, "success");
+                } else {
+                  showToast("Preset Active", `All ${newExceptions.length} events from ${res.preset.name} are active.`, "info");
+                }
               }
             }
           } catch (err) {

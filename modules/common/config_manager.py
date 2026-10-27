@@ -308,6 +308,14 @@ class ParserConfigManager:
                     if v is not None and str(v).strip():
                         merged["schedule_config"][k] = v
 
+            # 7. Merge organization preset
+            if "organization_preset" in user_data and isinstance(user_data["organization_preset"], dict):
+                merged["organization_preset"] = deepcopy(user_data["organization_preset"])
+
+            # 8. Merge calendar config
+            if "calendar_config" in user_data and isinstance(user_data["calendar_config"], dict):
+                merged["calendar_config"] = deepcopy(user_data["calendar_config"])
+
             self._cached_config = merged
         except Exception as e:
             logger.error(f"Failed to load user config from {self.config_file}, using defaults: {e}")
@@ -375,6 +383,12 @@ class ParserConfigManager:
                 for k in ("default_instructor", "default_semester", "default_college"):
                     if k in sc and str(sc[k]).strip():
                         validated["schedule_config"][k] = str(sc[k]).strip()
+
+            if "organization_preset" in new_config and isinstance(new_config["organization_preset"], dict):
+                validated["organization_preset"] = deepcopy(new_config["organization_preset"])
+
+            if "calendar_config" in new_config and isinstance(new_config["calendar_config"], dict):
+                validated["calendar_config"] = deepcopy(new_config["calendar_config"])
 
             # Atomic write via tempfile
             temp_fd, temp_path = tempfile.mkstemp(dir=self.config_dir, prefix="cfg_tmp_", suffix=".json")
