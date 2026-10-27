@@ -250,6 +250,10 @@ def test_ui_semester_workspaces_and_roster_diff():
     assert 'id="modalWorkspaceBackdrop"' in ui_content
     assert 'id="modalWorkspaceTitle"' in ui_content
     assert 'id="btnCloseWorkspaceModal"' in ui_content
+    assert 'id="workspaceActiveBanner"' in ui_content
+    assert 'id="workspaceActiveNameLabel"' in ui_content
+    assert 'id="btnUpdateActiveWorkspace"' in ui_content
+    assert 'id="btnDeleteActiveWorkspace"' in ui_content
     assert 'id="inputWorkspaceName"' in ui_content
     assert 'id="btnSaveCurrentWorkspace"' in ui_content
     assert 'id="btnImportWorkspace"' in ui_content
@@ -273,6 +277,9 @@ def test_ui_semester_workspaces_and_roster_diff():
     assert "loadWorkspaceListUI" in ui_content
     assert "onWorkspaceSelectChange" in ui_content
     assert "openWorkspaceModal" in ui_content
+    assert "deleteActiveWorkspaceFromUI" in ui_content
+    assert "deleteWorkspaceById" in ui_content
+
     assert "closeWorkspaceModal" in ui_content
     assert "openRosterDiffModal" in ui_content
     assert "closeRosterDiffModal" in ui_content

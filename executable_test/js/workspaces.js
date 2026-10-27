@@ -22,6 +22,7 @@ function updateWorkspaceHeaderDisplay() {
 function renderWorkspaceActiveBanner() {
   const label = document.getElementById("workspaceActiveNameLabel");
   const btnUpdate = document.getElementById("btnUpdateActiveWorkspace");
+  const btnDelete = document.getElementById("btnDeleteActiveWorkspace");
   const activeId = state?.activeWorkspaceId;
   const activeName = state?.activeWorkspaceName;
 
@@ -32,10 +33,17 @@ function renderWorkspaceActiveBanner() {
       btnUpdate.textContent = `💾 Update "${activeName}"`;
       btnUpdate.title = `Overwrite and update "${activeName}" with current session state`;
     }
+    if (btnDelete) {
+      btnDelete.classList.remove("d-none");
+      btnDelete.title = `Delete workspace "${activeName}"`;
+    }
   } else {
     if (label) label.innerHTML = `<em>Default Workspace (Unsaved)</em>`;
     if (btnUpdate) {
       btnUpdate.classList.add("d-none");
+    }
+    if (btnDelete) {
+      btnDelete.classList.add("d-none");
     }
   }
 }
@@ -95,8 +103,8 @@ async function loadWorkspaceListUI() {
             <button type="button" class="btn-primary-compact" style="font-size: 11px; padding: 4px 10px;" onclick="loadWorkspaceById('${escapeHTML(ws.workspace_id)}')">
               Load
             </button>
-            <button type="button" class="nav-btn" style="font-size: 11px; padding: 4px 8px; color: var(--accent-rose);" onclick="deleteWorkspaceById('${escapeHTML(ws.workspace_id)}', '${escapeHTML(ws.name)}')">
-              ✕
+            <button type="button" class="nav-btn" style="font-size: 11px; padding: 4px 8px; color: var(--accent-rose); border-color: rgba(239, 68, 68, 0.25);" title="Delete workspace" aria-label="Delete workspace" onclick="deleteWorkspaceById('${escapeHTML(ws.workspace_id)}', '${escapeHTML(ws.name)}')">
+              🗑️ Delete
             </button>
           </div>
         `;
@@ -246,6 +254,16 @@ async function executeSaveWorkspace(name, workspaceId = null) {
   }
 }
 
+async function deleteActiveWorkspaceFromUI() {
+  const activeId = state?.activeWorkspaceId;
+  const activeName = state?.activeWorkspaceName;
+  if (!activeId) {
+    showToast("No Active Workspace", "Default Workspace cannot be deleted.", "info");
+    return;
+  }
+  await deleteWorkspaceById(activeId, activeName);
+}
+
 async function deleteWorkspaceById(workspaceId, workspaceName) {
   if (typeof showAppleConfirm === "function") {
     const confirmed = await showAppleConfirm({
@@ -264,6 +282,14 @@ async function deleteWorkspaceById(workspaceId, workspaceName) {
     const res = await window.pywebview.api.delete_workspace(workspaceId);
     if (res && res.status === "success") {
       showToast("Workspace Deleted", `Removed workspace ${workspaceName || workspaceId}`, "info");
+      if (state && state.activeWorkspaceId === workspaceId) {
+        state.activeWorkspaceId = null;
+        state.activeWorkspaceName = "Default Workspace";
+        const select = document.getElementById("selectWorkspace");
+        if (select) select.value = "";
+        updateWorkspaceHeaderDisplay();
+        renderWorkspaceActiveBanner();
+      }
       await loadWorkspaceListUI();
     } else {
       showToast("Delete Failed", res?.message || "Could not delete workspace", "error");
