@@ -27,6 +27,7 @@ IMPORT_TO_DIST = {
     "playwright": "playwright",
     "PyInstaller": "pyinstaller",
     "Microsoft": "pythonnet",
+    "pypdf": "pypdf",
 }
 
 INTERNAL_MODULE_NAMES = {
@@ -241,6 +242,7 @@ def test_production_runtime_manifest_coverage():
     assert runtime_pins["lxml"] == "6.1.1"
     assert runtime_pins["openpyxl"] == "3.1.5"
     assert runtime_pins["xlrd"] == "2.0.2"
+    assert runtime_pins["pypdf"] == "6.21.3"
 
 
 def test_test_manifest_contents():

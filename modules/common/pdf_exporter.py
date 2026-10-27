@@ -18,10 +18,24 @@ import os
 import shutil
 import subprocess
 import sys
+import queue
+import threading
+from collections import defaultdict
 from typing import Any, Dict, List, Optional
 
 from modules.common.excel_utils import strip_long_path_prefix
 from modules.common.logger import logger
+
+
+def _get_com_modules():
+    """Dynamically loads Windows COM modules (win32com.client, pythoncom) if available."""
+    try:
+        import importlib
+        w32_client = importlib.import_module("win32com.client")
+        pycom = importlib.import_module("pythoncom")
+        return w32_client, pycom
+    except Exception:
+        return None, None
 
 
 class PdfExporter:
@@ -55,20 +69,17 @@ class PdfExporter:
         if sys.platform == "win32":
             try:
                 import gc
-                import pythoncom
-                import win32com.client
+                win32_client, pythoncom = _get_com_modules()
+                if not win32_client or not pythoncom:
+                    raise ImportError("win32com / pythoncom not available")
                 pythoncom.CoInitialize()
                 try:
-                    word = win32com.client.DispatchEx("Word.Application")
+                    word = win32_client.DispatchEx("Word.Application")
                     word.Visible = False
                     word.DisplayAlerts = 0
                     word.Quit()
                     del word
                     gc.collect()
-                    try:
-                        pythoncom.PumpWaitingMessages()
-                    except Exception:
-                        pass
                     self._converter_type = "win32com"
                     PdfExporter._cached_converter_type = self._converter_type
                     PdfExporter._probe_completed = True
@@ -157,13 +168,14 @@ class PdfExporter:
 
         try:
             if self._converter_type == "win32com":
-                import pythoncom
-                import win32com.client
+                win32_client, pythoncom = _get_com_modules()
+                if not win32_client or not pythoncom:
+                    return None
 
                 pythoncom.CoInitialize()
                 word = None
                 try:
-                    word = win32com.client.DispatchEx("Word.Application")
+                    word = win32_client.DispatchEx("Word.Application")
                     word.Visible = False
                     word.DisplayAlerts = 0
                     doc = word.Documents.Open(clean_docx, ReadOnly=True, ConfirmConversions=False)
@@ -235,13 +247,14 @@ class PdfExporter:
         clean_pdf = strip_long_path_prefix(os.path.abspath(target_pdf_path))
 
         try:
-            import pythoncom
-            import win32com.client
+            win32_client, pythoncom = _get_com_modules()
+            if not win32_client or not pythoncom:
+                return None
 
             pythoncom.CoInitialize()
             excel = None
             try:
-                excel = win32com.client.DispatchEx("Excel.Application")
+                excel = win32_client.DispatchEx("Excel.Application")
                 excel.Visible = False
                 excel.DisplayAlerts = False
                 wb = excel.Workbooks.Open(clean_xlsx, ReadOnly=True)
@@ -322,13 +335,14 @@ class PdfExporter:
                     "converter": "win32com",
                 }
 
-            import pythoncom
-            import win32com.client
+            win32_client, pythoncom = _get_com_modules()
+            if not win32_client or not pythoncom:
+                return {"available": False, "converted": [], "failed": valid_paths, "converter": None}
 
             pythoncom.CoInitialize()
             word = None
             try:
-                word = win32com.client.DispatchEx("Word.Application")
+                word = win32_client.DispatchEx("Word.Application")
                 word.Visible = False
                 word.DisplayAlerts = 0
                 for path in valid_paths:
@@ -416,3 +430,255 @@ class PdfExporter:
             "available": True,
             "converter": self._converter_type,
         }
+
+
+def merge_pdfs(pdf_paths: List[str], output_merged_path: str) -> Optional[str]:
+    """
+    Merges multiple PDF files into a single unified PDF bundle using pypdf.
+    Preserves exact vector rendering, fonts, landscape/portrait orientations,
+    and page margins with 100% fidelity.
+
+    Args:
+        pdf_paths: List of absolute or relative paths to PDF files to merge.
+        output_merged_path: Target path for the combined output PDF.
+
+    Returns:
+        The output_merged_path if successful, or None on failure.
+    """
+    if not pdf_paths:
+        return None
+
+    valid_pdfs = [p for p in pdf_paths if p and os.path.isfile(p)]
+    if not valid_pdfs:
+        return None
+
+    clean_out = strip_long_path_prefix(os.path.abspath(output_merged_path))
+    os.makedirs(os.path.dirname(clean_out), exist_ok=True)
+
+    try:
+        from pypdf import PdfWriter
+
+        writer = PdfWriter()
+        for p in valid_pdfs:
+            clean_p = strip_long_path_prefix(os.path.abspath(p))
+            writer.append(clean_p)
+
+        with open(clean_out, "wb") as f_out:
+            writer.write(f_out)
+        writer.close()
+
+        if os.path.isfile(clean_out) and os.path.getsize(clean_out) > 0:
+            logger.info(f"Generated merged PDF bundle ({len(valid_pdfs)} pages): {clean_out}")
+            return clean_out
+    except Exception as e:
+        logger.warning(f"Error merging PDFs into {output_merged_path}: {e}")
+    return None
+
+
+class ConcurrentPdfPipeline:
+    """
+    Pipelined asynchronous PDF conversion service.
+    Accepts documents concurrently as they are generated by generator engines,
+    converting them in a background worker thread using a single persistent
+    Word COM session (or LibreOffice CLI) to achieve maximal throughput.
+    """
+
+    def __init__(
+        self,
+        exporter: PdfExporter,
+        cancel_event: Optional[Any] = None,
+        progress_cb: Optional[Any] = None,
+    ):
+        self.exporter = exporter
+        self.cancel_event = cancel_event
+        self.progress_cb = progress_cb
+        self._queue: queue.Queue = queue.Queue()
+        self._worker_thread: Optional[threading.Thread] = None
+        self._converted: List[str] = []
+        self._failed: List[str] = []
+        self._by_class_category: Dict[str, Dict[str, List[str]]] = defaultdict(lambda: defaultdict(list))
+        self._is_running = False
+
+    def start(self) -> None:
+        """Starts the background conversion worker thread."""
+        self._is_running = True
+        self._worker_thread = threading.Thread(
+            target=self._run_worker,
+            name="PdfExportPipelineWorker",
+            daemon=True,
+        )
+        self._worker_thread.start()
+
+    def submit(
+        self,
+        docx_path: str,
+        output_dir: Optional[str] = None,
+        category: str = "general",
+        class_name: str = "general",
+    ) -> None:
+        """Enqueues a generated .docx file for concurrent PDF conversion."""
+        if self._is_running:
+            self._queue.put({
+                "docx_path": docx_path,
+                "output_dir": output_dir,
+                "category": category,
+                "class_name": class_name,
+            })
+
+    def _run_worker(self) -> None:
+        """Worker loop executing conversions concurrently with the generation pipeline."""
+        converter = self.exporter.get_available_converter()
+
+        if converter == "win32com":
+            self._run_win32com_worker()
+        else:
+            self._run_fallback_worker()
+
+    def _run_win32com_worker(self) -> None:
+        import gc
+        win32_client, pythoncom = _get_com_modules()
+        if not win32_client or not pythoncom:
+            self._run_fallback_worker()
+            return
+
+        pythoncom.CoInitialize()
+        word = None
+        try:
+            word = win32_client.DispatchEx("Word.Application")
+            word.Visible = False
+            word.DisplayAlerts = 0
+
+            while self._is_running or not self._queue.empty():
+                try:
+                    item = self._queue.get(timeout=0.2)
+                except queue.Empty:
+                    continue
+
+                if item is None:  # Sentinel
+                    self._queue.task_done()
+                    break
+
+                if self.cancel_event and self.cancel_event.is_set():
+                    self._queue.task_done()
+                    break
+
+                docx_path = item["docx_path"]
+                output_dir = item["output_dir"]
+                category = item.get("category", "general")
+                class_name = item.get("class_name", "general")
+
+                if not os.path.isfile(docx_path):
+                    self._failed.append(docx_path)
+                    self._queue.task_done()
+                    continue
+
+                clean_docx = strip_long_path_prefix(os.path.abspath(docx_path))
+                if not output_dir:
+                    output_dir = os.path.dirname(clean_docx)
+                clean_out_dir = strip_long_path_prefix(os.path.abspath(output_dir))
+                os.makedirs(clean_out_dir, exist_ok=True)
+                base_name = os.path.splitext(os.path.basename(clean_docx))[0]
+                clean_pdf = os.path.join(clean_out_dir, f"{base_name}.pdf")
+
+                doc = None
+                try:
+                    doc = word.Documents.Open(clean_docx, ReadOnly=True, ConfirmConversions=False)
+                    if doc:
+                        try:
+                            doc.SaveAs(clean_pdf, FileFormat=17)
+                        except Exception:
+                            doc.ExportAsFixedFormat(clean_pdf, 17, False, 0)
+
+                        if os.path.isfile(clean_pdf):
+                            self._converted.append(clean_pdf)
+                            self._by_class_category[class_name][category].append(clean_pdf)
+                            logger.info(f"Pipelined PDF Export: {clean_pdf}")
+                            if self.progress_cb:
+                                try:
+                                    self.progress_cb(clean_pdf)
+                                except Exception:
+                                    pass
+                        else:
+                            self._failed.append(docx_path)
+                    else:
+                        self._failed.append(docx_path)
+                except Exception as e:
+                    logger.warning(f"Error in pipelined PDF conversion for {docx_path}: {e}")
+                    self._failed.append(docx_path)
+                finally:
+                    if doc:
+                        try:
+                            doc.Close(False)
+                        except Exception:
+                            pass
+                    self._queue.task_done()
+        finally:
+            try:
+                if word:
+                    try:
+                        word.Quit()
+                    except Exception:
+                        pass
+                    del word
+            except Exception:
+                pass
+            gc.collect()
+            try:
+                pythoncom.CoUninitialize()
+            except Exception:
+                pass
+
+    def _run_fallback_worker(self) -> None:
+        while self._is_running or not self._queue.empty():
+            try:
+                item = self._queue.get(timeout=0.2)
+            except queue.Empty:
+                continue
+
+            if item is None:
+                self._queue.task_done()
+                break
+
+            if self.cancel_event and self.cancel_event.is_set():
+                self._queue.task_done()
+                break
+
+            docx_path = item["docx_path"]
+            output_dir = item["output_dir"]
+            category = item.get("category", "general")
+            class_name = item.get("class_name", "general")
+
+            pdf_path = self.exporter.export_to_pdf(docx_path, output_dir=output_dir)
+            if pdf_path:
+                self._converted.append(pdf_path)
+                self._by_class_category[class_name][category].append(pdf_path)
+                if self.progress_cb:
+                    try:
+                        self.progress_cb(pdf_path)
+                    except Exception:
+                        pass
+            else:
+                self._failed.append(docx_path)
+            self._queue.task_done()
+
+    def finish(self) -> Dict[str, Any]:
+        """
+        Signals the worker to drain any remaining tasks, terminates the worker thread,
+        and returns the consolidated converted and failed files dictionary.
+        """
+        self._is_running = False
+        self._queue.put(None)  # Sentinel
+        if self._worker_thread and self._worker_thread.is_alive():
+            self._worker_thread.join(timeout=120)
+
+        # Convert defaultdict to standard dict for serialization
+        plain_by_class = {}
+        for c_name, cat_dict in self._by_class_category.items():
+            plain_by_class[c_name] = dict(cat_dict)
+
+        return {
+            "converted": self._converted,
+            "failed": self._failed,
+            "by_class_category": plain_by_class,
+        }
+

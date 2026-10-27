@@ -141,6 +141,8 @@ def process_all(
 
         # CEIT tasks count
         total_estimated_steps += num_ceit_generators
+        if export_pdf and "ceit" in enabled_engines:
+            total_estimated_steps += num_ceit_generators + 1  # PDF conversion + merged bundle
 
         # Attendance tasks count
         if "attendance" in enabled_engines:
@@ -173,7 +175,10 @@ def process_all(
                 pre_grouped = defaultdict(list)
                 for b in flt_blocks:
                     pre_grouped[get_subject_code(b['subject_title'])].append(b)
-                total_estimated_steps += len(pre_grouped) * len(class_months)
+                att_step_count = len(pre_grouped) * len(class_months)
+                total_estimated_steps += att_step_count
+                if export_pdf:
+                    total_estimated_steps += att_step_count + 1  # PDF conversion + merged bundle
 
         # Grades task count
         if "grades" in enabled_engines:
@@ -200,6 +205,27 @@ def process_all(
             except Exception as pe:
                 logger.debug(f"Progress callback error: {pe}")
     
+    pdf_pipeline = None
+    if export_pdf:
+        try:
+            from modules.common.pdf_exporter import PdfExporter, ConcurrentPdfPipeline
+            exporter = PdfExporter()
+            if exporter.is_available():
+                pdf_pipeline = ConcurrentPdfPipeline(
+                    exporter=exporter,
+                    cancel_event=cancel_event,
+                    progress_cb=lambda p: _notify("PDF", f"Exported {os.path.basename(p)}")
+                )
+                pdf_pipeline.start()
+                logger.info("ConcurrentPdfPipeline initialized and started in background worker.")
+            else:
+                results["skipped"]["pdf"].append("No local PDF converter installed (MS Word or LibreOffice).")
+        except Exception as pe:
+            logger.warning(f"Could not initialize ConcurrentPdfPipeline: {pe}")
+            results["errors"]["pdf"].append(str(pe))
+
+    class_meta = {}
+
     for student_file in xlsx_files:
         if cancel_event and cancel_event.is_set():
             logger.info("Generation cancelled by user signal.")
@@ -362,6 +388,15 @@ def process_all(
         
         os.makedirs(ceit_dir, exist_ok=True)
         os.makedirs(attendance_dir, exist_ok=True)
+
+        class_meta[course_sec] = {
+            "course_dir": course_dir,
+            "ceit_dir": ceit_dir,
+            "attendance_dir": attendance_dir,
+            "course_sec_safe": course_sec_safe,
+            "schedule_code_safe": schedule_code_safe,
+            "is_second_sem": is_second,
+        }
         
         auto_has_lab = any(b.get("type", "").upper() == "LAB" for b in blocks)
         if not blocks and ("LAB" in subject_name.upper() or "LABORATORY" in subject_name.upper()):
@@ -416,6 +451,13 @@ def process_all(
                     generator.generate(info, out_path)
                     results["generated"]["ceit"].append(out_name)
                     results["by_class"][course_sec]["ceit"].append({"name": out_name, "path": out_path})
+                    if pdf_pipeline:
+                        pdf_pipeline.submit(
+                            docx_path=out_path,
+                            output_dir=target_dir,
+                            category="ceit",
+                            class_name=course_sec,
+                        )
                     _notify(course_sec, f"Created {suffix}")
                 except Exception as e:
                     err_msg = f"Failed CEIT ({suffix}): {str(e)}"
@@ -511,6 +553,13 @@ def process_all(
                             else:
                                 results["generated"]["attendance"].append(month_out_name)
                                 results["by_class"][course_sec]["attendance"].append({"name": month_out_name, "path": month_out_path})
+                                if pdf_pipeline:
+                                    pdf_pipeline.submit(
+                                        docx_path=month_out_path,
+                                        output_dir=attendance_dir,
+                                        category="attendance",
+                                        class_name=course_sec,
+                                    )
                             _notify(course_sec, f"Attendance {month_name}")
                         except Exception as e:
                             err_msg = f"Failed Attendance ({month_out_name}): {str(e)}"
@@ -557,14 +606,122 @@ def process_all(
                 results["errors"]["grades"].append(err_msg)
                 _notify(course_sec, "Error Grades")
 
-    if export_pdf and not results.get("cancelled"):
-        logger.info("Commencing optional Headless PDF Export...")
+    if pdf_pipeline:
+        logger.info("Draining and finalizing ConcurrentPdfPipeline...")
+        _notify("PDF", "Finalizing PDF exports and merged bundles...")
+        try:
+            from modules.common.pdf_exporter import merge_pdfs
+
+            pdf_summary = pdf_pipeline.finish()
+            converted_paths = pdf_summary.get("converted", [])
+            failed_paths = pdf_summary.get("failed", [])
+            by_class_cat = pdf_summary.get("by_class_category", {})
+
+            results["generated"]["pdf"].extend([os.path.basename(p) for p in converted_paths])
+            results["errors"]["pdf"].extend([f"Failed PDF: {os.path.basename(p)}" for p in failed_paths])
+
+            month_map = {
+                "january": 1, "february": 2, "march": 3, "april": 4,
+                "may": 5, "june": 6, "july": 7, "august": 8,
+                "september": 9, "october": 10, "november": 11, "december": 12
+            }
+
+            ceit_canonical_order = [
+                "SYLLABUS",
+                "EXAM_RETURNS_MIDTERM",
+                "EXAM_RETURNS_FINALS",
+                "TOS_MIDTERM",
+                "TOS_FINALS",
+                "GRADE_DISCUSSION_MIDTERM",
+                "GRADE_DISCUSSION_FINALS",
+            ]
+
+            for c_sec, meta in class_meta.items():
+                if c_sec not in results["by_class"]:
+                    results["by_class"][c_sec] = {"ceit": [], "attendance": [], "grades": [], "pdf": []}
+                cls_pdfs = results["by_class"][c_sec]["pdf"]
+
+                c_sec_safe = meta["course_sec_safe"]
+                s_code_safe = meta["schedule_code_safe"]
+                is_second = meta.get("is_second_sem", False)
+                att_dir = meta["attendance_dir"]
+                ceit_sub_dir = meta["ceit_dir"]
+
+                class_cat_files = by_class_cat.get(c_sec, {})
+                converted_att = class_cat_files.get("attendance", [])
+                converted_ceit = class_cat_files.get("ceit", [])
+
+                # 1. Process Attendance Merged Bundle (Chronological month order)
+                if converted_att:
+                    def _att_key(path):
+                        low = os.path.splitext(os.path.basename(path))[0].lower()
+                        for m_str, m_num in month_map.items():
+                            if m_str in low:
+                                return m_num if is_second else (m_num if m_num >= 7 else m_num + 12)
+                        return 99
+
+                    sorted_att_pdfs = sorted(converted_att, key=_att_key)
+                    merged_att_name = f"{c_sec_safe}_{s_code_safe}_ATTENDANCE_MERGED.pdf"
+                    merged_att_path = os.path.join(att_dir, merged_att_name)
+                    res_merge = merge_pdfs(sorted_att_pdfs, merged_att_path)
+                    if res_merge:
+                        results["generated"]["pdf"].append(merged_att_name)
+                        cls_pdfs.append({
+                            "name": merged_att_name,
+                            "path": res_merge,
+                            "is_merged": True,
+                            "category": "attendance"
+                        })
+                        _notify(c_sec, f"Merged Attendance ({len(sorted_att_pdfs)} sheets)")
+
+                # 2. Process CEIT Forms Merged Bundle (Academic order)
+                if converted_ceit:
+                    def _ceit_key(path):
+                        up = os.path.basename(path).upper()
+                        for idx, marker in enumerate(ceit_canonical_order):
+                            if marker in up:
+                                return idx
+                        return 999
+
+                    sorted_ceit_pdfs = sorted(converted_ceit, key=_ceit_key)
+                    merged_ceit_name = f"{c_sec_safe}_{s_code_safe}_CEIT_FORMS_MERGED.pdf"
+                    merged_ceit_path = os.path.join(ceit_sub_dir, merged_ceit_name)
+                    res_merge = merge_pdfs(sorted_ceit_pdfs, merged_ceit_path)
+                    if res_merge:
+                        results["generated"]["pdf"].append(merged_ceit_name)
+                        cls_pdfs.append({
+                            "name": merged_ceit_name,
+                            "path": res_merge,
+                            "is_merged": True,
+                            "category": "ceit"
+                        })
+                        _notify(c_sec, f"Merged CEIT Forms ({len(sorted_ceit_pdfs)} docs)")
+
+                # 3. Register individual converted PDFs
+                for att_p in converted_att:
+                    cls_pdfs.append({
+                        "name": os.path.basename(att_p),
+                        "path": att_p,
+                        "is_merged": False,
+                        "category": "attendance"
+                    })
+                for ceit_p in converted_ceit:
+                    cls_pdfs.append({
+                        "name": os.path.basename(ceit_p),
+                        "path": ceit_p,
+                        "is_merged": False,
+                        "category": "ceit"
+                    })
+
+        except Exception as pe:
+            logger.warning(f"Error finalizing concurrent PDF pipeline / merges: {pe}", exc_info=True)
+            results["errors"]["pdf"].append(str(pe))
+    elif export_pdf and not results.get("cancelled") and not results["skipped"]["pdf"]:
+        logger.info("Executing fallback sequential PDF export...")
         try:
             from modules.common.pdf_exporter import PdfExporter
             exporter = PdfExporter()
-            if not exporter.is_available():
-                results["skipped"]["pdf"].append("No local PDF converter installed (MS Word or LibreOffice).")
-            else:
+            if exporter.is_available():
                 all_docx = []
                 for cls_name, cls_items in results["by_class"].items():
                     for doc_entry in cls_items.get("ceit", []):
@@ -597,9 +754,9 @@ def process_all(
                                     pdf_path = pdf_map[stem]
                                     pdf_name = os.path.basename(pdf_path)
                                     if not any(x.get("path") == pdf_path for x in cls_items["pdf"]):
-                                        cls_items["pdf"].append({"name": pdf_name, "path": pdf_path})
+                                        cls_items["pdf"].append({"name": pdf_name, "path": pdf_path, "is_merged": False})
         except Exception as pe:
-            logger.warning(f"Optional PDF export encountered non-fatal fault: {pe}")
+            logger.warning(f"Fallback PDF export error: {pe}")
             results["errors"]["pdf"].append(str(pe))
 
     return results

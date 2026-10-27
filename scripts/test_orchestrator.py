@@ -152,6 +152,7 @@ MANIFEST = {
                 "tests/test_diagnostic_probe.py",
                 "tests/test_ab_benchmark_probe.py",
                 "tests/test_localhost_stress_probe.py",
+                "tests/test_pdf_exporter.py",
             ],
         },
     },

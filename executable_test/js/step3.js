@@ -464,18 +464,28 @@
                 files.forEach((item) => {
                   let fPath = "";
                   let fname = "";
+                  let isMerged = false;
                   if (typeof item === "object" && item !== null) {
                     fPath = item.path || item.name || "";
                     fname =
                       item.name ||
                       (fPath ? fPath.split(/[\\/]/).pop() : "File");
+                    isMerged = !!item.is_merged || fname.toUpperCase().includes("MERGED");
                   } else {
                     fPath = String(item || "");
                     fname = fPath ? fPath.split(/[\\/]/).pop() : "File";
+                    isMerged = fname.toUpperCase().includes("MERGED");
                   }
+                  const rowIcon = isMerged ? "📑" : icon;
+                  const bundleBadge = isMerged
+                    ? `<span style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.35); font-size: 10px; padding: 1px 6px; border-radius: 4px; margin-right: 6px; font-weight: 700; display: inline-flex; align-items: center; gap: 3px;">Merged Bundle</span>`
+                    : "";
+                  const rowStyle = isMerged
+                    ? `style="background: rgba(16, 185, 129, 0.06); border-left: 2px solid var(--accent-emerald);"`
+                    : "";
                   fileRowsHtml += `
-                    <div class="artifact-file-row">
-                      <span title="${escapeHTML(fPath)}">${icon} ${escapeHTML(fname)}</span>
+                    <div class="artifact-file-row" ${rowStyle}>
+                      <span title="${escapeHTML(fPath)}" style="display: inline-flex; align-items: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${rowIcon} ${bundleBadge}${escapeHTML(fname)}</span>
                       <button class="btn-launch-file" type="button" data-path="${escapeHTML(fPath)}" onclick="openArtifactFile(this.getAttribute('data-path'))">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                           <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>

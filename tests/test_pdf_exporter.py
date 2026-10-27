@@ -135,3 +135,57 @@ def test_pdf_exporter_extended_path_prefix(tmp_path):
     assert len(res["converted"]) == 1
     assert os.path.isfile(res["converted"][0])
 
+
+def test_merge_pdfs(tmp_path):
+    """merge_pdfs should merge multiple single-page PDFs into a multi-page PDF."""
+    from pypdf import PdfReader
+    from modules.common.pdf_exporter import merge_pdfs
+
+    exporter = PdfExporter()
+    doc1 = str(tmp_path / "page1.docx")
+    doc2 = str(tmp_path / "page2.docx")
+    _create_sample_docx(doc1, "First Page Content")
+    _create_sample_docx(doc2, "Second Page Content")
+
+    pdf1 = exporter.export_to_pdf(doc1, output_dir=str(tmp_path))
+    pdf2 = exporter.export_to_pdf(doc2, output_dir=str(tmp_path))
+
+    assert pdf1 and os.path.isfile(pdf1)
+    assert pdf2 and os.path.isfile(pdf2)
+
+    merged_path = str(tmp_path / "merged_test.pdf")
+    res = merge_pdfs([pdf1, pdf2], merged_path)
+
+    assert res == merged_path
+    assert os.path.isfile(merged_path)
+    reader = PdfReader(merged_path)
+    assert len(reader.pages) >= 2
+
+
+def test_concurrent_pdf_pipeline(tmp_path):
+    """ConcurrentPdfPipeline converts files in the background and categorizes by class."""
+    from modules.common.pdf_exporter import ConcurrentPdfPipeline
+
+    exporter = PdfExporter()
+    pipeline = ConcurrentPdfPipeline(exporter=exporter)
+    pipeline.start()
+
+    doc_att = str(tmp_path / "BSCS3-1_ATTENDANCE_August.docx")
+    doc_ceit = str(tmp_path / "BSCS3-1_SYLLABUS.docx")
+    _create_sample_docx(doc_att, "Attendance Sheet for August")
+    _create_sample_docx(doc_ceit, "Syllabus Form")
+
+    pipeline.submit(doc_att, output_dir=str(tmp_path / "Attendance"), category="attendance", class_name="BSCS3-1")
+    pipeline.submit(doc_ceit, output_dir=str(tmp_path / "CEIT_Forms"), category="ceit", class_name="BSCS3-1")
+
+    res = pipeline.finish()
+
+    assert len(res["converted"]) == 2
+    assert len(res["failed"]) == 0
+    assert "BSCS3-1" in res["by_class_category"]
+    assert "attendance" in res["by_class_category"]["BSCS3-1"]
+    assert "ceit" in res["by_class_category"]["BSCS3-1"]
+    assert len(res["by_class_category"]["BSCS3-1"]["attendance"]) == 1
+    assert len(res["by_class_category"]["BSCS3-1"]["ceit"]) == 1
+
+
