@@ -47,3 +47,7 @@ node_modules/
 
 # Local session checkpoint logs
 .claude/
+
+# Gemini Bridge local clone
+gemini-bridge/
+.env

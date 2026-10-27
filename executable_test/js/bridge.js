@@ -1,5 +1,45 @@
+// ── PyWebView Bridge Readiness Promise & Call Helper ─────────────────────
+const bridgeReadyPromise = new Promise((resolve) => {
+  if (window.pywebview && window.pywebview.api) {
+    resolve(window.pywebview.api);
+    return;
+  }
+  window.addEventListener(
+    'pywebviewready',
+    () => resolve(window.pywebview.api),
+    { once: true }
+  );
+  // Fallback polling for older WebView2 / test harnesses
+  const interval = setInterval(() => {
+    if (window.pywebview && window.pywebview.api) {
+      clearInterval(interval);
+      resolve(window.pywebview.api);
+    }
+  }, 50);
+});
+
+async function callBridge(method, ...args) {
+  const api = await bridgeReadyPromise;
+  if (!api || typeof api[method] !== 'function') {
+    throw new Error(`[Bridge] Method "${method}" is not available on pywebview.api`);
+  }
+  try {
+    const result = await api[method](...args);
+    if (result && result.error) {
+      throw new Error(result.error);
+    }
+    return result;
+  } catch (err) {
+    console.error(`[Bridge Error] ${method}:`, err);
+    throw err;
+  }
+}
+
+window.bridgeReadyPromise = bridgeReadyPromise;
+window.callBridge = callBridge;
+
 // ── Callbacks Invoked from Python (Bridge / Native DnD) ────────────────
-      window.onScheduleLoaded = async function (res) {
+window.onScheduleLoaded = async function (res) {
         if (res && res.path) {
           state.schedulePath = res.path;
           state.scheduleMeta = res.metadata;

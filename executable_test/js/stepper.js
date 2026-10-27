@@ -333,3 +333,12 @@
         // Initial computation
         computeActiveStep();
       }
+
+      window.scrollToStep = scrollToStep;
+      window.setActiveStepChip = setActiveStepChip;
+      window.initScrollAwareDock = initScrollAwareDock;
+      window.triggerWorkflowFromDock = triggerWorkflowFromDock;
+      window.setGenerationRunningState = setGenerationRunningState;
+      window.updateStepperStatus = updateStepperStatus;
+      window.initStepperScrollSpy = initStepperScrollSpy;
+

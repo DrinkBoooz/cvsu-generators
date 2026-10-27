@@ -35,12 +35,29 @@ let state = {
       window.elapsedTimerInterval = null;
       let generationStartTime = null;
 
-      function escapeHTML(str) {
-        if (!str) return "";
-        return String(str)
-          .replace(/&/g, "&amp;")
-          .replace(/</g, "&lt;")
-          .replace(/>/g, "&gt;")
-          .replace(/"/g, "&quot;")
-          .replace(/'/g, "&#039;");
-      }
+function escapeHTML(str) {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function resetDownstreamFromStep1() {
+  state.rosters = [];
+  state.rosterReports = [];
+  state.detectedClasses = [];
+  if (typeof renderRosterStatus === "function") renderRosterStatus();
+  if (typeof refreshClassDetection === "function") refreshClassDetection();
+  if (typeof updateStepperStatus === "function") updateStepperStatus();
+  if (typeof updateFileEstimate === "function") updateFileEstimate();
+  window.dispatchEvent(new CustomEvent("state:reset-downstream"));
+}
+
+window.state = state;
+window.saveRosterConfigs = saveRosterConfigs;
+window.escapeHTML = escapeHTML;
+window.resetDownstreamFromStep1 = resetDownstreamFromStep1;
+

@@ -17,7 +17,7 @@ if (document.readyState === 'loading') {
   bootstrapApp();
 }
 
-window.addEventListener('pywebviewready', () => {
+function onBridgeReady() {
   console.log('CvSU Gen Desktop pywebview ready.');
   if (typeof syncInitialStateWithPython === 'function') {
     syncInitialStateWithPython();
@@ -25,5 +25,26 @@ window.addEventListener('pywebviewready', () => {
   if (typeof syncUserPreferencesWithNative === 'function') {
     syncUserPreferencesWithNative();
   }
-});
+  if (typeof loadWorkspaceListUI === 'function') {
+    loadWorkspaceListUI();
+  }
+  if (typeof loadTemplateSetsUI === 'function') {
+    loadTemplateSetsUI();
+  }
+  if (typeof loadCustomTemplatesUI === 'function') {
+    loadCustomTemplatesUI();
+  }
+}
 
+if (window.pywebview && window.pywebview.api) {
+  onBridgeReady();
+} else {
+  window.addEventListener('pywebviewready', onBridgeReady, { once: true });
+  // Fallback check in case event was missed during startup
+  const _bridgeCheckTimer = setInterval(() => {
+    if (window.pywebview && window.pywebview.api) {
+      clearInterval(_bridgeCheckTimer);
+      onBridgeReady();
+    }
+  }, 100);
+}
