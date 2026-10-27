@@ -1446,8 +1446,11 @@
         }
       }
 
+      let editingExceptionIndex = -1;
+
       function toggleAddExceptionForm(show) {
         const form = document.getElementById("calAddExceptionForm");
+        const saveBtn = document.getElementById("btnSaveNewException");
         if (!form) return;
         if (show === undefined) {
           form.style.display = form.style.display === "none" ? "block" : "none";
@@ -1456,10 +1459,36 @@
         }
         if (form.style.display === "block") {
           const startInp = document.getElementById("newExcStartDate");
-          if (startInp && !startInp.value) {
+          if (startInp && !startInp.value && editingExceptionIndex < 0) {
             startInp.value = new Date().toISOString().substring(0, 10);
           }
+        } else {
+          editingExceptionIndex = -1;
+          if (saveBtn) saveBtn.textContent = "Save Exception";
         }
+      }
+
+      function editCalendarException(idx) {
+        if (!activeCalendarConfig || !Array.isArray(activeCalendarConfig.exceptions)) return;
+        if (idx < 0 || idx >= activeCalendarConfig.exceptions.length) return;
+        const exc = activeCalendarConfig.exceptions[idx];
+        editingExceptionIndex = idx;
+
+        const startInp = document.getElementById("newExcStartDate");
+        const endInp = document.getElementById("newExcEndDate");
+        const catSelect = document.getElementById("newExcCategory");
+        const scopeSelect = document.getElementById("newExcTimeScope");
+        const labelInp = document.getElementById("newExcLabel");
+        const saveBtn = document.getElementById("btnSaveNewException");
+
+        if (startInp) startInp.value = exc.start_date || exc.date_str || "";
+        if (endInp) endInp.value = exc.end_date || exc.start_date || "";
+        if (catSelect) catSelect.value = exc.category || "SUSPENDED";
+        if (scopeSelect) scopeSelect.value = exc.time_scope || "ALL_DAY";
+        if (labelInp) labelInp.value = exc.label || "";
+        if (saveBtn) saveBtn.textContent = "Update Exception";
+
+        toggleAddExceptionForm(true);
       }
 
       async function saveNewCalendarExceptionFromUI() {
@@ -1485,22 +1514,34 @@
         if (!activeCalendarConfig) activeCalendarConfig = {};
         if (!Array.isArray(activeCalendarConfig.exceptions)) activeCalendarConfig.exceptions = [];
 
-        activeCalendarConfig.exceptions.push({
+        const excData = {
           start_date: startDate,
           end_date: endDate,
           category: category,
           time_scope: timeScope,
           label: label,
-        });
+        };
+
+        if (editingExceptionIndex >= 0 && editingExceptionIndex < activeCalendarConfig.exceptions.length) {
+          activeCalendarConfig.exceptions[editingExceptionIndex] = excData;
+          editingExceptionIndex = -1;
+          const saveBtn = document.getElementById("btnSaveNewException");
+          if (saveBtn) saveBtn.textContent = "Save Exception";
+          if (typeof showToast === "function") {
+            showToast("Exception Updated", `Updated: ${label} (${startDate})`, "success");
+          }
+        } else {
+          activeCalendarConfig.exceptions.push(excData);
+          if (typeof showToast === "function") {
+            showToast("Exception Added", `Saved: ${label} (${startDate})`, "success");
+          }
+        }
 
         await saveActiveCalendarConfig();
         renderCalendarExceptionsTable();
         await renderCalendarDateStrip();
         toggleAddExceptionForm(false);
         if (labelInp) labelInp.value = "";
-        if (typeof showToast === "function") {
-          showToast("Exception Added", `Saved: ${label} (${startDate})`, "success");
-        }
       }
 
       async function deleteCalendarException(idx) {
@@ -1579,7 +1620,16 @@
                   ${escapeHTML(scopeLabel)}
                 </td>
                 <td style="padding: 6px 8px; color: var(--text-secondary);">${escapeHTML(exc.label || '')}</td>
-                <td style="padding: 6px 8px; text-align: center;">
+                <td style="padding: 6px 8px; text-align: center; white-space: nowrap;">
+                  <button
+                    type="button"
+                    class="nav-btn"
+                    onclick="editCalendarException(${idx})"
+                    style="font-size: 10px; padding: 2px 6px; margin-right: 4px; color: var(--accent-blue); border-color: rgba(59, 130, 246, 0.3);"
+                    title="Edit exception"
+                  >
+                    ✏️
+                  </button>
                   <button
                     type="button"
                     class="nav-btn"
@@ -1697,6 +1747,7 @@
       window.onCalendarDateKeyDown = onCalendarDateKeyDown;
       window.toggleAddExceptionForm = toggleAddExceptionForm;
       window.saveNewCalendarExceptionFromUI = saveNewCalendarExceptionFromUI;
+      window.editCalendarException = editCalendarException;
       window.deleteCalendarException = deleteCalendarException;
       window.renderCalendarExceptionsTable = renderCalendarExceptionsTable;
       window.loadCalendarPresetsUI = loadCalendarPresetsUI;
