@@ -195,7 +195,7 @@ def get_default_config_dict() -> dict:
                 {"rule_type": "fixed_date", "name": "Labor Day", "category": "HOLIDAY", "month": 5, "day": 1, "weekday": None, "nth": None, "mode": None},
                 {"rule_type": "fixed_date", "name": "Independence Day", "category": "HOLIDAY", "month": 6, "day": 12, "weekday": None, "nth": None, "mode": None},
                 {"rule_type": "fixed_date", "name": "Ninoy Aquino Day", "category": "HOLIDAY", "month": 8, "day": 21, "weekday": None, "nth": None, "mode": None},
-                {"rule_type": "fixed_date", "name": "Cavite Day", "category": "HOLIDAY", "month": 9, "day": 2, "weekday": None, "nth": None, "mode": None},
+                {"rule_type": "fixed_date", "name": "Cavite Day", "category": "HOLIDAY", "month": 3, "day": 22, "weekday": None, "nth": None, "mode": None},
                 {"rule_type": "fixed_date", "name": "All Saints' Day", "category": "HOLIDAY", "month": 11, "day": 1, "weekday": None, "nth": None, "mode": None},
                 {"rule_type": "fixed_date", "name": "All Souls' Day", "category": "HOLIDAY", "month": 11, "day": 2, "weekday": None, "nth": None, "mode": None},
                 {"rule_type": "fixed_date", "name": "Bonifacio Day", "category": "HOLIDAY", "month": 11, "day": 30, "weekday": None, "nth": None, "mode": None},

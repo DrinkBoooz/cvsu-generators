@@ -86,8 +86,8 @@ def test_recurrence_rule_fixed_and_provincial_holidays():
     assert date(2026, 6, 12) in holiday_map_2026
     assert "Independence" in holiday_map_2026[date(2026, 6, 12)]
 
-    assert date(2026, 9, 2) in holiday_map_2026
-    assert "Cavite Day" in holiday_map_2026[date(2026, 9, 2)]
+    assert date(2026, 3, 22) in holiday_map_2026
+    assert "Cavite Day" in holiday_map_2026[date(2026, 3, 22)]
 
     assert date(2026, 8, 31) in holiday_map_2026
     assert "National Heroes Day" in holiday_map_2026[date(2026, 8, 31)]
@@ -95,7 +95,7 @@ def test_recurrence_rule_fixed_and_provincial_holidays():
     # Check 2027 holidays without hardcoding
     holidays_2027 = resolver.get_recurring_holidays(2027)
     holiday_map_2027 = {h.start_date: h.label for h in holidays_2027}
-    assert date(2027, 9, 2) in holiday_map_2027
+    assert date(2027, 3, 22) in holiday_map_2027
     assert date(2027, 8, 30) in holiday_map_2027
 
 
@@ -213,12 +213,12 @@ def test_layer3_overrides_precedence():
         mode="OMIT_COLUMN",
     ))
 
-    # Test baseline: Aug 24 is SUSPENDED, Sep 2 is HOLIDAY (Layer 1 Cavite Day)
+    # Test baseline: Aug 24 is SUSPENDED, Mar 22 is HOLIDAY (Layer 1 Cavite Day)
     res_aug24 = resolver.resolve_date(date(2026, 8, 24))
     assert res_aug24.status == "SUSPENDED"
 
-    res_sep2 = resolver.resolve_date(date(2026, 9, 2))
-    assert res_sep2.status == "HOLIDAY"
+    res_mar22 = resolver.resolve_date(date(2026, 3, 22))
+    assert res_mar22.status == "HOLIDAY"
 
     # Override 1: Instructor overrides Aug 24 to ACTIVE (make-up class / asynchronous session)
     resolver.set_date_override(date(2026, 8, 24), status="ACTIVE", label="Make-up Class")
@@ -362,8 +362,8 @@ def test_attendance_generation_stamp_column_mode(tmp_path):
     assert student_date_texts[0] == ""
     assert student_date_texts[1] == ""
     assert student_date_texts[2] == ""
-    assert student_date_texts[3] == "SUSP."
-    assert student_date_texts[4] == "HOLIDAY"
+    assert student_date_texts[3] == "Suspension (Typhoon)"
+    assert student_date_texts[4] == "Holiday (National Heroes Day)"
 
 
 def test_attendance_generation_leave_and_adm_stamping(tmp_path):
@@ -430,8 +430,8 @@ def test_attendance_generation_leave_and_adm_stamping(tmp_path):
     student_date_cells = student_cells[3:7]
     student_date_texts = ["".join(tc.itertext()).strip() for tc in student_date_cells]
 
-    assert student_date_texts[0] == "LEAVE"
-    assert student_date_texts[1] == "ADM"
+    assert student_date_texts[0] == "Leave (Instructor On Leave)"
+    assert student_date_texts[1] == "ADM (Shift to ADM Modality)"
     assert student_date_texts[2] == ""
     assert student_date_texts[3] == ""
 
@@ -695,7 +695,7 @@ def test_attendance_generation_vertically_merged_columns_across_40_rows(tmp_path
     assert vmerge1.get(w("val")) == "restart"
     assert tcpr1.find(w("vAlign")).get(w("val")) == "center"
     assert tcpr1.find(w("textDirection")).get(w("val")) == "btLr"
-    assert "".join(student1_tc.itertext()).strip() == "SUSP."
+    assert "".join(student1_tc.itertext()).strip() == "Suspension (Typhoon Kristine)"
 
     # 2. Rows index 3 through 41 (Students 2 through 40) must have <w:vMerge/> continuation and empty text
     for r_idx in range(3, 42):

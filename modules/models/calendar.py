@@ -13,6 +13,7 @@ Supports:
 from __future__ import annotations
 
 import calendar
+import re
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -69,6 +70,61 @@ class ResolvedDateInfo:
     @property
     def is_working_session(self) -> bool:
         return self.status == CalendarExceptionCategory.ACTIVE
+
+    def format_stamp_text(self) -> str:
+        """
+        Formats a descriptive text label for attendance stamping.
+        Produces full descriptive forms like 'Suspension (Habagat & TD Neneng)',
+        'Holiday (Ninoy Aquino Day)', 'Leave (Personal)', 'ADM (Asynchronous activity)'
+        to fit into vertically merged columns across 40 student rows.
+        """
+        status = (self.status or "").upper()
+        label = (self.label or "").strip()
+
+        if status in (CalendarExceptionCategory.SUSPENDED, "SUSP.", "SUSPENDED", "WEATHER_SUSPENSION"):
+            if label:
+                clean = re.sub(r"^(class\s+)?suspension[\s:\-–—]+", "", label, flags=re.IGNORECASE).strip()
+                clean = clean.strip("()")
+                if clean.lower() in ("susp", "susp.", "suspended", "suspension"):
+                    return "Suspension"
+                return f"Suspension ({clean})" if clean else "Suspension"
+            return "Suspension"
+
+        if status in (CalendarExceptionCategory.HOLIDAY, "HOLIDAY"):
+            if label:
+                clean = re.sub(r"^holiday[\s:\-–—]+", "", label, flags=re.IGNORECASE).strip()
+                clean = clean.strip("()")
+                if clean.lower() in ("holiday",):
+                    return "Holiday"
+                return f"Holiday ({clean})"
+            return "Holiday"
+
+        if status in (CalendarExceptionCategory.INSTRUCTOR_LEAVE, "LEAVE", "INSTRUCTOR_LEAVE"):
+            if label:
+                clean = re.sub(r"^(instructor\s+)?leave[\s:\-–—]+", "", label, flags=re.IGNORECASE).strip()
+                clean = clean.strip("()")
+                if clean.lower() in ("leave", "instructor leave"):
+                    return "Instructor Leave"
+                return f"Leave ({clean})" if clean else "Instructor Leave"
+            return "Instructor Leave"
+
+        if status in (CalendarExceptionCategory.ADM_ASYNC, "ADM", "ADM_ASYNC"):
+            if label:
+                clean = re.sub(r"^(adm|async|asynchronous)[\s:\-–—]+", "", label, flags=re.IGNORECASE).strip()
+                clean = clean.strip("()")
+                if clean.lower() in ("adm", "asynchronous", "async"):
+                    return "ADM (Asynchronous)"
+                return f"ADM ({clean})" if clean else "ADM (Asynchronous)"
+            return "ADM (Asynchronous)"
+
+        if status in (CalendarExceptionCategory.EXAM, "EXAM"):
+            return f"Exam ({label})" if label else "Examinations"
+
+        if status in (CalendarExceptionCategory.EVENT, "EVENT"):
+            return f"Event ({label})" if label else "University Event"
+
+        return self.display_tag or "Suspension"
+
 
 
 @dataclass
@@ -313,13 +369,6 @@ CVSU_INDANG_2026_PRESET: List[Dict[str, Any]] = [
         "time_scope": CalendarTimeScope.ALL_DAY,
     },
     {
-        "start_date": "2026-09-02",
-        "end_date": "2026-09-02",
-        "label": "Cavite Day (Provincial Holiday)",
-        "category": CalendarExceptionCategory.HOLIDAY,
-        "time_scope": CalendarTimeScope.ALL_DAY,
-    },
-    {
         "start_date": "2026-09-03",
         "end_date": "2026-09-03",
         "label": "Persistent Habagat (Shift to ADM)",
@@ -354,13 +403,34 @@ CVSU_INDANG_2026_PRESET: List[Dict[str, Any]] = [
         "category": CalendarExceptionCategory.SUSPENDED,
         "time_scope": CalendarTimeScope.ALL_DAY,
     },
+    {
+        "start_date": "2026-10-07",
+        "end_date": "2026-10-07",
+        "label": "Instructor on leave",
+        "category": CalendarExceptionCategory.INSTRUCTOR_LEAVE,
+        "time_scope": CalendarTimeScope.ALL_DAY,
+    },
+    {
+        "start_date": "2026-10-09",
+        "end_date": "2026-10-09",
+        "label": "Instructor on leave",
+        "category": CalendarExceptionCategory.INSTRUCTOR_LEAVE,
+        "time_scope": CalendarTimeScope.ALL_DAY,
+    },
+    {
+        "start_date": "2026-10-14",
+        "end_date": "2026-10-14",
+        "label": "Asynchronous activity (Instructor Modality Shift)",
+        "category": CalendarExceptionCategory.ADM_ASYNC,
+        "time_scope": CalendarTimeScope.ALL_DAY,
+    },
 ]
 
 CALENDAR_PRESETS: Dict[str, Dict[str, Any]] = {
     "cvsu_indang_2026_sem1": {
         "id": "cvsu_indang_2026_sem1",
         "name": "CvSU Main (Indang) — 1st Semester 2026-2027 (Aug–Oct Verified)",
-        "description": "15 verified Habagat weather suspensions, Malacañang proclamations, Cavite Day, and Teachers' Day disruptions.",
+        "description": "Verified Habagat weather suspensions, Malacañang proclamations, Teachers' Day, and verified schedule adjustments.",
         "exceptions": CVSU_INDANG_2026_PRESET,
     }
 }

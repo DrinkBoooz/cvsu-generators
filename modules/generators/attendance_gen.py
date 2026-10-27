@@ -884,7 +884,7 @@ class AttendanceGenerator:
                     if dt is not None and calendar_resolver is not None:
                         res = calendar_resolver.resolve_date(dt, class_time_range=slot_label or class_schedule)
                         if not res.is_working_session:
-                            tag = res.display_tag or "HOLIDAY"
+                            tag = res.format_stamp_text() if hasattr(res, "format_stamp_text") else (res.display_tag or "Suspension")
                 if tag:
                     if row_idx == 0:
                         _format_merged_column_header_cell(tc, tag, date_w)

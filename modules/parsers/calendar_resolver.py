@@ -209,7 +209,7 @@ def get_default_cavite_recurrence_rules() -> List[RecurrenceRule]:
         RecurrenceRule("fixed_date", "Labor Day", CalendarExceptionCategory.HOLIDAY, month=5, day=1),
         RecurrenceRule("fixed_date", "Independence Day", CalendarExceptionCategory.HOLIDAY, month=6, day=12),
         RecurrenceRule("fixed_date", "Ninoy Aquino Day", CalendarExceptionCategory.HOLIDAY, month=8, day=21),
-        RecurrenceRule("fixed_date", "Cavite Day", CalendarExceptionCategory.HOLIDAY, month=9, day=2),
+        RecurrenceRule("fixed_date", "Cavite Day", CalendarExceptionCategory.HOLIDAY, month=3, day=22),
         RecurrenceRule("fixed_date", "All Saints' Day", CalendarExceptionCategory.HOLIDAY, month=11, day=1),
         RecurrenceRule("fixed_date", "All Souls' Day", CalendarExceptionCategory.HOLIDAY, month=11, day=2),
         RecurrenceRule("fixed_date", "Bonifacio Day", CalendarExceptionCategory.HOLIDAY, month=11, day=30),
