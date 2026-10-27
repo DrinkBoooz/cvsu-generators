@@ -30,7 +30,16 @@
         const idx = STEP_CARD_IDS.indexOf(cardId);
         if (idx !== -1) {
           setActiveStepChip(idx);
-          window._scrollSpyLockedUntil = Date.now() + 650;
+          window._scrollSpyLockedUntil = Date.now() + 850;
+          if ("onscrollend" in window) {
+            window.addEventListener(
+              "scrollend",
+              () => {
+                window._scrollSpyLockedUntil = 0;
+              },
+              { once: true }
+            );
+          }
         }
 
         // Spotlight highlight on target card

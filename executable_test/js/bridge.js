@@ -21,7 +21,8 @@ const bridgeReadyPromise = new Promise((resolve) => {
 async function callBridge(method, ...args) {
   const api = await bridgeReadyPromise;
   if (!api || typeof api[method] !== 'function') {
-    throw new Error(`[Bridge] Method "${method}" is not available on pywebview.api`);
+    console.warn(`[Bridge] Method "${method}" is not available on pywebview.api`);
+    return null;
   }
   try {
     const result = await api[method](...args);
@@ -40,40 +41,50 @@ window.callBridge = callBridge;
 
 // ── Callbacks Invoked from Python (Bridge / Native DnD) ────────────────
 window.onScheduleLoaded = async function (res) {
-        if (res && res.path) {
-          state.schedulePath = res.path;
-          state.scheduleMeta = res.metadata;
-          if (res.validation && res.validation.length > 0) {
-            state.rosterReports = res.validation;
-            renderRosterStatus();
-          }
-          renderScheduleStatus();
-          await refreshClassDetection();
-          updateStepperStatus();
-          updateFileEstimate();
-          showToast(
-            "Schedule Loaded",
-            `Loaded schedule for ${state.scheduleMeta?.instructor || "Instructor"}`,
-            "success",
-          );
-        }
-      };
+  const activeModal = document.querySelector(".modal-backdrop-custom:not(.d-none)");
+  if (activeModal && activeModal.id !== "modalScheduleBackdrop") {
+    console.warn("[Bridge] Schedule drop ignored because modal is active:", activeModal.id);
+    return;
+  }
+  if (res && res.path) {
+    state.schedulePath = res.path;
+    state.scheduleMeta = res.metadata;
+    if (res.validation && res.validation.length > 0) {
+      state.rosterReports = res.validation;
+      renderRosterStatus();
+    }
+    renderScheduleStatus();
+    await refreshClassDetection();
+    updateStepperStatus();
+    updateFileEstimate();
+    showToast(
+      "Schedule Loaded",
+      `Loaded schedule for ${state.scheduleMeta?.instructor || "Instructor"}`,
+      "success",
+    );
+  }
+};
 
-      window.onRostersLoaded = async function (res) {
-        if (res) {
-          state.rosters = res.rosters || [];
-          state.rosterReports = res.validation || [];
-          renderRosterStatus();
-          await refreshClassDetection();
-          updateStepperStatus();
-          updateFileEstimate();
-          showToast(
-            "Rosters Loaded",
-            `${state.rosters.length} student roster files loaded.`,
-            "success",
-          );
-        }
-      };
+window.onRostersLoaded = async function (res) {
+  const activeModal = document.querySelector(".modal-backdrop-custom:not(.d-none)");
+  if (activeModal && activeModal.id !== "modalRosterMappingBackdrop") {
+    console.warn("[Bridge] Rosters drop ignored because modal is active:", activeModal.id);
+    return;
+  }
+  if (res) {
+    state.rosters = res.rosters || [];
+    state.rosterReports = res.validation || [];
+    renderRosterStatus();
+    await refreshClassDetection();
+    updateStepperStatus();
+    updateFileEstimate();
+    showToast(
+      "Rosters Loaded",
+      `${state.rosters.length} student roster files loaded.`,
+      "success",
+    );
+  }
+};
 
       window.onGenerationProgress = function (info) {
         if (typeof handleGenerationProgress === "function") {

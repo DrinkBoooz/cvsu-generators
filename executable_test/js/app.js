@@ -36,15 +36,10 @@ function onBridgeReady() {
   }
 }
 
-if (window.pywebview && window.pywebview.api) {
+if (window.bridgeReadyPromise) {
+  window.bridgeReadyPromise.then(onBridgeReady);
+} else if (window.pywebview && window.pywebview.api) {
   onBridgeReady();
 } else {
   window.addEventListener('pywebviewready', onBridgeReady, { once: true });
-  // Fallback check in case event was missed during startup
-  const _bridgeCheckTimer = setInterval(() => {
-    if (window.pywebview && window.pywebview.api) {
-      clearInterval(_bridgeCheckTimer);
-      onBridgeReady();
-    }
-  }, 100);
 }
