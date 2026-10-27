@@ -644,3 +644,70 @@ def test_calendar_presets_api():
     assert any("2026-08-28" in (e.get("start_date") or "") for e in exc_list)
 
 
+def test_attendance_generation_vertically_merged_columns_across_40_rows(tmp_path):
+    """
+    Verifies that when STAMP_COLUMN mode is active, non-working date columns are joined
+    vertically from student row 1 through row 40 using OpenXML <w:vMerge>, preventing
+    40 repeated text lines from stretching table row heights onto a 2nd page.
+    """
+    template_path = get_default_template_path(has_lab=False)
+    output_docx = str(tmp_path / "attendance_vmerge_40_rows.docx")
+
+    resolver = CalendarResolver(rules=get_default_cavite_recurrence_rules())
+    resolver.default_mode = "STAMP_COLUMN"
+    resolver.set_date_override(date(2026, 8, 24), status="SUSPENDED", label="Typhoon Kristine", mode="STAMP_COLUMN")
+
+    # 40 students
+    students = [(f"Student {i:02d}, Test", f"2026{i:05d}") for i in range(1, 41)]
+
+    recipe = TemplateRecipeResolver.get_instance().resolve(template_path, profile_id="attendance_docx")
+    generator = AttendanceGenerator(template_path, recipe)
+
+    generator.generate(
+        output_path=output_docx,
+        course_code_title="COSC 101 - Advanced Programming",
+        class_schedule="7:00-10:00AM / Mon",
+        semester_ay="First Semester / A.Y. 2026-2027",
+        room_assignment="CL 1",
+        instructor="Dan Joseph Ortega",
+        months=[8],
+        year=2026,
+        weekdays=[0],  # Monday: Aug 3, 10, 17, 24, 31
+        students=students,
+        calendar_resolver=resolver,
+    )
+
+    assert os.path.exists(output_docx)
+    zin, root, body = load_docx(output_docx)
+    tables = body.findall(w("tbl"))
+    matrix_tbl = tables[1]
+    rows = matrix_tbl.findall(w("tr"))
+    assert len(rows) == 42  # header0, header1, and 40 student rows
+
+    # Aug 24 is at col index 6 (lead cols 0, 1, 2, then dates Aug 3=col 3, Aug 10=col 4, Aug 17=col 5, Aug 24=col 6)
+    # 1. Row index 2 (Student 1) must have <w:vMerge w:val="restart"/>, vertical text btLr, and tag "SUSP."
+    student1_row = rows[2]
+    student1_tc = student1_row.findall(w("tc"))[6]
+    tcpr1 = student1_tc.find(w("tcPr"))
+    assert tcpr1 is not None
+    vmerge1 = tcpr1.find(w("vMerge"))
+    assert vmerge1 is not None
+    assert vmerge1.get(w("val")) == "restart"
+    assert tcpr1.find(w("vAlign")).get(w("val")) == "center"
+    assert tcpr1.find(w("textDirection")).get(w("val")) == "btLr"
+    assert "".join(student1_tc.itertext()).strip() == "SUSP."
+
+    # 2. Rows index 3 through 41 (Students 2 through 40) must have <w:vMerge/> continuation and empty text
+    for r_idx in range(3, 42):
+        st_row = rows[r_idx]
+        st_tc = st_row.findall(w("tc"))[6]
+        tcpr = st_tc.find(w("tcPr"))
+        assert tcpr is not None, f"Row {r_idx} missing tcPr"
+        vmerge = tcpr.find(w("vMerge"))
+        assert vmerge is not None, f"Row {r_idx} missing vMerge continuation"
+        # OpenXML continuation has no val or val="continue"
+        assert vmerge.get(w("val")) is None or vmerge.get(w("val")) == "continue"
+        assert "".join(st_tc.itertext()).strip() == "", f"Row {r_idx} continuation cell must be empty"
+
+
+

@@ -380,20 +380,35 @@ def clone_student_row(template_row) -> etree._Element:
                     t.text = ""
     return row
 
-def _format_stamp_cell(tc, tag: str, date_w: int):
-    """Formats attendance matrix cells for non-working stamped dates with font auto-scaling and centered alignment."""
-    tag_len = len(tag)
-    if tag_len >= 7:
-        target_sz = "10"  # 5pt
-    elif tag_len >= 5:
-        target_sz = "12"  # 6pt
-    elif tag_len >= 4:
-        target_sz = "14"  # 7pt
-    else:
-        target_sz = "16"  # 8pt
+def _format_merged_column_header_cell(tc, tag: str, date_w: int):
+    """
+    Formats the top cell (Student 1) of a vertically merged non-working column.
+    Merges across all student rows via <w:vMerge w:val="restart"/>, vertically centered,
+    with vertical bottom-to-top text direction to ensure standard single-page attendance fit.
+    """
+    tcpr = tc.find(w("tcPr"))
+    if tcpr is None:
+        tcpr = etree.Element(w("tcPr"))
+        tc.insert(0, tcpr)
+
+    vmerge = tcpr.find(w("vMerge"))
+    if vmerge is None:
+        vmerge = etree.SubElement(tcpr, w("vMerge"))
+    vmerge.set(w("val"), "restart")
+
+    valign = tcpr.find(w("vAlign"))
+    if valign is None:
+        valign = etree.SubElement(tcpr, w("vAlign"))
+    valign.set(w("val"), "center")
+
+    text_dir = tcpr.find(w("textDirection"))
+    if text_dir is None:
+        text_dir = etree.SubElement(tcpr, w("textDirection"))
+    text_dir.set(w("val"), "btLr")
 
     p = tc.find(w("p"))
     if p is not None:
+        set_para_text(p, tag)
         ppr = p.find(w("pPr"))
         if ppr is None:
             ppr = etree.Element(w("pPr"))
@@ -403,18 +418,62 @@ def _format_stamp_cell(tc, tag: str, date_w: int):
             jc = etree.SubElement(ppr, w("jc"))
         jc.set(w("val"), "center")
 
+        spacing = ppr.find(w("spacing"))
+        if spacing is None:
+            spacing = etree.SubElement(ppr, w("spacing"))
+        spacing.set(w("before"), "0")
+        spacing.set(w("after"), "0")
+
         for r in p.findall(w("r")):
             rpr = r.find(w("rPr"))
             if rpr is None:
                 rpr = etree.SubElement(r, w("rPr"))
+            if rpr.find(w("b")) is None:
+                etree.SubElement(rpr, w("b"))
             sz = rpr.find(w("sz"))
             if sz is None:
                 sz = etree.SubElement(rpr, w("sz"))
-            sz.set(w("val"), target_sz)
+            sz.set(w("val"), "18")  # 9pt
             sz_cs = rpr.find(w("szCs"))
             if sz_cs is None:
                 sz_cs = etree.SubElement(rpr, w("szCs"))
-            sz_cs.set(w("val"), target_sz)
+            sz_cs.set(w("val"), "18")
+            color = rpr.find(w("color"))
+            if color is None:
+                color = etree.SubElement(rpr, w("color"))
+            color.set(w("val"), "4B5563")
+
+
+def _format_merged_column_continuation_cell(tc):
+    """
+    Formats continuation cells (Students 2 to 40) of a vertically merged column.
+    Declares <w:vMerge/> without a value to merge seamlessly into the header cell,
+    with zero text and zero paragraph margins to prevent vertical row stretching.
+    """
+    tcpr = tc.find(w("tcPr"))
+    if tcpr is None:
+        tcpr = etree.Element(w("tcPr"))
+        tc.insert(0, tcpr)
+
+    vmerge = tcpr.find(w("vMerge"))
+    if vmerge is None:
+        vmerge = etree.SubElement(tcpr, w("vMerge"))
+    vmerge.attrib.pop(w("val"), None)
+
+    p = tc.find(w("p"))
+    if p is not None:
+        set_para_text(p, "")
+        ppr = p.find(w("pPr"))
+        if ppr is not None:
+            spacing = ppr.find(w("spacing"))
+            if spacing is not None:
+                spacing.set(w("before"), "0")
+                spacing.set(w("after"), "0")
+
+
+def _format_stamp_cell(tc, tag: str, date_w: int):
+    """Formats attendance matrix cells for non-working stamped dates with font auto-scaling and centered alignment."""
+    _format_merged_column_header_cell(tc, tag, date_w)
 
 # ── Core builder ─────────────────────────────────────────────────────────────
 
@@ -826,11 +885,15 @@ class AttendanceGenerator:
                         res = calendar_resolver.resolve_date(dt, class_time_range=slot_label or class_schedule)
                         if not res.is_working_session:
                             tag = res.display_tag or "HOLIDAY"
-                p = tc.find(w("p"))
-                if p is not None:
-                    set_para_text(p, tag)
-                    if tag:
-                        _format_stamp_cell(tc, tag, date_w)
+                if tag:
+                    if row_idx == 0:
+                        _format_merged_column_header_cell(tc, tag, date_w)
+                    else:
+                        _format_merged_column_continuation_cell(tc)
+                else:
+                    p = tc.find(w("p"))
+                    if p is not None:
+                        set_para_text(p, "")
                 tr.append(tc)
 
             # Region 3: Summary region
