@@ -380,23 +380,26 @@ class GenerationMixin:
                             "details": results,
                             "output_dir": snap_output_dir
                         }
-                    else:
-                        logger.info(
-                            f"Build completed successfully! {total_generated} file(s) generated "
-                            f"(CEIT: {len(gen['ceit'])}, Attendance: {len(gen['attendance'])}, "
-                            f"Grades: {len(gen['grades'])}, PDF: {len(gen.get('pdf', []))})."
-                        )
-                        payload = {
-                            "status": "success",
-                            "message": f"Generation complete! {total_generated} files generated successfully.",
-                            "stats": {
-                                "generated": total_generated,
-                                "errors": total_errors,
-                                "skipped": total_skipped
-                            },
-                            "details": results,
-                            "output_dir": snap_output_dir
-                        }
+                    pdf_skipped = skp.get("pdf", [])
+                    pdf_count = len(gen.get("pdf", []))
+                    skip_pdf_notice = f" (Note: PDF export skipped - {pdf_skipped[0]})" if (export_pdf and pdf_count == 0 and pdf_skipped) else ""
+
+                    logger.info(
+                        f"Build completed successfully! {total_generated} file(s) generated "
+                        f"(CEIT: {len(gen['ceit'])}, Attendance: {len(gen['attendance'])}, "
+                        f"Grades: {len(gen['grades'])}, PDF: {pdf_count}).{skip_pdf_notice}"
+                    )
+                    payload = {
+                        "status": "success",
+                        "message": f"Generation complete! {total_generated} files generated successfully.{skip_pdf_notice}",
+                        "stats": {
+                            "generated": total_generated,
+                            "errors": total_errors,
+                            "skipped": total_skipped
+                        },
+                        "details": results,
+                        "output_dir": snap_output_dir
+                    }
                 except Exception as e:
                     logger.error(f"Error Pipeline Breakdown: {e}", exc_info=True)
                     payload = {"status": "error", "message": f"Fatal Generation Fault: {str(e)}", "details": None}

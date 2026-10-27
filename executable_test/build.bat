@@ -27,6 +27,7 @@ python -m PyInstaller --noconfirm --clean --workpath "%TEMP%\cvsu_build" --distp
     --version-file "file_version_info.txt" ^
     --hidden-import pycparser.lextab --hidden-import pycparser.yacctab ^
     --collect-submodules modules ^
+    --collect-submodules pypdf ^
     --paths ".." ^
     --add-data "ui.html;." ^
     --add-data "css;css/" ^

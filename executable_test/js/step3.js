@@ -422,6 +422,7 @@
             const attCount = (details.generated.attendance || []).length;
             const gradeCount = (details.generated.grades || []).length;
             const pdfCount = (details.generated.pdf || []).length;
+            const pdfSkipped = (details.skipped && details.skipped.pdf) || [];
             const totalFiles = ceitCount + attCount + gradeCount + pdfCount;
 
             let elapsedStr = "0s";
@@ -436,8 +437,13 @@
               <span class="meta-pill">📅 ${attCount} Attendance</span>
               <span class="meta-pill">📊 ${gradeCount} Grade Sheets</span>
               ${pdfCount > 0 ? `<span class="meta-pill" style="border-color: var(--accent-cyan); color: var(--accent-cyan);">📄 ${pdfCount} PDFs</span>` : ""}
+              ${pdfSkipped.length > 0 ? `<span class="meta-pill" style="border-color: var(--accent-amber); color: var(--accent-amber);" title="${pdfSkipped[0]}">⚠️ PDF Skipped (${pdfSkipped[0]})</span>` : ""}
               <span class="meta-pill">⏱️ ${elapsedStr}</span>
             `;
+
+            if (pdfSkipped.length > 0) {
+              showToast("PDF Export Notice", pdfSkipped[0], "warning");
+            }
           }
 
           // Render Interactive File Artifact Tree

@@ -3,6 +3,7 @@ from PyInstaller.utils.hooks import collect_submodules
 
 hiddenimports = ['pycparser.lextab', 'pycparser.yacctab']
 hiddenimports += collect_submodules('modules')
+hiddenimports += collect_submodules('pypdf')
 
 
 a = Analysis(

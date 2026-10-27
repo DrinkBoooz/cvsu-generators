@@ -65,31 +65,48 @@ class PdfExporter:
             self._soffice_bin = PdfExporter._cached_soffice_bin
             return
 
-        # 1. Check native Windows Word COM Automation via win32com
+        # 1. Check native Windows Word COM Automation via PowerShell
+        # (Out-of-process COM sandbox: 0 pywin32 dependencies, immune to Python 3.14 RPC crashes)
+        if sys.platform == "win32":
+            try:
+                ps_probe = "$w = New-Object -ComObject Word.Application; $w.Quit(); exit 0"
+                res = subprocess.run(
+                    ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_probe],
+                    capture_output=True,
+                    timeout=10,
+                )
+                if res.returncode == 0:
+                    self._converter_type = "powershell"
+                    PdfExporter._cached_converter_type = self._converter_type
+                    PdfExporter._probe_completed = True
+                    return
+            except Exception as e:
+                logger.debug(f"PowerShell Word probe failed: {e}")
+
+        # 2. Check native Windows Word COM Automation via win32com (in-process fallback)
         if sys.platform == "win32":
             try:
                 import gc
                 win32_client, pythoncom = _get_com_modules()
-                if not win32_client or not pythoncom:
-                    raise ImportError("win32com / pythoncom not available")
-                pythoncom.CoInitialize()
-                try:
-                    word = win32_client.DispatchEx("Word.Application")
-                    word.Visible = False
-                    word.DisplayAlerts = 0
-                    word.Quit()
-                    del word
-                    gc.collect()
-                    self._converter_type = "win32com"
-                    PdfExporter._cached_converter_type = self._converter_type
-                    PdfExporter._probe_completed = True
-                    return
-                finally:
-                    pythoncom.CoUninitialize()
+                if win32_client and pythoncom:
+                    pythoncom.CoInitialize()
+                    try:
+                        word = win32_client.DispatchEx("Word.Application")
+                        word.Visible = False
+                        word.DisplayAlerts = 0
+                        word.Quit()
+                        del word
+                        gc.collect()
+                        self._converter_type = "win32com"
+                        PdfExporter._cached_converter_type = self._converter_type
+                        PdfExporter._probe_completed = True
+                        return
+                    finally:
+                        pythoncom.CoUninitialize()
             except Exception as e:
                 logger.debug(f"win32com Word probe failed: {e}")
 
-        # 2. Check docx2pdf (optional external library)
+        # 3. Check docx2pdf (optional external library)
         try:
             import importlib
             importlib.import_module("docx2pdf")
@@ -102,7 +119,7 @@ class PdfExporter:
         except Exception as e:
             logger.debug(f"docx2pdf probe failed: {e}")
 
-        # 3. Check soffice in PATH
+        # 4. Check soffice in PATH
         which_soffice = shutil.which("soffice") or shutil.which("soffice.exe")
         if which_soffice and os.path.isfile(which_soffice):
             self._converter_type = "soffice"
@@ -112,7 +129,7 @@ class PdfExporter:
             PdfExporter._probe_completed = True
             return
 
-        # 4. Check common LibreOffice installation paths on Windows
+        # 5. Check common LibreOffice installation paths on Windows
         for candidate in self._SOFFICE_CANDIDATE_PATHS:
             if os.path.isfile(candidate):
                 self._converter_type = "soffice"
@@ -131,7 +148,7 @@ class PdfExporter:
         return self._converter_type is not None
 
     def get_available_converter(self) -> Optional[str]:
-        """Returns the identifier of the active converter ('win32com', 'docx2pdf', 'soffice', or None)."""
+        """Returns the identifier of the active converter ('powershell', 'win32com', 'docx2pdf', 'soffice', or None)."""
         return self._converter_type
 
     def export_to_pdf(self, docx_path: str, output_dir: Optional[str] = None) -> Optional[str]:
@@ -167,7 +184,28 @@ class PdfExporter:
         clean_pdf = strip_long_path_prefix(os.path.abspath(target_pdf_path))
 
         try:
-            if self._converter_type == "win32com":
+            if self._converter_type == "powershell":
+                ps_cmd = (
+                    f"$word = New-Object -ComObject Word.Application; "
+                    f"$word.Visible = $false; $word.DisplayAlerts = 0; "
+                    f"try {{ "
+                    f"$doc = $word.Documents.Open('{clean_docx}', $false, $true); "
+                    f"$doc.SaveAs([ref]'{clean_pdf}', [ref]17); "
+                    f"$doc.Close([ref]$false); "
+                    f"}} finally {{ "
+                    f"$word.Quit(); "
+                    f"[System.Runtime.InteropServices.Marshal]::ReleaseComObject($word) | Out-Null; "
+                    f"[System.GC]::Collect(); "
+                    f"[System.GC]::WaitForPendingFinalizers(); "
+                    f"}}"
+                )
+                subprocess.run(
+                    ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_cmd],
+                    capture_output=True,
+                    timeout=60,
+                    check=True,
+                )
+            elif self._converter_type == "win32com":
                 win32_client, pythoncom = _get_com_modules()
                 if not win32_client or not pythoncom:
                     return None
@@ -247,38 +285,62 @@ class PdfExporter:
         clean_pdf = strip_long_path_prefix(os.path.abspath(target_pdf_path))
 
         try:
-            win32_client, pythoncom = _get_com_modules()
-            if not win32_client or not pythoncom:
-                return None
-
-            pythoncom.CoInitialize()
-            excel = None
-            try:
-                excel = win32_client.DispatchEx("Excel.Application")
-                excel.Visible = False
-                excel.DisplayAlerts = False
-                wb = excel.Workbooks.Open(clean_xlsx, ReadOnly=True)
-                if not wb:
-                    logger.warning(f"Excel failed to open workbook: {clean_xlsx}")
+            if self._converter_type == "powershell":
+                ps_cmd = (
+                    f"$excel = New-Object -ComObject Excel.Application; "
+                    f"$excel.Visible = $false; $excel.DisplayAlerts = $false; "
+                    f"try {{ "
+                    f"$wb = $excel.Workbooks.Open('{clean_xlsx}'); "
+                    f"$wb.ExportAsFixedFormat(0, '{clean_pdf}'); "
+                    f"$wb.Close($false); "
+                    f"}} finally {{ "
+                    f"$excel.Quit(); "
+                    f"[System.Runtime.InteropServices.Marshal]::ReleaseComObject($excel) | Out-Null; "
+                    f"[System.GC]::Collect(); "
+                    f"[System.GC]::WaitForPendingFinalizers(); "
+                    f"}}"
+                )
+                subprocess.run(
+                    ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_cmd],
+                    capture_output=True,
+                    timeout=60,
+                    check=True,
+                )
+                if os.path.isfile(clean_pdf):
+                    return clean_pdf
+            else:
+                win32_client, pythoncom = _get_com_modules()
+                if not win32_client or not pythoncom:
                     return None
+
+                pythoncom.CoInitialize()
+                excel = None
                 try:
-                    wb.ExportAsFixedFormat(0, clean_pdf)  # 0 = xlTypePDF
-                finally:
-                    wb.Close(False)
-            finally:
-                if excel:
+                    excel = win32_client.DispatchEx("Excel.Application")
+                    excel.Visible = False
+                    excel.DisplayAlerts = False
+                    wb = excel.Workbooks.Open(clean_xlsx, ReadOnly=True)
+                    if not wb:
+                        logger.warning(f"Excel failed to open workbook: {clean_xlsx}")
+                        return None
                     try:
-                        excel.Quit()
+                        wb.ExportAsFixedFormat(0, clean_pdf)  # 0 = xlTypePDF
+                    finally:
+                        wb.Close(False)
+                finally:
+                    if excel:
+                        try:
+                            excel.Quit()
+                        except Exception:
+                            pass
+                        del excel
+                    import gc
+                    gc.collect()
+                    try:
+                        pythoncom.PumpWaitingMessages()
                     except Exception:
                         pass
-                    del excel
-                import gc
-                gc.collect()
-                try:
-                    pythoncom.PumpWaitingMessages()
-                except Exception:
-                    pass
-                pythoncom.CoUninitialize()
+                    pythoncom.CoUninitialize()
             if os.path.isfile(clean_pdf):
                 return clean_pdf
         except Exception as e:
@@ -318,6 +380,81 @@ class PdfExporter:
         os.makedirs(clean_target_dir, exist_ok=True)
 
         # High-performance batch path using a single Word.Application instance
+        if self._converter_type == "powershell":
+            valid_paths = [p for p in docx_paths if os.path.isfile(p)]
+            invalid_paths = [p for p in docx_paths if not os.path.isfile(p)]
+            failed.extend(invalid_paths)
+
+            if not valid_paths or (cancel_event and cancel_event.is_set()):
+                return {
+                    "converted": converted,
+                    "failed": failed,
+                    "available": True,
+                    "converter": "powershell",
+                }
+
+            ps_script = _get_powershell_word_batch_script()
+            proc = None
+            try:
+                proc = subprocess.Popen(
+                    ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_script],
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    encoding="utf-8",
+                    bufsize=1,
+                )
+                ready_line = proc.stdout.readline().strip()
+                if "READY" in ready_line:
+                    for path in valid_paths:
+                        if cancel_event and cancel_event.is_set():
+                            break
+                        base_name = os.path.splitext(os.path.basename(path))[0]
+                        clean_docx = strip_long_path_prefix(os.path.abspath(path))
+                        clean_pdf = strip_long_path_prefix(os.path.abspath(os.path.join(clean_target_dir, f"{base_name}.pdf")))
+                        try:
+                            proc.stdin.write(f"{clean_docx}|{clean_pdf}\n")
+                            proc.stdin.flush()
+                            resp = proc.stdout.readline().strip()
+                            if resp.startswith("OK:") and os.path.isfile(clean_pdf):
+                                converted.append(clean_pdf)
+                                logger.info(f"Exported PDF deliverable: {clean_pdf}")
+                                if progress_cb:
+                                    try:
+                                        progress_cb(clean_pdf)
+                                    except Exception:
+                                        pass
+                            else:
+                                failed.append(path)
+                        except Exception as e:
+                            logger.warning(f"Error in PowerShell batch conversion for {path}: {e}")
+                            failed.append(path)
+                else:
+                    logger.warning(f"PowerShell batch init failed: {ready_line}")
+                    failed.extend(valid_paths)
+            except Exception as e:
+                logger.warning(f"Error launching PowerShell batch process: {e}")
+                failed.extend(valid_paths)
+            finally:
+                if proc:
+                    try:
+                        proc.stdin.write("EXIT\n")
+                        proc.stdin.flush()
+                        proc.wait(timeout=10)
+                    except Exception:
+                        try:
+                            proc.kill()
+                        except Exception:
+                            pass
+
+            return {
+                "converted": converted,
+                "failed": failed,
+                "available": True,
+                "converter": "powershell",
+            }
+
         if self._converter_type == "win32com":
             valid_paths = []
             for path in docx_paths:
@@ -475,6 +612,41 @@ def merge_pdfs(pdf_paths: List[str], output_merged_path: str) -> Optional[str]:
     return None
 
 
+def _get_powershell_word_batch_script() -> str:
+    """Returns persistent PowerShell automation script for high-throughput batch Word-to-PDF conversion."""
+    return (
+        "$word = New-Object -ComObject Word.Application\n"
+        "$word.Visible = $false\n"
+        "$word.DisplayAlerts = 0\n"
+        "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n"
+        "[Console]::Out.WriteLine('READY')\n"
+        "try {\n"
+        "    while ($line = [Console]::In.ReadLine()) {\n"
+        "        $line = $line.Trim()\n"
+        "        if (-not $line -or $line -eq 'EXIT') { break }\n"
+        "        $parts = $line.Split('|')\n"
+        "        if ($parts.Length -ge 2) {\n"
+        "            $docx = $parts[0]\n"
+        "            $pdf = $parts[1]\n"
+        "            try {\n"
+        "                $doc = $word.Documents.Open($docx, $false, $true)\n"
+        "                $doc.SaveAs([ref]$pdf, [ref]17)\n"
+        "                $doc.Close([ref]$false)\n"
+        "                [Console]::Out.WriteLine('OK:' + $pdf)\n"
+        "            } catch {\n"
+        "                [Console]::Out.WriteLine('ERR:' + $docx + '|' + $_.Exception.Message)\n"
+        "            }\n"
+        "        }\n"
+        "    }\n"
+        "} finally {\n"
+        "    $word.Quit()\n"
+        "    [System.Runtime.InteropServices.Marshal]::ReleaseComObject($word) | Out-Null\n"
+        "    [System.GC]::Collect()\n"
+        "    [System.GC]::WaitForPendingFinalizers()\n"
+        "}\n"
+    )
+
+
 class ConcurrentPdfPipeline:
     """
     Pipelined asynchronous PDF conversion service.
@@ -529,10 +701,99 @@ class ConcurrentPdfPipeline:
         """Worker loop executing conversions concurrently with the generation pipeline."""
         converter = self.exporter.get_available_converter()
 
-        if converter == "win32com":
+        if converter == "powershell":
+            self._run_powershell_worker()
+        elif converter == "win32com":
             self._run_win32com_worker()
         else:
             self._run_fallback_worker()
+
+    def _run_powershell_worker(self) -> None:
+        ps_script = _get_powershell_word_batch_script()
+        proc = None
+        try:
+            proc = subprocess.Popen(
+                ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_script],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
+                bufsize=1,
+            )
+            ready_line = proc.stdout.readline().strip()
+            if "READY" not in ready_line:
+                logger.warning(f"PowerShell worker failed to initialize: {ready_line}")
+                self._run_fallback_worker()
+                return
+
+            while self._is_running or not self._queue.empty():
+                try:
+                    item = self._queue.get(timeout=0.2)
+                except queue.Empty:
+                    continue
+
+                if item is None:  # Sentinel
+                    self._queue.task_done()
+                    break
+
+                if self.cancel_event and self.cancel_event.is_set():
+                    self._queue.task_done()
+                    break
+
+                docx_path = item["docx_path"]
+                output_dir = item["output_dir"]
+                category = item.get("category", "general")
+                class_name = item.get("class_name", "general")
+
+                if not os.path.isfile(docx_path):
+                    self._failed.append(docx_path)
+                    self._queue.task_done()
+                    continue
+
+                clean_docx = strip_long_path_prefix(os.path.abspath(docx_path))
+                if not output_dir:
+                    output_dir = os.path.dirname(clean_docx)
+                clean_out_dir = strip_long_path_prefix(os.path.abspath(output_dir))
+                os.makedirs(clean_out_dir, exist_ok=True)
+                base_name = os.path.splitext(os.path.basename(clean_docx))[0]
+                clean_pdf = os.path.join(clean_out_dir, f"{base_name}.pdf")
+
+                try:
+                    proc.stdin.write(f"{clean_docx}|{clean_pdf}\n")
+                    proc.stdin.flush()
+                    resp = proc.stdout.readline().strip()
+                    if resp.startswith("OK:") and os.path.isfile(clean_pdf):
+                        self._converted.append(clean_pdf)
+                        self._by_class_category[class_name][category].append(clean_pdf)
+                        logger.info(f"Pipelined PDF Export: {clean_pdf}")
+                        if self.progress_cb:
+                            try:
+                                self.progress_cb(clean_pdf)
+                            except Exception:
+                                pass
+                    else:
+                        logger.warning(f"Error in pipelined PowerShell conversion: {resp}")
+                        self._failed.append(docx_path)
+                except Exception as e:
+                    logger.warning(f"PowerShell worker communication error: {e}")
+                    self._failed.append(docx_path)
+                finally:
+                    self._queue.task_done()
+        except Exception as pe:
+            logger.warning(f"PowerShell worker fatal failure: {pe}")
+            self._run_fallback_worker()
+        finally:
+            if proc:
+                try:
+                    proc.stdin.write("EXIT\n")
+                    proc.stdin.flush()
+                    proc.wait(timeout=10)
+                except Exception:
+                    try:
+                        proc.kill()
+                    except Exception:
+                        pass
 
     def _run_win32com_worker(self) -> None:
         import gc

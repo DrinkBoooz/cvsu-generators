@@ -27,11 +27,11 @@ def _create_sample_docx(filepath: str, text: str = "Test document content") -> s
 
 
 def test_pdf_exporter_detection():
-    """PdfExporter should successfully detect an available converter on Windows (win32com)."""
+    """PdfExporter should successfully detect an available converter on Windows (powershell or win32com)."""
     exporter = PdfExporter()
     assert exporter.is_available() is True
     converter = exporter.get_available_converter()
-    assert converter in ("win32com", "docx2pdf", "soffice")
+    assert converter in ("powershell", "win32com", "docx2pdf", "soffice")
 
 
 def test_pdf_exporter_single_convert(tmp_path):
