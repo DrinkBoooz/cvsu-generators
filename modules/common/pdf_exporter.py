@@ -20,6 +20,7 @@ import subprocess
 import sys
 from typing import Any, Dict, List, Optional
 
+from modules.common.excel_utils import strip_long_path_prefix
 from modules.common.logger import logger
 
 
@@ -147,8 +148,12 @@ class PdfExporter:
         if not output_dir:
             output_dir = os.path.join(os.path.dirname(os.path.abspath(docx_path)), "PDF_Submissions")
 
-        os.makedirs(output_dir, exist_ok=True)
-        target_pdf_path = os.path.join(output_dir, f"{base_name}.pdf")
+        clean_out_dir = strip_long_path_prefix(os.path.abspath(output_dir))
+        os.makedirs(clean_out_dir, exist_ok=True)
+        target_pdf_path = os.path.join(clean_out_dir, f"{base_name}.pdf")
+
+        clean_docx = strip_long_path_prefix(os.path.abspath(docx_path))
+        clean_pdf = strip_long_path_prefix(os.path.abspath(target_pdf_path))
 
         try:
             if self._converter_type == "win32com":
@@ -161,14 +166,15 @@ class PdfExporter:
                     word = win32com.client.DispatchEx("Word.Application")
                     word.Visible = False
                     word.DisplayAlerts = 0
-                    abs_docx = os.path.abspath(docx_path)
-                    abs_pdf = os.path.abspath(target_pdf_path)
-                    doc = word.Documents.Open(abs_docx, ReadOnly=True, ConfirmConversions=False)
+                    doc = word.Documents.Open(clean_docx, ReadOnly=True, ConfirmConversions=False)
+                    if not doc:
+                        logger.warning(f"Word failed to open document: {clean_docx}")
+                        return None
                     try:
                         try:
-                            doc.SaveAs(abs_pdf, FileFormat=17)  # wdFormatPDF = 17
+                            doc.SaveAs(clean_pdf, FileFormat=17)  # wdFormatPDF = 17
                         except Exception:
-                            doc.ExportAsFixedFormat(abs_pdf, 17, False, 0)
+                            doc.ExportAsFixedFormat(clean_pdf, 17, False, 0)
                     finally:
                         doc.Close(False)
                 finally:
@@ -189,7 +195,7 @@ class PdfExporter:
                 import importlib
                 docx2pdf_mod = importlib.import_module("docx2pdf")
                 convert_fn = getattr(docx2pdf_mod, "convert")
-                convert_fn(docx_path, target_pdf_path)
+                convert_fn(clean_docx, clean_pdf)
             elif self._converter_type == "soffice" and self._soffice_bin:
                 cmd = [
                     self._soffice_bin,
@@ -197,16 +203,16 @@ class PdfExporter:
                     "--convert-to",
                     "pdf",
                     "--outdir",
-                    output_dir,
-                    docx_path,
+                    clean_out_dir,
+                    clean_docx,
                 ]
                 subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60, check=True)
 
-            if os.path.isfile(target_pdf_path):
-                logger.info(f"Exported PDF deliverable: {target_pdf_path}")
-                return target_pdf_path
+            if os.path.isfile(clean_pdf):
+                logger.info(f"Exported PDF deliverable: {clean_pdf}")
+                return clean_pdf
             else:
-                logger.warning(f"PDF export finished but target file not found: {target_pdf_path}")
+                logger.warning(f"PDF export finished but target file not found: {clean_pdf}")
                 return None
         except Exception as e:
             logger.warning(f"Non-fatal error exporting {docx_path} to PDF: {e}")
@@ -221,8 +227,12 @@ class PdfExporter:
         base_name = os.path.splitext(os.path.basename(xlsx_path))[0]
         if not output_dir:
             output_dir = os.path.join(os.path.dirname(os.path.abspath(xlsx_path)), "PDF_Submissions")
-        os.makedirs(output_dir, exist_ok=True)
-        target_pdf_path = os.path.join(output_dir, f"{base_name}.pdf")
+        clean_out_dir = strip_long_path_prefix(os.path.abspath(output_dir))
+        os.makedirs(clean_out_dir, exist_ok=True)
+        target_pdf_path = os.path.join(clean_out_dir, f"{base_name}.pdf")
+
+        clean_xlsx = strip_long_path_prefix(os.path.abspath(xlsx_path))
+        clean_pdf = strip_long_path_prefix(os.path.abspath(target_pdf_path))
 
         try:
             import pythoncom
@@ -234,11 +244,12 @@ class PdfExporter:
                 excel = win32com.client.DispatchEx("Excel.Application")
                 excel.Visible = False
                 excel.DisplayAlerts = False
-                abs_xlsx = os.path.abspath(xlsx_path)
-                abs_pdf = os.path.abspath(target_pdf_path)
-                wb = excel.Workbooks.Open(abs_xlsx, ReadOnly=True)
+                wb = excel.Workbooks.Open(clean_xlsx, ReadOnly=True)
+                if not wb:
+                    logger.warning(f"Excel failed to open workbook: {clean_xlsx}")
+                    return None
                 try:
-                    wb.ExportAsFixedFormat(0, abs_pdf)  # 0 = xlTypePDF
+                    wb.ExportAsFixedFormat(0, clean_pdf)  # 0 = xlTypePDF
                 finally:
                     wb.Close(False)
             finally:
@@ -255,8 +266,8 @@ class PdfExporter:
                 except Exception:
                     pass
                 pythoncom.CoUninitialize()
-            if os.path.isfile(target_pdf_path):
-                return target_pdf_path
+            if os.path.isfile(clean_pdf):
+                return clean_pdf
         except Exception as e:
             logger.warning(f"Error exporting {xlsx_path} to PDF via Excel COM: {e}")
         return None
@@ -290,6 +301,9 @@ class PdfExporter:
         target_dir = os.path.join(output_base_dir, "PDF_Submissions")
         os.makedirs(target_dir, exist_ok=True)
 
+        clean_target_dir = strip_long_path_prefix(os.path.abspath(target_dir))
+        os.makedirs(clean_target_dir, exist_ok=True)
+
         # High-performance batch path using a single Word.Application instance
         if self._converter_type == "win32com":
             valid_paths = []
@@ -322,22 +336,27 @@ class PdfExporter:
                         break
 
                     base_name = os.path.splitext(os.path.basename(path))[0]
-                    target_pdf_path = os.path.join(target_dir, f"{base_name}.pdf")
+                    target_pdf_path = os.path.join(clean_target_dir, f"{base_name}.pdf")
+                    clean_docx = strip_long_path_prefix(os.path.abspath(path))
+                    clean_pdf = strip_long_path_prefix(os.path.abspath(target_pdf_path))
                     doc = None
                     try:
-                        abs_docx = os.path.abspath(path)
-                        abs_pdf = os.path.abspath(target_pdf_path)
-                        doc = word.Documents.Open(abs_docx, ReadOnly=True, ConfirmConversions=False)
-                        try:
-                            doc.SaveAs(abs_pdf, FileFormat=17)
-                        except Exception:
-                            doc.ExportAsFixedFormat(abs_pdf, 17, False, 0)
+                        doc = word.Documents.Open(clean_docx, ReadOnly=True, ConfirmConversions=False)
+                        if not doc:
+                            logger.warning(f"Word failed to open document: {clean_docx}")
+                            failed.append(path)
+                            continue
 
-                        if os.path.isfile(target_pdf_path):
-                            converted.append(target_pdf_path)
-                            logger.info(f"Exported PDF deliverable: {target_pdf_path}")
+                        try:
+                            doc.SaveAs(clean_pdf, FileFormat=17)
+                        except Exception:
+                            doc.ExportAsFixedFormat(clean_pdf, 17, False, 0)
+
+                        if os.path.isfile(clean_pdf):
+                            converted.append(clean_pdf)
+                            logger.info(f"Exported PDF deliverable: {clean_pdf}")
                         else:
-                            logger.warning(f"PDF export finished but target file not found: {target_pdf_path}")
+                            logger.warning(f"PDF export finished but target file not found: {clean_pdf}")
                             failed.append(path)
                     except Exception as e:
                         logger.warning(f"Error converting {path} to PDF via win32com: {e}")

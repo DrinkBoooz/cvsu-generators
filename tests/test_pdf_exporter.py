@@ -112,3 +112,26 @@ def test_pdf_exporter_unavailable_fallback():
         res = exporter.batch_export(["dummy.docx"], output_base_dir="out")
         assert res["available"] is False
         assert len(res["converted"]) == 0
+
+
+def test_pdf_exporter_extended_path_prefix(tmp_path):
+    """PdfExporter should cleanly convert files even when paths have Windows \\\\?\\ prefix."""
+    from modules.common.excel_utils import get_long_path
+    exporter = PdfExporter()
+    doc_path = str(tmp_path / "long_prefix_test.docx")
+    _create_sample_docx(doc_path, "Testing with Windows extended path prefix")
+
+    long_doc_path = get_long_path(doc_path)
+    long_out_dir = get_long_path(str(tmp_path / "PDF_Submissions"))
+
+    # Test single export
+    pdf_path = exporter.export_to_pdf(long_doc_path, output_dir=long_out_dir)
+    assert pdf_path is not None
+    assert os.path.isfile(pdf_path)
+    assert os.path.getsize(pdf_path) > 0
+
+    # Test batch export
+    res = exporter.batch_export([long_doc_path], output_base_dir=get_long_path(str(tmp_path)))
+    assert len(res["converted"]) == 1
+    assert os.path.isfile(res["converted"][0])
+
