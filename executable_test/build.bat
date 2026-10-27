@@ -13,6 +13,9 @@ call venv\Scripts\activate.bat
 echo Installing Pinned Dependencies...
 python -m pip install -r requirements-build.txt
 
+echo Terminating any active CvSU Gen processes...
+taskkill /F /IM "CvSU Gen.exe" >nul 2>&1
+
 echo Removing old builds...
 if exist build rmdir /S /Q build
 if exist dist rmdir /S /Q dist
