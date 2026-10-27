@@ -1327,6 +1327,14 @@
         border-color: rgba(139, 92, 246, 0.5);
         background: rgba(139, 92, 246, 0.08);
       }
+      .cal-date-pill-leave {
+        border-color: rgba(139, 92, 246, 0.5);
+        background: rgba(139, 92, 246, 0.08);
+      }
+      .cal-date-pill-adm {
+        border-color: rgba(13, 148, 136, 0.5);
+        background: rgba(13, 148, 136, 0.08);
+      }
       .cal-date-pill-event {
         border-color: rgba(59, 130, 246, 0.5);
         background: rgba(59, 130, 246, 0.08);

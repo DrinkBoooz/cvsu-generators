@@ -464,7 +464,7 @@ class AttendanceGenerator:
             raise EmptyDateError("No class dates found for the given months/year/weekdays.")
 
         if calendar_resolver is not None:
-            class_dates, _ = calendar_resolver.filter_or_stamp_dates(class_dates)
+            class_dates, _ = calendar_resolver.filter_or_stamp_dates(class_dates, class_time_range=class_schedule)
             if not class_dates:
                 raise EmptyDateError("No active class dates found after calendar resolution.")
 
@@ -699,11 +699,13 @@ class AttendanceGenerator:
 
         # Region 2: Date / session region
         column_dates = []
+        column_slots = []
         for wg in week_groups:
             week_dates = {dt.weekday(): dt for dt in wg}
             for session_idx, (day_idx, slot_label) in enumerate(schedule_meetings, 1):
                 dt = week_dates.get(day_idx)
                 column_dates.append(dt)
+                column_slots.append(slot_label)
                 day_num = str(dt.day) if dt is not None else ""
                 tc = copy.deepcopy(date_cell_template)
                 set_cell_width(tc, date_w)
@@ -819,8 +821,9 @@ class AttendanceGenerator:
                 tag = ""
                 if col_idx < len(column_dates):
                     dt = column_dates[col_idx]
+                    slot_label = column_slots[col_idx] if col_idx < len(column_slots) else ""
                     if dt is not None and calendar_resolver is not None:
-                        res = calendar_resolver.resolve_date(dt)
+                        res = calendar_resolver.resolve_date(dt, class_time_range=slot_label or class_schedule)
                         if not res.is_working_session:
                             tag = res.display_tag or "HOLIDAY"
                 p = tc.find(w("p"))

@@ -169,6 +169,9 @@ const rawMockApi = {
     export_workspace_file: async (path, id) => ({ status: "success", file_path: path || "mock.cvsu-workspace.json" }),
     get_active_template_set: async () => window.__mockResponses.get_active_template_set || { set_id: "builtin_cvsu" },
     get_calendar_config: async () => ({ default_mode: "OMIT_COLUMN", rules: [], exceptions: [], overrides: {} }),
+    get_calendar_presets: async () => ([
+        { id: "cvsu_main_2026_first_sem", name: "CvSU Main Campus (Indang) - 1st Sem AY 2026-2027", campus: "CvSU Main (Indang)", academic_year: "AY 2026-2027", semester: "1st Semester", exception_count: 15 }
+    ]),
     get_ceit_prefix_directory: async () => ({ prefixes: {}, departments: {} }),
     get_custom_templates: async () => window.__mockResponses.get_custom_templates || [],
     get_generation_progress: async () => ({ status: "idle", current_index: 0, total_count: 0, percent: 0, current_file_label: "", current_class: "", error: null }),
@@ -192,6 +195,7 @@ const rawMockApi = {
     inspect_schedule: async (p) => window.__mockResponses.inspect_schedule || null,
     inspect_template_set_files: async (paths) => window.__mockResponses.inspect_template_set_files || { results: [] },
     list_workspaces: async () => window.__mockResponses.list_workspaces || [],
+    load_calendar_preset: async (id) => ({ status: "success", preset_id: id, count: 15, exceptions: [] }),
     load_workspace: async (id) => ({ status: "success", workspace: { name: "Mock Workspace", id: id } }),
     open_file: async (f) => ({ status: "success" }),
     open_log_folder: async () => ({ status: "success" }),

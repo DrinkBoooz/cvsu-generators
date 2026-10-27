@@ -24,10 +24,150 @@ from modules.models.calendar import (
     CalendarException,
     CalendarExceptionCategory,
     CalendarExceptionMode,
+    CalendarTimeScope,
     CATEGORY_TAG_MAP,
     RecurrenceRule,
     ResolvedDateInfo,
 )
+
+
+_TIME_RANGE_RE = re.compile(
+    r"(\d{1,2}):(\d{2})\s*(AM|PM|NN|NOON)?\s*[-–to]+\s*(\d{1,2}):(\d{2})\s*(AM|PM|NN|NOON)?",
+    re.IGNORECASE,
+)
+_SIMPLE_TIME_RE = re.compile(
+    r"(\d{1,2})\s*(AM|PM|NN|NOON)?\s*[-–to]+\s*(\d{1,2})\s*(AM|PM|NN|NOON)?",
+    re.IGNORECASE,
+)
+
+
+def parse_class_time_range(time_str: str) -> Optional[Tuple[int, int]]:
+    """
+    Parses class schedule time ranges into minute intervals from midnight (0 to 1440).
+    Supports formats like:
+      - "07:00-10:00AM" -> (420, 600)
+      - "7:00-10:00AM"  -> (420, 600)
+      - "1:00-4:00PM"   -> (780, 960)
+      - "10:00AM-1:00PM"-> (600, 780)
+      - "12:00NN-3:00PM"-> (720, 900)
+      - "12:00-3:00PM"  -> (720, 900)
+      - "13:00-16:00"   -> (780, 960)
+    """
+    if not time_str:
+        return None
+
+    clean = time_str.strip()
+    m = _TIME_RANGE_RE.search(clean)
+    if m:
+        h1, m1, mer1, h2, m2, mer2 = m.groups()
+        h1, m1, h2, m2 = int(h1), int(m1), int(h2), int(m2)
+    else:
+        m2_simple = _SIMPLE_TIME_RE.search(clean)
+        if not m2_simple:
+            return None
+        h1, mer1, h2, mer2 = m2_simple.groups()
+        h1, m1, h2, m2 = int(h1), 0, int(h2), 0
+
+    mer1 = (mer1 or "").upper()
+    mer2 = (mer2 or "").upper()
+
+    if mer1 in ("NN", "NOON"):
+        mer1 = "PM"
+        h1 = 12
+    if mer2 in ("NN", "NOON"):
+        mer2 = "PM"
+        h2 = 12
+
+    if not mer1 and mer2:
+        if mer2 == "AM":
+            mer1 = "AM"
+        elif mer2 == "PM":
+            if 7 <= h1 <= 11 and (h2 < h1 or h2 == 12):
+                mer1 = "AM"
+            else:
+                mer1 = "PM"
+    elif mer1 and not mer2:
+        mer2 = mer1
+    elif not mer1 and not mer2:
+        if h1 >= 12 or h2 >= 12:
+            mer1 = "24H"
+            mer2 = "24H"
+        else:
+            mer1 = "AM" if 7 <= h1 <= 11 else "PM"
+            mer2 = "AM" if (7 <= h2 <= 11 and h2 >= h1) else "PM"
+
+    def _to_mins(h: int, mn: int, mer: str) -> int:
+        if mer == "24H":
+            return h * 60 + mn
+        if mer == "PM" and h < 12:
+            h += 12
+        elif mer == "AM" and h == 12:
+            h = 0
+        return h * 60 + mn
+
+    s_mins = _to_mins(h1, m1, mer1)
+    e_mins = _to_mins(h2, m2, mer2)
+    if s_mins >= e_mins:
+        return None
+    return (s_mins, e_mins)
+
+
+def _extract_slot_for_weekday(schedule: Optional[str], target_weekday: int) -> Optional[str]:
+    """
+    Given a schedule string (which may have multi-day definitions like
+    'M: 07:00-10:00AM; W: 13:00-16:00' or 'F 07:00-10:00AM'), extracts the
+    slot relevant to target_weekday (0=Mon..6=Sun).
+    Falls back to schedule string if no day-specific prefix is found.
+    """
+    if not schedule:
+        return None
+
+    if ":" in schedule or ";" in schedule:
+        days_map = {
+            "m": 0, "mon": 0, "monday": 0,
+            "t": 1, "tue": 1, "tues": 1, "tuesday": 1,
+            "w": 2, "wed": 2, "wednesday": 2,
+            "th": 3, "thu": 3, "thur": 3, "thurs": 3, "thursday": 3,
+            "f": 4, "fri": 4, "friday": 4,
+            "s": 5, "sat": 5, "saturday": 5,
+            "su": 6, "sun": 6, "sunday": 6,
+        }
+        for segment in re.split(r"[;\n|]+", schedule):
+            seg = segment.strip()
+            if not seg:
+                continue
+            if ":" in seg:
+                day_part, time_part = seg.split(":", 1)
+                for tok in re.split(r"[\s,]+", day_part.lower()):
+                    if tok in days_map and days_map[tok] == target_weekday:
+                        return time_part.strip()
+            else:
+                parts = seg.split(None, 1)
+                if len(parts) == 2 and parts[0].lower() in days_map:
+                    if days_map[parts[0].lower()] == target_weekday:
+                        return parts[1].strip()
+
+    return schedule
+
+
+def _is_disrupted(exc: CalendarException, class_time_range: Optional[str]) -> bool:
+    """
+    Determines whether a time-bounded exception disrupts a class.
+    If the exception is ALL_DAY or no class_time_range is specified, returns True.
+    Otherwise, evaluates minute interval overlap: max(c_start, e_start) < min(c_end, e_end).
+    """
+    if exc.time_scope == CalendarTimeScope.ALL_DAY or not class_time_range:
+        return True
+
+    class_window = parse_class_time_range(class_time_range)
+    if not class_window:
+        return True
+
+    c_s, c_e = class_window
+    e_s, e_e = exc.get_effective_minutes_window()
+
+    return max(c_s, e_s) < min(c_e, e_e)
+
 
 
 def compute_nth_weekday(year: int, month: int, weekday: int, nth: Union[int, str]) -> date:
@@ -85,6 +225,10 @@ def get_default_cavite_recurrence_rules() -> List[RecurrenceRule]:
 def _categorize_label(label: str) -> str:
     """Auto-categorizes calendar events based on institutional keywords."""
     low = label.lower()
+    if any(k in low for k in ("leave", "personal leave", "sick leave", "on leave")):
+        return CalendarExceptionCategory.INSTRUCTOR_LEAVE
+    if any(k in low for k in ("adm", "async", "asynchronous", "online class", "online modality")):
+        return CalendarExceptionCategory.ADM_ASYNC
     if any(k in low for k in ("exam", "examination", "midterm", "finals", "test")):
         return CalendarExceptionCategory.EXAM
     if any(k in low for k in ("suspension", "suspended", "walang pasok", "walangpasok", "typhoon", "bagyo", "flood", "strike", "weather", "storm", "rain")):
@@ -409,14 +553,22 @@ class CalendarResolver:
                 logger.warning(f"Failed resolving recurrence rule '{r.name}' for {year}: {e}")
         return res
 
-    def resolve_date(self, target_date: date) -> ResolvedDateInfo:
+    def resolve_date(
+        self,
+        target_date: date,
+        class_time_range: Optional[str] = None,
+    ) -> ResolvedDateInfo:
         """
         Resolves a single date across all 3 layers.
         Precedence:
           1. Layer 3: Interactive Overrides
-          2. Layer 2: Manual Exceptions (.ics / Announcements)
+          2. Layer 2: Manual Exceptions (.ics / Announcements / Presets)
           3. Layer 1: Recurrence Rules
           4. Default: ACTIVE
+
+        If class_time_range is provided and an exception is time-bounded (e.g. MIDDAY_ONWARDS,
+        AFTERNOON_1PM), checks for minute interval overlap. If the class session completed
+        prior to the disruption start, resolves to ACTIVE.
         """
         d_iso = target_date.isoformat()
 
@@ -427,10 +579,12 @@ class CalendarResolver:
                 status = ov.upper()
                 label = ""
                 mode = self.default_mode.upper()
+                time_scope = CalendarTimeScope.ALL_DAY
             else:
                 status = ov.get("status", CalendarExceptionCategory.ACTIVE).upper()
                 label = ov.get("label", "")
                 mode = ov.get("mode", self.default_mode).upper()
+                time_scope = ov.get("time_scope", CalendarTimeScope.ALL_DAY)
             tag = CATEGORY_TAG_MAP.get(status, "")
             return ResolvedDateInfo(
                 date=target_date,
@@ -438,11 +592,15 @@ class CalendarResolver:
                 label=label,
                 mode=mode,
                 display_tag=tag,
+                time_scope=time_scope,
             )
 
         # Layer 2: Exceptions (latest takes priority)
         for exc in reversed(self.exceptions):
             if exc.spans_date(target_date):
+                if not _is_disrupted(exc, class_time_range):
+                    # Class was completed in morning or outside disruption window!
+                    continue
                 mode = (exc.mode or self.default_mode).upper()
                 tag = CATEGORY_TAG_MAP.get(exc.category, "HOLIDAY")
                 return ResolvedDateInfo(
@@ -451,11 +609,14 @@ class CalendarResolver:
                     label=exc.label,
                     mode=mode,
                     display_tag=tag,
+                    time_scope=exc.time_scope,
                 )
 
         # Layer 1: Recurring Holidays
         for exc in self.get_recurring_holidays(target_date.year):
             if exc.spans_date(target_date):
+                if not _is_disrupted(exc, class_time_range):
+                    continue
                 mode = (exc.mode or self.default_mode).upper()
                 tag = CATEGORY_TAG_MAP.get(exc.category, "HOLIDAY")
                 return ResolvedDateInfo(
@@ -464,6 +625,7 @@ class CalendarResolver:
                     label=exc.label,
                     mode=mode,
                     display_tag=tag,
+                    time_scope=exc.time_scope,
                 )
 
         # Default: Active session
@@ -473,12 +635,14 @@ class CalendarResolver:
             label="",
             mode=self.default_mode,
             display_tag="",
+            time_scope=CalendarTimeScope.ALL_DAY,
         )
 
     def filter_or_stamp_dates(
         self,
         class_dates: List[date],
         default_mode: Optional[str] = None,
+        class_time_range: Optional[str] = None,
     ) -> Tuple[List[date], Dict[int, str]]:
         """
         Processes candidate class dates according to resolved modes.
@@ -491,11 +655,12 @@ class CalendarResolver:
         stamped_tags: Dict[int, str] = {}
 
         for dt in class_dates:
-            info = self.resolve_date(dt)
+            slot = _extract_slot_for_weekday(class_time_range, dt.weekday())
+            info = self.resolve_date(dt, class_time_range=slot)
             if info.is_working_session:
                 final_dates.append(dt)
             else:
-                # Non-working date (HOLIDAY, SUSPENDED, EXAM, EVENT)
+                # Non-working date (HOLIDAY, SUSPENDED, INSTRUCTOR_LEAVE, ADM_ASYNC, EXAM, EVENT)
                 effective_mode = (info.mode or mode_policy).upper()
                 if effective_mode == CalendarExceptionMode.OMIT_COLUMN:
                     # Exclude non-working date from column sequence
@@ -515,6 +680,7 @@ class CalendarResolver:
         weekdays: List[int],
         start_bound: Optional[Tuple[int, int]] = None,
         end_bound: Optional[Tuple[int, int]] = None,
+        class_time_range: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         Generates full metadata for UI strip rendering of candidate dates in a semester.
@@ -525,7 +691,8 @@ class CalendarResolver:
 
         day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
         for dt in raw_dates:
-            res = self.resolve_date(dt)
+            slot = _extract_slot_for_weekday(class_time_range, dt.weekday())
+            res = self.resolve_date(dt, class_time_range=slot)
             preview.append({
                 "date": dt.isoformat(),
                 "date_str": dt.isoformat(),
@@ -539,6 +706,7 @@ class CalendarResolver:
                 "label": res.label,
                 "mode": res.mode,
                 "display_tag": res.display_tag,
+                "time_scope": res.time_scope,
                 "is_active": res.is_working_session,
                 "is_working": res.is_working_session,
             })

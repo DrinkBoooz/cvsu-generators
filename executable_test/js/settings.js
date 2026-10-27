@@ -999,6 +999,12 @@
           modeSelect.value = activeCalendarConfig.default_mode || "OMIT_COLUMN";
         }
 
+        // Load presets dropdown
+        await loadCalendarPresetsUI();
+
+        // Render exceptions table
+        renderCalendarExceptionsTable();
+
         // Render recurrence rules badges
         renderRecurrenceRulesUI();
 
@@ -1091,6 +1097,9 @@
               const newExceptions = res.exceptions || [];
               activeCalendarConfig.exceptions.push(...newExceptions);
 
+              await saveActiveCalendarConfig();
+              renderCalendarExceptionsTable();
+
               if (feedback) {
                 feedback.innerHTML = `<span style="color: var(--accent-emerald);">✓ Parsed and registered <strong>${newExceptions.length}</strong> calendar exception(s).</span>`;
               }
@@ -1127,6 +1136,10 @@
               }
               const newExceptions = res.exceptions || [];
               activeCalendarConfig.exceptions.push(...newExceptions);
+
+              await saveActiveCalendarConfig();
+              renderCalendarExceptionsTable();
+
               if (typeof showToast === "function") {
                 showToast("iCalendar Imported", `Loaded ${newExceptions.length} calendar event(s) from .ics file.`, "success");
               }
@@ -1157,13 +1170,8 @@
         if (feedback) {
           feedback.innerHTML = `<span style="color: var(--text-muted);">Exceptions cleared.</span>`;
         }
-        if (
-          window.pywebview &&
-          window.pywebview.api &&
-          window.pywebview.api.save_calendar_config
-        ) {
-          await window.pywebview.api.save_calendar_config(activeCalendarConfig);
-        }
+        await saveActiveCalendarConfig();
+        renderCalendarExceptionsTable();
         if (typeof showToast === "function") {
           showToast("Exceptions Cleared", "Cleared Layer 2 memo/calendar exceptions.", "info");
         }
@@ -1267,11 +1275,24 @@
             } else if (cat === "SUSPENDED") {
               pillClass = "cal-date-pill-suspended";
               tagBg = "var(--accent-amber)";
-              tagText = "SUSP.";
+              const tscope = (d.time_scope || "").toUpperCase();
+              if (tscope === "MIDDAY_ONWARDS") tagText = "SUSP. (12NN)";
+              else if (tscope === "AFTERNOON_1PM") tagText = "SUSP. (1PM)";
+              else tagText = "SUSP.";
               icon = "🟠";
+            } else if (cat === "INSTRUCTOR_LEAVE" || cat === "LEAVE") {
+              pillClass = "cal-date-pill-leave";
+              tagBg = "var(--accent-purple, #8b5cf6)";
+              tagText = "LEAVE";
+              icon = "🏖️";
+            } else if (cat === "ADM_ASYNC" || cat === "ADM") {
+              pillClass = "cal-date-pill-adm";
+              tagBg = "var(--accent-teal, #0d9488)";
+              tagText = "ADM";
+              icon = "💻";
             } else if (cat === "EXAM") {
               pillClass = "cal-date-pill-exam";
-              tagBg = "var(--accent-purple, #8b5cf6)";
+              tagBg = "#6366f1";
               tagText = "EXAM";
               icon = "🟣";
             } else if (cat === "EVENT") {
@@ -1327,11 +1348,13 @@
           effectiveStatus = item ? (item.category || "ACTIVE").toUpperCase() : "ACTIVE";
         }
 
-        // Cycle: ACTIVE -> HOLIDAY -> SUSPENDED -> EXAM -> EVENT -> ACTIVE
+        // Cycle: ACTIVE -> HOLIDAY -> SUSPENDED -> INSTRUCTOR_LEAVE -> ADM_ASYNC -> EXAM -> EVENT -> ACTIVE
         let nextStatus = "HOLIDAY";
         if (effectiveStatus === "ACTIVE") nextStatus = "HOLIDAY";
         else if (effectiveStatus === "HOLIDAY") nextStatus = "SUSPENDED";
-        else if (effectiveStatus === "SUSPENDED") nextStatus = "EXAM";
+        else if (effectiveStatus === "SUSPENDED") nextStatus = "INSTRUCTOR_LEAVE";
+        else if (effectiveStatus === "INSTRUCTOR_LEAVE" || effectiveStatus === "LEAVE") nextStatus = "ADM_ASYNC";
+        else if (effectiveStatus === "ADM_ASYNC" || effectiveStatus === "ADM") nextStatus = "EXAM";
         else if (effectiveStatus === "EXAM") nextStatus = "EVENT";
         else if (effectiveStatus === "EVENT") nextStatus = "ACTIVE";
 
@@ -1397,6 +1420,250 @@
         return dates;
       }
 
+      async function saveActiveCalendarConfig() {
+        if (!activeCalendarConfig) return;
+        if (activeParserConfig) {
+          if (!activeParserConfig.calendar_config) activeParserConfig.calendar_config = {};
+          Object.assign(activeParserConfig.calendar_config, activeCalendarConfig);
+        }
+        if (
+          window.pywebview &&
+          window.pywebview.api &&
+          window.pywebview.api.save_calendar_config
+        ) {
+          try {
+            await window.pywebview.api.save_calendar_config(activeCalendarConfig);
+          } catch (e) {
+            console.warn("Could not save calendar config via bridge:", e);
+          }
+        }
+      }
+
+      function toggleAddExceptionForm(show) {
+        const form = document.getElementById("calAddExceptionForm");
+        if (!form) return;
+        if (show === undefined) {
+          form.style.display = form.style.display === "none" ? "block" : "none";
+        } else {
+          form.style.display = show ? "block" : "none";
+        }
+        if (form.style.display === "block") {
+          const startInp = document.getElementById("newExcStartDate");
+          if (startInp && !startInp.value) {
+            startInp.value = new Date().toISOString().substring(0, 10);
+          }
+        }
+      }
+
+      async function saveNewCalendarExceptionFromUI() {
+        const startInp = document.getElementById("newExcStartDate");
+        const endInp = document.getElementById("newExcEndDate");
+        const catSelect = document.getElementById("newExcCategory");
+        const scopeSelect = document.getElementById("newExcTimeScope");
+        const labelInp = document.getElementById("newExcLabel");
+
+        if (!startInp || !startInp.value) {
+          if (typeof showToast === "function") {
+            showToast("Date Required", "Please provide at least a start date.", "warning");
+          }
+          return;
+        }
+
+        const startDate = startInp.value;
+        const endDate = (endInp && endInp.value) ? endInp.value : startDate;
+        const category = (catSelect && catSelect.value) || "SUSPENDED";
+        const timeScope = (scopeSelect && scopeSelect.value) || "ALL_DAY";
+        const label = (labelInp && labelInp.value.trim()) || category;
+
+        if (!activeCalendarConfig) activeCalendarConfig = {};
+        if (!Array.isArray(activeCalendarConfig.exceptions)) activeCalendarConfig.exceptions = [];
+
+        activeCalendarConfig.exceptions.push({
+          start_date: startDate,
+          end_date: endDate,
+          category: category,
+          time_scope: timeScope,
+          label: label,
+        });
+
+        await saveActiveCalendarConfig();
+        renderCalendarExceptionsTable();
+        await renderCalendarDateStrip();
+        toggleAddExceptionForm(false);
+        if (labelInp) labelInp.value = "";
+        if (typeof showToast === "function") {
+          showToast("Exception Added", `Saved: ${label} (${startDate})`, "success");
+        }
+      }
+
+      async function deleteCalendarException(idx) {
+        if (!activeCalendarConfig || !Array.isArray(activeCalendarConfig.exceptions)) return;
+        if (idx < 0 || idx >= activeCalendarConfig.exceptions.length) return;
+        const removed = activeCalendarConfig.exceptions.splice(idx, 1)[0];
+        await saveActiveCalendarConfig();
+        renderCalendarExceptionsTable();
+        await renderCalendarDateStrip();
+        if (typeof showToast === "function") {
+          showToast("Exception Removed", `Removed: ${removed.label || 'Exception'}`, "info");
+        }
+      }
+
+      function renderCalendarExceptionsTable() {
+        const tbody = document.getElementById("calExceptionsTableBody");
+        const countSpan = document.getElementById("calExceptionsCount");
+        if (!tbody || !activeCalendarConfig) return;
+
+        const exceptions = activeCalendarConfig.exceptions || [];
+        if (countSpan) countSpan.innerText = String(exceptions.length);
+
+        if (exceptions.length === 0) {
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="5" style="text-align: center; padding: 14px; color: var(--text-muted);">
+                No exceptions or leaves registered. Load an institutional preset, paste a memo announcement, or click "+ Add Exception / Leave / ADM".
+              </td>
+            </tr>
+          `;
+          return;
+        }
+
+        tbody.innerHTML = exceptions
+          .map((exc, idx) => {
+            const start = exc.start_date || exc.date_str || "";
+            const end = exc.end_date || start;
+            const dateStr = start === end ? start : `${start} to ${end}`;
+            const cat = (exc.category || "HOLIDAY").toUpperCase();
+            const scope = (exc.time_scope || "ALL_DAY").toUpperCase();
+
+            let catColor = "var(--accent-rose)";
+            let catLabel = "Holiday";
+            if (cat === "SUSPENDED") {
+              catColor = "var(--accent-amber)";
+              catLabel = "Suspension";
+            } else if (cat === "INSTRUCTOR_LEAVE" || cat === "LEAVE") {
+              catColor = "var(--accent-purple, #8b5cf6)";
+              catLabel = "Instructor Leave";
+            } else if (cat === "ADM_ASYNC" || cat === "ADM") {
+              catColor = "var(--accent-teal, #0d9488)";
+              catLabel = "ADM / Online";
+            } else if (cat === "EXAM") {
+              catColor = "#6366f1";
+              catLabel = "Exam Week";
+            } else if (cat === "EVENT") {
+              catColor = "var(--accent-blue)";
+              catLabel = "Event";
+            }
+
+            let scopeLabel = "All Day";
+            if (scope === "MIDDAY_ONWARDS") scopeLabel = "12:00 NN Onwards";
+            else if (scope === "AFTERNOON_1PM") scopeLabel = "1:00 PM Onwards";
+            else if (scope === "MORNING_ONLY") scopeLabel = "Morning Only";
+            else if (scope === "CUSTOM_TIME") scopeLabel = `${exc.start_time || ''}-${exc.end_time || ''}`;
+
+            return `
+              <tr style="border-bottom: 1px solid var(--border-subtle);">
+                <td style="padding: 6px 8px; font-weight: 600; color: var(--text-primary);">${escapeHTML(dateStr)}</td>
+                <td style="padding: 6px 8px;">
+                  <span style="display: inline-block; padding: 1px 6px; font-size: 10px; font-weight: 700; border-radius: 4px; background: ${catColor}; color: #fff;">
+                    ${escapeHTML(catLabel)}
+                  </span>
+                </td>
+                <td style="padding: 6px 8px; color: var(--text-secondary); font-size: 11px;">
+                  ${escapeHTML(scopeLabel)}
+                </td>
+                <td style="padding: 6px 8px; color: var(--text-secondary);">${escapeHTML(exc.label || '')}</td>
+                <td style="padding: 6px 8px; text-align: center;">
+                  <button
+                    type="button"
+                    class="nav-btn"
+                    onclick="deleteCalendarException(${idx})"
+                    style="font-size: 10px; padding: 2px 6px; color: var(--accent-rose); border-color: rgba(239, 68, 68, 0.3);"
+                    title="Delete exception"
+                  >
+                    🗑️
+                  </button>
+                </td>
+              </tr>
+            `;
+          })
+          .join("");
+      }
+
+      async function loadCalendarPresetsUI() {
+        const select = document.getElementById("calPresetSelect");
+        if (!select) return;
+        if (
+          window.pywebview &&
+          window.pywebview.api &&
+          window.pywebview.api.get_calendar_presets
+        ) {
+          try {
+            const res = await window.pywebview.api.get_calendar_presets();
+            if (res && res.status === "success" && Array.isArray(res.presets)) {
+              let optHtml = '<option value="">-- Select Verified Academic Calendar Preset --</option>';
+              res.presets.forEach((p) => {
+                optHtml += `<option value="${escapeHTML(p.id)}">${escapeHTML(p.name)} (${p.count} events)</option>`;
+              });
+              select.innerHTML = optHtml;
+            }
+          } catch (e) {
+            console.warn("Could not fetch calendar presets:", e);
+          }
+        }
+      }
+
+      async function loadSelectedCalendarPresetFromUI() {
+        const select = document.getElementById("calPresetSelect");
+        const feedback = document.getElementById("calPresetFeedback");
+        if (!select || !select.value) {
+          if (typeof showToast === "function") {
+            showToast("Select Preset", "Please choose an academic calendar preset from the dropdown first.", "warning");
+          }
+          return;
+        }
+        const presetId = select.value;
+        if (
+          window.pywebview &&
+          window.pywebview.api &&
+          window.pywebview.api.load_calendar_preset
+        ) {
+          try {
+            const res = await window.pywebview.api.load_calendar_preset(presetId);
+            if (res && res.status === "success" && res.preset) {
+              if (!activeCalendarConfig) activeCalendarConfig = {};
+              if (!Array.isArray(activeCalendarConfig.exceptions)) {
+                activeCalendarConfig.exceptions = [];
+              }
+              const newExceptions = res.preset.exceptions || [];
+              let addedCount = 0;
+              newExceptions.forEach((ne) => {
+                const sDate = ne.start_date || ne.date_str;
+                const exists = activeCalendarConfig.exceptions.some(
+                  (e) => (e.start_date === sDate || e.date_str === sDate) && e.label === ne.label
+                );
+                if (!exists) {
+                  activeCalendarConfig.exceptions.push(ne);
+                  addedCount++;
+                }
+              });
+
+              await saveActiveCalendarConfig();
+              renderCalendarExceptionsTable();
+              await renderCalendarDateStrip();
+
+              if (feedback) {
+                feedback.innerHTML = `<span style="color: var(--accent-emerald);">✓ Successfully loaded <strong>${addedCount}</strong> event(s) from preset: <em>${escapeHTML(res.preset.name)}</em>.</span>`;
+              }
+              if (typeof showToast === "function") {
+                showToast("Preset Loaded", `Loaded ${addedCount} events from ${res.preset.name}.`, "success");
+              }
+            }
+          } catch (err) {
+            console.error("Failed loading calendar preset:", err);
+          }
+        }
+      }
+
       // Expose globally for testing
       window.updateAccessibilitySettingsUI = updateAccessibilitySettingsUI;
       window.onAccessibilityMotionChange = onAccessibilityMotionChange;
@@ -1412,3 +1679,9 @@
       window.renderCalendarDateStrip = renderCalendarDateStrip;
       window.cycleCalendarDateStatus = cycleCalendarDateStatus;
       window.onCalendarDateKeyDown = onCalendarDateKeyDown;
+      window.toggleAddExceptionForm = toggleAddExceptionForm;
+      window.saveNewCalendarExceptionFromUI = saveNewCalendarExceptionFromUI;
+      window.deleteCalendarException = deleteCalendarException;
+      window.renderCalendarExceptionsTable = renderCalendarExceptionsTable;
+      window.loadCalendarPresetsUI = loadCalendarPresetsUI;
+      window.loadSelectedCalendarPresetFromUI = loadSelectedCalendarPresetFromUI;

@@ -366,6 +366,76 @@ def test_attendance_generation_stamp_column_mode(tmp_path):
     assert student_date_texts[4] == "HOLIDAY"
 
 
+def test_attendance_generation_leave_and_adm_stamping(tmp_path):
+    """
+    Verifies that AttendanceGenerator with STAMP_COLUMN mode correctly stamps
+    'LEAVE' for instructor personal leaves and 'ADM' for alternative learning modalities.
+    """
+    template_path = get_default_template_path(has_lab=False)
+    output_docx = str(tmp_path / "attendance_leave_adm_stamp.docx")
+
+    exc_leave = CalendarException(
+        start_date=date(2026, 10, 7),
+        end_date=date(2026, 10, 7),
+        label="Instructor On Leave",
+        category=CalendarExceptionCategory.INSTRUCTOR_LEAVE,
+        mode="STAMP_COLUMN",
+    )
+    exc_adm = CalendarException(
+        start_date=date(2026, 10, 14),
+        end_date=date(2026, 10, 14),
+        label="Shift to ADM Modality",
+        category=CalendarExceptionCategory.ADM_ASYNC,
+        mode="STAMP_COLUMN",
+    )
+    resolver = CalendarResolver(rules=[], exceptions=[exc_leave, exc_adm], default_mode="STAMP_COLUMN")
+
+    students = [
+        ("Ortega, Dan Joseph", "202010123"),
+    ]
+
+    recipe = TemplateRecipeResolver.get_instance().resolve(template_path, profile_id="attendance_docx")
+    generator = AttendanceGenerator(template_path, recipe)
+
+    generator.generate(
+        output_path=output_docx,
+        course_code_title="COSC 101 - Advanced Programming",
+        class_schedule="7:00-10:00AM / Wed",
+        semester_ay="First Semester / A.Y. 2026-2027",
+        room_assignment="CL 1",
+        instructor="Dan Joseph Ortega",
+        months=[10],
+        year=2026,
+        weekdays=[2],  # Wednesday (Oct 7, 14, 21, 28)
+        students=students,
+        calendar_resolver=resolver,
+    )
+
+    assert os.path.exists(output_docx)
+    zin, root, body = load_docx(output_docx)
+    tables = body.findall(w("tbl"))
+    matrix_tbl = tables[1]
+    rows = matrix_tbl.findall(w("tr"))
+
+    # Header dates (Oct 7, 14, 21, 28)
+    header1 = rows[1]
+    cells = header1.findall(w("tc"))
+    date_cells = cells[3:7]
+    date_texts = ["".join(tc.itertext()).strip() for tc in date_cells]
+    assert date_texts == ["7", "14", "21", "28"]
+
+    # Student row: Oct 7 has "LEAVE", Oct 14 has "ADM", Oct 21 and 28 are active ("")
+    student_row1 = rows[2]
+    student_cells = student_row1.findall(w("tc"))
+    student_date_cells = student_cells[3:7]
+    student_date_texts = ["".join(tc.itertext()).strip() for tc in student_date_cells]
+
+    assert student_date_texts[0] == "LEAVE"
+    assert student_date_texts[1] == "ADM"
+    assert student_date_texts[2] == ""
+    assert student_date_texts[3] == ""
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Bridge API & UI Accessibility Integration Tests
 # ─────────────────────────────────────────────────────────────────────────────
@@ -446,4 +516,131 @@ def test_ui_calendar_tab_and_accessibility_attributes():
     assert 'id="calDateStripContainer"' in html
     assert 'id="calDateStripStats"' in html
     assert 'id="calRecurrenceRulesList"' in html
+
+    # New preset loader and structured exceptions table controls
+    assert 'id="calPresetSelect"' in html
+    assert 'id="btnLoadCalPreset"' in html
+    assert 'id="calendarExceptionsTable"' in html
+    assert 'id="calExceptionsTableBody"' in html
+    assert 'id="calAddExceptionForm"' in html
+    assert 'id="btnOpenAddExceptionModal"' in html
+
+
+def test_time_aware_slot_sensitivity_and_suspension_thresholds():
+    """
+    Real-world verification using the historical CvSU Indang August 2026 data:
+    - Aug 14, 2026: Executive Order No. 27 suspended classes from 12:00 NN onwards.
+      Morning class (7:00-10:00 AM) finished completely without disruption -> ACTIVE.
+      Afternoon class (1:00-4:00 PM) was disrupted -> SUSPENDED.
+    - Aug 28, 2026: Memorandum Circular No. 132 suspended classes from 1:00 PM onwards.
+      Morning class (7:00-10:00 AM) finished -> ACTIVE.
+      Midday class (10:00 AM-1:00 PM) finished right at 1:00 PM -> ACTIVE.
+      Afternoon class (1:00-4:00 PM) disrupted -> SUSPENDED.
+    """
+    from modules.models.calendar import CalendarTimeScope
+    from modules.parsers.calendar_resolver import parse_class_time_range
+
+    # Verify time range parser
+    assert parse_class_time_range("07:00-10:00AM") == (420, 600)
+    assert parse_class_time_range("7:00-10:00AM") == (420, 600)
+    assert parse_class_time_range("1:00-4:00PM") == (780, 960)
+    assert parse_class_time_range("10:00AM-1:00PM") == (600, 780)
+    assert parse_class_time_range("12:00NN-3:00PM") == (720, 900)
+
+    # Setup resolver with August 14 and August 28 exceptions
+    exc_aug14 = CalendarException(
+        start_date=date(2026, 8, 14),
+        end_date=date(2026, 8, 14),
+        label="Executive Order No. 27 (Suspension from 12:00 NN onwards)",
+        category=CalendarExceptionCategory.SUSPENDED,
+        time_scope=CalendarTimeScope.MIDDAY_ONWARDS,
+    )
+    exc_aug28 = CalendarException(
+        start_date=date(2026, 8, 28),
+        end_date=date(2026, 8, 28),
+        label="Memorandum Circular No. 132 (Suspension from 1:00 PM onwards)",
+        category=CalendarExceptionCategory.SUSPENDED,
+        time_scope=CalendarTimeScope.AFTERNOON_1PM,
+    )
+    resolver = CalendarResolver(rules=[], exceptions=[exc_aug14, exc_aug28])
+
+    # Aug 14: Morning class (7-10 AM) is unaffected
+    res_morning_14 = resolver.resolve_date(date(2026, 8, 14), class_time_range="07:00-10:00AM")
+    assert res_morning_14.is_working_session is True
+    assert res_morning_14.status == CalendarExceptionCategory.ACTIVE
+
+    # Aug 14: Afternoon class (1-4 PM) is suspended
+    res_afternoon_14 = resolver.resolve_date(date(2026, 8, 14), class_time_range="1:00-4:00PM")
+    assert res_afternoon_14.is_working_session is False
+    assert res_afternoon_14.status == CalendarExceptionCategory.SUSPENDED
+    assert "Executive Order No. 27" in res_afternoon_14.label
+
+    # Aug 28: Morning class (7-10 AM) is unaffected
+    res_morning_28 = resolver.resolve_date(date(2026, 8, 28), class_time_range="07:00-10:00AM")
+    assert res_morning_28.is_working_session is True
+
+    # Aug 28: Midday class (10 AM - 1 PM) is unaffected (finished before 1:00 PM cutoff)
+    res_midday_28 = resolver.resolve_date(date(2026, 8, 28), class_time_range="10:00AM-1:00PM")
+    assert res_midday_28.is_working_session is True
+
+    # Aug 28: Afternoon class (1-4 PM) is suspended
+    res_afternoon_28 = resolver.resolve_date(date(2026, 8, 28), class_time_range="1:00-4:00PM")
+    assert res_afternoon_28.is_working_session is False
+    assert res_afternoon_28.status == CalendarExceptionCategory.SUSPENDED
+
+
+def test_instructor_leave_and_adm_modality():
+    """Verify instructor leaves (Oct 7, 9) and ADM shift (Oct 14)."""
+    exc_leave1 = CalendarException(
+        start_date=date(2026, 10, 7),
+        end_date=date(2026, 10, 7),
+        label="Instructor Personal Leave",
+        category=CalendarExceptionCategory.INSTRUCTOR_LEAVE,
+    )
+    exc_leave2 = CalendarException(
+        start_date=date(2026, 10, 9),
+        end_date=date(2026, 10, 9),
+        label="Instructor On Leave",
+        category=CalendarExceptionCategory.INSTRUCTOR_LEAVE,
+    )
+    exc_adm = CalendarException(
+        start_date=date(2026, 10, 14),
+        end_date=date(2026, 10, 14),
+        label="Provincial Advisory (Shift to ADM Modality)",
+        category=CalendarExceptionCategory.ADM_ASYNC,
+    )
+    resolver = CalendarResolver(rules=[], exceptions=[exc_leave1, exc_leave2, exc_adm])
+
+    res_oct7 = resolver.resolve_date(date(2026, 10, 7))
+    assert res_oct7.status == CalendarExceptionCategory.INSTRUCTOR_LEAVE
+    assert res_oct7.display_tag == "LEAVE"
+    assert res_oct7.is_working_session is False
+
+    res_oct9 = resolver.resolve_date(date(2026, 10, 9))
+    assert res_oct9.status == CalendarExceptionCategory.INSTRUCTOR_LEAVE
+    assert res_oct9.display_tag == "LEAVE"
+
+    res_oct14 = resolver.resolve_date(date(2026, 10, 14))
+    assert res_oct14.status == CalendarExceptionCategory.ADM_ASYNC
+    assert res_oct14.display_tag == "ADM"
+
+
+def test_calendar_presets_api():
+    """Verify built-in presets endpoint and preset loading."""
+    from executable_test.api.config import ConfigMixin
+    bridge = ConfigMixin()
+
+    presets_res = bridge.get_calendar_presets()
+    assert presets_res["status"] == "success"
+    presets = presets_res["presets"]
+    assert any(p["id"] == "cvsu_indang_2026_sem1" for p in presets)
+
+    loaded = bridge.load_calendar_preset("cvsu_indang_2026_sem1")
+    assert loaded["status"] == "success"
+    assert len(loaded["preset"]["exceptions"]) >= 10
+    # Confirm Aug 14 midday and Aug 28 1pm are encoded in preset
+    exc_list = loaded["preset"]["exceptions"]
+    assert any("2026-08-14" in (e.get("start_date") or "") for e in exc_list)
+    assert any("2026-08-28" in (e.get("start_date") or "") for e in exc_list)
+
 

@@ -324,6 +324,35 @@ class ConfigMixin:
         cfg["calendar_config"] = calendar_dict
         return config_manager.save_config(cfg)
 
+    def get_calendar_presets(self):
+        """Returns available built-in academic calendar presets."""
+        from modules.models.calendar import CALENDAR_PRESETS
+        preset_list = []
+        for pid, pdata in CALENDAR_PRESETS.items():
+            preset_list.append({
+                "id": pid,
+                "name": pdata.get("name", pid),
+                "description": pdata.get("description", ""),
+                "count": len(pdata.get("exceptions", [])),
+            })
+        return {"status": "success", "presets": preset_list}
+
+    def load_calendar_preset(self, preset_id: str):
+        """Retrieves exceptions from a designated calendar preset."""
+        from modules.models.calendar import CALENDAR_PRESETS
+        preset = CALENDAR_PRESETS.get(preset_id)
+        if not preset:
+            return {"status": "error", "message": f"Preset '{preset_id}' not found"}
+        return {
+            "status": "success",
+            "preset": {
+                "id": preset_id,
+                "name": preset.get("name", preset_id),
+                "description": preset.get("description", ""),
+                "exceptions": preset.get("exceptions", []),
+            }
+        }
+
     def preview_calendar_dates(self, params):
         """Calculates candidate meeting dates for a schedule and month range."""
         from modules.parsers.calendar_resolver import CalendarResolver
@@ -335,6 +364,7 @@ class ConfigMixin:
         weekdays = params.get("weekdays", [0])
         start_bound = params.get("start_bound")
         end_bound = params.get("end_bound")
+        class_time_range = params.get("class_time_range")
 
         cal_cfg = params.get("calendar_config") or config_manager.get_config().get("calendar_config")
         resolver = CalendarResolver.from_dict(cal_cfg) if cal_cfg else CalendarResolver()
@@ -344,6 +374,7 @@ class ConfigMixin:
             weekdays=weekdays,
             start_bound=tuple(start_bound) if start_bound else None,
             end_bound=tuple(end_bound) if end_bound else None,
+            class_time_range=class_time_range,
         )
         return {"status": "success", "dates": dates_preview}
 
