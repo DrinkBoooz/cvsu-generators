@@ -2,6 +2,44 @@
 
 let currentRosterDiffPayload = null;
 
+function updateWorkspaceHeaderDisplay() {
+  const select = document.getElementById("selectWorkspace");
+  const btnSave = document.getElementById("btnSaveWorkspace");
+  if (!btnSave) return;
+
+  const activeId = state?.activeWorkspaceId || (select && select.value) || null;
+  const activeName = state?.activeWorkspaceName || (select && select.value ? select.options[select.selectedIndex]?.text : null);
+
+  if (activeId && activeName) {
+    btnSave.title = `Update current workspace "${activeName}"`;
+    btnSave.setAttribute("aria-label", `Update current workspace "${activeName}"`);
+  } else {
+    btnSave.title = "Save active semester state as new workspace";
+    btnSave.setAttribute("aria-label", "Save active semester state as new workspace");
+  }
+}
+
+function renderWorkspaceActiveBanner() {
+  const label = document.getElementById("workspaceActiveNameLabel");
+  const btnUpdate = document.getElementById("btnUpdateActiveWorkspace");
+  const activeId = state?.activeWorkspaceId;
+  const activeName = state?.activeWorkspaceName;
+
+  if (activeId && activeName) {
+    if (label) label.textContent = activeName;
+    if (btnUpdate) {
+      btnUpdate.classList.remove("d-none");
+      btnUpdate.textContent = `💾 Update "${activeName}"`;
+      btnUpdate.title = `Overwrite and update "${activeName}" with current session state`;
+    }
+  } else {
+    if (label) label.innerHTML = `<em>Default Workspace (Unsaved)</em>`;
+    if (btnUpdate) {
+      btnUpdate.classList.add("d-none");
+    }
+  }
+}
+
 async function loadWorkspaceListUI() {
   if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.list_workspaces) {
     return;
@@ -13,7 +51,7 @@ async function loadWorkspaceListUI() {
 
     // Populate dropdown
     if (select) {
-      const currentVal = select.value;
+      const currentVal = select.value || state?.activeWorkspaceId || "";
       select.innerHTML = `<option value="">Default Workspace</option>`;
       (workspaces || []).forEach((ws) => {
         const opt = document.createElement("option");
@@ -21,9 +59,14 @@ async function loadWorkspaceListUI() {
         opt.textContent = ws.name || ws.workspace_id;
         if (ws.workspace_id === currentVal) {
           opt.selected = true;
+          if (state) {
+            state.activeWorkspaceId = ws.workspace_id;
+            state.activeWorkspaceName = ws.name || ws.workspace_id;
+          }
         }
         select.appendChild(opt);
       });
+      updateWorkspaceHeaderDisplay();
     }
 
     // Populate Manager List
@@ -37,9 +80,13 @@ async function loadWorkspaceListUI() {
         const item = document.createElement("div");
         item.className = "workspace-card-item";
         const dateStr = ws.updated_at ? new Date(ws.updated_at).toLocaleDateString() : "";
+        const isActive = state?.activeWorkspaceId === ws.workspace_id;
         item.innerHTML = `
           <div>
-            <div style="font-weight: 700; font-size: 13px; color: var(--text-primary);">${escapeHTML(ws.name || ws.workspace_id)}</div>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span style="font-weight: 700; font-size: 13px; color: var(--text-primary);">${escapeHTML(ws.name || ws.workspace_id)}</span>
+              ${isActive ? `<span class="badge" style="background: rgba(34, 197, 94, 0.15); color: var(--accent-emerald); font-size: 10px; padding: 1px 6px; border-radius: 4px;">Active</span>` : ""}
+            </div>
             <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
               ${ws.rosters_count || 0} Rosters · Updated ${escapeHTML(dateStr)}
             </div>
@@ -62,7 +109,16 @@ async function loadWorkspaceListUI() {
 }
 
 async function onWorkspaceSelectChange(workspaceId) {
-  if (!workspaceId) return;
+  if (!workspaceId) {
+    if (state) {
+      state.activeWorkspaceId = null;
+      state.activeWorkspaceName = "Default Workspace";
+    }
+    updateWorkspaceHeaderDisplay();
+    renderWorkspaceActiveBanner();
+    showToast("Default Workspace", "Switched to Default Workspace", "info");
+    return;
+  }
   await loadWorkspaceById(workspaceId);
 }
 
@@ -78,6 +134,8 @@ async function loadWorkspaceById(workspaceId) {
       state.rosters = ws.rosters || [];
       state.rosterConfigs = ws.roster_configs || {};
       state.outputDir = ws.output_dir || "";
+      state.activeWorkspaceId = ws.workspace_id;
+      state.activeWorkspaceName = ws.name || ws.workspace_id;
 
       if (state.outputDir) {
         const outDisplay = document.getElementById("outputDisplay");
@@ -93,6 +151,8 @@ async function loadWorkspaceById(workspaceId) {
 
       const select = document.getElementById("selectWorkspace");
       if (select) select.value = ws.workspace_id;
+      updateWorkspaceHeaderDisplay();
+      renderWorkspaceActiveBanner();
 
       showToast("Workspace Loaded", `Loaded snapshot for ${ws.name}`, "success");
     } else {
@@ -108,6 +168,7 @@ function openWorkspaceModal() {
   const modal = document.getElementById("modalWorkspaceBackdrop");
   if (modal) {
     modal.classList.remove("d-none");
+    renderWorkspaceActiveBanner();
     loadWorkspaceListUI();
   }
 }
@@ -118,9 +179,19 @@ function closeWorkspaceModal() {
 }
 
 async function promptSaveCurrentWorkspace() {
-  const name = prompt("Enter a name for this Semester Workspace (e.g. '1st Sem AY 2026-2027'):", "");
-  if (!name || !name.trim()) return;
-  await executeSaveWorkspace(name.trim());
+  const select = document.getElementById("selectWorkspace");
+  const activeId = state?.activeWorkspaceId || (select && select.value) || null;
+  const activeName = state?.activeWorkspaceName || (select && select.value ? select.options[select.selectedIndex]?.text : null);
+
+  if (activeId && activeName) {
+    // Active workspace is loaded: directly update it!
+    await executeSaveWorkspace(activeName, activeId);
+  } else {
+    // On Default Workspace: prompt for a name to create a new workspace
+    const name = prompt("Enter a name for this Semester Workspace (e.g. '1st Sem AY 2026-2027'):", "");
+    if (!name || !name.trim()) return;
+    await executeSaveWorkspace(name.trim(), null);
+  }
 }
 
 async function saveCurrentWorkspaceFromUI() {
@@ -130,21 +201,42 @@ async function saveCurrentWorkspaceFromUI() {
     showToast("Name Required", "Please enter a workspace name", "warning");
     return;
   }
-  await executeSaveWorkspace(name);
+  await executeSaveWorkspace(name, null);
   if (input) input.value = "";
 }
 
-async function executeSaveWorkspace(name) {
+async function updateActiveWorkspaceFromUI() {
+  const activeId = state?.activeWorkspaceId;
+  const activeName = state?.activeWorkspaceName;
+  if (!activeId || !activeName) {
+    showToast("No Active Workspace", "Please select a workspace to update, or save as new.", "info");
+    return;
+  }
+  await executeSaveWorkspace(activeName, activeId);
+}
+
+async function executeSaveWorkspace(name, workspaceId = null) {
   if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.save_workspace) {
     return;
   }
   try {
-    const res = await window.pywebview.api.save_workspace(name);
+    const res = await window.pywebview.api.save_workspace(name, null, workspaceId);
     if (res && res.status === "success") {
-      showToast("Workspace Saved", `Saved workspace: ${name}`, "success");
+      const isUpdate = Boolean(workspaceId);
+      const title = isUpdate ? "Workspace Updated" : "Workspace Saved";
+      const desc = isUpdate ? `Updated active workspace: ${name}` : `Saved workspace: ${name}`;
+      showToast(title, desc, "success");
+
+      if (state) {
+        state.activeWorkspaceId = res.workspace?.workspace_id || workspaceId;
+        state.activeWorkspaceName = res.workspace?.name || name;
+      }
+
       await loadWorkspaceListUI();
       const select = document.getElementById("selectWorkspace");
       if (select && res.workspace) select.value = res.workspace.workspace_id;
+      updateWorkspaceHeaderDisplay();
+      renderWorkspaceActiveBanner();
     } else {
       showToast("Save Failed", res?.message || "Failed to save workspace", "error");
     }

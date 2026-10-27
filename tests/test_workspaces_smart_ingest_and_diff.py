@@ -344,3 +344,72 @@ def test_bridge_workspace_and_diff_endpoints(tmp_path):
     # Test preview_roster_diff with missing file
     diff_err = api.preview_roster_diff("COSC 101", "non_existent_file.xlsx")
     assert diff_err["status"] == "error"
+
+
+def test_config_manager_workspace_inplace_update(temp_config_manager):
+    """Verify that saving with an existing workspace_id updates the workspace in-place."""
+    save_res = temp_config_manager.save_workspace("1st Sem AY 2026-2027", {
+        "schedule_path": "C:/CvSU/sched.xlsx",
+        "rosters": ["C:/CvSU/r1.xlsx"],
+        "output_dir": "C:/CvSU/Output",
+    })
+    assert save_res["status"] == "success"
+    ws_id = save_res["workspace"]["workspace_id"]
+    assert ws_id == "1st-sem-ay-2026-2027"
+
+    # List workspaces
+    ws_list = temp_config_manager.list_workspaces()
+    assert len(ws_list) == 1
+    assert ws_list[0]["workspace_id"] == "1st-sem-ay-2026-2027"
+
+    # Update in-place with new output_dir and additional roster
+    update_res = temp_config_manager.save_workspace("1st Sem AY 2026-2027", {
+        "workspace_id": ws_id,
+        "schedule_path": "C:/CvSU/sched.xlsx",
+        "rosters": ["C:/CvSU/r1.xlsx", "C:/CvSU/r2.xlsx"],
+        "output_dir": "C:/CvSU/Updated_Output",
+    })
+    assert update_res["status"] == "success"
+
+    # Ensure no duplicates were created
+    ws_list_after = temp_config_manager.list_workspaces()
+    assert len(ws_list_after) == 1
+
+    loaded = temp_config_manager.get_workspace(ws_id)
+    assert loaded is not None
+    assert loaded["output_dir"] == "C:/CvSU/Updated_Output"
+    assert len(loaded["rosters"]) == 2
+
+
+
+def test_bridge_workspace_inplace_update(tmp_path):
+    """Verify that bridge save_workspace with workspace_id updates active workspace in-place."""
+    api = DummyMockAPI()
+
+    # Initial save
+    res1 = api.save_workspace("Midterm Workspace", {
+        "schedule_path": "C:/path/sched.xlsx",
+        "output_dir": "C:/path/out1",
+    })
+    assert res1["status"] == "success"
+    ws_id = res1["workspace"]["workspace_id"]
+    assert ws_id == "midterm-workspace"
+
+    # In-place update using workspace_id
+    res2 = api.save_workspace("Midterm Workspace Renamed", {
+        "schedule_path": "C:/path/sched_updated.xlsx",
+        "output_dir": "C:/path/out2",
+    }, workspace_id=ws_id)
+    assert res2["status"] == "success"
+    assert res2["workspace"]["workspace_id"] == ws_id
+    assert res2["workspace"]["output_dir"] == "C:/path/out2"
+
+    # Verify loaded workspace reflection
+    loaded = api.load_workspace(ws_id)
+    assert loaded["status"] == "success"
+    assert api.schedule_path == "C:/path/sched_updated.xlsx"
+    assert api.output_dir == "C:/path/out2"
+
+    # Cleanup
+    api.delete_workspace(ws_id)
+

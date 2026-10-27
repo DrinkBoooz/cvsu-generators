@@ -432,7 +432,7 @@ class ConfigMixin:
         from modules.common.config_manager import config_manager
         return config_manager.list_workspaces()
 
-    def save_workspace(self, name: str, workspace_dict: dict = None):
+    def save_workspace(self, name: str, workspace_dict: dict = None, workspace_id: str = None):
         """Saves current state or provided dictionary as a named semester workspace snapshot."""
         from modules.common.config_manager import config_manager
         if workspace_dict is None:
@@ -460,6 +460,11 @@ class ConfigMixin:
                 "calendar_config": cfg.get("calendar_config", {}),
                 "active_template_set": getattr(self, "active_template_set", ""),
             }
+            if workspace_id:
+                workspace_dict["workspace_id"] = workspace_id
+        elif workspace_id and "workspace_id" not in workspace_dict:
+            workspace_dict["workspace_id"] = workspace_id
+
         return config_manager.save_workspace(name, workspace_dict)
 
     def load_workspace(self, workspace_id_or_name: str):
