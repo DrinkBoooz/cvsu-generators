@@ -170,7 +170,7 @@ const rawMockApi = {
     get_active_template_set: async () => window.__mockResponses.get_active_template_set || { set_id: "builtin_cvsu" },
     get_calendar_config: async () => ({ default_mode: "OMIT_COLUMN", rules: [], exceptions: [], overrides: {} }),
     get_calendar_presets: async () => ([
-        { id: "cvsu_main_2026_first_sem", name: "CvSU Main Campus (Indang) - 1st Sem AY 2026-2027", campus: "CvSU Main (Indang)", academic_year: "AY 2026-2027", semester: "1st Semester", exception_count: 15 }
+        { id: "cvsu_indang_2026_sem1", name: "CvSU Main (Indang) — 1st Semester 2026-2027 (Aug–Oct Verified)", count: 15 }
     ]),
     get_ceit_prefix_directory: async () => ({ prefixes: {}, departments: {} }),
     get_custom_templates: async () => window.__mockResponses.get_custom_templates || [],
@@ -179,7 +179,7 @@ const rawMockApi = {
     get_parser_config: async () => ({ prefixes: {}, lab_courses: [] }),
     get_recent_logs: async (l) => "No log entries found.",
     get_template_grid_preview: async (path, max_rows) => ({ status: "success", preview: { tables: [] } }),
-    get_template_sets: async () => window.__mockResponses.get_template_sets || [],
+    get_template_sets: async () => window.__mockResponses.get_template_sets || ({ status: "success", template_sets: [], active_set_id: "builtin_cvsu" }),
     get_user_preferences: async (meta) => window.__mockResponses.get_user_preferences || (meta ? { version: "1.0", theme: "dark", accessibility: { motion: "system", transparency: "system" }, _persisted: true } : { version: "1.0", theme: "dark", accessibility: { motion: "system", transparency: "system" } }),
     handle_dropped_custom_template: async (f) => ({ status: "success" }),
     handle_dropped_rosters: async (f, cfg) => window.__mockResponses.handle_dropped_rosters || window.__mockResponses.browse_rosters,
@@ -445,8 +445,9 @@ def test_playwright_e2e_happy_path_workflow(app_page):
 
     # Assert exact structured API arguments and validate schema
     args = gen_calls[0]["args"]
-    assert len(args) == 5
-    type_overrides, date_overrides, selected_classes, enabled_engines, roster_configs = args
+    assert len(args) == 6
+    type_overrides, date_overrides, selected_classes, enabled_engines, roster_configs, export_pdf = args
+    assert export_pdf is False
     assert type_overrides == {"cls_1": "lecture_lab", "cls_2": "lecture_only"}
     assert date_overrides == {
         "startYear": 2026, "startMonth": 1, "startDay": 15,
@@ -772,8 +773,8 @@ def test_playwright_failure_path_generation_failure(app_page):
     gen_calls = get_api_calls(page, "run_generation")
     assert len(gen_calls) == 3, "Retry must dispatch third run_generation call"
     third_call_args = gen_calls[2]["args"]
-    assert len(third_call_args) == 5
-    _, _, _, _, retried_roster_configs = third_call_args
+    assert len(third_call_args) == 6
+    _, _, _, _, retried_roster_configs, _ = third_call_args
     validate_roster_configs_schema(retried_roster_configs)
     assert retried_roster_configs == expected_multi_mappings
     active_token = page.evaluate("() => window._activeGenerationId")

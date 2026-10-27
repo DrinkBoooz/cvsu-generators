@@ -417,6 +417,7 @@
 
           // Render Metrics Pills
           const details = payload.details;
+          if (metricsContainer && details && details.generated) {
             const ceitCount = (details.generated.ceit || []).length;
             const attCount = (details.generated.attendance || []).length;
             const gradeCount = (details.generated.grades || []).length;

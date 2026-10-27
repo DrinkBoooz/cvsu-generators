@@ -118,6 +118,10 @@
           if (tabBtn) tabBtn.classList.toggle("active", t === tabName);
           if (pane) pane.classList.toggle("d-none", t !== tabName);
         });
+        const activeTabBtn = document.getElementById(`cfgTab${tabName}`);
+        if (activeTabBtn && typeof activeTabBtn.scrollIntoView === "function") {
+          activeTabBtn.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+        }
         if (tabName === "TemplateSets" && typeof loadTemplateSetsUI === "function") {
           loadTemplateSetsUI();
         }
