@@ -383,6 +383,13 @@ CVSU_INDANG_2026_PRESET: List[Dict[str, Any]] = [
         "time_scope": CalendarTimeScope.ALL_DAY,
     },
     {
+        "start_date": "2026-09-07",
+        "end_date": "2026-09-07",
+        "label": "Heavy Rainfall / Flood Alert (LGU Indang / PAGASA)",
+        "category": CalendarExceptionCategory.SUSPENDED,
+        "time_scope": CalendarTimeScope.ALL_DAY,
+    },
+    {
         "start_date": "2026-09-08",
         "end_date": "2026-09-08",
         "label": "Severe Monsoon Rain (Habagat)",
@@ -390,6 +397,9 @@ CVSU_INDANG_2026_PRESET: List[Dict[str, Any]] = [
         "time_scope": CalendarTimeScope.ALL_DAY,
     },
     {
+        "start_date": "2026-10-05",
+        "end_date": "2026-10-05",
+        "label": "World / National Teachers' Day Observance",
         "start_date": "2026-09-28",
         "end_date": "2026-09-28",
         "label": "National Family Week (Kainang Pamilya Mahalaga Day)",
