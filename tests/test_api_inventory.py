@@ -75,6 +75,7 @@ EXPECTED_API = {
     "remove_roster",
     "reset_parser_config",
     "reset_user_preferences",
+    "reveal_in_explorer",
     "run_generation",
     "save_calendar_config",
     "save_custom_template",

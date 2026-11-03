@@ -1,6 +1,7 @@
 import os
 import sys
 import re
+import importlib
 
 def sanitize_filename(filename: str) -> str:
     """Sanitize filename to prevent directory traversal and invalid OS characters."""
@@ -13,10 +14,11 @@ def sanitize_filename(filename: str) -> str:
 def get_resource_path(relative_path: str) -> str:
     """Get absolute path to resource, works for dev and for PyInstaller."""
     try:
-        # PyInstaller creates a temp folder and stores path in _MEIPASS
-        base_path = sys._MEIPASS
+        if getattr(sys, 'frozen', False):
+            base_path = getattr(sys, '_MEIPASS', os.path.dirname(sys.executable))
+        else:
+            base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     except Exception:
-        # Resolve to directory of the main executable entrypoint
         base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
     return os.path.join(base_path, relative_path)
@@ -25,6 +27,11 @@ class BaseAPI:
     """Base API containing shared state, locks, and thread synchronization primitives."""
     def __init__(self):
         import threading
+        if getattr(sys, 'frozen', False):
+            self.base_dir = getattr(sys, '_MEIPASS', os.path.dirname(sys.executable))
+        else:
+            self.base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
         self._window = None
         self.schedule_path = ""
         self.output_dir = ""
@@ -44,3 +51,32 @@ class BaseAPI:
             "error": None,
         }
 
+    def _get_gen_module(self, name: str):
+        """
+        Dynamically retrieve generator module. In frozen mode, uses standard static
+        importlib.import_module to allow PyInstaller PYZ resolution without raw disk loading.
+        In development mode, falls back to importlib.util.spec_from_file_location for hot-reloading.
+        """
+        if getattr(sys, 'frozen', False):
+            try:
+                return importlib.import_module(name)
+            except ImportError:
+                return importlib.import_module(f"modules.generators.{name}")
+        else:
+            import importlib.util
+            potential_paths = [
+                os.path.join(self.base_dir, "modules", "generators", f"{name}.py"),
+                os.path.join(self.base_dir, f"{name}.py"),
+            ]
+            for p in potential_paths:
+                if os.path.exists(p):
+                    spec = importlib.util.spec_from_file_location(name, p)
+                    if spec and spec.loader:
+                        mod = importlib.util.module_from_spec(spec)
+                        sys.modules[name] = mod
+                        spec.loader.exec_module(mod)
+                        return mod
+            try:
+                return importlib.import_module(name)
+            except ImportError:
+                return importlib.import_module(f"modules.generators.{name}")

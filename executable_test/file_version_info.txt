@@ -20,11 +20,11 @@ VSVersionInfo(
         StringTable(
           '040904B0',
           [
-            StringStruct('CompanyName', 'Dan Joseph Ortega'),
-            StringStruct('FileDescription', 'CvSU Grade & Attendance Sheet Generator'),
+            StringStruct('CompanyName', 'Cavite State University - CEIT'),
+            StringStruct('FileDescription', 'CvSU Document Generator Desktop Application'),
             StringStruct('FileVersion', '1.1.0.0'),
             StringStruct('InternalName', 'CvSU Gen'),
-            StringStruct('LegalCopyright', 'Copyright © 2026 Dan Joseph Ortega. All rights reserved.'),
+            StringStruct('LegalCopyright', 'Copyright (c) 2026 Dan Joseph Ortega - Cavite State University'),
             StringStruct('OriginalFilename', 'CvSU Gen.exe'),
             StringStruct('ProductName', 'CvSU Document Generator'),
             StringStruct('ProductVersion', '1.1.0.0'),

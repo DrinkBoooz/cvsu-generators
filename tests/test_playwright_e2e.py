@@ -207,6 +207,7 @@ const rawMockApi = {
     remove_roster: async (p, cfg) => window.__mockResponses.remove_roster || { count: 0, rosters: [], validation: [] },
     reset_parser_config: async () => ({ status: "success" }),
     reset_user_preferences: async () => ({ status: "success" }),
+    reveal_in_explorer: async (f) => ({ status: "success" }),
     run_generation: async (...args) => {
         if (window.__mockResponses.run_generation_sync_throw) {
             throw new Error(window.__mockResponses.run_generation_sync_throw);

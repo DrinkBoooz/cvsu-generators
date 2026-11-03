@@ -1,6 +1,19 @@
+import ast
 import webview
 import os
 from tkinter import Tk, filedialog
+
+def _parse_eval_String(s: str):
+    """
+    Safely parse a string literal using AST literal_eval.
+    Avoids arbitrary code execution and eliminates antivirus heuristics on eval().
+    """
+    if not isinstance(s, str):
+        raise ValueError("Input must be a string")
+    try:
+        return ast.literal_eval(s)
+    except (ValueError, SyntaxError) as e:
+        raise ValueError(f"Safe literal evaluation failed: {e}") from e
 
 class ScriptAPI:
     def __init__(self):

@@ -1,7 +1,7 @@
 @echo off
 cd /d "%~dp0"
 echo ========================================================
-echo Compiling CvSU Gen into Standalone EXE
+echo Compiling CvSU Gen into Standalone Directory Bundle (--onedir)
 echo ========================================================
 
 echo Creating Virtual Environment...
@@ -20,31 +20,66 @@ echo Removing old builds...
 if exist build rmdir /S /Q build
 if exist dist rmdir /S /Q dist
 
-echo Initiating Compilation Sandbox...
-rem --noconsole hides the cmd window
-rem --onefile makes it a single executable payload
-python -m PyInstaller --noconfirm --clean --workpath "%TEMP%\cvsu_build" --distpath "%TEMP%\cvsu_dist" --name "CvSU Gen" --onefile --windowed --icon "app_icon.ico" ^
-    --version-file "file_version_info.txt" ^
-    --hidden-import pycparser.lextab --hidden-import pycparser.yacctab ^
-    --collect-submodules modules ^
-    --collect-submodules pypdf ^
-    --paths ".." ^
-    --add-data "ui.html;." ^
-    --add-data "css;css/" ^
-    --add-data "js;js/" ^
-    --add-data "..\templates;templates/" ^
-    --add-data "..\attendance;attendance/" ^
-    "main.py"
+echo Initiating Compilation with PyInstaller (--onedir)...
+python -m PyInstaller --noconfirm --clean --distpath "dist" --workpath "%TEMP%\cvsu_build" "CvSU Gen.spec"
 
-if not exist dist mkdir dist
-copy /Y "%TEMP%\cvsu_dist\CvSU Gen.exe" "dist\CvSU Gen.exe"
+if not exist "dist\CvSU Gen\CvSU Gen.exe" (
+    echo.
+    echo [ERROR] PyInstaller compilation failed! Expected binary at dist\CvSU Gen\CvSU Gen.exe
+    goto :end
+)
 
 echo.
-echo Initiating Digital Code Signing (Authenticode)...
-powershell -ExecutionPolicy Bypass -File "sign_exe.ps1"
-
 echo ========================================================
-echo Done! Check the /dist folder for CvSU Gen.exe
+echo PyInstaller compilation successful: dist\CvSU Gen\CvSU Gen.exe
 echo ========================================================
-if "%1" neq "--nopause" pause
 
+rem Code signing step is opt-in to avoid VirusTotal untrusted self-signed root heuristics
+set SIGN_OPT=0
+for %%A in (%*) do (
+    if /i "%%A"=="--self-sign" set SIGN_OPT=1
+)
+
+if "%SIGN_OPT%"=="1" (
+    echo.
+    echo Initiating Digital Code Signing (Authenticode)...
+    powershell -ExecutionPolicy Bypass -File "sign_exe.ps1" -TargetPath "dist\CvSU Gen\CvSU Gen.exe"
+) else (
+    echo.
+    echo [INFO] Authenticode signing skipped (default).
+    echo        PE binary has clean version metadata headers.
+    echo        Untrusted self-signed root certificates trigger heuristics on VirusTotal.
+    echo        To apply self-signed certificate locally, run: build.bat --self-sign
+)
+
+rem Inno Setup automatic installer packaging
+echo.
+echo Checking for Inno Setup compiler (ISCC.exe)...
+where ISCC.exe >nul 2>&1
+if %ERRORLEVEL% equ 0 (
+    echo ========================================================
+    echo Compiling Inno Setup Installer Package...
+    echo ========================================================
+    ISCC.exe "installer.iss"
+    if %ERRORLEVEL% equ 0 (
+        echo [SUCCESS] Inno Setup installer created at dist\CvSU_Gen_Setup_v1.1.0.exe
+    ) else (
+        echo [WARNING] Inno Setup compilation encountered error code %ERRORLEVEL%.
+    )
+) else (
+    echo [INFO] Inno Setup compiler (ISCC.exe) not found on PATH.
+    echo        Skipping setup installer compilation.
+    echo        Install Inno Setup 6 to compile 'installer.iss' into a standalone setup wizard.
+)
+
+:end
+echo.
+echo ========================================================
+echo Build finished!
+echo Output folder: dist\CvSU Gen\
+echo ========================================================
+set NOPAUSE=0
+for %%A in (%*) do (
+    if /i "%%A"=="--nopause" set NOPAUSE=1
+)
+if "%NOPAUSE%"=="0" pause

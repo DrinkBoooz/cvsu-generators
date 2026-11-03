@@ -14,7 +14,13 @@ param(
 
 if ([string]::IsNullOrWhiteSpace($TargetPath)) {
     $scriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Definition }
-    $TargetPath = Join-Path $scriptDir "dist\CvSU Gen.exe"
+    $candidate1 = Join-Path $scriptDir "dist\CvSU Gen\CvSU Gen.exe"
+    $candidate2 = Join-Path $scriptDir "dist\CvSU Gen.exe"
+    if (Test-Path $candidate1) {
+        $TargetPath = $candidate1
+    } else {
+        $TargetPath = $candidate2
+    }
 }
 
 Write-Host "========================================================" -ForegroundColor Cyan
