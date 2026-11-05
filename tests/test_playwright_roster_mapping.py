@@ -118,6 +118,7 @@ def test_playwright_roster_mapping_modal_and_ceit_help():
         }
         """
         page.evaluate(mock_js)
+        page.click("#chipStep2")
 
         # Verify CEIT pill badge in roster row
         ceit_pill = page.locator(".roster-row .badge-ceit-pill")
@@ -145,13 +146,14 @@ def test_playwright_roster_mapping_modal_and_ceit_help():
         assert "20261001" in parsed_preview.inner_text()
 
         # Check class card in Step 3 has CEIT badge
+        page.click("#btnCloseMappingModal")
+        page.wait_for_timeout(200)
+        page.click("#chipStep3")
         class_pill = page.locator("#classesListContainer .badge-ceit-pill")
         assert class_pill.is_visible(), "Class card in Step 3 must display CEIT badge"
         assert "COSC · DIT" in class_pill.inner_text()
 
-        # Close the modal
-        page.click("#btnCloseMappingModal")
-        page.wait_for_timeout(200)
+        
         assert modal.is_hidden(), "Modal should close"
 
         browser.close()
@@ -248,6 +250,7 @@ def test_playwright_incomplete_filename_fallback_and_recommendation():
         }
         """.replace("True", "true")
         page.evaluate(mock_js)
+        page.click("#chipStep2")
 
         # 1. Verify warning badge for incomplete filename
         status_badge = page.locator(".roster-row .badge-warning")

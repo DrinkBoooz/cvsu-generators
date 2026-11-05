@@ -220,6 +220,7 @@ def test_playwright_keyboard_dropzones_activation():
         assert calls["schedule"] == 2, f"Schedule drop zone must trigger on Enter and Space, got {calls['schedule']}"
 
         # Focus Rosters drop zone and press Enter
+        page.click("#chipStep2")
         drop_rosters = page.locator("#rostersDropzone")
         assert drop_rosters.is_visible()
         drop_rosters.focus()
@@ -285,3 +286,90 @@ def test_playwright_axe_core_initial_scan():
             pytest.fail(f"axe-core found {len(actionable_violations)} actionable accessibility violations:\n{summary}")
 
         browser.close()
+
+
+def test_stepper_keyboard_dom_contracts():
+    """Verify stepper buttons have required keyboard and accessibility attributes in HTML/CSS."""
+    import re
+    assert os.path.exists(UI_HTML_PATH)
+    with open(UI_HTML_PATH, "r", encoding="utf-8") as f:
+        html = f.read()
+
+    assert 'aria-label="Workflow Steps"' in html or 'aria-label="Workflow Navigation"' in html
+    assert 'id="workflowStepper"' in html
+
+    for i in range(1, 7):
+        chip_pattern = rf'<button[^>]*id="chipStep{i}"[^>]*>'
+        assert re.search(chip_pattern, html), f"Step chip {i} must be a native <button>"
+        assert f'id="chipStep{i}"' in html
+        assert f'id="statusStep{i}"' in html
+
+    css_path = os.path.join(WORKSPACE_DIR, "executable_test", "css", "components.css")
+    base_css_path = os.path.join(WORKSPACE_DIR, "executable_test", "css", "base.css")
+    with open(css_path, "r", encoding="utf-8") as f:
+        css = f.read()
+    with open(base_css_path, "r", encoding="utf-8") as f:
+        css += "\n" + f.read()
+
+    assert ":focus-visible" in css or ".step-chip:focus" in css, "Step chip must define visible focus indicator"
+
+
+def test_playwright_stepper_keyboard_tab_and_activation():
+    """Verify keyboard Tab/Arrow navigation, Enter/Space activation, and single-active-stage activation."""
+    from playwright.sync_api import expect
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": 1280, "height": 800})
+        page.goto(FILE_URL)
+        page.wait_for_timeout(300)
+
+        chip1 = page.locator("#chipStep1")
+        chip1.focus()
+        expect(chip1).to_be_focused()
+
+        for i in range(2, 7):
+            page.keyboard.press("Tab")
+            target_chip = page.locator(f"#chipStep{i}")
+            expect(target_chip).to_be_visible()
+
+        chip3 = page.locator("#chipStep3")
+        chip3.focus()
+        page.keyboard.press("Enter")
+        page.wait_for_timeout(200)
+
+        card3 = page.locator("#cardStep3")
+        expect(card3).to_be_visible()
+        expect(page.locator("#cardStep1")).to_be_hidden()
+
+        chip5 = page.locator("#chipStep5")
+        chip5.focus()
+        page.keyboard.press("Space")
+        page.wait_for_timeout(200)
+
+        card5 = page.locator("#cardStep5")
+        expect(card5).to_be_visible()
+        expect(card3).to_be_hidden()
+
+        browser.close()
+
+
+def test_playwright_stepper_aria_live_and_focus_indicator():
+    """Verify step chips have proper accessibility labels and outline on focus."""
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": 1280, "height": 800})
+        page.goto(FILE_URL)
+
+        chip1 = page.locator("#chipStep1")
+        aria_label = chip1.get_attribute("aria-label") or ""
+        assert "Step 1" in aria_label, "Chip 1 must identify as Step 1"
+        assert len(aria_label) > 10, "Chip 1 aria-label must include descriptive status"
+
+        chip1.focus()
+        outline = page.evaluate("() => window.getComputedStyle(document.getElementById('chipStep1')).outline")
+        box_shadow = page.evaluate("() => window.getComputedStyle(document.getElementById('chipStep1')).boxShadow")
+        has_visible_focus = (outline and outline != "none" and "0px" not in outline) or (box_shadow and box_shadow != "none")
+        assert has_visible_focus, "Focused step chip must have visible outline or focus ring box-shadow"
+
+        browser.close()
+

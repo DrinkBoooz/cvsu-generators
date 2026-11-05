@@ -321,37 +321,52 @@ def expect_toast(page, title_text: str, toast_type: str = None):
 
 def complete_steps_1_to_5(page):
     """
-    Executes and milestone-gates Steps 1 through 5 through user actions.
+    Executes and milestone-gates Steps 1 through 5 through user actions
+    across the single-active-stage navigation ribbon.
     Asserts intermediate milestone states to isolate any workflow breakdowns.
     """
     # Step 1: Browse Schedule
+    page.click("#chipStep1")
+    expect(page.locator("#cardStep1")).to_be_visible()
+    expect(page.locator("#cardStep2")).to_be_hidden()
     page.click("#scheduleDropzone")
     expect_step_ready(page, 1, True)
     expect(page.locator("#scheduleFilename")).to_have_text("Instructor_Schedule.xlsx")
     expect(page.locator("#instructorBanner")).to_be_visible()
 
     # Step 2: Browse Rosters
+    page.click("#chipStep2")
+    expect(page.locator("#cardStep2")).to_be_visible()
+    expect(page.locator("#cardStep1")).to_be_hidden()
     page.click("#rostersDropzone")
     expect_step_ready(page, 2, True)
     expect(page.locator("#rosterRowsContainer .roster-row")).to_have_count(2)
 
     # Step 3: Class Detection & Package Selection
+    page.click("#chipStep3")
+    expect(page.locator("#cardStep3")).to_be_visible()
     expect_step_ready(page, 3, True)
     expect(page.locator("#classesSection")).to_be_visible()
     expect(page.locator(".class-card")).to_have_count(2)
 
     # Step 4: Semester Dates (Optional)
+    page.click("#chipStep4")
+    expect(page.locator("#cardStep4")).to_be_visible()
     page.fill("#startDate", "2026-01-15")
     page.fill("#endDate", "2026-05-30")
     expect(page.locator("#startDate")).to_have_value("2026-01-15")
     expect(page.locator("#endDate")).to_have_value("2026-05-30")
 
     # Step 5: Target Output Path
+    page.click("#chipStep5")
+    expect(page.locator("#cardStep5")).to_be_visible()
     page.click("button:has-text('Browse Path')")
     expect_step_ready(page, 5, True)
     expect(page.locator("#outputDisplay")).to_have_value("C:/CvSU/Output")
 
     # Step 6 Readiness Milestone
+    page.click("#chipStep6")
+    expect(page.locator("#cardStep6")).to_be_visible()
     expect_step_ready(page, 6, True)
     expect(page.locator("#processBtn")).to_be_enabled()
 
@@ -398,6 +413,7 @@ def test_playwright_e2e_happy_path_workflow(app_page):
     assert sched_calls[0]["args"] == []
 
     # 3. Step 2: Select Rosters
+    page.click("#chipStep2")
     page.click("#rostersDropzone")
     expect_step_ready(page, 2, True)
     expect(page.locator("#rosterRowsContainer .roster-row")).to_have_count(2)
@@ -408,6 +424,7 @@ def test_playwright_e2e_happy_path_workflow(app_page):
     assert len(roster_calls) == 1
 
     # 4. Step 3: Class Detection & Packages
+    page.click("#chipStep3")
     expect_step_ready(page, 3, True)
     expect(page.locator("#classesSection")).to_be_visible()
     expect(page.locator("#classesCountDisplay")).to_have_text("2")
@@ -418,8 +435,10 @@ def test_playwright_e2e_happy_path_workflow(app_page):
     assert len(detect_calls) >= 1
 
     # 5. Step 4 & 5: Dates & Output Folder
+    page.click("#chipStep4")
     page.fill("#startDate", "2026-01-15")
     page.fill("#endDate", "2026-05-30")
+    page.click("#chipStep5")
     page.click("button:has-text('Browse Path')")
     expect_step_ready(page, 5, True)
     expect(page.locator("#outputDisplay")).to_have_value("C:/CvSU/Output")
@@ -428,6 +447,7 @@ def test_playwright_e2e_happy_path_workflow(app_page):
     assert len(output_calls) == 1
 
     # 6. Readiness Verification
+    page.click("#chipStep6")
     expect_step_ready(page, 6, True)
     expect(page.locator("#connector1to2")).to_have_class(re.compile(r"\bready\b"))
     expect(page.locator("#connector2to3")).to_have_class(re.compile(r"\bready\b"))
@@ -589,7 +609,8 @@ def test_playwright_failure_path_no_packages_selected(app_page):
     page = app_page
     complete_steps_1_to_5(page)
 
-    # Uncheck all three packages
+    # Switch to Stage 3 and uncheck all three packages
+    page.click("#chipStep3")
     page.uncheck("#checkAttendance")
     page.uncheck("#checkCeit")
     page.uncheck("#checkGrades")
@@ -611,7 +632,8 @@ def test_playwright_edge_case_duplicate_files(app_page):
     """
     page = app_page
 
-    # 1. Ingest duplicate roster paths (same absolute path)
+    # 1. Ingest duplicate roster paths (same absolute path) on Stage 2
+    page.click("#chipStep2")
     dup_response = {
         "cancelled": False,
         "count": 1,
@@ -657,7 +679,8 @@ def test_playwright_edge_case_duplicate_files(app_page):
     assert page.evaluate("() => state.rosters.length") == 2
     expect(page.locator("#rosterRowsContainer .roster-row")).to_have_count(2)
 
-    # 3. Schedule Reset Button
+    # 3. Schedule Reset Button on Stage 1
+    page.click("#chipStep1")
     page.click("#scheduleDropzone")  # load schedule first
     expect_step_ready(page, 1, True)
     expect(page.locator("#btnResetSchedule")).to_be_visible()
@@ -904,3 +927,104 @@ def test_playwright_lifecycle_window_close_cleanup():
 
     app_errors = [e for e in uncaught_errors if not is_expected_teardown_msg(e)]
     assert app_errors == [], f"Unexpected application errors during teardown: {app_errors}"
+
+
+def test_playwright_single_active_stage_workbench_and_inspector(app_page):
+    """
+    Scenario 11: Hybrid Guided Batch Workbench & Single-Active-Stage Architecture.
+    Verifies:
+      1. Genuine single-active-stage visibility (only 1 .stage-panel visible at a time)
+         and 100% state preservation when switching back and forth across stages.
+      2. Stage 3 8-column batch matrix (.packages-matrix-table), verified student counts,
+         batch classification (#bulkClassTypeSelect + #btnApplyBulkType), and empty-selection guard.
+      3. On-demand privacy-conscious Section Inspector (#classInspectorDrawer) with
+         collapsed-by-default student disclosure (#inspectorStudentDisclosure) and zero gender display.
+    """
+    page = app_page
+
+    # 1. Verify only Stage 1 is initially visible
+    visible_stages = page.evaluate("""() => {
+        return Array.from(document.querySelectorAll('.stage-panel'))
+            .filter(el => window.getComputedStyle(el).display !== 'none')
+            .map(el => el.id);
+    }""")
+    assert visible_stages == ["cardStep1"]
+
+    # Complete steps 1 to 5 and verify state preservation across stage switches
+    complete_steps_1_to_5(page)
+
+    # Switch back to Stage 3 (Packages Batch Workbench)
+    page.click("#chipStep3")
+    visible_stages = page.evaluate("""() => {
+        return Array.from(document.querySelectorAll('.stage-panel'))
+            .filter(el => window.getComputedStyle(el).display !== 'none')
+            .map(el => el.id);
+    }""")
+    assert visible_stages == ["cardStep3"]
+
+    # 2. Verify 8-column class matrix headers and student counts
+    headers = page.locator("#packagesMatrixTable thead th")
+    expect(headers).to_have_count(8)
+    expect(page.locator("#card_cls_1")).to_contain_text("28 students")
+    expect(page.locator("#card_cls_2")).to_contain_text("32 students")
+
+    # Verify batch classification apply
+    page.select_option("#bulkClassTypeSelect", "lecture_only")
+    page.click("#btnApplyBulkType")
+    expect(page.locator("#type_cls_1")).to_have_value("lecture_only")
+    expect(page.locator("#type_cls_2")).to_have_value("lecture_only")
+
+    # Verify empty-selection guard blocks generation and prevents backend empty-list fallback
+    page.uncheck("#selectAllClasses")
+    expect_step_ready(page, 3, False)
+    expect_step_ready(page, 6, False)
+    page.evaluate("startGeneration()")
+    expect_toast(page, "No Classes Selected", "warning")
+    assert len(get_api_calls(page, "run_generation")) == 0
+
+    # Re-select all classes
+    page.check("#selectAllClasses")
+    expect_step_ready(page, 3, True)
+    expect_step_ready(page, 6, True)
+
+    # 3. Verify On-Demand Privacy-Conscious Section Inspector
+    page.evaluate("""() => {
+        window.__mockResponses.inspect_roster = {
+            status: "ok",
+            format: "excel",
+            raw_rows: [],
+            available_columns: [],
+            preview_students: [
+                { student_number: "202400101", name: "DELA CRUZ, JUAN (SYNTHETIC)", gender: "MALE" },
+                { student_number: "202400102", name: "SANTOS, MARIA (SYNTHETIC)", gender: "FEMALE" }
+            ]
+        };
+    }""")
+
+    page.click("#btnInspect_cls_1")
+    expect(page.locator("#classInspectorDrawer")).to_be_visible()
+    expect(page.locator("#inspCourseSec")).to_have_text("BSCS 1-1")
+    expect(page.locator("#inspStudentCount")).to_contain_text("28 Students")
+
+    # Student preview disclosure MUST be collapsed by default
+    is_open = page.evaluate("() => document.getElementById('inspectorStudentDisclosure').open")
+    assert is_open is False
+
+    # Expand student disclosure and verify synthetic records render without gender
+    page.click("#inspectorStudentDisclosure summary")
+    expect(page.locator("#inspectorStudentTbody tr")).to_have_count(2)
+    expect(page.locator("#inspectorStudentTbody")).to_contain_text("202400101")
+    expect(page.locator("#inspectorStudentTbody")).to_contain_text("DELA CRUZ, JUAN (SYNTHETIC)")
+    inspector_html = page.locator("#inspectorStudentTbody").inner_html()
+    assert "MALE" not in inspector_html and "FEMALE" not in inspector_html
+
+    # Close inspector
+    page.click("#btnCloseClassInspector")
+    expect(page.locator("#classInspectorDrawer")).to_be_hidden()
+
+    # Verify switching back to Stage 4 and Stage 5 preserved previously entered values
+    page.click("#chipStep4")
+    expect(page.locator("#startDate")).to_have_value("2026-01-15")
+    expect(page.locator("#endDate")).to_have_value("2026-05-30")
+    page.click("#chipStep5")
+    expect(page.locator("#outputDisplay")).to_have_value("C:/CvSU/Output")
