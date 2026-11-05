@@ -1,0 +1,128 @@
+/*
+ * CvSU Gen semantic UI tokens — PROVISIONAL
+ * These colors are working values for design exploration, not official CvSU brand colors.
+ * Verify the green/gold against the real CvSU/CEIT identity artwork before production.
+ * Host typography intentionally uses the Windows-native Segoe UI family.
+ */
+
+:root {
+  color-scheme: light;
+  --font-ui: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --font-mono: Consolas, "Cascadia Mono", monospace;
+
+  /* Light surfaces and text */
+  --color-canvas: #F4F6F3;
+  --color-surface: #FFFFFF;
+  --color-surface-subtle: #EDF1ED;
+  --color-surface-raised: #FFFFFF;
+  --color-text: #1F2822;
+  --color-text-secondary: #58635B;
+  --color-text-disabled: #7A857D;
+  --color-border: #D6DED8;
+  --color-border-strong: #AAB7AE;
+
+  /* Brand/action — provisional CvSU-inspired green */
+  --color-accent: #226247;
+  --color-accent-hover: #194D38;
+  --color-accent-pressed: #153F2E;
+  --color-accent-subtle: #E7F0EA;
+  --color-on-accent: #FFFFFF;
+  --color-focus: #275E8C;
+
+  /* Semantic states: pair every color with text/icon meaning */
+  --color-success: #226247;
+  --color-success-surface: #E7F0EA;
+  --color-warning: #805600;
+  --color-warning-surface: #FFF4D8;
+  --color-danger: #A12D35;
+  --color-danger-surface: #FBEAEC;
+  --color-info: #275E8C;
+  --color-info-surface: #EAF2F9;
+
+  /* Geometry and rhythm */
+  --radius-control: 6px;
+  --radius-surface: 8px;
+  --radius-dialog: 10px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* Motion */
+  --duration-fast: 100ms;
+  --duration-standard: 160ms;
+  --ease-standard: ease;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --color-canvas: #171E19;
+  --color-surface: #202A23;
+  --color-surface-subtle: #29352D;
+  --color-surface-raised: #303D34;
+  --color-text: #F0F3F0;
+  --color-text-secondary: #B6C1B8;
+  --color-text-disabled: #8C9A90;
+  --color-border: #3A483E;
+  --color-border-strong: #58685D;
+
+  --color-accent: #83B897;
+  --color-accent-hover: #A0C9AE;
+  --color-accent-pressed: #B4D7BE;
+  --color-accent-subtle: #263D2D;
+  --color-on-accent: #142319;
+  --color-focus: #9BC7ED;
+
+  --color-success: #86C99E;
+  --color-success-surface: #263D2D;
+  --color-warning: #E7BD6A;
+  --color-warning-surface: #3C321D;
+  --color-danger: #F1A0A0;
+  --color-danger-surface: #3E2528;
+  --color-info: #9BC7ED;
+  --color-info-surface: #223549;
+}
+
+
+/* Follow the Windows appearance preference unless the app explicitly selects a theme. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not([data-theme="dark"]) {
+    color-scheme: dark;
+
+    --color-canvas: #171E19;
+    --color-surface: #202A23;
+    --color-surface-subtle: #29352D;
+    --color-surface-raised: #303D34;
+    --color-text: #F0F3F0;
+    --color-text-secondary: #B6C1B8;
+    --color-text-disabled: #8C9A90;
+    --color-border: #3A483E;
+    --color-border-strong: #58685D;
+
+    --color-accent: #83B897;
+    --color-accent-hover: #A0C9AE;
+    --color-accent-pressed: #B4D7BE;
+    --color-accent-subtle: #263D2D;
+    --color-on-accent: #142319;
+    --color-focus: #9BC7ED;
+
+    --color-success: #86C99E;
+    --color-success-surface: #263D2D;
+    --color-warning: #E7BD6A;
+    --color-warning-surface: #3C321D;
+    --color-danger: #F1A0A0;
+    --color-danger-surface: #3E2528;
+    --color-info: #9BC7ED;
+    --color-info-surface: #223549;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+    --duration-standard: 0ms;
+  }
+}
