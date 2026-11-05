@@ -1,149 +1,152 @@
 body {
-        background-color: var(--bg-base);
-        color: var(--text-primary);
-        font-family:
-          -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
-          "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-        -webkit-font-smoothing: antialiased;
-        min-height: 100vh;
-        padding-bottom: 70px;
-        user-select: none;
-      }
+  background-color: var(--color-canvas);
+  color: var(--color-text);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  padding-bottom: 24px;
+  user-select: none;
+}
 
-      /* Allow text selection on specific data display elements */
-      .selectable,
-      code,
-      pre,
-      input,
-      textarea {
-        user-select: text !important;
-      }
+/* Allow text selection on specific data display elements */
+.selectable,
+code,
+pre,
+input,
+textarea {
+  user-select: text !important;
+}
 
-      /* Institutional Emerald text selection highlight */
-      ::selection {
-        background: var(--accent-emerald);
-        color: #ffffff;
-      }
+/* Institutional Green text selection highlight */
+::selection {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
 
-      /* High-Visibility Focus Ring Accessibility (WCAG 2.1 AA & Microsoft Fluent/HIG) */
-      :focus-visible {
-        outline: var(--a11y-focus-ring-width) solid var(--a11y-focus-ring-color);
-        outline-offset: var(--a11y-focus-ring-offset);
-        box-shadow: var(--a11y-focus-glow);
-      }
-      button:focus-visible,
-      a:focus-visible,
-      input:focus-visible,
-      select:focus-visible,
-      textarea:focus-visible,
-      [tabindex="0"]:focus-visible,
-      .dropzone:focus-visible,
-      .step-chip:focus-visible {
-        outline: var(--a11y-focus-ring-width) solid var(--a11y-focus-ring-color) !important;
-        outline-offset: var(--a11y-focus-ring-offset) !important;
-        box-shadow: var(--a11y-focus-glow) !important;
-      }
+/* High-Visibility Focus Ring Accessibility (WCAG 2.2 AA & Windows / HIG) */
+:focus-visible {
+  outline: var(--a11y-focus-ring-width) solid var(--a11y-focus-ring-color);
+  outline-offset: var(--a11y-focus-ring-offset);
+  box-shadow: var(--a11y-focus-glow);
+}
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible,
+[tabindex="0"]:focus-visible,
+.dropzone:focus-visible,
+.step-chip:focus-visible {
+  outline: var(--a11y-focus-ring-width) solid var(--a11y-focus-ring-color) !important;
+  outline-offset: var(--a11y-focus-ring-offset) !important;
+  box-shadow: var(--a11y-focus-glow) !important;
+}
 
-      /* Screen Reader Only Utility (Narrator / Assistive Tech) */
-      .sr-only {
-        position: absolute !important;
-        width: 1px !important;
-        height: 1px !important;
-        padding: 0 !important;
-        margin: -1px !important;
-        overflow: hidden !important;
-        clip: rect(0, 0, 0, 0) !important;
-        white-space: nowrap !important;
-        border: 0 !important;
-      }
+/* Screen Reader Only Utility (Narrator / Assistive Tech) */
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
 
-      /* Windows High-Contrast Mode / Forced Colors */
-      @media (forced-colors: active) {
-        :focus-visible,
-        button:focus-visible,
-        a:focus-visible,
-        input:focus-visible,
-        select:focus-visible,
-        textarea:focus-visible,
-        [tabindex="0"]:focus-visible,
-        .dropzone:focus-visible,
-        .step-chip:focus-visible {
-          outline: 3px solid Highlight !important;
-          outline-offset: 3px !important;
-          box-shadow: none !important;
-        }
+/* Windows High-Contrast Mode / Forced Colors */
+@media (forced-colors: active) {
+  :focus-visible,
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  [tabindex="0"]:focus-visible,
+  .dropzone:focus-visible,
+  .step-chip:focus-visible {
+    outline: 3px solid Highlight !important;
+    outline-offset: 3px !important;
+    box-shadow: none !important;
+  }
 
-        .glass-card,
-        .modal-dialog-custom,
-        .drawer-panel,
-        .nav-btn,
-        .btn-browse,
-        .btn-primary-compact,
-        .btn-primary-action,
-        .step-chip,
-        .filter-pill,
-        .segmented-btn {
-          border: 1px solid ButtonBorder !important;
-        }
+  .glass-card,
+  .stage-panel,
+  .modal-dialog-custom,
+  .drawer-panel,
+  .nav-btn,
+  .btn-browse,
+  .btn-primary-compact,
+  .btn-primary-action,
+  .step-chip,
+  .filter-pill,
+  .segmented-btn {
+    border: 1px solid ButtonBorder !important;
+  }
 
-        .dropzone {
-          border: 2px dashed CanvasText !important;
-        }
+  .dropzone {
+    border: 2px dashed CanvasText !important;
+  }
 
-        .step-chip.active,
-        .step-chip.ready,
-        .filter-pill.active,
-        .segmented-btn.active,
-        .drawer-tab.active,
-        .settings-nav-tab.active {
-          background: Highlight !important;
-          color: HighlightText !important;
-          border-color: Highlight !important;
-        }
+  .step-chip.active,
+  .step-chip.active-step,
+  .step-chip.ready,
+  .filter-pill.active,
+  .segmented-btn.active,
+  .drawer-tab.active,
+  .settings-nav-tab.active {
+    background: Highlight !important;
+    color: HighlightText !important;
+    border-color: Highlight !important;
+  }
 
-        .badge-version,
-        .badge-ceit-pill {
-          border: 1px solid CanvasText !important;
-        }
-      }
+  .badge-version,
+  .badge-ceit-pill {
+    border: 1px solid CanvasText !important;
+  }
+}
 
-      /* Unified input placeholder contrast */
-      input::placeholder,
-      textarea::placeholder {
-        color: var(--text-muted);
-        opacity: 0.8;
-      }
+/* Unified input placeholder contrast */
+input::placeholder,
+textarea::placeholder {
+  color: var(--color-text-secondary);
+  opacity: 0.85;
+}
 
-      /* Modern themed scrollbars for WebView2 & Chromium */
-      ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
-      }
-      ::-webkit-scrollbar-track {
-        background: transparent;
-      }
-      ::-webkit-scrollbar-thumb {
-        background: var(--border-subtle);
-        border-radius: 999px;
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: var(--text-muted);
-      }
-      * {
-        scrollbar-width: thin;
-        scrollbar-color: var(--border-subtle) transparent;
-      }
+/* Clean Windows desktop scrollbars for WebView2 & Chromium */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-surface-subtle);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-secondary);
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-strong) var(--color-surface-subtle);
+}
 
-      /* ── Core Display & Text Utilities ────────────────────────────────── */
-      .d-none {
-        display: none !important;
-      }
-      .text-muted {
-        color: var(--text-muted);
-      }
-      .text-secondary {
-        color: var(--text-secondary);
-      }
-      .text-emerald {
-        color: var(--accent-emerald);
-      }
+/* ── Core Display & Text Utilities ────────────────────────────────── */
+.d-none {
+  display: none !important;
+}
+.text-muted {
+  color: var(--color-text-secondary);
+}
+.text-secondary {
+  color: var(--color-text-secondary);
+}
+.text-emerald {
+  color: var(--color-accent);
+}
