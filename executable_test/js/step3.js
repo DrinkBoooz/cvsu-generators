@@ -57,25 +57,10 @@
 
       async function startGeneration() {
         if (window._isGenerationRunning || window._generationState !== "idle") return;
-        window._isGenerationRunning = true;
-        window._generationState = "running";
-        const currentGenId = ++window._generationSequence;
-        window._activeGenerationId = currentGenId;
 
-        const btn = document.getElementById("processBtn");
-        const btnLabel = document.getElementById("processBtnLabel");
-        const progressContainer = document.getElementById("progressContainer");
-        const progressFill = document.getElementById("progressFill");
-        const progressPercent = document.getElementById("progressPercent");
-        const progressTaskLabel = document.getElementById("progressTaskLabel");
-        const progressElapsedTimer = document.getElementById(
-          "progressElapsedTimer",
-        );
-        const btnCancel = document.getElementById("btnCancelGeneration");
-        const resultsCard = document.getElementById("resultsCard");
         const readiness = getGenerationReadiness();
 
-        // Validate basic inputs using non-blocking toasts
+        // Validate basic inputs using non-blocking toasts and strict guards
         if (!readiness.schedule) {
           window._isGenerationRunning = false;
           window._generationState = "idle";
@@ -100,7 +85,19 @@
           scrollToStep("cardStep2");
           return;
         }
-        if (!state.outputDir) {
+        if (readiness.dates === false) {
+          window._isGenerationRunning = false;
+          window._generationState = "idle";
+          window._activeGenerationId = null;
+          showToast(
+            "Invalid Date Range",
+            "Semester End Date cannot be earlier than Start Date.",
+            "warning",
+          );
+          scrollToStep("cardStep4");
+          return;
+        }
+        if (!readiness.output) {
           window._isGenerationRunning = false;
           window._generationState = "idle";
           window._activeGenerationId = null;
@@ -119,7 +116,7 @@
           selectedClasses.push(cb.getAttribute("data-class-id"));
         });
 
-        if (!readiness.classes) {
+        if (!readiness.classes || selectedClasses.length === 0) {
           window._isGenerationRunning = false;
           window._generationState = "idle";
           window._activeGenerationId = null;
@@ -150,6 +147,29 @@
           scrollToStep("cardStep3");
           return;
         }
+
+        if (!readiness.ready) {
+          window._isGenerationRunning = false;
+          window._generationState = "idle";
+          window._activeGenerationId = null;
+          scrollToStep("cardStep6");
+          return;
+        }
+
+        window._isGenerationRunning = true;
+        window._generationState = "running";
+        const currentGenId = ++window._generationSequence;
+        window._activeGenerationId = currentGenId;
+
+        const btn = document.getElementById("processBtn");
+        const btnLabel = document.getElementById("processBtnLabel");
+        const progressContainer = document.getElementById("progressContainer");
+        const progressFill = document.getElementById("progressFill");
+        const progressPercent = document.getElementById("progressPercent");
+        const progressTaskLabel = document.getElementById("progressTaskLabel");
+        const progressElapsedTimer = document.getElementById("progressElapsedTimer");
+        const btnCancel = document.getElementById("btnCancelGeneration");
+        const resultsCard = document.getElementById("resultsCard");
 
         // Collect type overrides
         const typeOverrides = {};
@@ -616,7 +636,7 @@
           slotsBody.innerHTML = '<tr><td colspan="2" style="text-align: center; color: var(--text-muted); padding: 14px;">Synthesizing sample document in memory...</td></tr>';
         }
         if (rosterBody) {
-          rosterBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 14px;">Loading sample student records...</td></tr>';
+          rosterBody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: var(--text-muted); padding: 14px;">Loading sample student records...</td></tr>';
         }
         if (sigsList) {
           sigsList.innerHTML = '<span style="color: var(--text-muted);">Resolving signatory chain hierarchy...</span>';
@@ -705,15 +725,14 @@
           // Render Roster Table (first 10)
           if (rosterBody) {
             if (rows.length === 0) {
-              rosterBody.innerHTML = '<tr><td colspan="4" style="color: var(--text-muted); padding: 10px;">No students found in sample roster.</td></tr>';
+              rosterBody.innerHTML = '<tr><td colspan="3" style="color: var(--text-muted); padding: 10px;">No students found in sample roster.</td></tr>';
             } else {
               rosterBody.innerHTML = rows.map((st, idx) => `
                 <tr>
                   <td style="color: var(--text-muted); text-align: center;">${idx + 1}</td>
                   <td style="font-family: monospace;">${escapeHTML(st.student_id || "-")}</td>
                   <td><strong>${escapeHTML(st.name || "-")}</strong></td>
-                  <td>${escapeHTML(st.gender || "-")}</td>
-                </tr>
+                                  </tr>
               `).join("");
             }
           }

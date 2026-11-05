@@ -11,7 +11,55 @@
         updateFileEstimate();
       }
 
-      // ── Step 2: Class Detection & Table ───────────────────────────────────
+      // ── Step 2: Class Detection & 8-Column Packages Matrix ────────────────
+      window._currentInspectedClassId = null;
+
+      function findRosterReportForClass(cls) {
+        const reports = state.rosterReports || state.rosterValidation || [];
+        if (!cls || !Array.isArray(reports) || reports.length === 0) return null;
+        const norm = (p) => String(p || "").replace(/\\/g, "/").trim().toLowerCase();
+
+        // 1. Primary: exact normalized full path match on cls.roster_file
+        if (cls.roster_file) {
+          const targetPath = norm(cls.roster_file);
+          const byPath = reports.find((r) => r.path && norm(r.path) === targetPath);
+          if (byPath) return byPath;
+        }
+
+        // 2. Secondary: match via explicit schedule_code linkage in state.rosterConfigs or report
+        if (cls.schedule_code) {
+          const byLink = reports.find((r) => {
+            const cfg = (state.rosterConfigs && state.rosterConfigs[r.filename]) || {};
+            return (
+              cfg.linked_schedule_code === cls.schedule_code ||
+              cfg.schedule_code === cls.schedule_code ||
+              r.linked_schedule_code === cls.schedule_code
+            );
+          });
+          if (byLink) return byLink;
+        }
+
+        // 3. Tertiary: match via matched_class prefix if unambiguous
+        if (cls.course_sec && cls.schedule_code) {
+          const byMatched = reports.filter(
+            (r) =>
+              r.matched_class &&
+              String(r.matched_class).includes(cls.course_sec)
+          );
+          if (byMatched.length === 1) return byMatched[0];
+        }
+
+        // 4. Fallback: basename match ONLY when unambiguous (exactly 1 report shares that filename)
+        if (cls.roster_file) {
+          const baseName = String(cls.roster_file).split(/[\\/]/).pop();
+          const matches = reports.filter(
+            (r) => r.filename === baseName || r.file === baseName
+          );
+          if (matches.length === 1) return matches[0];
+        }
+        return null;
+      }
+
       async function refreshClassDetection() {
         if (!window.pywebview || !window.pywebview.api) return;
         try {
@@ -27,72 +75,362 @@
 
       function renderClassesSection() {
         const section = document.getElementById("classesSection");
+        const emptyState = document.getElementById("classesEmptyState");
         const container = document.getElementById("classesListContainer");
         const countDisplay = document.getElementById("classesCountDisplay");
         const readyBadge = document.getElementById("classesReadyBadge");
 
         if (!state.detectedClasses || state.detectedClasses.length === 0) {
-          section.classList.add("d-none");
-          container.innerHTML = "";
+          if (section) section.classList.add("d-none");
+          if (emptyState) emptyState.classList.remove("d-none");
+          if (container) container.innerHTML = "";
           updateStepperStatus();
           updateFileEstimate();
           return;
         }
 
-        section.classList.remove("d-none");
-        countDisplay.innerText = state.detectedClasses.length;
-        readyBadge.innerText = `${state.detectedClasses.length} Ready`;
-        container.innerHTML = "";
+        if (emptyState) emptyState.classList.add("d-none");
+        if (section) section.classList.remove("d-none");
+        if (countDisplay) countDisplay.innerText = state.detectedClasses.length;
+        if (readyBadge) readyBadge.innerText = `${state.detectedClasses.length} Ready`;
 
+        let rowsHtml = "";
         state.detectedClasses.forEach((cls) => {
           const isLab = cls.detected_type === "lecture_lab";
-          const card = document.createElement("div");
-          card.className = "class-card";
-          card.id = `card_${cls.id}`;
+          const rep = findRosterReportForClass(cls);
+          const studentCount =
+            rep && typeof rep.student_count === "number"
+              ? rep.student_count
+              : typeof cls.student_count === "number"
+                ? cls.student_count
+                : null;
+
+          const autoStrip = document.getElementById("autoStripCheck")
+            ? document.getElementById("autoStripCheck").checked
+            : true;
+          let statusBadgeHtml = `<span class="badge-status badge-valid">Ready</span>`;
+          if (rep) {
+            if (rep.status === "error") {
+              statusBadgeHtml = `<span class="badge-status badge-error" title="${escapeHTML(rep.message || 'Validation issue')}">Needs Review</span>`;
+            } else if (rep.issue === "incomplete_filename" || (rep.status === "warning" && !autoStrip)) {
+              statusBadgeHtml = `<span class="badge-status badge-warning" title="${escapeHTML(rep.message || 'Check roster columns')}">Warning</span>`;
+            }
+          }
 
           let ceitPill = "";
           if (cls.ceit_metadata) {
-            ceitPill = `<span class="badge-ceit-pill" title="${escapeHTML(cls.ceit_metadata.department_name)}">${escapeHTML(cls.ceit_metadata.prefix)} · ${escapeHTML(cls.ceit_metadata.department_code)}</span>`;
+            ceitPill = `<span class="badge-ceit-pill" style="margin-top: 3px;" title="${escapeHTML(cls.ceit_metadata.department_name)}">${escapeHTML(cls.ceit_metadata.prefix)} · ${escapeHTML(cls.ceit_metadata.department_code)}</span>`;
           }
 
-          card.innerHTML = `
-            <input type="checkbox" class="class-select-check item-class-check" data-class-id="${escapeHTML(cls.id)}" checked onchange="updateSelectCount()">
-            <div class="class-details">
-              <div class="class-header-row">
-                <span class="course-badge">${escapeHTML(cls.course_sec)}</span>
-                <span class="sched-badge">Sched: ${escapeHTML(cls.schedule_code)}</span>
-                ${ceitPill}
-              </div>
-              <div class="subject-title">${escapeHTML(cls.subject_name)}</div>
-              <div class="sched-schedule-line">${escapeHTML(cls.schedule_desc)}</div>
-            </div>
-            <div class="class-type-wrapper">
-              <select class="type-dropdown class-type-select" data-class-id="${escapeHTML(cls.id)}">
-                <option value="lecture_lab" ${isLab ? "selected" : ""}>Lecture and Lab</option>
-                <option value="lecture_only" ${!isLab ? "selected" : ""}>Lecture only</option>
-              </select>
-              <button
-                type="button"
-                class="btn-map-columns"
-                onclick="triggerRosterDiff('${escapeHTML(cls.id)}')"
-                title="Review mid-semester roster additions/drops for this class"
-                style="margin-top: 4px; font-size: 11px;"
-              >
-                🔄 Diff Update
-              </button>
-            </div>
+          const countCellHtml =
+            studentCount !== null
+              ? `<span class="student-count-value">${studentCount}</span> <span class="student-count-unit">students</span>`
+              : `<span class="student-count-unit">Linked</span>`;
+
+          const isInspected = window._currentInspectedClassId === cls.id ? "row-inspected" : "";
+
+          rowsHtml += `
+            <tr class="class-card class-table-row row-selected ${isInspected}" id="card_${escapeHTML(cls.id)}" data-class-id="${escapeHTML(cls.id)}">
+              <td class="col-select">
+                <input
+                  type="checkbox"
+                  id="sel_${escapeHTML(cls.id)}" class="class-select-check item-class-check"
+                  data-class-id="${escapeHTML(cls.id)}"
+                  aria-label="Select ${escapeHTML(cls.course_sec)} (${escapeHTML(cls.subject_name)})"
+                  checked
+                  onchange="updateSelectCount()"
+                />
+              </td>
+              <td class="col-section">
+                <div class="class-header-row" style="margin-bottom: 0;">
+                  <span class="course-badge">${escapeHTML(cls.course_sec)}</span>
+                  <span class="sched-badge">Sched: ${escapeHTML(cls.schedule_code)}</span>
+                  ${ceitPill}
+                </div>
+              </td>
+              <td class="col-subject">
+                <div class="subject-title" title="${escapeHTML(cls.subject_name)}">${escapeHTML(cls.subject_name)}</div>
+              </td>
+              <td class="col-schedule">
+                <div class="sched-schedule-line" title="${escapeHTML(cls.schedule_desc)}">${escapeHTML(cls.schedule_desc)}</div>
+              </td>
+              <td class="col-classification">
+                <div class="class-type-wrapper">
+                  <select id="type_${escapeHTML(cls.id)}" class="type-dropdown class-type-select" data-class-id="${escapeHTML(cls.id)}" aria-label="Classification for ${escapeHTML(cls.course_sec)}">
+                    <option value="lecture_lab" ${isLab ? "selected" : ""}>Lecture and Lab</option>
+                    <option value="lecture_only" ${!isLab ? "selected" : ""}>Lecture only</option>
+                  </select>
+                </div>
+              </td>
+              <td class="col-students">
+                ${countCellHtml}
+              </td>
+              <td class="col-status">
+                ${statusBadgeHtml}
+              </td>
+              <td class="col-actions">
+                <button
+                  type="button"
+                  id="btnInspect_${escapeHTML(cls.id)}" class="btn-inspect-row"
+                  onclick="openClassInspector('${escapeHTML(cls.id)}')"
+                  aria-label="Inspect ${escapeHTML(cls.course_sec)}"
+                >
+                  Inspect
+                </button>
+              </td>
+            </tr>
           `;
-          container.appendChild(card);
         });
+
+        container.innerHTML = `
+          <div class="table-scroll-container" role="region" aria-label="Detected classes batch matrix" tabindex="0">
+            <table id="packagesMatrixTable" class="packages-matrix-table">
+              <thead>
+                <tr>
+                  <th scope="col" class="col-select" title="Select section for batch generation">✓</th>
+                  <th scope="col" class="col-section" title="Course and Section">Section</th>
+                  <th scope="col" class="col-subject">Subject Title</th>
+                  <th scope="col" class="col-schedule">Schedule &amp; Room</th>
+                  <th scope="col" class="col-classification">Classification</th>
+                  <th scope="col" class="col-students">Enrolled</th>
+                  <th scope="col" class="col-status">Status</th>
+                  <th scope="col" class="col-actions">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rowsHtml}
+              </tbody>
+            </table>
+          </div>
+          <div class="table-scroll-hint" aria-hidden="true">
+            <span>&larr; Scroll horizontally to access the Actions (Inspect) column &rarr;</span>
+            <span>Min width: 942px</span>
+          </div>
+        `;
 
         applyClassTypeOverrides();
         const selects = document.querySelectorAll(".class-type-select");
         selects.forEach((s) =>
-          s.addEventListener("change", saveClassTypeOverrides),
+          s.addEventListener("change", () => {
+            saveClassTypeOverrides();
+            if (window._currentInspectedClassId === s.getAttribute("data-class-id")) {
+              const inspSel = document.getElementById("inspClassTypeSelect");
+              if (inspSel) inspSel.value = s.value;
+            }
+          }),
         );
-        updateStepperStatus();
-        updateFileEstimate();
+        updateSelectCount();
       }
+
+      // ── On-Demand Privacy-Conscious Section Inspector Controller ──────────
+      function openClassInspector(classId) {
+        const cls = (state.detectedClasses || []).find((c) => c.id === classId);
+        if (!cls) return;
+        window._currentInspectedClassId = classId;
+
+        document.querySelectorAll("tr.class-table-row").forEach((tr) => {
+          tr.classList.toggle("row-inspected", tr.getAttribute("data-class-id") === classId);
+        });
+
+        const rep = findRosterReportForClass(cls);
+        const rosterFile =
+          (rep && (rep.filename || rep.file)) ||
+          (cls.roster_file ? String(cls.roster_file).split(/[\\/]/).pop() : "Auto-matched roster");
+        const studentCount =
+          rep && typeof rep.student_count === "number"
+            ? rep.student_count
+            : typeof cls.student_count === "number"
+              ? cls.student_count
+              : null;
+
+        const setElText = (id, txt) => {
+          const el = document.getElementById(id);
+          if (el) el.innerText = txt;
+        };
+        setElText("classInspectorTitle", `Inspect: ${cls.course_sec}`);
+        setElText("inspCourseSec", cls.course_sec || "-");
+        setElText("inspScheduleCode", cls.schedule_code || "-");
+        setElText("inspSubjectName", cls.subject_name || "-");
+        setElText("inspScheduleDesc", cls.schedule_desc || "-");
+        setElText("inspStudentCount", studentCount !== null ? `${studentCount} Students` : "Verified Roster");
+        setElText("inspRosterFilename", rosterFile);
+
+        const statusEl = document.getElementById("inspStatusBadge");
+        const autoStrip = document.getElementById("autoStripCheck")
+          ? document.getElementById("autoStripCheck").checked
+          : true;
+        if (statusEl) {
+          if (rep && rep.status === "error") {
+            statusEl.innerHTML = `<span class="badge-status badge-error">Needs Review</span>`;
+          } else if (rep && (rep.issue === "incomplete_filename" || (rep.status === "warning" && !autoStrip))) {
+            statusEl.innerHTML = `<span class="badge-status badge-warning">Warning</span>`;
+          } else {
+            statusEl.innerHTML = `<span class="badge-status badge-valid">Ready</span>`;
+          }
+        }
+
+        const rowSelect = document.querySelector(`.class-type-select[data-class-id="${CSS.escape ? CSS.escape(classId) : classId}"]`);
+        const inspSelect = document.getElementById("inspClassTypeSelect");
+        if (inspSelect) {
+          inspSelect.value = rowSelect ? rowSelect.value : cls.detected_type || "lecture_lab";
+        }
+
+        // Reset student preview disclosure to collapsed by default (privacy-by-default)
+        const disclosure = document.getElementById("inspectorStudentDisclosure");
+        const previewContainer = document.getElementById("inspectorStudentPreviewContainer");
+        if (disclosure) {
+          disclosure.open = false;
+        }
+        if (previewContainer) {
+          previewContainer.innerHTML = `
+            <div style="padding: 12px; font-size: 12px; color: var(--color-text-secondary);">
+              Expand to inspect up to 8 verified student records (Student Number and Name only).
+            </div>
+          `;
+        }
+
+        const trigger = document.activeElement;
+        if (typeof closeAllDrawers === "function") closeAllDrawers();
+        const drawer = document.getElementById("classInspectorDrawer");
+        const backdrop = document.getElementById("drawerBackdrop");
+        if (drawer) drawer.classList.add("active");
+        if (backdrop) backdrop.classList.add("active");
+        if (typeof FocusTrapManager !== "undefined" && drawer) {
+          FocusTrapManager.trap(
+            drawer,
+            document.getElementById("btnCloseClassInspector") || drawer.querySelector("button"),
+            trigger,
+          );
+        }
+      }
+
+      function closeClassInspector() {
+        window._currentInspectedClassId = null;
+        document.querySelectorAll("tr.class-table-row.row-inspected").forEach((tr) => {
+          tr.classList.remove("row-inspected");
+        });
+        if (typeof closeAllDrawers === "function") {
+          closeAllDrawers();
+        }
+      }
+
+      function onInspectorClassTypeChange(newVal) {
+        const cid = window._currentInspectedClassId;
+        if (!cid) return;
+        const rowSelect = document.querySelector(`.class-type-select[data-class-id="${CSS.escape ? CSS.escape(cid) : cid}"]`);
+        if (rowSelect) {
+          rowSelect.value = newVal;
+          saveClassTypeOverrides();
+          updateFileEstimate();
+        }
+      }
+
+      async function replaceInspectedRoster() {
+        closeClassInspector();
+        if (typeof loadRosters === "function") {
+          await loadRosters();
+        }
+      }
+
+      function remapInspectedRoster() {
+        const cid = window._currentInspectedClassId;
+        const cls = (state.detectedClasses || []).find((c) => c.id === cid);
+        if (!cls) return;
+        const rep = findRosterReportForClass(cls);
+        const filename =
+          (rep && (rep.filename || rep.file)) ||
+          (cls.roster_file ? String(cls.roster_file).split(/[\\/]/).pop() : null) ||
+          (state.rosters && state.rosters[0] ? String(state.rosters[0]).split(/[\\/]/).pop() : null);
+        closeClassInspector();
+        if (filename && typeof openColumnMappingModal === "function") {
+          openColumnMappingModal(filename);
+        }
+      }
+
+      function diffInspectedRoster() {
+        const cid = window._currentInspectedClassId;
+        if (!cid) return;
+        closeClassInspector();
+        if (typeof triggerRosterDiff === "function") {
+          triggerRosterDiff(cid);
+        }
+      }
+
+      async function onInspectorStudentDisclosureToggle(detailsEl) {
+        if (!detailsEl || !detailsEl.open) return;
+        const cid = window._currentInspectedClassId;
+        const cls = (state.detectedClasses || []).find((c) => c.id === cid);
+        const container = document.getElementById("inspectorStudentPreviewContainer");
+        if (!cls || !container) return;
+
+        const rep = findRosterReportForClass(cls);
+        const targetPathOrName =
+          cls.roster_file ||
+          (rep && (rep.path || rep.filename || rep.file)) ||
+          (state.rosters && state.rosters[0]) ||
+          "";
+        const baseName = String(targetPathOrName).split(/[\\/]/).pop();
+        const config = (state.rosterConfigs && state.rosterConfigs[baseName]) || null;
+
+        container.innerHTML = `<div style="padding: 12px; font-size: 12px; color: var(--color-text-secondary);">Loading sample student records...</div>`;
+
+        try {
+          if (window.pywebview && window.pywebview.api && typeof window.pywebview.api.inspect_roster === "function" && targetPathOrName) {
+            const res = await window.pywebview.api.inspect_roster(targetPathOrName, config);
+            const students = (res && (res.parsed_students || res.parsed_preview || res.preview_students)) || [];
+            if (students.length > 0) {
+              const slice = students.slice(0, 8);
+              let trs = "";
+              slice.forEach((s, idx) => {
+                const sName = s.name !== undefined ? s.name : Array.isArray(s) ? s[0] : "-";
+                const sId =
+                  s.student_number !== undefined
+                    ? s.student_number
+                    : s.id !== undefined
+                      ? s.id
+                      : Array.isArray(s)
+                        ? s[1]
+                        : "-";
+                trs += `
+                  <tr>
+                    <td style="width: 32px; color: var(--color-text-muted);">${idx + 1}</td>
+                    <td class="col-stud-no">${escapeHTML(String(sId))}</td>
+                    <td><strong>${escapeHTML(String(sName))}</strong></td>
+                  </tr>
+                `;
+              });
+              container.innerHTML = `
+                <table class="inspector-student-table" aria-label="Sample enrolled students (Student Number and Name only)">
+                  <thead>
+                    <tr>
+                      <th scope="col">#</th>
+                      <th scope="col">Student No.</th>
+                      <th scope="col">Student Name</th>
+                    </tr>
+                  </thead>
+                  <tbody id="inspectorStudentTbody">${trs}</tbody>
+                </table>
+                <div style="padding: 8px 12px; font-size: 11px; color: var(--color-text-muted); background: var(--color-surface-2);">
+                  Showing ${slice.length} of ${res.student_count || students.length} verified records (Student Number &amp; Name only).
+                </div>
+              `;
+              return;
+            }
+          }
+          container.innerHTML = `<div style="padding: 12px; font-size: 12px; color: var(--color-text-secondary);">Use "Remap Columns" above to inspect raw spreadsheet rows and custom column mappings.</div>`;
+        } catch (err) {
+          container.innerHTML = `<div style="padding: 12px; font-size: 12px; color: var(--color-danger);">Could not load student preview: ${escapeHTML(String(err))}</div>`;
+        }
+      }
+
+      window.findRosterReportForClass = findRosterReportForClass;
+      window.openClassInspector = openClassInspector;
+      window.closeClassInspector = closeClassInspector;
+      window.onInspectorClassTypeChange = onInspectorClassTypeChange;
+      window.replaceInspectedRoster = replaceInspectedRoster;
+      window.remapInspectedRoster = remapInspectedRoster;
+      window.diffInspectedRoster = diffInspectedRoster;
+      window.onInspectorStudentDisclosureToggle = onInspectorStudentDisclosureToggle;
 
       // ── Step 2: Interactive Column Mapping Modal ─────────────────────────
       let currentMappingFilename = null;
@@ -245,7 +583,7 @@
             detectedName,
             detectedId,
           );
-          const parsedList = res.parsed_students || res.parsed_preview || [];
+          const parsedList = res.parsed_students || res.parsed_preview || res.preview_students || [];
           renderParsedPreview(parsedList, res.student_count || 0);
 
           const previousFocus = document.activeElement;
@@ -382,7 +720,7 @@
               overrides.name_column,
               overrides.id_column,
             );
-            const parsedList = res.parsed_students || res.parsed_preview || [];
+            const parsedList = res.parsed_students || res.parsed_preview || res.preview_students || [];
             renderParsedPreview(parsedList, res.student_count || 0);
           }
         } catch (err) {
@@ -526,11 +864,17 @@
         const headerRow = parseInt(headerRowVal, 10);
         const nameCol = parseInt(nameColVal, 10);
         const idCol = parseInt(idColVal, 10);
+        const cols = (currentInspectionData && currentInspectionData.columns) || [];
+        const isExcel = !!(currentInspectionData && currentInspectionData.is_excel);
+        const resolvedNameCol = isNaN(nameCol) ? null : (isExcel && cols[nameCol] ? cols[nameCol] : nameCol);
+        const resolvedIdCol = isNaN(idCol) ? null : (isExcel && cols[idCol] ? cols[idCol] : idCol);
 
         const config = {
           header_row: isNaN(headerRow) ? null : headerRow,
           name_column: isNaN(nameCol) ? null : nameCol,
           id_column: isNaN(idCol) ? null : idCol,
+          name_col: resolvedNameCol,
+          id_col: resolvedIdCol,
           course_sec: courseSec || null,
           schedule_code: scheduleCode || null,
           subject_name: subjectName || null,
@@ -665,26 +1009,81 @@
       }
 
       function updateSelectCount() {
-        const total = document.querySelectorAll(".item-class-check").length;
+        const allChecks = document.querySelectorAll(".item-class-check");
+        const total = allChecks.length;
         const selected = document.querySelectorAll(
           ".item-class-check:checked",
         ).length;
-        document.getElementById("classesReadyBadge").innerText =
-          `${selected} / ${total} Selected`;
+
+        const masterCheck = document.getElementById("selectAllClasses");
+        if (masterCheck) {
+          masterCheck.checked = total > 0 && selected === total;
+          masterCheck.indeterminate = selected > 0 && selected < total;
+        }
+
+        allChecks.forEach((cb) => {
+          const tr = cb.closest("tr.class-table-row");
+          if (tr) {
+            tr.classList.toggle("row-selected", cb.checked);
+            tr.classList.toggle("row-unselected", !cb.checked);
+          }
+        });
+
+        const readyBadge = document.getElementById("classesReadyBadge");
+        if (readyBadge) {
+          readyBadge.innerText = `${selected} / ${total} Selected`;
+        }
+
+        const bulkBtn = document.getElementById("btnApplyBulkType");
+        if (bulkBtn) {
+          bulkBtn.disabled = selected === 0;
+        }
+
         updateStepperStatus();
         updateFileEstimate();
       }
+
+      function applyBulkClassType() {
+        const bulkSelect = document.getElementById("bulkClassTypeSelect");
+        if (!bulkSelect) return;
+        const targetType = bulkSelect.value;
+        let updatedCount = 0;
+
+        document.querySelectorAll(".item-class-check:checked").forEach((cb) => {
+          const cid = cb.getAttribute("data-class-id");
+          const rowSelect = document.querySelector(
+            `.class-type-select[data-class-id="${CSS.escape ? CSS.escape(cid) : cid}"]`
+          );
+          if (rowSelect) {
+            rowSelect.value = targetType;
+            updatedCount++;
+          }
+        });
+
+        if (updatedCount > 0) {
+          saveClassTypeOverrides();
+          updateFileEstimate();
+          const label = targetType === "lecture_lab" ? "Lecture and Lab" : "Lecture only";
+          showToast(
+            "Batch Classification Applied",
+            `Set ${updatedCount} selected section${updatedCount === 1 ? "" : "s"} to "${label}".`,
+            "info",
+            2200,
+          );
+        }
+      }
+      window.applyBulkClassType = applyBulkClassType;
 
       function filterClassCards(type) {
         document
           .querySelectorAll(".filter-pill")
           .forEach((p) => p.classList.remove("active"));
         if (type === "all")
-          document.getElementById("filterAllClasses").classList.add("active");
+          document.getElementById("filterAllClasses")?.classList.add("active");
         else if (type === "lab")
-          document.getElementById("filterLabClasses").classList.add("active");
+          document.getElementById("filterLabClasses")?.classList.add("active");
         else if (type === "lec")
-          document.getElementById("filterLecClasses").classList.add("active");
+          document.getElementById("filterLecClasses")?.classList.add("active");
 
         const cards = document.querySelectorAll(
           "#classesListContainer .class-card",
@@ -692,12 +1091,13 @@
         cards.forEach((card) => {
           const select = card.querySelector(".class-type-select");
           const val = select ? select.value : "";
+          const visibleDisplay = card.tagName === "TR" ? "" : "flex";
           if (type === "all") {
-            card.style.display = "flex";
+            card.style.display = visibleDisplay;
           } else if (type === "lab") {
-            card.style.display = val === "lecture_lab" ? "flex" : "none";
+            card.style.display = val === "lecture_lab" ? visibleDisplay : "none";
           } else if (type === "lec") {
-            card.style.display = val === "lecture_only" ? "flex" : "none";
+            card.style.display = val === "lecture_only" ? visibleDisplay : "none";
           }
         });
       }
@@ -805,6 +1205,11 @@
         if (sVal && eVal) {
           const d1 = new Date(sVal);
           const d2 = new Date(eVal);
+          if (!isNaN(d1) && !isNaN(d2) && d2 < d1) {
+            container.innerHTML = `<span class="month-chip" style="border-color: var(--color-danger); color: var(--color-danger);">⚠️ Invalid Date Range: End Date must be on or after Start Date</span>`;
+            updateFileEstimate();
+            return;
+          }
           if (!isNaN(d1) && !isNaN(d2) && d2 >= d1) {
             let chipsHtml = "";
             let curr = new Date(d1.getFullYear(), d1.getMonth(), 1);

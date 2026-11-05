@@ -220,9 +220,10 @@
       <nav aria-label="Workflow Steps" class="stepper-bar" id="workflowStepper">
         <div class="stepper-track">
           <button
-            class="step-chip"
+            class="step-chip active-step"
             id="chipStep1"
             type="button"
+            aria-current="step"
             onclick="scrollToStep('cardStep1')"
             aria-label="Step 1: Schedule - Incomplete"
           >
@@ -299,182 +300,198 @@
     <div id="a11yLiveAnnouncer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
 
     <main id="mainContent" class="app-container" role="main">
-      <!-- ── Modern Studio 2-Column Dashboard Grid ─────────────────────────── -->
-      <div class="dashboard-grid">
-        <!-- ── LEFT COLUMN: Data Ingestion (Schedule & Rosters) ──────────── -->
-        <div class="dashboard-col col-ingestion">
-          <!-- ── STEP 1: Select Instructor Schedule ────────────────────────── -->
-          <section class="glass-card" id="cardStep1">
-            <div class="step-header">
-              <div class="step-number">1</div>
-              <div class="step-header-text">
-                <div class="step-title">
-                  Select Instructor Schedule (.xls or .xlsx)
-                </div>
-                <div class="step-sub">
-                  Official master schedule spreadsheet from the faculty portal
-                </div>
+      <!-- ── Hybrid Guided Batch Workbench: Contextual Single-Active-Stage Host ── -->
+      <div class="workspace-stage-host" id="workspaceStageHost">
+        <!-- ── STAGE 1: Select Instructor Schedule ────────────────────────── -->
+        <section class="glass-card stage-panel active-stage" id="cardStep1" aria-labelledby="stageHeading1">
+          <div class="step-header">
+            <div class="step-number">1</div>
+            <div class="step-header-text">
+              <h2 class="step-title" id="stageHeading1" tabindex="-1">
+                Select Instructor Schedule (.xls or .xlsx)
+              </h2>
+              <div class="step-sub">
+                Official master schedule spreadsheet from the faculty portal
               </div>
-              <div class="step-desc">Master Schedule</div>
             </div>
+            <div class="step-desc">Stage 1 of 6 · Master Schedule</div>
+          </div>
 
-            <!-- Schedule Dropzone with Browse File button -->
-            <div
-              id="scheduleDropzone"
-              class="dropzone"
-              onclick="loadSchedule()"
-              tabindex="0"
-              role="button"
-              aria-label="Upload instructor master schedule spreadsheet (.xls or .xlsx)"
-              onkeydown="if(event.key==='Enter' || event.key===' ') { event.preventDefault(); this.click(); }"
+          <!-- Schedule Dropzone with Browse File button -->
+          <div
+            id="scheduleDropzone"
+            class="dropzone"
+            onclick="loadSchedule()"
+            tabindex="0"
+            role="button"
+            aria-label="Upload instructor master schedule spreadsheet (.xls or .xlsx)"
+            onkeydown="if(event.key==='Enter' || event.key===' ') { event.preventDefault(); this.click(); }"
+          >
+            <svg
+              class="dropzone-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
             >
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+            <div class="dropzone-title">
+              Instructor Schedule Spreadsheet
+              <span
+                id="scheduleFormatBadge"
+                class="badge-version d-none"
+                style="margin-left: 6px"
+                >.XLS</span
+              >
+            </div>
+            <div id="schedulePrompt" class="dropzone-hint">
+              Click "Browse File" or drop master schedule (.xls / .xlsx)
+            </div>
+            <div style="display: flex; gap: 8px; margin-top: 6px">
+              <span class="btn-browse" aria-hidden="true">Browse File</span>
+              <button
+                class="nav-btn d-none"
+                id="btnResetSchedule"
+                type="button"
+                style="padding: 4px 10px; font-size: 11px"
+                aria-label="Reset master schedule"
+                onclick="
+                  event.stopPropagation();
+                  resetSchedule();
+                "
+              >
+                Reset File
+              </button>
+            </div>
+            <div
+              id="scheduleFilename"
+              class="dropzone-status d-none selectable"
+            ></div>
+          </div>
+
+          <!-- Progressive Disclosure Details: Schedule Notes -->
+          <details class="step-disclosure" id="disclosureStep1">
+            <summary class="disclosure-summary">
               <svg
-                class="dropzone-icon"
+                width="13"
+                height="13"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
-                stroke-width="2"
+                stroke-width="2.5"
                 stroke-linecap="round"
                 stroke-linejoin="round"
               >
-                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                <line x1="16" y1="2" x2="16" y2="6"></line>
-                <line x1="8" y1="2" x2="8" y2="6"></line>
-                <line x1="3" y1="10" x2="21" y2="10"></line>
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="16" x2="12" y2="12"></line>
+                <line x1="12" y1="8" x2="12.01" y2="8"></line>
               </svg>
-              <div class="dropzone-title">
-                Instructor Schedule Spreadsheet
-                <span
-                  id="scheduleFormatBadge"
-                  class="badge-version d-none"
-                  style="margin-left: 6px"
-                  >.XLS</span
+              <span>Schedule Instructions &amp; Async Filtering Notes</span>
+              <svg
+                class="chevron-icon"
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+              >
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </summary>
+            <div class="disclosure-content">
+              <p class="step-instructions">
+                Download your official schedule spreadsheet from the faculty
+                portal. Click <strong>"Browse File"</strong> to select
+                your master schedule. The generator automatically extracts
+                your instructor name, college header, semester, academic year,
+                class times, days, and rooms.<br />
+                <em
+                  >Note: Schedule blocks labeled as Async or Asynch are
+                  automatically filtered out so only in-person sessions
+                  receive attendance columns.</em
                 >
-              </div>
-              <div id="schedulePrompt" class="dropzone-hint">
-                Click "Browse File" or drop master schedule (.xls / .xlsx)
-              </div>
-              <div style="display: flex; gap: 8px; margin-top: 6px">
-                <span class="btn-browse" aria-hidden="true">Browse File</span>
-                <button
-                  class="nav-btn d-none"
-                  id="btnResetSchedule"
-                  type="button"
-                  style="padding: 4px 10px; font-size: 11px"
-                  aria-label="Reset master schedule"
-                  onclick="
-                    event.stopPropagation();
-                    resetSchedule();
-                  "
-                >
-                  Reset File
-                </button>
-              </div>
-              <div
-                id="scheduleFilename"
-                class="dropzone-status d-none selectable"
-              ></div>
+              </p>
             </div>
+          </details>
 
-            <!-- Progressive Disclosure Details: Schedule Notes -->
-            <details class="step-disclosure" id="disclosureStep1">
-              <summary class="disclosure-summary">
-                <svg
-                  width="13"
-                  height="13"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
+          <!-- Instructor Profile Instant Banner -->
+          <div
+            id="instructorBanner"
+            class="instructor-banner d-none"
+            style="margin-top: 16px"
+          >
+            <div class="instructor-info">
+              <div id="instructorInitials" class="instructor-avatar">DO</div>
+              <div>
+                <div id="instructorName" class="instructor-name selectable">
+                  Instructor Name
+                </div>
+                <div
+                  id="instructorCollege"
+                  class="instructor-meta selectable"
                 >
-                  <circle cx="12" cy="12" r="10"></circle>
-                  <line x1="12" y1="16" x2="12" y2="12"></line>
-                  <line x1="12" y1="8" x2="12.01" y2="8"></line>
-                </svg>
-                <span>Schedule Instructions &amp; Async Filtering Notes</span>
-                <svg
-                  class="chevron-icon"
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                >
-                  <polyline points="6 9 12 15 18 9"></polyline>
-                </svg>
-              </summary>
-              <div class="disclosure-content">
-                <p class="step-instructions">
-                  Download your official schedule spreadsheet from the faculty
-                  portal. Click <strong>"Browse File"</strong> below to select
-                  your master schedule. The generator automatically extracts
-                  your instructor name, college header, semester, academic year,
-                  class times, days, and rooms.<br />
-                  <em
-                    >Note: Schedule blocks labeled as Async or Asynch are
-                    automatically filtered out so only in-person sessions
-                    receive attendance columns.</em
-                  >
-                </p>
-              </div>
-            </details>
-
-            <!-- Instructor Profile Instant Banner -->
-            <div
-              id="instructorBanner"
-              class="instructor-banner d-none"
-              style="margin-top: 16px"
-            >
-              <div class="instructor-info">
-                <div id="instructorInitials" class="instructor-avatar">DO</div>
-                <div>
-                  <div id="instructorName" class="instructor-name selectable">
-                    Instructor Name
-                  </div>
-                  <div
-                    id="instructorCollege"
-                    class="instructor-meta selectable"
-                  >
-                    College of Engineering and Information Technology
-                  </div>
+                  College of Engineering and Information Technology
                 </div>
               </div>
-              <div class="instructor-pills">
-                <span id="instructorSemPill" class="meta-pill">Semester</span>
-                <span id="instructorSlotsPill" class="meta-pill"
-                  >0 Class Blocks</span
+            </div>
+            <div class="instructor-pills">
+              <span id="instructorSemPill" class="meta-pill">Semester</span>
+              <span id="instructorSlotsPill" class="meta-pill"
+                >0 Class Blocks</span
+              >
+            </div>
+          </div>
+
+          <!-- Stage 1 Contextual Footer -->
+          <div class="stage-footer-bar">
+            <div class="stage-footer-status" id="stage1FooterStatus">
+              Select your official faculty master schedule (.xls or .xlsx) to begin.
+            </div>
+            <div class="stage-footer-actions">
+              <button
+                type="button"
+                id="btnStage1Primary"
+                class="btn-browse btn-stage-primary"
+                onclick="handleStage1PrimaryAction()"
+              >
+                Browse File
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── STAGE 2: Select Student Rosters ───────────────────────────── -->
+        <section class="glass-card stage-panel" id="cardStep2" aria-labelledby="stageHeading2">
+          <div class="step-header">
+            <div class="step-number">2</div>
+            <div class="step-header-text">
+              <h2 class="step-title" id="stageHeading2" tabindex="-1">
+                Select Student Rosters (.xlsx, .xls, or .csv)
+              </h2>
+              <div class="step-sub">
+                Class student rosters from
+                <a
+                  href="https://registrar.cvsu.edu.ph/"
+                  target="_blank"
+                  class="text-link"
+                  >registrar.cvsu.edu.ph</a
                 >
               </div>
             </div>
-          </section>
+            <div class="step-desc">Stage 2 of 6 · Class Lists</div>
+          </div>
 
-          <!-- ── STEP 2: Select Student Rosters ───────────────────────────── -->
-          <section class="glass-card" id="cardStep2">
-            <div class="step-header">
-              <div class="step-number">2</div>
-              <div class="step-header-text">
-                <div class="step-title">
-                  Select Student Rosters (.xlsx, .xls, or .csv)
-                </div>
-                <div class="step-sub">
-                  Class student rosters from
-                  <a
-                    href="https://registrar.cvsu.edu.ph/"
-                    target="_blank"
-                    class="text-link"
-                    >registrar.cvsu.edu.ph</a
-                  >
-                </div>
-              </div>
-              <div class="step-desc">Class Lists</div>
-            </div>
-
-            <!-- Auto-Strip Extra Columns Toggle -->
-            <div class="auto-strip-box">
-              <label class="toggle-switch">
+          <!-- Auto-Strip Extra Columns (Clean Inline Preference) -->
+          <div class="stage-preference-row">
+            <label class="preference-toggle" for="autoStripCheck">
+              <span class="toggle-switch">
                 <input
                   type="checkbox"
                   id="autoStripCheck"
@@ -483,262 +500,270 @@
                   onchange="renderRosterStatus()"
                 />
                 <span class="toggle-slider"></span>
-              </label>
-              <div>
-                <div class="toggle-label">
-                  Auto-Strip Extra Columns (Recommended)
-                </div>
-                <div class="toggle-sub">
-                  Automatically isolates Name &amp; Student number, safely
-                  ignoring extra portal columns.
-                </div>
-              </div>
-            </div>
-
-            <!-- Rosters Dropzone with Browse Data button -->
-            <div id="rostersDropzone" class="dropzone" onclick="loadRosters()" tabindex="0" role="button" aria-label="Upload student class rosters (.xlsx, .xls, or .csv)" onkeydown="if(event.key==='Enter' || event.key===' ') { event.preventDefault(); this.click(); }">
-              <svg
-                class="dropzone-icon"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                <circle cx="9" cy="7" r="4"></circle>
-                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-              </svg>
-              <div class="dropzone-title">Class Rosters Files</div>
-              <div id="rostersPrompt" class="dropzone-hint">
-                Click "Browse Data" or drop student lists (.xlsx / .xls / .csv)
-                — hold Ctrl/Shift for multi-select
-              </div>
-              <span
-                class="btn-browse"
-                aria-hidden="true"
-                style="margin-top: 6px"
-              >
-                Browse Data
               </span>
-              <div id="rostersFilename" class="dropzone-status d-none"></div>
-            </div>
+              <span class="preference-labels">
+                <span class="preference-title">Auto-strip extra portal columns</span>
+                <span class="preference-desc">Safely isolates student name &amp; student number from registrar exports</span>
+              </span>
+            </label>
+          </div>
 
-            <!-- Crucial Naming Format Callout (Apple HIG Minimal, Justified) -->
-            <div class="apple-callout">
-              <div class="apple-callout-header">
-                <div class="apple-callout-title">
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2.2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path
-                      d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
-                    ></path>
-                    <line x1="12" y1="9" x2="12" y2="13"></line>
-                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
-                  </svg>
-                  <span
-                    ><strong>Crucial:</strong> Official File Naming Format</span
-                  >
-                </div>
-                <span class="apple-callout-pill">Required</span>
-              </div>
-              <div class="apple-callout-code">
-                <span
-                  ><span style="color: var(--accent-amber); font-weight: 600"
-                    >{Course/Sec}</span
-                  >
-                  List of Students for
-                  <span style="color: var(--accent-amber); font-weight: 600"
-                    >{ScheduleCode}</span
-                  >-{Subject}.xlsx</span
-                >
-              </div>
-              <div class="apple-callout-example">
-                <span
-                  ><strong style="color: var(--text-secondary)"
-                    >Example:</strong
-                  >
-                  BSCS1-4 List of Students for 202612040-DCIT 21A - INTRODUCTION
-                  TO COMPUTING.xlsx</span
-                >
-              </div>
+          <!-- Rosters Dropzone with Browse Data button -->
+          <div id="rostersDropzone" class="dropzone" onclick="loadRosters()" tabindex="0" role="button" aria-label="Upload student class rosters (.xlsx, .xls, or .csv)" onkeydown="if(event.key==='Enter' || event.key===' ') { event.preventDefault(); this.click(); }">
+            <svg
+              class="dropzone-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+              <circle cx="9" cy="7" r="4"></circle>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+            </svg>
+            <div class="dropzone-title">Class Rosters Files</div>
+            <div id="rostersPrompt" class="dropzone-hint">
+              Click "Browse Data" or drop student lists (.xlsx / .xls / .csv)
+              — hold Ctrl/Shift for multi-select
             </div>
+            <span
+              class="btn-browse"
+              aria-hidden="true"
+              style="margin-top: 6px"
+            >
+              Browse Data
+            </span>
+            <div id="rostersFilename" class="dropzone-status d-none"></div>
+          </div>
 
-            <!-- Progressive Disclosure Details: Roster Column Guidelines & Official Naming -->
-            <details class="step-disclosure" id="disclosureStep2">
-              <summary class="disclosure-summary">
+          <!-- Recommended Roster Filename Guidance (Informational Reference) -->
+          <div class="syntax-guidance-note">
+            <div class="guidance-header">
+              <div class="guidance-title">
                 <svg
-                  width="13"
-                  height="13"
+                  width="14"
+                  height="14"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
-                  stroke-width="2.5"
+                  stroke-width="2"
                   stroke-linecap="round"
                   stroke-linejoin="round"
+                  aria-hidden="true"
                 >
                   <circle cx="12" cy="12" r="10"></circle>
                   <line x1="12" y1="16" x2="12" y2="12"></line>
                   <line x1="12" y1="8" x2="12.01" y2="8"></line>
                 </svg>
-                <span
-                  >Roster Column Guidelines &amp; Official Naming Rules</span
-                >
-                <svg
-                  class="chevron-icon"
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                >
-                  <polyline points="6 9 12 15 18 9"></polyline>
-                </svg>
-              </summary>
-              <div class="disclosure-content">
-                <p class="step-instructions">
-                  Download class student rosters directly from
-                  <a
-                    href="https://registrar.cvsu.edu.ph/"
-                    target="_blank"
-                    class="text-link"
-                    >registrar.cvsu.edu.ph</a
-                  >. Click <strong>"Browse Data"</strong> below. You can select
-                  <strong>multiple files at once</strong> by holding
-                  <kbd>Ctrl</kbd> or <kbd>Shift</kbd> to load all your class
-                  rosters together.
-                </p>
-
-                <!-- Roster Column Info Box -->
-                <div class="alert-info">
-                  <div
-                    style="
-                      color: var(--accent-blue);
-                      flex-shrink: 0;
-                      margin-top: 2px;
-                    "
-                  >
-                    <svg
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <circle cx="12" cy="12" r="10"></circle>
-                      <line x1="12" y1="16" x2="12" y2="12"></line>
-                      <line x1="12" y1="8" x2="12.01" y2="8"></line>
-                    </svg>
-                  </div>
-                  <div>
-                    <strong>Roster Columns:</strong> Columns A &amp; B must
-                    contain the student <code>Name</code> and
-                    <code>Student number</code>. Extra portal columns (Email,
-                    Course, Section, Status, Remarks) are automatically cleaned
-                    and ignored.
-                  </div>
-                </div>
+                <span>Recommended Roster Filename Format</span>
               </div>
-            </details>
+              <span class="guidance-badge">Auto-Matching Recommended</span>
+            </div>
+            <div class="guidance-code">
+              <span><span class="token-hl">{Course/Sec}</span> List of Students for <span class="token-hl">{ScheduleCode}</span>-{Subject}.xlsx</span>
+            </div>
+            <div class="guidance-example">
+              <span><strong>Example:</strong> BSCS1-4 List of Students for 202612040-DCIT 21A - INTRODUCTION TO COMPUTING.xlsx</span>
+              <span class="guidance-hint">Files matching this format link automatically. Other roster files can be linked manually via the class dropdown.</span>
+            </div>
+          </div>
 
-            <!-- Roster Pre-flight List -->
-            <div
-              id="rosterListBox"
-              class="roster-list-box d-none"
-              style="margin-top: 14px"
-            >
-              <div
-                style="
-                  display: flex;
-                  justify-content: space-between;
-                  align-items: center;
-                  margin-bottom: 8px;
-                "
+          <!-- Progressive Disclosure Details: Roster Column Guidelines & Official Naming -->
+          <details class="step-disclosure" id="disclosureStep2">
+            <summary class="disclosure-summary">
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
               >
-                <div style="display: flex; align-items: center; gap: 8px">
-                  <span
-                    style="
-                      font-size: 12px;
-                      font-weight: 700;
-                      text-transform: uppercase;
-                      color: var(--text-secondary);
-                    "
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="16" x2="12" y2="12"></line>
+                <line x1="12" y1="8" x2="12.01" y2="8"></line>
+              </svg>
+              <span
+                >Roster Column Guidelines &amp; Official Naming Rules</span
+              >
+              <svg
+                class="chevron-icon"
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+              >
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </summary>
+            <div class="disclosure-content">
+              <p class="step-instructions">
+                Download class student rosters directly from
+                <a
+                  href="https://registrar.cvsu.edu.ph/"
+                  target="_blank"
+                  class="text-link"
+                  >registrar.cvsu.edu.ph</a
+                >. Click <strong>"Browse Data"</strong>. You can select
+                <strong>multiple files at once</strong> by holding
+                <kbd>Ctrl</kbd> or <kbd>Shift</kbd> to load all your class
+                rosters together.
+              </p>
+
+              <!-- Roster Column Info Box -->
+              <div class="alert-info">
+                <div
+                  style="
+                    color: var(--accent-blue);
+                    flex-shrink: 0;
+                    margin-top: 2px;
+                  "
+                >
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
                   >
-                    Loaded Roster Files (<span id="rosterCountBadge">0</span>)
-                  </span>
-                  <span
-                    id="rosterTotalStudentsBadge"
-                    class="badge-version d-none"
-                    >0 Students</span
-                  >
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="16" x2="12" y2="12"></line>
+                    <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                  </svg>
                 </div>
-                <div style="display: flex; gap: 6px; align-items: center;">
-                  <input
-                    type="text"
-                    id="rosterSearchInput"
-                    placeholder="Filter rosters..."
-                    style="
-                      font-size: 12px;
-                      padding: 4px 10px;
-                      min-height: 28px;
-                      border-radius: 8px;
-                      border: 1px solid var(--border-subtle);
-                      background: var(--surface-card);
-                      color: var(--text-primary);
-                    "
-                    oninput="filterRostersList(this.value)"
-                  />
-                  <button
-                    class="nav-btn"
-                    id="btnClearAllRosters"
-                    style="padding: 4px 10px; font-size: 12px; min-height: 28px; display: inline-flex; align-items: center;"
-                    aria-label="Remove all imported rosters"
-                    onclick="clearAllRosters()"
-                  >
-                    Clear All
-                  </button>
+                <div>
+                  <strong>Roster Columns:</strong> Columns A &amp; B must
+                  contain the student <code>Name</code> and
+                  <code>Student number</code>. Extra portal columns (Email,
+                  Course, Section, Status, Remarks) are automatically cleaned
+                  and ignored.
                 </div>
               </div>
-              <div id="rosterRowsContainer"></div>
             </div>
-          </section>
-        </div>
+          </details>
 
-        <!-- ── RIGHT COLUMN: Control Deck (Packages, Classes, Dates, Output) ── -->
-        <div class="dashboard-col col-controls">
-          <!-- ── STEP 3: Confirm Detected Classes & Subject Types ──────────── -->
-          <section class="glass-card" id="cardStep3">
-            <div class="step-header">
-              <div class="step-number">3</div>
-              <div class="step-header-text">
-                <div class="step-title">
-                  Confirm Detected Classes &amp; Subject Types
-                </div>
-                <div class="step-sub">
-                  Select packages to compile &amp; confirm grading templates
-                </div>
-              </div>
-              <div class="step-desc">Templates &amp; Packages</div>
-            </div>
-
-            <!-- Document Engine Toggles (Apple Feature Tiles) -->
-            <label class="form-label" style="margin-bottom: 8px"
-              >Document Packages to Compile</label
+          <!-- Roster Pre-flight List -->
+          <div
+            id="rosterListBox"
+            class="roster-list-box d-none"
+            style="margin-top: 14px"
+          >
+            <div
+              style="
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 8px;
+                flex-wrap: wrap;
+                gap: 8px;
+              "
             >
+              <div style="display: flex; align-items: center; gap: 8px">
+                <span
+                  style="
+                    font-size: 12px;
+                    font-weight: 700;
+                    text-transform: uppercase;
+                    color: var(--text-secondary);
+                  "
+                >
+                  Loaded Roster Files (<span id="rosterCountBadge">0</span>)
+                </span>
+                <span
+                  id="rosterTotalStudentsBadge"
+                  class="badge-version d-none"
+                  >0 Students</span
+                >
+              </div>
+              <div style="display: flex; gap: 6px; align-items: center;">
+                <input
+                  type="text"
+                  id="rosterSearchInput"
+                  placeholder="Filter rosters..."
+                  aria-label="Filter loaded roster files"
+                  style="
+                    font-size: 12px;
+                    padding: 4px 10px;
+                    min-height: 28px;
+                    border-radius: 6px;
+                    border: 1px solid var(--color-border-strong);
+                    background: var(--color-surface);
+                    color: var(--color-text);
+                  "
+                  oninput="filterRostersList(this.value)"
+                />
+                <button
+                  class="nav-btn"
+                  id="btnClearAllRosters"
+                  type="button"
+                  style="padding: 4px 10px; font-size: 12px; min-height: 28px; display: inline-flex; align-items: center;"
+                  aria-label="Remove all imported rosters"
+                  onclick="clearAllRosters()"
+                >
+                  Clear All
+                </button>
+              </div>
+            </div>
+            <div id="rosterRowsContainer"></div>
+          </div>
+
+          <!-- Stage 2 Contextual Footer -->
+          <div class="stage-footer-bar">
+            <button type="button" class="nav-btn" onclick="activateStage(1)">
+              &larr; Back to Schedule
+            </button>
+            <div class="stage-footer-actions">
+              <span class="stage-footer-status" id="stage2FooterStatus">
+                No roster files loaded yet.
+              </span>
+              <button
+                type="button"
+                id="btnStage2Primary"
+                class="btn-browse btn-stage-primary"
+                onclick="handleStage2PrimaryAction()"
+              >
+                Browse Data
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── STAGE 3: Full-Width Packages & Class Workbench ────────────── -->
+        <section class="glass-card stage-panel" id="cardStep3" aria-labelledby="stageHeading3">
+          <div class="step-header">
+            <div class="step-number">3</div>
+            <div class="step-header-text">
+              <h2 class="step-title" id="stageHeading3" tabindex="-1">
+                Confirm Detected Classes &amp; Subject Types
+              </h2>
+              <div class="step-sub">
+                Configure batch document packages, review matched sections, and verify grading classifications
+              </div>
+            </div>
+            <div class="step-desc">Stage 3 of 6 · Batch Workbench</div>
+          </div>
+
+          <!-- Global Batch-Level Document Package Configuration Area -->
+          <div class="batch-package-config-panel" role="group" aria-labelledby="batchPackageConfigHeading">
+            <div class="batch-package-header">
+              <div class="batch-package-title" id="batchPackageConfigHeading">
+                <span>Batch Document Package Selection</span>
+              </div>
+              <div class="batch-package-scope-note">
+                Selected packages apply uniformly to all checked sections in this generation run.
+              </div>
+            </div>
+
             <div class="engine-selector">
               <div
                 class="engine-chip active"
@@ -793,128 +818,113 @@
               </div>
             </div>
 
-            <div id="customWorkflowPackages" class="d-none" aria-live="polite"></div>
-
-            <!-- Progressive Disclosure Details: Template Specifications -->
-            <details class="step-disclosure" id="disclosureStep3">
-              <summary class="disclosure-summary">
-                <svg
-                  width="13"
-                  height="13"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <circle cx="12" cy="12" r="10"></circle>
-                  <line x1="12" y1="16" x2="12" y2="12"></line>
-                  <line x1="12" y1="8" x2="12.01" y2="8"></line>
-                </svg>
-                <span
-                  >Grading Template Specifications &amp; Detection Rules</span
-                >
-                <svg
-                  class="chevron-icon"
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                >
-                  <polyline points="6 9 12 15 18 9"></polyline>
-                </svg>
-              </summary>
-              <div class="disclosure-content">
-                <p class="step-instructions" style="margin-bottom: 6px">
-                  Once your schedule and rosters are loaded, the panel below
-                  displays all detected classes paired with official CvSU
-                  grading templates:
-                </p>
-                <div class="template-spec-box">
-                  <ul
-                    style="
-                      padding-left: 18px;
-                      font-size: 12px;
-                      color: var(--text-secondary);
-                      line-height: 1.5;
-                    "
-                  >
-                    <li>
-                      <strong>Lecture and Lab:</strong> Uses
-                      <code>GRADING_LECTURE_LAB_TEMPLATE.xlsx</code> (includes
-                      Lecture, Laboratory, Consolidated, and Grading Sheet
-                      tabs).
-                    </li>
-                    <li>
-                      <strong>Lecture only:</strong> Uses
-                      <code>GRADING_LECTURE_TEMPLATE.xlsx</code> (includes
-                      Lecture and Grading Sheet tabs).
-                    </li>
-                  </ul>
-                  <div
-                    style="
-                      font-size: 11.5px;
-                      color: var(--text-muted);
-                      margin-top: 6px;
-                      font-style: italic;
-                    "
-                  >
-                    The system automatically detects labs from your schedule
-                    hours, but you can change this anytime using the dropdown
-                    menu.
-                  </div>
-                </div>
-              </div>
-            </details>
+            <div id="customWorkflowPackages" class="d-none" aria-live="polite" style="margin-top: 10px;"></div>
 
             <!-- Live File Estimate Badge -->
             <div id="fileEstimateBadge" class="estimate-badge d-none">
               Estimated Output: 0 files
             </div>
+          </div>
 
-            <!-- Detected Classes Matrix -->
-            <div id="classesSection" class="d-none">
-              <div
-                style="
-                  display: flex;
-                  justify-content: space-between;
-                  align-items: center;
-                  margin-bottom: 8px;
-                  flex-wrap: wrap;
-                  gap: 8px;
-                "
+          <!-- Progressive Disclosure Details: Template Specifications -->
+          <details class="step-disclosure" id="disclosureStep3">
+            <summary class="disclosure-summary">
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
               >
-                <div style="display: flex; align-items: center; gap: 8px">
-                  <input
-                    type="checkbox"
-                    id="selectAllClasses"
-                    class="class-select-check"
-                    checked
-                    onchange="toggleSelectAllClasses(this.checked)"
-                  />
-                  <label
-                    for="selectAllClasses"
-                    class="form-label"
-                    style="margin-bottom: 0; cursor: pointer"
-                  >
-                    Detected Classes &amp; Template Selection (<span
-                      id="classesCountDisplay"
-                      >0</span
-                    >)
-                  </label>
-                </div>
-                <div style="display: flex; align-items: center; gap: 8px">
-                  <span class="badge-version" id="classesReadyBadge"
-                    >0 Ready</span
-                  >
-                </div>
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="16" x2="12" y2="12"></line>
+                <line x1="12" y1="8" x2="12.01" y2="8"></line>
+              </svg>
+              <span
+                >Grading Template Specifications &amp; Detection Rules</span
+              >
+              <svg
+                class="chevron-icon"
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+              >
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </summary>
+            <div class="disclosure-content">
+              <p class="step-instructions" style="margin-bottom: 6px">
+                Once your schedule and rosters are loaded, the matrix below
+                displays all detected classes paired with official CvSU
+                grading templates:
+              </p>
+              <div class="template-spec-box">
+                <ul
+                  style="
+                    padding-left: 18px;
+                    font-size: 12px;
+                    color: var(--text-secondary);
+                    line-height: 1.5;
+                  "
+                >
+                  <li>
+                    <strong>Lecture and Lab:</strong> Uses
+                    <code>GRADING_LECTURE_LAB_TEMPLATE.xlsx</code> (includes
+                    Lecture, Laboratory, Consolidated, and Grading Sheet
+                    tabs).
+                  </li>
+                  <li>
+                    <strong>Lecture only:</strong> Uses
+                    <code>GRADING_LECTURE_TEMPLATE.xlsx</code> (includes
+                    Lecture and Grading Sheet tabs).
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </details>
+
+          <!-- Empty State when Schedule or Rosters are not yet loaded -->
+          <div id="classesEmptyState" class="template-spec-box" style="text-align: center; padding: 24px 16px;">
+            <div style="font-size: 14px; font-weight: 600; color: var(--color-text); margin-bottom: 6px;">
+              No Matched Class Sections Detected Yet
+            </div>
+            <div style="font-size: 12.5px; color: var(--color-text-secondary); margin-bottom: 14px;">
+              Load both your Instructor Master Schedule (Stage 1) and Student Roster files (Stage 2) to populate the 8-column batch workbench.
+            </div>
+            <div style="display: inline-flex; gap: 8px; flex-wrap: wrap; justify-content: center;">
+              <button type="button" class="nav-btn" onclick="activateStage(1)">Go to Stage 1: Schedule</button>
+              <button type="button" class="nav-btn" onclick="activateStage(2)">Go to Stage 2: Rosters</button>
+            </div>
+          </div>
+
+          <!-- Detected Classes 8-Column Workbench Matrix -->
+          <div id="classesSection" class="d-none">
+            <div class="batch-command-bar">
+              <div class="batch-selection-summary">
+                <input
+                  type="checkbox"
+                  id="selectAllClasses"
+                  class="class-select-check"
+                  checked
+                  onchange="toggleSelectAllClasses(this.checked)"
+                />
+                <label
+                  for="selectAllClasses"
+                  style="cursor: pointer; margin: 0;"
+                >
+                  Select All (<span id="classesCountDisplay">0</span>)
+                </label>
+                <span class="badge-version" id="classesReadyBadge">0 Ready</span>
               </div>
 
-              <!-- Quick Filters (Apple Segmented Control) -->
-              <div class="filter-chip-group segmented-control">
+              <!-- Quick Filters -->
+              <div class="filter-chip-group segmented-control" style="margin: 0;">
                 <button
                   class="segmented-btn filter-pill active"
                   id="filterAllClasses"
@@ -941,342 +951,313 @@
                 </button>
               </div>
 
-              <div
-                id="classesListContainer"
-                class="classes-container"
-                style="margin-top: 10px"
-              ></div>
-            </div>
-          </section>
-
-          <!-- ── STEP 4: (Optional) Set Semester Date Boundaries ───────────── -->
-          <section class="glass-card" id="cardStep4">
-            <div class="step-header">
-              <div class="step-number">4</div>
-              <div class="step-header-text">
-                <div class="step-title">
-                  (Optional) Set Semester Date Boundaries
-                </div>
-                <div class="step-sub">
-                  Standard calendar (Aug–Dec / Jan–May) or custom range
-                </div>
-              </div>
-              <div class="step-desc">Attendance Calendar</div>
-            </div>
-
-            <p class="step-instructions">
-              If you want attendance sheets to cover only specific dates of the
-              semester, select a <strong>Start Date</strong> and
-              <strong>End Date</strong>.<br />
-              <em
-                >If left blank, the app will generate sheets for the standard
-                semester calendar (August–December for 1st Semester; January–May
-                for 2nd Semester).</em
-              >
-            </p>
-
-            <div class="date-boundary-box">
-              <div class="date-inputs-row">
-                <div class="date-input-group">
-                  <label for="startDate">Start:</label>
-                  <input
-                    type="date"
-                    id="startDate"
-                    class="date-input"
-                    aria-label="Semester start date boundary"
-                    onchange="saveDates()"
-                  />
-                </div>
-                <div class="date-input-group">
-                  <label for="endDate">End:</label>
-                  <input
-                    type="date"
-                    id="endDate"
-                    class="date-input"
-                    aria-label="Semester end date boundary"
-                    onchange="saveDates()"
-                  />
-                </div>
-              </div>
-              <div class="preset-chips segmented-control">
+              <!-- Bulk Classification Action -->
+              <div class="batch-actions-group">
+                <label for="bulkClassTypeSelect" class="batch-action-label">Set Selected:</label>
+                <select
+                  id="bulkClassTypeSelect"
+                  class="type-dropdown"
+                  style="width: auto; max-width: 150px;"
+                  aria-label="Bulk classification type for selected classes"
+                >
+                  <option value="lecture_lab">Lecture and Lab</option>
+                  <option value="lecture_only">Lecture only</option>
+                </select>
                 <button
                   type="button"
-                  class="chip-preset segmented-btn"
-                  onclick="setSemesterPreset('1st')"
+                  id="btnApplyBulkType"
+                  class="btn-batch-apply"
+                  onclick="applyBulkClassType()"
                 >
-                  1st Sem (Aug-Dec)
-                </button>
-                <button
-                  type="button"
-                  class="chip-preset segmented-btn"
-                  onclick="setSemesterPreset('2nd')"
-                >
-                  2nd Sem (Jan-May)
-                </button>
-                <button
-                  type="button"
-                  class="chip-preset segmented-btn"
-                  onclick="clearDatePresets()"
-                >
-                  Reset Dates
+                  Apply to Selected
                 </button>
               </div>
             </div>
 
-            <!-- Dynamic Month Preview Chips -->
             <div
-              id="includedMonthsContainer"
-              class="month-chips-container"
+              id="classesListContainer"
+              class="classes-container"
             ></div>
-          </section>
+          </div>
 
-          <!-- ── STEP 5: Choose Target Output Folder ───────────────────────── -->
-          <section class="glass-card" id="cardStep5">
-            <div class="step-header">
-              <div class="step-number">5</div>
-              <div class="step-header-text">
-                <div class="step-title">Choose Target Output Folder</div>
-                <div class="step-sub">
-                  Destination directory for compiled document packages
-                </div>
-              </div>
-              <div class="step-desc">Destination Directory</div>
+          <!-- Stage 3 Contextual Footer -->
+          <div class="stage-footer-bar">
+            <button type="button" class="nav-btn" onclick="activateStage(2)">
+              &larr; Back to Rosters
+            </button>
+            <div class="stage-footer-actions">
+              <span class="stage-footer-status" id="stage3FooterStatus">
+                Configure batch packages and verify section classifications.
+              </span>
+              <button
+                type="button"
+                id="btnStage3Primary"
+                class="btn-browse btn-stage-primary"
+                onclick="activateStage(4)"
+              >
+                Continue to Dates &rarr;
+              </button>
             </div>
+          </div>
+        </section>
 
-            <p class="step-instructions">
-              Click <strong>"Browse Path"</strong> and select any destination
-              folder on your computer where the files should be saved.
-            </p>
+        <!-- ── STAGE 4: (Optional) Set Semester Date Boundaries ───────────── -->
+        <section class="glass-card stage-panel" id="cardStep4" aria-labelledby="stageHeading4">
+          <div class="step-header">
+            <div class="step-number">4</div>
+            <div class="step-header-text">
+              <h2 class="step-title" id="stageHeading4" tabindex="-1">
+                (Optional) Set Semester Date Boundaries
+              </h2>
+              <div class="step-sub">
+                Standard calendar (Aug–Dec / Jan–May) or custom range
+              </div>
+            </div>
+            <div class="step-desc">Stage 4 of 6 · Attendance Calendar</div>
+          </div>
 
-            <div class="input-with-action">
-              <input
-                type="text"
-                id="outputDisplay"
-                class="text-input selectable"
-                placeholder="Select destination folder for generated files..."
-                aria-label="Target output directory path"
-                readonly
-              />
-              <button class="btn-browse" type="button" onclick="loadOutput()">
-                Browse Path
+          <p class="step-instructions">
+            If you want attendance sheets to cover only specific dates of the
+            semester, select a <strong>Start Date</strong> and
+            <strong>End Date</strong>.<br />
+            <em
+              >If left blank, the app will generate sheets for the standard
+              semester calendar (August–December for 1st Semester; January–May
+              for 2nd Semester).</em
+            >
+          </p>
+
+          <div class="date-boundary-box">
+            <div class="date-inputs-row">
+              <div class="date-input-group">
+                <label for="startDate">Start:</label>
+                <input
+                  type="date"
+                  id="startDate"
+                  class="date-input"
+                  aria-label="Semester start date boundary"
+                  onchange="saveDates()"
+                />
+              </div>
+              <div class="date-input-group">
+                <label for="endDate">End:</label>
+                <input
+                  type="date"
+                  id="endDate"
+                  class="date-input"
+                  aria-label="Semester end date boundary"
+                  onchange="saveDates()"
+                />
+              </div>
+            </div>
+            <div class="preset-chips segmented-control">
+              <button
+                type="button"
+                class="chip-preset segmented-btn"
+                onclick="setSemesterPreset('1st')"
+              >
+                1st Sem (Aug-Dec)
               </button>
               <button
-                class="nav-btn"
-                id="btnOpenOutput"
                 type="button"
-                onclick="openOutputFolder()"
-                title="Open Target Folder"
+                class="chip-preset segmented-btn"
+                onclick="setSemesterPreset('2nd')"
               >
-                Open Folder
+                2nd Sem (Jan-May)
+              </button>
+              <button
+                type="button"
+                class="chip-preset segmented-btn"
+                onclick="clearDatePresets()"
+              >
+                Reset Dates
               </button>
             </div>
-            <div
-              id="outputPathStatus"
-              style="
-                font-size: 12px;
-                margin-top: 6px;
-                font-weight: 600;
-                color: var(--text-muted);
-              "
-            ></div>
-          </section>
-        </div>
-      </div>
+          </div>
 
-      <!-- ── STEP 6: Initialize Workflow ───────────────────────────────── -->
-      <section class="glass-card execution-card" id="cardStep6">
-        <div class="step-header">
-          <div class="step-number">6</div>
-          <div class="step-header-text">
-            <div class="step-title">Initialize Workflow</div>
-            <div class="step-sub">
-              Automated document compilation &amp; verification
+          <!-- Dynamic Month Preview Chips -->
+          <div
+            id="includedMonthsContainer"
+            class="month-chips-container"
+          ></div>
+
+          <!-- Stage 4 Contextual Footer -->
+          <div class="stage-footer-bar">
+            <button type="button" class="nav-btn" onclick="activateStage(3)">
+              &larr; Back to Packages
+            </button>
+            <div class="stage-footer-actions">
+              <span class="stage-footer-status" id="stage4FooterStatus">
+                Optional: Custom dates or standard 5-month semester defaults.
+              </span>
+              <button
+                type="button"
+                id="btnStage4Primary"
+                class="btn-browse btn-stage-primary"
+                onclick="activateStage(5)"
+              >
+                Continue to Output &rarr;
+              </button>
             </div>
           </div>
-          <div class="step-desc">Automated Generation</div>
-        </div>
+        </section>
 
-        <p class="step-instructions">
-          Click the green <strong>"Initialize Workflow"</strong> button.
-          Processing typically takes only a few seconds!
-        </p>
+        <!-- ── STAGE 5: Choose Target Output Folder ───────────────────────── -->
+        <section class="glass-card stage-panel" id="cardStep5" aria-labelledby="stageHeading5">
+          <div class="step-header">
+            <div class="step-number">5</div>
+            <div class="step-header-text">
+              <h2 class="step-title" id="stageHeading5" tabindex="-1">
+                Choose Target Output Folder
+              </h2>
+              <div class="step-sub">
+                Destination directory for compiled document packages
+              </div>
+            </div>
+            <div class="step-desc">Stage 5 of 6 · Destination Directory</div>
+          </div>
 
-        <!-- Pre-Flight Preview & Export Options Bar -->
-        <div style="display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-bottom: 12px;">
-          <button
-            type="button"
-            id="btnPreviewSample"
-            class="nav-btn"
-            onclick="openPreflightPreviewModal()"
-            style="font-size: 12.5px; padding: 6px 14px; border-color: var(--accent-cyan); color: var(--accent-cyan);"
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="11" cy="11" r="8"></circle>
-              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-            </svg>
-            Preview Sample Page
-          </button>
-          <label style="display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-secondary); cursor: pointer; user-select: none;">
+          <p class="step-instructions">
+            Click <strong>"Browse Path"</strong> and select any destination
+            folder on your computer where the files should be saved.
+          </p>
+
+          <div class="input-with-action">
             <input
-              type="checkbox"
-              id="checkExportPdf"
-              style="accent-color: var(--accent-emerald); cursor: pointer;"
+              type="text"
+              id="outputDisplay"
+              class="text-input selectable"
+              placeholder="Select destination folder for generated files..."
+              aria-label="Target output directory path"
+              readonly
             />
-            <span>Also Export as PDF (<code>.docx &rarr; .pdf</code>)</span>
-          </label>
-        </div>
-
-        <button
-          id="processBtn"
-          class="btn-primary-action"
-          type="button"
-          onclick="startGeneration()"
-        >
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2.4"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <polygon points="5 3 19 12 5 21 5 3"></polygon>
-          </svg>
-          <span id="processBtnLabel">Initialize Workflow</span>
-        </button>
-
-        <!-- Progress Indicator -->
-        <div id="progressContainer" class="progress-container d-none" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-valuetext="0% - Initializing engine...">
-          <div class="progress-track">
-            <div id="progressFill" class="progress-fill"></div>
-          </div>
-          <div class="progress-meta">
-            <div class="progress-task">
-              <div class="pulse-dot"></div>
-              <span id="progressTaskLabel">Initializing engine...</span>
-              <span id="progressElapsedTimer" class="progress-stopwatch"
-                >⏱️ 00:00</span
-              >
-            </div>
-            <div id="progressPercent" style="color: var(--accent-emerald)">
-              0%
-            </div>
-          </div>
-          <div style="text-align: center; margin-top: 8px">
+            <button class="btn-browse" type="button" onclick="loadOutput()">
+              Browse Path
+            </button>
             <button
-              class="btn-cancel-gen"
-              id="btnCancelGeneration"
+              class="nav-btn"
+              id="btnOpenOutput"
               type="button"
-              onclick="cancelGeneration()"
+              onclick="openOutputFolder()"
+              title="Open Target Folder"
             >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-              </svg>
-              Cancel Generation
+              Open Folder
             </button>
           </div>
-        </div>
+          <div
+            id="outputPathStatus"
+            style="
+              font-size: 12px;
+              margin-top: 6px;
+              font-weight: 600;
+              color: var(--text-muted);
+            "
+          ></div>
 
-        <!-- Results Screen -->
-        <div id="resultsCard" class="results-card d-none">
-          <div class="results-header">
-            <div class="results-title">
-              <svg
-                id="resultsIcon"
-                width="22"
-                height="22"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              ></svg>
-              <span id="resultsTitleText">Generation Complete</span>
-            </div>
-            <div style="display: flex; gap: 8px">
-              <button class="btn-open-folder" onclick="openOutputFolder()">
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path
-                    d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
-                  ></path>
-                </svg>
-                Open Output Folder
+          <!-- Stage 5 Contextual Footer -->
+          <div class="stage-footer-bar">
+            <button type="button" class="nav-btn" onclick="activateStage(4)">
+              &larr; Back to Dates
+            </button>
+            <div class="stage-footer-actions">
+              <span class="stage-footer-status" id="stage5FooterStatus">
+                Choose a local destination folder for generated files.
+              </span>
+              <button
+                type="button"
+                id="btnStage5Primary"
+                class="btn-browse btn-stage-primary"
+                onclick="handleStage5PrimaryAction()"
+              >
+                Browse Path
               </button>
             </div>
           </div>
+        </section>
 
-          <div
-            id="resultsMetricsPills"
-            style="
-              display: flex;
-              gap: 8px;
-              flex-wrap: wrap;
-              margin-bottom: 12px;
-            "
-          ></div>
-          <div
-            id="resultsMessage"
-            style="font-size: 13.5px; margin-bottom: 14px; line-height: 1.5"
-          ></div>
+        <!-- ── STAGE 6: Initialize Workflow ───────────────────────────────── -->
+        <section class="glass-card execution-card stage-panel" id="cardStep6" aria-labelledby="stageHeading6">
+          <div class="step-header">
+            <div class="step-number">6</div>
+            <div class="step-header-text">
+              <h2 class="step-title" id="stageHeading6" tabindex="-1">
+                Initialize Workflow
+              </h2>
+              <div class="step-sub">
+                Pre-flight verification &amp; automated document compilation
+              </div>
+            </div>
+            <div class="step-desc">Stage 6 of 6 · Automated Generation</div>
+          </div>
 
-          <label class="form-label" style="margin-bottom: 6px"
-            >Generated File Artifacts</label
-          >
-          <div id="fileTreeContainer" class="file-tree-container selectable">
-            <!-- Populated on completion -->
-          </div>
-        </div>
-      </section>
-    </div>
+          <p class="step-instructions">
+            Review your batch configuration below and click
+            <strong>"Initialize Workflow"</strong>. Processing typically takes
+            only a few seconds.
+          </p>
 
-    <!-- ── Floating Bottom Action Deck ────────────────────────────────── -->
-    <div class="bottom-action-bar" id="bottomActionBar">
-      <div class="bottom-action-content">
-        <div class="action-status-block">
-          <div class="action-pills-row">
-            <span class="summary-pill" id="actionPillSchedule"
-              ><span class="pill-dot"></span> Schedule</span
-            >
-            <span class="summary-pill" id="actionPillRosters"
-              ><span class="pill-dot"></span> 0 Rosters</span
-            >
-            <span class="summary-pill" id="actionPillOutput"
-              ><span class="pill-dot"></span> Output Ready</span
-            >
+          <!-- Pre-Flight Summary Cards -->
+          <div class="preflight-summary-grid" aria-label="Generation pre-flight summary">
+            <div class="preflight-stat-card">
+              <div class="preflight-stat-label">Master Schedule</div>
+              <div class="preflight-stat-value" id="preflightStatSchedule">Not Loaded</div>
+            </div>
+            <div class="preflight-stat-card">
+              <div class="preflight-stat-label">Selected Sections</div>
+              <div class="preflight-stat-value" id="preflightStatSections">0 of 0 Sections</div>
+            </div>
+            <div class="preflight-stat-card">
+              <div class="preflight-stat-label">Batch Packages</div>
+              <div class="preflight-stat-value" id="preflightStatPackages">3 Active</div>
+            </div>
+            <div class="preflight-stat-card">
+              <div class="preflight-stat-label">Output Folder</div>
+              <div class="preflight-stat-value" id="preflightStatOutput" style="font-size: 13px; word-break: break-all;">Not Selected</div>
+            </div>
           </div>
-          <div class="action-bar-hint" id="actionBarHint">
-            Drop or browse your master schedule (.xls / .xlsx) to begin
+
+          <!-- Dynamic Pre-Flight Blocker Box (Explains why generation cannot start yet) -->
+          <div id="preflightBlockerBox" class="preflight-blocker-box d-none" role="status" aria-live="polite">
+            <div class="preflight-blocker-title">
+              <span>⚠️ Pre-Flight Requirements Needed Before Generation</span>
+            </div>
+            <ul class="preflight-blocker-list" id="preflightBlockerList"></ul>
           </div>
-        </div>
-        <div class="action-bar-controls">
+
+          <!-- Pre-Flight Preview & Export Options Bar -->
+          <div style="display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-bottom: 12px;">
+            <button
+              type="button"
+              id="btnPreviewSample"
+              class="nav-btn"
+              onclick="openPreflightPreviewModal()"
+              style="font-size: 12.5px; padding: 6px 14px;"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+              Preview Sample Page
+            </button>
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-secondary); cursor: pointer; user-select: none;">
+              <input
+                type="checkbox"
+                id="checkExportPdf"
+                style="accent-color: var(--color-accent); cursor: pointer;"
+              />
+              <span>Also Export as PDF (<code>.docx &rarr; .pdf</code>)</span>
+            </label>
+          </div>
+
           <button
-            id="btnDockProcess"
-            class="btn-dock-action"
+            id="processBtn"
+            class="btn-primary-action"
             type="button"
-            aria-label="Initialize document generation workflow"
-            onclick="triggerWorkflowFromDock()"
+            disabled
+            aria-disabled="true"
+            aria-describedby="preflightBlockerBox"
+            title="Generation blocked: please resolve pre-flight requirements above."
+            onclick="startGeneration()"
           >
             <svg
               width="18"
@@ -1284,14 +1265,154 @@
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
-              stroke-width="2.5"
+              stroke-width="2.4"
               stroke-linecap="round"
               stroke-linejoin="round"
             >
               <polygon points="5 3 19 12 5 21 5 3"></polygon>
             </svg>
-            <span id="btnDockProcessLabel">Initialize Workflow</span>
+            <span id="processBtnLabel">Initialize Workflow</span>
           </button>
+
+          <!-- Progress Indicator -->
+          <div id="progressContainer" class="progress-container d-none" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-valuetext="0% - Initializing engine...">
+            <div class="progress-track">
+              <div id="progressFill" class="progress-fill"></div>
+            </div>
+            <div class="progress-meta">
+              <div class="progress-task">
+                <div class="pulse-dot"></div>
+                <span id="progressTaskLabel">Initializing engine...</span>
+                <span id="progressElapsedTimer" class="progress-stopwatch"
+                  >⏱️ 00:00</span
+                >
+              </div>
+              <div id="progressPercent" style="color: var(--color-accent)">
+                0%
+              </div>
+            </div>
+            <div style="text-align: center; margin-top: 8px">
+              <button
+                class="btn-cancel-gen"
+                id="btnCancelGeneration"
+                type="button"
+                onclick="cancelGeneration()"
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+                Cancel Generation
+              </button>
+            </div>
+          </div>
+
+          <!-- Results Screen -->
+          <div id="resultsCard" class="results-card d-none">
+            <div class="results-header">
+              <div class="results-title">
+                <svg
+                  id="resultsIcon"
+                  width="22"
+                  height="22"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                ></svg>
+                <span id="resultsTitleText">Generation Complete</span>
+              </div>
+              <div style="display: flex; gap: 8px">
+                <button class="btn-open-folder" onclick="openOutputFolder()">
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
+                    ></path>
+                  </svg>
+                  Open Output Folder
+                </button>
+              </div>
+            </div>
+
+            <div
+              id="resultsMetricsPills"
+              style="
+                display: flex;
+                gap: 8px;
+                flex-wrap: wrap;
+                margin-bottom: 12px;
+              "
+            ></div>
+            <div
+              id="resultsMessage"
+              style="font-size: 13.5px; margin-bottom: 14px; line-height: 1.5"
+            ></div>
+
+            <label class="form-label" style="margin-bottom: 6px"
+              >Generated File Artifacts</label
+            >
+            <div id="fileTreeContainer" class="file-tree-container selectable">
+              <!-- Populated on completion -->
+            </div>
+          </div>
+
+          <!-- Stage 6 Contextual Footer -->
+          <div class="stage-footer-bar">
+            <button type="button" class="nav-btn" onclick="activateStage(5)">
+              &larr; Back to Output
+            </button>
+            <div class="stage-footer-status" id="stage6FooterStatus">
+              All stages remain revisitable via the top workflow ribbon.
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- ── Compact Stage-Aware Bottom Readiness Dock (Status-Only) ─────── -->
+      <div
+        class="bottom-action-bar sticky-action-dock"
+        id="bottomActionBar"
+        data-dock="stickyActionDock"
+        role="region"
+        aria-label="Workflow Readiness Status"
+      >
+        <div class="bottom-action-content">
+          <div class="action-status-block">
+            <div class="action-pills-row" id="dockReadinessPills">
+              <span class="summary-pill" id="actionPillSchedule" title="Master schedule status"
+                ><span class="pill-dot"></span> Schedule</span
+              >
+              <span class="summary-pill" id="actionPillRosters" title="Student rosters status"
+                ><span class="pill-dot"></span> 0 Rosters</span
+              >
+              <span class="summary-pill" id="actionPillOutput" title="Target output directory status"
+                ><span class="pill-dot"></span> Output Folder</span
+              >
+              <span class="summary-pill summary-pill-classes" id="actionPillClasses" title="Selected sections count"
+                ><span class="pill-dot"></span> 0 Sections</span
+              >
+            </div>
+          </div>
         </div>
       </div>
     </main>
@@ -1302,6 +1423,122 @@
       class="drawer-backdrop"
       onclick="closeAllDrawers()"
     ></div>
+
+    <!-- ── On-Demand Privacy-Conscious Section Inspector Drawer ─────────── -->
+    <aside
+      id="classInspectorDrawer"
+      class="drawer-panel inspector-drawer-panel"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="classInspectorTitle"
+    >
+      <div class="drawer-header">
+        <div>
+          <h3 class="drawer-title" id="classInspectorTitle">Section Inspector</h3>
+          <div id="inspectorSubtitle" style="font-size: 12px; color: var(--color-text-secondary); margin-top: 2px;">
+            Class configuration &amp; linked roster verification
+          </div>
+        </div>
+        <button
+          id="btnCloseClassInspector"
+          type="button"
+          class="drawer-close"
+          aria-label="Close section inspector"
+          onclick="closeClassInspector()"
+        >
+          &times;
+        </button>
+      </div>
+      <div class="drawer-body" id="classInspectorBody">
+        <div class="inspector-field-grid">
+          <div>
+            <div class="inspector-field-label">Course &amp; Section</div>
+            <div class="inspector-field-value" id="inspCourseSec">-</div>
+          </div>
+          <div>
+            <div class="inspector-field-label">Schedule Code</div>
+            <div class="inspector-field-value" id="inspScheduleCode" style="font-family: var(--font-mono);">-</div>
+          </div>
+          <div class="inspector-field-full">
+            <div class="inspector-field-label">Subject Title</div>
+            <div class="inspector-field-value" id="inspSubjectName">-</div>
+          </div>
+          <div class="inspector-field-full">
+            <div class="inspector-field-label">Schedule &amp; Room</div>
+            <div class="inspector-field-value" id="inspScheduleDesc">-</div>
+          </div>
+          <div>
+            <div class="inspector-field-label">Enrolled Students</div>
+            <div class="inspector-field-value" id="inspStudentCount">0 Students</div>
+          </div>
+          <div>
+            <div class="inspector-field-label">Validation Status</div>
+            <div class="inspector-field-value" id="inspStatusBadge">-</div>
+          </div>
+          <div class="inspector-field-full">
+            <div class="inspector-field-label">Linked Roster File</div>
+            <div class="inspector-field-value selectable" id="inspRosterFilename" style="font-family: var(--font-mono); font-size: 12px;">-</div>
+          </div>
+        </div>
+
+        <div class="drawer-section" style="margin-bottom: 14px;">
+          <label for="inspClassTypeSelect" class="form-label" style="margin-bottom: 6px;">Grading Sheet Classification</label>
+          <select
+            id="inspClassTypeSelect"
+            class="type-dropdown"
+            style="max-width: 100%;"
+            onchange="onInspectorClassTypeChange(this.value)"
+          >
+            <option value="lecture_lab">Lecture and Lab</option>
+            <option value="lecture_only">Lecture only</option>
+          </select>
+        </div>
+
+        <div class="inspector-actions-row">
+          <button
+            type="button"
+            id="btnInspectorReplaceRoster"
+            class="btn-inspector-action"
+            onclick="replaceInspectedRoster()"
+          >
+            📂 Replace Roster File
+          </button>
+          <button
+            type="button"
+            id="btnInspectorRemapColumns"
+            class="btn-inspector-action"
+            onclick="remapInspectedRoster()"
+          >
+            ⚙️ Remap Columns
+          </button>
+          <button
+            type="button"
+            id="btnInspectorRosterDiff"
+            class="btn-inspector-action"
+            onclick="diffInspectedRoster()"
+          >
+            🔄 Diff Update
+          </button>
+        </div>
+
+        <!-- Privacy-Conscious Student Preview (Collapsed by default, max 8 rows, ID + Name only) -->
+        <details
+          class="inspector-student-disclosure"
+          id="inspectorStudentDisclosure"
+          ontoggle="onInspectorStudentDisclosureToggle(this)"
+        >
+          <summary class="inspector-student-summary">
+            <span>Preview Enrolled Student Records (Max 8)</span>
+            <span style="font-size: 11px; color: var(--color-text-secondary);">Expand &darr;</span>
+          </summary>
+          <div id="inspectorStudentPreviewContainer">
+            <div style="padding: 12px; font-size: 12px; color: var(--color-text-secondary);">
+              Expand to inspect up to 8 verified student records (Student Number and Name only).
+            </div>
+          </div>
+        </details>
+      </div>
+    </aside>
 
     <aside id="helpDrawer" class="drawer-panel" role="region" aria-label="Documentation and help drawer">
       <div class="drawer-header">
@@ -4218,8 +4455,7 @@
                     <th style="width: 38px;">#</th>
                     <th style="width: 140px;">Student Number</th>
                     <th>Name</th>
-                    <th style="width: 80px;">Gender</th>
-                  </tr>
+                                      </tr>
                 </thead>
                 <tbody id="previewRosterTableBody">
                   <!-- Populated dynamically -->

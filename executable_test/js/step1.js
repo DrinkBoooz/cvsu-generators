@@ -301,10 +301,10 @@
                 <div class="roster-item-recommendation">
                   <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
                     <div style="display: flex; align-items: center; gap: 6px;">
-                      <span style="color: var(--accent-amber); font-size: 13px;">💡</span>
-                      <span style="font-size: 11.5px; color: var(--text-secondary);">
-                        <strong>Recommended:</strong> Rename to official format for zero-click automation:
-                        <code class="selectable" style="font-size: 11px; background: var(--surface-subtle); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border-subtle); color: var(--accent-emerald);">${escapeHTML(recFilename)}</code>
+                      <span style="color: var(--color-accent); font-size: 13px;">💡</span>
+                      <span style="font-size: 11.5px; color: var(--color-text-secondary);">
+                        <strong>Recommended format for auto-matching:</strong>
+                        <code class="selectable" style="font-size: 11px; background: var(--color-surface); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--color-border); color: var(--color-accent);">${escapeHTML(recFilename)}</code>
                       </span>
                     </div>
                     <button type="button" class="btn-copy-rec-sm" onclick="copyToClipboard('${escapeHTML(recFilename)}', 'Copied recommended official filename: ${escapeHTML(recFilename)}')" title="Copy recommended official filename">📋 Copy Name</button>
