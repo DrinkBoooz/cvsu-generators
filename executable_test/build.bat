@@ -30,7 +30,7 @@ if not exist "dist\CvSU Gen\CvSU Gen.exe" (
 )
 
 if exist "CvSU Gen.exe.config" (
-    echo Copying .NET configuration (CvSU Gen.exe.config) to distribution bundle...
+    echo Copying .NET configuration [CvSU Gen.exe.config] to distribution bundle...
     copy /Y "CvSU Gen.exe.config" "dist\CvSU Gen\CvSU Gen.exe.config" >nul
 )
 
@@ -62,9 +62,15 @@ echo.
 echo Checking for Inno Setup compiler (ISCC.exe)...
 set "ISCC_EXE="
 where ISCC.exe >nul 2>&1 && set "ISCC_EXE=ISCC.exe"
-if not defined ISCC_EXE if exist "%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe" set "ISCC_EXE=%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe"
-if not defined ISCC_EXE if exist "%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe" set "ISCC_EXE=%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe"
-if not defined ISCC_EXE if exist "%ProgramFiles%\Inno Setup 6\ISCC.exe" set "ISCC_EXE=%ProgramFiles%\Inno Setup 6\ISCC.exe"
+if not defined ISCC_EXE (
+    if exist "%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe" set "ISCC_EXE=%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe"
+)
+if not defined ISCC_EXE (
+    if exist "%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe" set "ISCC_EXE=%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe"
+)
+if not defined ISCC_EXE (
+    if exist "%ProgramFiles%\Inno Setup 6\ISCC.exe" set "ISCC_EXE=%ProgramFiles%\Inno Setup 6\ISCC.exe"
+)
 
 if defined ISCC_EXE (
     echo ========================================================
