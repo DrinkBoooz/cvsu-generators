@@ -60,19 +60,24 @@ if "%SIGN_OPT%"=="1" (
 rem Inno Setup automatic installer packaging
 echo.
 echo Checking for Inno Setup compiler (ISCC.exe)...
-where ISCC.exe >nul 2>&1
-if %ERRORLEVEL% equ 0 (
+set "ISCC_EXE="
+where ISCC.exe >nul 2>&1 && set "ISCC_EXE=ISCC.exe"
+if not defined ISCC_EXE if exist "%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe" set "ISCC_EXE=%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe"
+if not defined ISCC_EXE if exist "%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe" set "ISCC_EXE=%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe"
+if not defined ISCC_EXE if exist "%ProgramFiles%\Inno Setup 6\ISCC.exe" set "ISCC_EXE=%ProgramFiles%\Inno Setup 6\ISCC.exe"
+
+if defined ISCC_EXE (
     echo ========================================================
     echo Compiling Inno Setup Installer Package...
     echo ========================================================
-    ISCC.exe "installer.iss"
+    "%ISCC_EXE%" "installer.iss"
     if %ERRORLEVEL% equ 0 (
         echo [SUCCESS] Inno Setup installer created at dist\CvSU_Gen_Setup_v1.1.0.exe
     ) else (
         echo [WARNING] Inno Setup compilation encountered error code %ERRORLEVEL%.
     )
 ) else (
-    echo [INFO] Inno Setup compiler (ISCC.exe) not found on PATH.
+    echo [INFO] Inno Setup compiler (ISCC.exe) not found on PATH or standard directories.
     echo        Skipping setup installer compilation.
     echo        Install Inno Setup 6 to compile 'installer.iss' into a standalone setup wizard.
 )
