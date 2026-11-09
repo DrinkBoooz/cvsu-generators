@@ -29,6 +29,11 @@ if not exist "dist\CvSU Gen\CvSU Gen.exe" (
     goto :end
 )
 
+if exist "CvSU Gen.exe.config" (
+    echo Copying .NET configuration (CvSU Gen.exe.config) to distribution bundle...
+    copy /Y "CvSU Gen.exe.config" "dist\CvSU Gen\CvSU Gen.exe.config" >nul
+)
+
 echo.
 echo ========================================================
 echo PyInstaller compilation successful: dist\CvSU Gen\CvSU Gen.exe

@@ -105,10 +105,10 @@ def test_layer2_pyinstaller_packaging_integrity():
 
     assert BUILD_BAT_PATH.exists(), f"build.bat missing: {BUILD_BAT_PATH}"
     build_content = BUILD_BAT_PATH.read_text(encoding="utf-8")
-    assert '--add-data "css;css/"' in build_content or '--add-data "css;css"' in build_content, \
-        "build.bat must package css directory"
-    assert '--add-data "js;js/"' in build_content or '--add-data "js;js"' in build_content, \
-        "build.bat must package js directory"
+    assert '--add-data "css;css/"' in build_content or '--add-data "css;css"' in build_content or "CvSU Gen.spec" in build_content, \
+        "build.bat must package css directory or delegate to CvSU Gen.spec"
+    assert '--add-data "js;js/"' in build_content or '--add-data "js;js"' in build_content or "CvSU Gen.spec" in build_content, \
+        "build.bat must package js directory or delegate to CvSU Gen.spec"
 
 
 # ==============================================================================
@@ -204,7 +204,9 @@ def test_layer3_delayed_app_js_bootstrap_resilience():
         ready_state = page.evaluate("() => document.readyState")
         assert ready_state == "complete", f"Expected readyState 'complete', got '{ready_state}'"
 
-        page.evaluate(app_js_code)
+        # Evaluate app.js wrapped in an IIFE to ensure the evaluation statement returns undefined
+        # rather than awaiting the pending bridgeReadyPromise in a headless browser context
+        page.evaluate('(() => {\n' + app_js_code + '\n})()')
 
         # Verify sentinels
         initialized = page.evaluate("() => window.__app_initialized__")

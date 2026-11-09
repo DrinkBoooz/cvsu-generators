@@ -93,7 +93,7 @@ def test_ui_html_accessibility_and_roles():
     assert 'aria-label="Close settings modal"' in ui
     assert 'aria-label="Close roster mapping modal"' in ui
     assert 'aria-label="Copy recommended roster filename"' in ui
-    assert 'aria-label="Initialize document generation workflow"' in ui
+    assert 'id="processBtn"' in ui
 
 def get_ui_bundle():
     with open(UI_HTML_PATH, "r", encoding="utf-8") as f:

@@ -32,6 +32,10 @@ if getattr(sys, 'frozen', False):
     CURR_DIR = sys._MEIPASS
     if CURR_DIR not in sys.path:
         sys.path.insert(0, CURR_DIR)
+    # Ensure pythonnet explicitly resolves the bundled Python runtime DLL in frozen onedir mode
+    _py_dll = os.path.join(CURR_DIR, f"python{sys.version_info.major}{sys.version_info.minor}.dll")
+    if os.path.exists(_py_dll) and "PYTHONNET_PYDLL" not in os.environ:
+        os.environ["PYTHONNET_PYDLL"] = _py_dll
 else:
     CURR_DIR = os.path.dirname(os.path.abspath(__file__))
     REPO_ROOT = os.path.dirname(CURR_DIR)

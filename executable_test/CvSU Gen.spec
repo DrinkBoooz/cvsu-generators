@@ -8,6 +8,9 @@ hiddenimports = [
     'attendancegen',
     'grading_generator',
     'generic_doc_generator',
+    'clr_loader',
+    'pythonnet',
+    'clr',
 ]
 hiddenimports += collect_submodules('modules')
 hiddenimports += collect_submodules('pypdf')
@@ -20,6 +23,7 @@ a = Analysis(
         ('ui.html', '.'),
         ('css', 'css'),
         ('js', 'js'),
+        ('CvSU Gen.exe.config', '.'),
         ('../templates', 'templates'),
         ('../attendance', 'attendance'),
     ],
@@ -62,3 +66,14 @@ coll = COLLECT(
     upx_exclude=[],
     name='CvSU Gen',
 )
+
+# Post-COLLECT Hook: Ensure .NET application config file is placed adjacent to the executable in onedir root
+import shutil
+from pathlib import Path
+
+config_src = Path('CvSU Gen.exe.config')
+if config_src.exists():
+    target_dir = Path(DISTPATH) / 'CvSU Gen'
+    target_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy(str(config_src), str(target_dir / 'CvSU Gen.exe.config'))
+

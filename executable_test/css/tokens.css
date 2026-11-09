@@ -79,8 +79,22 @@
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
+  --space-5: 20px;
   --space-6: 24px;
   --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* Standardized Interactive Control Heights */
+  --control-height-sm: 28px;
+  --control-height-default: 34px;
+  --control-height-lg: 40px;
+
+  /* Intentional Academic Workbench Max Widths */
+  --container-max-focused: 960px;
+  --container-max-workbench: 1540px;
+  --container-max-dropzone: 680px;
+  --container-max-preflight: 760px;
 
   /* Motion */
   --duration-fast: 100ms;
@@ -170,8 +184,8 @@
   --color-disabled-bg: #253028;
   --color-disabled-text: var(--color-text-disabled);
   --color-disabled-border: var(--color-border-strong);
-  --color-border: #3A483E;          /* 1.48:1 Decorative divider */
-  --color-border-muted: #2F3B33;
+  --color-border: #2A372E;          /* 1.25:1 Quieter decorative divider (reduces dark border glow) */
+  --color-border-muted: #222C25;
   --color-border-strong: #7A827B;   /* 3.75:1 Non-text control boundary */
 
   --color-accent: #83B897;          /* 7.22:1 AAA with #142319 text */
@@ -246,7 +260,7 @@
     --color-text: #F0F3F0;
     --color-text-secondary: #B6C1B8;
     --color-text-disabled: #8C9A90;
-    --color-border: #3A483E;
+    --color-border: #2A372E;
     --color-border-strong: #7A827B;
     --color-accent: #83B897;
     --color-accent-hover: #A0C9AE;

@@ -49,6 +49,7 @@ The build pipeline has been hardened to eliminate common false positives from ma
 | **AST / Scanners** | Bare `eval()` calls in webview runtime | Replaced with `ast.literal_eval()` with strict type guards |
 | **Process Injection** | `subprocess.Popen(['explorer', '/select,', ...])` | Native `ctypes.windll.shell32` (`SHOpenFolderAndSelectItems`) |
 | **Dynamic Filesystem Imports**| Runtime `spec_from_file_location` imports | Static import hooks bundled directly into PyInstaller `PYZ` archive |
+| **Untrusted DLL / MotW (`0x80131515`)** | Windows blocks `Python.Runtime.dll` in downloaded ZIP or OneDrive | Bundles `CvSU Gen.exe.config` enabling `<loadFromRemoteSources enabled="true"/>` |
 
 ### Compiling the Standalone Application
 

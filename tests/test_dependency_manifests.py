@@ -40,7 +40,7 @@ INTERNAL_MODULE_NAMES = {
     "document_generator", "ceit_directory", "excel_utils", "logger",
     "recipe_validator", "base", "generation", "dnd", "template_set",
     "template_role_detector", "field_resolver", "template_set_manager",
-    "docx_grid_table", "template_analyzer", "dynamic_renderer",
+    "docx_grid_table", "template_analyzer", "dynamic_renderer", "main",
 }
 
 
